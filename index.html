@@ -762,6 +762,8 @@ async function loadView(view) {
       {id:'copia_documentos',label:'Copia de documentos',type:'select',opts:['true','false']},
       {id:'info_reserva',label:'Info de reserva',type:'select',opts:['true','false']},
       {id:'carpeta_completa',label:'Carpeta completa',type:'select',opts:['true','false']},
+      {id:'otro_si_1',label:'Otro Sí 1 (descripción)',type:'text'},
+      {id:'otro_si_2',label:'Otro Sí 2 (descripción)',type:'text'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
 
@@ -775,6 +777,8 @@ async function loadView(view) {
       {id:'empresa',label:'Empresa',type:'text'},
       {id:'master',label:'Master / Canal',type:'text'},
       {id:'saldo_total',label:'Saldo total ($)',type:'number'},
+      {id:'extras',label:'Extras ($)',type:'number'},
+      {id:'descripcion_extras',label:'Descripción extras',type:'text'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
 
@@ -1439,7 +1443,10 @@ function renderTurnoForm() {
         </div>
         <div class="form-row">
           <div class="form-group"><label>Check-outs del día</label><input type="number" id="t-checkouts" min="0" placeholder="0"></div>
-          <div class="form-group"><label>Caja al cierre ($)</label><input type="number" id="t-caja" min="0" placeholder="0"></div>
+          <div class="form-group"><label>Caja LTM3 ($)</label><input type="number" id="t-caja-ltm3" min="0" placeholder="0" onchange="calcCajaTurno()"></div>
+          <div class="form-group"><label>Caja OT ($)</label><input type="number" id="t-caja-ot" min="0" placeholder="0" onchange="calcCajaTurno()"></div>
+          <div class="form-group"><label>Caja PH ($)</label><input type="number" id="t-caja-ph" min="0" placeholder="0" onchange="calcCajaTurno()"></div>
+          <div class="form-group"><label>Total Caja al cierre ($)</label><input type="number" id="t-caja" min="0" placeholder="0" readonly style="background:#E2EFDA;font-weight:bold"></div>
         </div>
       </div>
 
@@ -1567,7 +1574,10 @@ async function enviarTurno() {
   const disp   = document.getElementById('t-disponibles').value || '0';
   const cki    = document.getElementById('t-checkins').value || '0';
   const cko    = document.getElementById('t-checkouts').value || '0';
-  const caja   = Number(document.getElementById('t-caja').value || 0).toLocaleString('es-CO');
+  const cajaLTM3 = Number(document.getElementById('t-caja-ltm3')?.value || 0).toLocaleString('es-CO');
+  const cajaOT   = Number(document.getElementById('t-caja-ot')?.value || 0).toLocaleString('es-CO');
+  const cajaPH   = Number(document.getElementById('t-caja-ph')?.value || 0).toLocaleString('es-CO');
+  const caja     = Number(document.getElementById('t-caja').value || 0).toLocaleString('es-CO');
   const pend   = document.getElementById('t-pendientes').value.trim();
   const notas  = document.getElementById('t-notas').value.trim();
   const [y,m,d] = fecha.split('-');
@@ -1589,7 +1599,8 @@ async function enviarTurno() {
 *OCUPACIÓN:*
 ▪️ Aptos ocupados: ${ocup} | Disponibles: ${disp}
 ▪️ Check-ins: ${cki} | Check-outs: ${cko}
-▪️ Caja al cierre: $${caja}
+▪️ Caja LTM3: $${cajaLTM3} | OT: $${cajaOT} | PH: $${cajaPH}
+▪️ Total caja: $${caja}
 
 *NOVEDADES:*
 ${novResumen}
@@ -3106,17 +3117,21 @@ async function renderControlPersonal() {
           </div>
           <div style="overflow-x:auto"><table class="tabla">
             <thead><tr><th>Empleado</th><th>Cargo</th><th>Horario</th><th>Ingreso</th><th>Salida</th><th>Retraso</th><th>Adicional</th><th>Obs.</th></tr></thead>
-            <tbody>${porFecha[fecha].map(r => `<tr>
-              <td><strong>${r.nombre}</strong></td>
-              <td>${r.cargo||'-'}</td>
-              <td style="font-size:11px;color:var(--gris-t)">${r.horario||'-'}</td>
-              <td style="color:${r.tiempo_retraso>0?'var(--rojo)':'var(--verde)'}">${r.marcacion_ingreso||'-'}</td>
-              <td>${r.marcacion_salida||
-                `<button onclick="registrarSalidaPersonal('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Salida</button>`}</td>
-              <td>${r.tiempo_retraso>0 ? `<span style="color:var(--rojo);font-weight:600">${r.tiempo_retraso} min</span>` : '-'}</td>
-              <td>${r.tiempo_adicional>0 ? `<span style="color:var(--verde);font-weight:600">${r.tiempo_adicional} min</span>` : '-'}</td>
-              <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.observaciones||'-'}</td>
-            </tr>`).join('')}</tbody>
+            <tbody>${porFecha[fecha].map(r => {
+              const retraso = Number(r.tiempo_retraso)||0;
+              const adicional = Number(r.tiempo_adicional)||0;
+              const salidaBtn = r.marcacion_salida ? r.marcacion_salida : '<button onclick="registrarSalidaPersonal(\''+r.id+'\')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Salida</button>';
+              return '<tr>'
+                +'<td><strong>'+(r.nombre||'-')+'</strong></td>'
+                +'<td>'+(r.cargo||'-')+'</td>'
+                +'<td style="font-size:11px;color:var(--gris-t)">'+(r.horario||'-')+'</td>'
+                +'<td style="color:'+(retraso>0?'var(--rojo)':'var(--verde)')+'">'+(r.marcacion_ingreso||'-')+'</td>'
+                +'<td>'+salidaBtn+'</td>'
+                +'<td>'+(retraso>0?'<span style="color:var(--rojo);font-weight:600">'+retraso+' min</span>':'-')+'</td>'
+                +'<td>'+(adicional>0?'<span style="color:var(--verde);font-weight:600">'+adicional+' min</span>':'-')+'</td>'
+                +'<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r.observaciones||'-')+'</td>'
+                +'</tr>';
+            }).join('')}</tbody>
           </table></div>
         </div>`).join('')}`;
 }
@@ -3741,6 +3756,15 @@ ${rows.map(r=>`▪️ [${r.prioridad}] ${r.area||'General'} — ${r.descripcion?
 
 _Generado desde Sistema 8010 Urban Living_`;
   compartirInforme('Novedades abiertas — ' + fmtDate(TODAY), txt);
+}
+
+function calcCajaTurno() {
+  const ltm3 = Number(document.getElementById('t-caja-ltm3')?.value) || 0;
+  const ot   = Number(document.getElementById('t-caja-ot')?.value) || 0;
+  const ph   = Number(document.getElementById('t-caja-ph')?.value) || 0;
+  const total = ltm3 + ot + ph;
+  const el = document.getElementById('t-caja');
+  if (el) el.value = total;
 }
 
 async function registrarSalidaHK(id) {
