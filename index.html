@@ -324,6 +324,12 @@ textarea{resize:vertical;min-height:80px}
       <button class="btn btn-danger btn-sm" onclick="declinarLimpieza()" title="Registra novedad automática: el arrendatario no quiere limpieza hoy">
         🚫 Declina limpieza
       </button>
+      <button class="btn btn-outline btn-sm" onclick="abrirInformeCKI()" style="color:var(--verde);border-color:var(--verde)" title="Generar informe de Check-In">
+        🟢 Generar CKI
+      </button>
+      <button class="btn btn-outline btn-sm" onclick="abrirInformeCKO()" style="color:var(--rojo);border-color:var(--rojo)" title="Generar informe de Check-Out y marcar como libre">
+        🔴 Generar CKO
+      </button>
       <button class="btn btn-primary btn-sm" onclick="saveApto()">💾 Guardar cambios</button>
     </div>
   </div>
@@ -607,6 +613,8 @@ function setActiveNav(id) {
 // ROUTER
 // ═══════════════════════════════════════════════════════════
 async function loadView(view) {
+  // Guardar vista anterior para el botón Volver en formularios
+  if (!view.endsWith('-form') && view !== 'dashboard') window._prevView = view;
   window._currentView = view;
   setActiveNav(view);
   const main = document.getElementById('main-content');
@@ -933,7 +941,10 @@ async function renderDashboard() {
 
   // ── AUTO-REFRESH cada 3 minutos ───────────────────────────
   clearTimeout(window._dashTimer);
-  window._dashTimer = setTimeout(() => { if(document.getElementById('main-content')) loadView('dashboard'); }, 180000);
+  window._dashTimer = setTimeout(() => {
+    // Solo refrescar si estamos viendo el dashboard (no si estamos en un formulario)
+    if (window._currentView === 'dashboard') loadView('dashboard');
+  }, 300000); // 5 minutos en lugar de 3
 
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px">
@@ -2914,7 +2925,7 @@ function renderGenForm(tabla, titulo, campos) {
     <div class="card" style="max-width:700px">
       ${rows}
       <div class="form-actions">
-        <button class="btn btn-outline btn-sm" onclick="history.back()">Cancelar</button>
+        <button class="btn btn-outline btn-sm" onclick="loadView(window._prevView||'dashboard')">← Volver</button>
         <button class="btn btn-success" onclick="submitGenForm('${tabla}',${JSON.stringify(campos.map(f=>f.id)).replace(/"/g,'&quot;')},${JSON.stringify(campos.map(f=>f.req||false))})" style="min-width:160px">
           📤 Guardar registro
         </button>
@@ -3602,7 +3613,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
       <div class="form-group"><label>Quien reporta</label><input type="text" id="cki-quien" value="${nombre}" placeholder="Tu nombre"></div>
       <div class="form-group"><label>Observaciones adicionales</label><textarea id="cki-obs" placeholder="Detalles adicionales..." style="min-height:60px"></textarea></div>
       <div class="form-actions">
-        <button class="btn btn-outline btn-sm" onclick="history.back()">Cancelar</button>
+        <button class="btn btn-outline btn-sm" onclick="loadView(window._currentView||'dashboard')">Cancelar</button>
         <button class="btn btn-success" onclick="generarMsgCKI()" style="min-width:200px">📤 Generar Informe CKI</button>
       </div>
     </div>`;
@@ -3683,7 +3694,7 @@ function renderInformeCKO(aptoPreload, huesped, canal) {
       <div class="form-group"><label>Quien reporta</label><input type="text" id="cko-quien" value="${nombre}" placeholder="Tu nombre"></div>
       <div class="form-group"><label>Observaciones adicionales</label><textarea id="cko-obs" placeholder="Detalles adicionales..." style="min-height:60px"></textarea></div>
       <div class="form-actions">
-        <button class="btn btn-outline btn-sm" onclick="history.back()">Cancelar</button>
+        <button class="btn btn-outline btn-sm" onclick="loadView(window._currentView||'dashboard')">Cancelar</button>
         <button class="btn btn-danger" onclick="generarMsgCKO()" style="min-width:200px">📤 Generar Informe CKO</button>
       </div>
     </div>`;
@@ -3795,6 +3806,23 @@ ${rows.map(r=>`▪️ [${r.prioridad}] ${r.area||'General'} — ${r.descripcion?
 
 _Generado desde Sistema 8010 Urban Living_`;
   compartirInforme('Novedades abiertas — ' + fmtDate(TODAY), txt);
+}
+
+function abrirInformeCKO() {
+  const apto = document.getElementById('modal-apto-num').textContent;
+  const huesped = _aptoData?.huesped || '';
+  const canal = _aptoData?.canal || '';
+  closeModal('modal-apto');
+  renderInformeCKO(apto, huesped, canal);
+}
+
+function abrirInformeCKI() {
+  const apto = document.getElementById('modal-apto-num').textContent;
+  const huesped = _aptoData?.huesped || '';
+  const canal = _aptoData?.canal || '';
+  const tarifa = _aptoData?.tarifa || '';
+  closeModal('modal-apto');
+  renderInformeCKI(apto, huesped, canal, tarifa);
 }
 
 function calcCajaTurno() {
