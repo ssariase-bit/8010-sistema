@@ -902,7 +902,7 @@ async function renderDashboard() {
     sb.from('rack').select('*').eq('fecha', TODAY).order('estado', { ascending: true }),
     sb.from('rack').select('estado,tarifa').gte('fecha', monthStart).lte('fecha', monthEnd),
     sb.from('novedades').select('*').in('estado',['Abierto','En proceso','Escalado']).order('created_at',{ascending:false}),
-    sb.from('mantenimiento').select('*').in('estado',['Pendiente','En proceso']).order('created_at',{ascending:false}),
+    sb.from('mantenimiento').select('*').in('estado',['Pendiente','En proceso']).gte('fecha', new Date(Date.now()-90*24*60*60*1000).toISOString().split('T')[0]).order('created_at',{ascending:false}),
     sb.from('turnos').select('*').eq('fecha', TODAY).order('created_at',{ascending:false}),
     sb.from('turnos').select('*').order('created_at',{ascending:false}).limit(3),
   ]);
