@@ -449,6 +449,10 @@ const NAV_ITEMS = {
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
     { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
     { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
+    { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
+    { id: 'magnifique-form', icon: '➕', label: 'Nuevo Recibo' },
+    { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
+    { id: 'cargos-form', icon: '➕', label: 'Registrar Cargo' },
     { section: 'Sistema' },
     { id: 'import-rack', icon: '🔄', label: 'Importar Rack 2026' },
   ],
@@ -614,6 +618,41 @@ async function loadView(view) {
     case 'informe-cki':     renderInformeCKI(); break;
     case 'informe-cko':     renderInformeCKO(); break;
     case 'entrega-efectivos': await renderEntregaEfectivos(); break;
+
+    // Recibos Magnifique
+    case 'magnifique-list': await renderList('recibos_magnifique','🍽️ Recibos Magnifique','magnifique-form',
+      ['fecha','apto','arrendatario','num_comanda','productos','valor_recibo','iva','total'],
+      ['Fecha','Apto','Arrendatario','Comanda','Productos','Valor','IVA','Total']); break;
+    case 'magnifique-form': renderGenForm('recibos_magnifique','🍽️ Registrar Recibo Magnifique',[
+      {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
+      {id:'apto',label:'Apartamento',type:'select',opts:['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'],req:true},
+      {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
+      {id:'num_comanda',label:'No. Comanda',type:'text'},
+      {id:'productos',label:'Productos (descripción)',type:'textarea'},
+      {id:'valor_recibo',label:'Valor recibo ($)',type:'number',req:true},
+      {id:'iva',label:'IVA ($)',type:'number'},
+      {id:'total',label:'Total ($)',type:'number'},
+      {id:'observaciones',label:'Observaciones',type:'text'},
+    ]); break;
+
+    // Listado General de Cargos
+    case 'cargos-list': await renderList('listado_cargos','📋 Listado General de Cargos','cargos-form',
+      ['fecha','semana','apto','arrendatario','num_comanda','transporte','lavanderia','varios','total'],
+      ['Fecha','Semana','Apto','Arrendatario','Comanda','Transporte','Lavandería','Varios','Total']); break;
+    case 'cargos-form': renderGenForm('listado_cargos','📋 Registrar Cargo',[
+      {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
+      {id:'semana',label:'Semana (ej: 25 MAY - 31 MAY)',type:'text'},
+      {id:'apto',label:'Apartamento',type:'select',opts:['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'],req:true},
+      {id:'arrendatario',label:'Arrendatario',type:'text'},
+      {id:'num_comanda',label:'No. Comanda / Producto',type:'text'},
+      {id:'transporte',label:'Transporte ($)',type:'number',default:'0'},
+      {id:'utilidad_transporte',label:'Utilidad transporte ($)',type:'number',default:'0'},
+      {id:'lavanderia',label:'Lavandería ($)',type:'number',default:'0'},
+      {id:'utilidad_lavanderia',label:'Utilidad lavandería ($)',type:'number',default:'0'},
+      {id:'varios',label:'Varios ($)',type:'number',default:'0'},
+      {id:'total',label:'Total ($)',type:'number',default:'0'},
+      {id:'observaciones',label:'Observaciones',type:'text'},
+    ]); break;
     case 'entrega-efectivos-form': renderGenForm('entrega_efectivos','💵 Entrega de Efectivos',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'turno',label:'Turno',type:'select',opts:['Mañana (6am-2pm)','Tarde (2pm-10pm)','Noche (10pm-6am)','Turno 12h Día (6am-6pm)','Turno 12h Noche (6pm-6am)']},
