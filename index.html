@@ -3672,10 +3672,17 @@ async function renderFormatoHuespedes() {
     '1001','1001A','1002','1002A',
     '1101','1102'
   ];
-  // [fondo, texto] por tipo de barra
+  // [fondo, texto] por tipo de barra (según estatus)
   const COL = {
-    casa:['#9FE1CB','#04342C'], in:['#85B7EB','#0C447C'], out:['#FAC775','#854F0B'],
-    limp:['#CECBF6','#3C3489'], mant:['#F5C4B3','#993C1D']
+    casa:['#9FE1CB','#04342C'],     // en casa (ocupado, incluye hoy)
+    reserva:['#B5D4F4','#0C447C'],  // reserva futura
+    in:['#378ADD','#fff'],          // entra hoy
+    out:['#EF9F27','#412402'],      // sale hoy
+    hist:['#D3D1C7','#444441'],     // estadía pasada
+    limp:['#CECBF6','#3C3489'],     // limpieza
+    mant:['#F5C4B3','#993C1D'],     // mantenimiento
+    bloq:['#D9D9D9','#555555'],     // bloqueado
+    completo:['#FCE0A2','#7c4a03']  // apto completo
   };
   const colW = 34, aptoW = 56;
   const totalW = aptoW + daysInMonth*colW;
@@ -3693,17 +3700,25 @@ async function renderFormatoHuespedes() {
       const key = d.huesped ? 'H:'+d.huesped : 'E:'+est;
       let j = i;
       while (j+1<=daysInMonth && dias[j+1] && (dias[j+1].huesped?('H:'+dias[j+1].huesped):('E:'+(dias[j+1].estado||'')))===key) j++;
-      let tipo = 'casa', label = d.huesped || est;
+      let tipo = 'casa', label = d.huesped || est, lock = false;
       if (!d.huesped){
         if (est.indexOf('Limpieza')>=0) tipo='limp';
         else if (est.indexOf('Mantenimiento')>=0) tipo='mant';
+        else if (est.indexOf('Bloqueado')>=0){
+          if ((d.observaciones||'').indexOf('Apto completo')>=0){ tipo='completo'; label='Apto completo'; lock=true; }
+          else { tipo='bloq'; label='Bloqueado'; }
+        }
         else { i=j+1; continue; }
       } else {
-        const estHoy = (hoyDia>=i && hoyDia<=j && dias[hoyDia]) ? (dias[hoyDia].estado||'') : '';
-        if (estHoy.indexOf('Check-in')>=0) tipo='in';
-        else if (estHoy.indexOf('Check-out')>=0) tipo='out';
+        const incluyeHoy = hoyDia>=i && hoyDia<=j && dias[hoyDia];
+        const estHoy = incluyeHoy ? (dias[hoyDia].estado||'') : '';
+        if (incluyeHoy && estHoy.indexOf('Check-in')>=0) tipo='in';
+        else if (incluyeHoy && estHoy.indexOf('Check-out')>=0) tipo='out';
+        else if (incluyeHoy) tipo='casa';
+        else if (hoyDia>0 && j<hoyDia) tipo='hist';
+        else tipo='reserva';
       }
-      segs.push({start:i,end:j,tipo,label,id:d.id});
+      segs.push({start:i,end:j,tipo,label,id:d.id,lock});
       i = j+1;
     }
     return segs;
@@ -3737,7 +3752,17 @@ async function renderFormatoHuespedes() {
       const nm=(s.label||'').replace(/"/g,'&quot;');
       const clk = s.id?`onclick="openAptoModal('${s.id}','${apto}')"`:'';
       const cur = s.id?'cursor:pointer':'';
-      return `<div ${clk} title="${nm} (días ${s.start}–${s.end})" style="grid-column:${s.start+1}/${s.end+2};grid-row:1;z-index:1;margin:4px 2px;border-radius:6px;background:${bg};color:${tx};font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0 6px;overflow:hidden;white-space:nowrap;${cur}">${nm}</div>`;
+      const span = s.end - s.start + 1;
+      const lockIco = s.lock ? '🔒 ' : '';
+      let inner;
+      if (span>=3){
+        inner = `<span style="font-size:9px;font-weight:700;opacity:.7;flex:0 0 auto">${s.start}</span>`
+              + `<span style="flex:1 1 auto;text-align:center;overflow:hidden;text-overflow:ellipsis;padding:0 3px">${lockIco}${nm}</span>`
+              + `<span style="font-size:9px;font-weight:700;opacity:.7;flex:0 0 auto">${s.end}</span>`;
+      } else {
+        inner = `<span style="overflow:hidden;text-overflow:ellipsis">${lockIco}${nm}</span>`;
+      }
+      return `<div ${clk} title="${nm} · del día ${s.start} al ${s.end}" style="grid-column:${s.start+1}/${s.end+2};grid-row:1;z-index:1;margin:4px 2px;border-radius:6px;background:${bg};color:${tx};font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:space-between;padding:0 5px;overflow:hidden;white-space:nowrap;${cur}">${inner}</div>`;
     }).join('');
     body += `<div style="display:grid;grid-template-columns:${aptoW}px repeat(${daysInMonth},${colW}px);width:${totalW}px;border-bottom:1px solid #f0f0f0">
       <div style="position:sticky;left:0;z-index:3;background:#fff;font-size:11px;font-weight:700;color:${esA?'#999':'#1D3461'};display:flex;align-items:center;justify-content:center;border-right:2px solid #e2e4e8;min-height:34px">${apto}</div>
@@ -3754,12 +3779,15 @@ async function renderFormatoHuespedes() {
         <button onclick="compartirEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
       </div>
     </div>
-    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;align-items:center">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;align-items:center">
       <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#9FE1CB"></span>En casa</span>
-      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#85B7EB"></span>Entra hoy</span>
-      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#FAC775"></span>Sale hoy</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#378ADD"></span>Entra hoy</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#EF9F27"></span>Sale hoy</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#B5D4F4"></span>Reserva futura</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#D3D1C7"></span>Histórico</span>
       <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#CECBF6"></span>Limpieza</span>
       <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#F5C4B3"></span>Mantenimiento</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#FCE0A2"></span>🔒 Apto completo</span>
     </div>
     <div style="overflow-x:auto;border:1px solid #e2e4e8;border-radius:8px;box-shadow:0 1px 8px rgba(0,0,0,.06)">
       <div style="width:${totalW}px">
