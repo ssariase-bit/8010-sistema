@@ -421,6 +421,9 @@ const NAV_ITEMS = {
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
+    { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
+    { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
+    { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
     { id: 'novedades-list', icon: '⚠️', label: 'Novedades' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
     { id: 'hk-list', icon: '🧹', label: 'Housekeeping' },
@@ -457,6 +460,9 @@ const NAV_ITEMS = {
     { section: 'Operación' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
+    { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
+    { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
+    { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
     { id: 'novedades-list', icon: '⚠️', label: 'Novedades' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
     { id: 'hk-list', icon: '🧹', label: 'Housekeeping' },
@@ -605,6 +611,20 @@ async function loadView(view) {
     case 'dashboard':       await renderDashboard(); break;
     case 'rack':            await renderRack(); break;
     case 'nueva-reserva':   renderNuevaReserva(); break;
+    case 'informe-cki':     renderInformeCKI(); break;
+    case 'informe-cko':     renderInformeCKO(); break;
+    case 'entrega-efectivos': await renderEntregaEfectivos(); break;
+    case 'entrega-efectivos-form': renderGenForm('entrega_efectivos','💵 Entrega de Efectivos',[
+      {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
+      {id:'turno',label:'Turno',type:'select',opts:['Mañana (6am-2pm)','Tarde (2pm-10pm)','Noche (10pm-6am)','Turno 12h Día (6am-6pm)','Turno 12h Noche (6pm-6am)']},
+      {id:'entregado_por',label:'Entregado por',type:'text',req:true},
+      {id:'recibido_por',label:'Recibido por',type:'text',req:true},
+      {id:'caja_ltm3',label:'Caja LTM3 ($)',type:'number',default:'0'},
+      {id:'caja_ot',label:'Caja OT ($)',type:'number',default:'0'},
+      {id:'caja_ph',label:'Caja PH ($)',type:'number',default:'0'},
+      {id:'total_efectivo',label:'Total efectivo ($)',type:'number',default:'0'},
+      {id:'observaciones',label:'Observaciones',type:'textarea'},
+    ]); break;
     case 'turno-form':      renderTurnoForm(); break;
     case 'novedad-form':    renderNovedadForm(); break;
     case 'mant-form':       renderMantForm(); break;
@@ -3475,6 +3495,197 @@ async function renderFormatoHuespedes() {
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// INFORME CKI — CHECK IN
+// ═══════════════════════════════════════════════════════════
+function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
+  const h = new Date().getHours();
+  const saludo = h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches';
+  const nombre = currentProfile?.nombre || '';
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-title">🟢 Informe de Check-In</div>
+    <div class="card" style="max-width:680px">
+      <div class="form-row col3">
+        <div class="form-group"><label>Apartamento *</label>
+          <select id="cki-apto">
+            ${['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'].map(a=>`<option ${a===aptoPreload?'selected':''}>${a}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Huésped *</label><input type="text" id="cki-huesped" value="${huesped||''}" placeholder="Sr./Sra. Nombre Apellido"></div>
+        <div class="form-group"><label>Canal</label>
+          <select id="cki-canal">
+            <option ${canal==='Particular'?'selected':''}>Particular</option>
+            <option ${canal==='Booking'?'selected':''}>Booking</option>
+            <option ${canal==='Expedia'?'selected':''}>Expedia</option>
+            <option ${canal==='Airbnb'?'selected':''}>Airbnb</option>
+            <option ${canal==='Mirai'?'selected':''}>Mirai</option>
+            <option ${canal==='Corporativo'?'selected':''}>Corporativo</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row col3">
+        <div class="form-group"><label>Fecha aloj. inicio</label><input type="date" id="cki-fi" value="${TODAY}"></div>
+        <div class="form-group"><label>Fecha aloj. fin</label><input type="date" id="cki-ff"></div>
+        <div class="form-group"><label>Tarifa/noche ($)</label><input type="number" id="cki-tarifa" value="${tarifa||''}" placeholder="0" onchange="calcCKI()"></div>
+      </div>
+      <div class="form-row col3">
+        <div class="form-group"><label>IVA (19%) ($)</label><input type="number" id="cki-iva" readonly style="background:#f5f5f5"></div>
+        <div class="form-group"><label>Total ($)</label><input type="number" id="cki-total" readonly style="background:#E2EFDA;font-weight:bold"></div>
+        <div class="form-group"><label>No. Factura</label><input type="text" id="cki-fv" placeholder="FV UL0000"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Forma de pago</label>
+          <select id="cki-pago"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Cortesía</option></select>
+        </div>
+        <div class="form-group"><label>Equipaje</label>
+          <select id="cki-equipaje"><option>Declina acompañamiento</option><option>Acepta acompañamiento</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label>Quien reporta</label><input type="text" id="cki-quien" value="${nombre}" placeholder="Tu nombre"></div>
+      <div class="form-group"><label>Observaciones adicionales</label><textarea id="cki-obs" placeholder="Detalles adicionales..." style="min-height:60px"></textarea></div>
+      <div class="form-actions">
+        <button class="btn btn-outline btn-sm" onclick="history.back()">Cancelar</button>
+        <button class="btn btn-success" onclick="generarMsgCKI()" style="min-width:200px">📤 Generar Informe CKI</button>
+      </div>
+    </div>`;
+}
+
+function calcCKI() {
+  const tarifa = Number(document.getElementById('cki-tarifa').value) || 0;
+  const iva = Math.round(tarifa * 0.19);
+  document.getElementById('cki-iva').value = iva;
+  document.getElementById('cki-total').value = tarifa + iva;
+}
+
+function generarMsgCKI() {
+  const apto = document.getElementById('cki-apto').value;
+  const huesped = document.getElementById('cki-huesped').value.trim();
+  const canal = document.getElementById('cki-canal').value;
+  const fi = document.getElementById('cki-fi').value;
+  const ff = document.getElementById('cki-ff').value;
+  const tarifa = Number(document.getElementById('cki-tarifa').value) || 0;
+  const iva = Math.round(tarifa * 0.19);
+  const total = tarifa + iva;
+  const fv = document.getElementById('cki-fv').value.trim();
+  const pago = document.getElementById('cki-pago').value;
+  const equipaje = document.getElementById('cki-equipaje').value;
+  const quien = document.getElementById('cki-quien').value.trim();
+  const obs = document.getElementById('cki-obs').value.trim();
+
+  if (!huesped) { showToast('Ingresa el nombre del huésped', 'error'); return; }
+
+  const [yi,mi,di] = fi.split('-');
+  const [yf,mf,df] = ff ? ff.split('-') : ['-','-','-'];
+  const fechasAloj = fi && ff ? `${di}/${mi}/${yi} - ${df}/${mf}/${yf}` : fi ? `desde ${di}/${mi}/${yi}` : '';
+
+  const msg = `${new Date().getHours()<12?'Buenos días':'Buenas tardes'},
+Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${tarifa.toLocaleString('es-CO')} + IVA ($${iva.toLocaleString('es-CO')}) = $${total.toLocaleString('es-CO')}${fv?' se genera '+fv+' en '+pago:' pago en '+pago}, ${equipaje}, se relaciona check list, se envía book de servicios y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
+R/${quien}`;
+
+  compartirInforme(`CKI — ${huesped} Apto ${apto}`, msg);
+}
+
+// ═══════════════════════════════════════════════════════════
+// INFORME CKO — CHECK OUT
+// ═══════════════════════════════════════════════════════════
+function renderInformeCKO(aptoPreload, huesped, canal) {
+  const nombre = currentProfile?.nombre || '';
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-title">🔴 Informe de Check-Out</div>
+    <div class="card" style="max-width:680px">
+      <div class="form-row col3">
+        <div class="form-group"><label>Apartamento *</label>
+          <select id="cko-apto">
+            ${['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'].map(a=>`<option ${a===aptoPreload?'selected':''}>${a}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Huésped *</label><input type="text" id="cko-huesped" value="${huesped||''}" placeholder="Sr./Sra. Nombre Apellido"></div>
+        <div class="form-group"><label>Canal / Tipo</label><input type="text" id="cko-canal" value="${canal||''}" placeholder="Expedia/VIP, Booking..."></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Consumos adicionales ($)</label><input type="number" id="cko-consumos" placeholder="0" value="0"></div>
+        <div class="form-group"><label>Forma de pago adicional</label>
+          <select id="cko-pago"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Sin consumos</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>No. Factura</label><input type="text" id="cko-fv" placeholder="FV UL0000"></div>
+        <div class="form-group"><label>Migración Colombia</label>
+          <select id="cko-migracion"><option>Sí, se envía reporte</option><option>No aplica</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Encuesta satisfacción</label>
+          <select id="cko-encuesta"><option>Enviada por solicitud</option><option>Enviada automática</option><option>No enviada</option></select>
+        </div>
+        <div class="form-group"><label>Maletas</label>
+          <select id="cko-maletas"><option>Sin maletas</option><option>Deja 1 maleta para recoger</option><option>Deja 2 maletas para recoger</option><option>Deja 3 maletas para recoger</option><option>Se lleva todo</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label>Quien reporta</label><input type="text" id="cko-quien" value="${nombre}" placeholder="Tu nombre"></div>
+      <div class="form-group"><label>Observaciones adicionales</label><textarea id="cko-obs" placeholder="Detalles adicionales..." style="min-height:60px"></textarea></div>
+      <div class="form-actions">
+        <button class="btn btn-outline btn-sm" onclick="history.back()">Cancelar</button>
+        <button class="btn btn-danger" onclick="generarMsgCKO()" style="min-width:200px">📤 Generar Informe CKO</button>
+      </div>
+    </div>`;
+}
+
+function generarMsgCKO() {
+  const apto = document.getElementById('cko-apto').value;
+  const huesped = document.getElementById('cko-huesped').value.trim();
+  const canal = document.getElementById('cko-canal').value.trim();
+  const consumos = Number(document.getElementById('cko-consumos').value) || 0;
+  const pago = document.getElementById('cko-pago').value;
+  const fv = document.getElementById('cko-fv').value.trim();
+  const migracion = document.getElementById('cko-migracion').value;
+  const encuesta = document.getElementById('cko-encuesta').value;
+  const maletas = document.getElementById('cko-maletas').value;
+  const quien = document.getElementById('cko-quien').value.trim();
+  const obs = document.getElementById('cko-obs').value.trim();
+
+  if (!huesped) { showToast('Ingresa el nombre del huésped', 'error'); return; }
+
+  const h = new Date().getHours();
+  const consumosStr = consumos > 0 ? `, realiza el pago de sus consumos adicionales ($${consumos.toLocaleString('es-CO')} ${pago})` : '';
+  const fvStr = fv ? `, se genera ${fv}` : '';
+  const mig = migracion.includes('Sí') ? ', se envía reporte de salida a Migración Colombia' : '';
+  const enc = encuesta.includes('No') ? '' : ', se envía encuesta de satisfacción por solicitud';
+  const maletasStr = maletas === 'Sin maletas' || maletas === 'Se lleva todo' ? '' : `. ${maletas.replace('Deja','Deja')} las cuales vendrán a recogerlas`;
+
+  const msg = `${h<12?'Buenos días':'Buenas tardes'},
+Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${consumosStr}${fvStr}${mig}${enc} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}
+R/${quien}`;
+
+  compartirInforme(`CKO — ${huesped} Apto ${apto}`, msg);
+}
+
+// ═══════════════════════════════════════════════════════════
+// ENTREGA DE EFECTIVOS
+// ═══════════════════════════════════════════════════════════
+async function renderEntregaEfectivos() {
+  const { data } = await sb.from('entrega_efectivos').select('*').order('created_at',{ascending:false}).limit(50);
+  const rows = data || [];
+  document.getElementById('main-content').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="page-title" style="margin-bottom:0">💵 Entrega de Efectivos</div>
+      <button class="btn btn-success btn-sm" onclick="loadView('entrega-efectivos-form')" style="padding:10px 20px">+ Nueva Entrega</button>
+    </div>
+    <div class="card">
+      ${rows.length===0?'<div class="empty"><div class="empty-icon">💵</div><p>Sin entregas registradas</p></div>':
+      `<div style="overflow-x:auto"><table class="tabla">
+        <thead><tr><th>Fecha</th><th>Turno</th><th>Entrega</th><th>Recibe</th><th>LTM3</th><th>OT</th><th>PH</th><th>Total</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr>
+          <td>${fmtDate(r.fecha)}</td><td>${r.turno||'-'}</td>
+          <td>${r.entregado_por||'-'}</td><td>${r.recibido_por||'-'}</td>
+          <td>$${fmtNum(r.caja_ltm3)}</td><td>$${fmtNum(r.caja_ot)}</td><td>$${fmtNum(r.caja_ph)}</td>
+          <td><strong>$${fmtNum(r.total_efectivo)}</strong></td>
+        </tr>`).join('')}</tbody>
+      </table></div>`}
     </div>`;
 }
 
