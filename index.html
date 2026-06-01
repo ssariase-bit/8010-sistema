@@ -3735,14 +3735,20 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
       <div class="form-row col3">
         <div class="form-group"><label>Fecha aloj. inicio</label><input type="date" id="cki-fi" value="${TODAY}"></div>
         <div class="form-group"><label>Fecha aloj. fin</label><input type="date" id="cki-ff"></div>
-        <div class="form-group"><label>Tarifa/noche ($)</label><input type="number" id="cki-tarifa" value="${tarifa||''}" placeholder="0" onchange="calcCKI()"></div>
+        <div class="form-group"><label>Moneda</label>
+          <select id="cki-moneda" onchange="calcCKI()">
+            <option value="COP">COP ($)</option>
+            <option value="USD">USD ($)</option>
+          </select>
+        </div>
       </div>
       <div class="form-row col3">
-        <div class="form-group"><label>IVA (19%) ($)</label><input type="number" id="cki-iva" readonly style="background:#f5f5f5"></div>
-        <div class="form-group"><label>Total ($)</label><input type="number" id="cki-total" readonly style="background:#E2EFDA;font-weight:bold"></div>
-        <div class="form-group"><label>No. Factura</label><input type="text" id="cki-fv" placeholder="FV UL0000"></div>
+        <div class="form-group"><label>Tarifa/noche</label><input type="number" id="cki-tarifa" value="${tarifa||''}" placeholder="0" onchange="calcCKI()"></div>
+        <div class="form-group"><label>IVA (19%)</label><input type="number" id="cki-iva" readonly style="background:#f5f5f5"></div>
+        <div class="form-group"><label>Total</label><input type="number" id="cki-total" readonly style="background:#E2EFDA;font-weight:bold"></div>
       </div>
-      <div class="form-row">
+      <div class="form-row col3">
+        <div class="form-group"><label>No. Factura</label><input type="text" id="cki-fv" placeholder="FV UL0000"></div>
         <div class="form-group"><label>Forma de pago</label>
           <select id="cki-pago"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Cortesía</option></select>
         </div>
@@ -3750,7 +3756,16 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
           <select id="cki-equipaje"><option>Declina acompañamiento</option><option>Acepta acompañamiento</option></select>
         </div>
       </div>
-      <div class="form-group"><label>Quien reporta</label><input type="text" id="cki-quien" value="${nombre}" placeholder="Tu nombre"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Acta inicial</label>
+          <select id="cki-acta">
+            <option>Firma acta inicial</option>
+            <option>Acta inicial pendiente de firma</option>
+            <option>No firma acta inicial</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Quien reporta</label><input type="text" id="cki-quien" value="${nombre}" placeholder="Tu nombre"></div>
+      </div>
       <div class="form-group"><label>Observaciones adicionales</label><textarea id="cki-obs" placeholder="Detalles adicionales..." style="min-height:60px"></textarea></div>
       <div class="form-actions">
         <button class="btn btn-outline btn-sm" onclick="loadView(window._currentView||'dashboard')">Cancelar</button>
@@ -3761,9 +3776,17 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
 
 function calcCKI() {
   const tarifa = Number(document.getElementById('cki-tarifa').value) || 0;
-  const iva = Math.round(tarifa * 0.19);
+  const moneda = document.getElementById('cki-moneda')?.value || 'COP';
+  let iva, total;
+  if (moneda === 'USD') {
+    iva = Math.round(tarifa * 0.19 * 100) / 100;
+    total = Math.round((tarifa + iva) * 100) / 100;
+  } else {
+    iva = Math.round(tarifa * 0.19);
+    total = tarifa + iva;
+  }
   document.getElementById('cki-iva').value = iva;
-  document.getElementById('cki-total').value = tarifa + iva;
+  document.getElementById('cki-total').value = total;
 }
 
 function generarMsgCKI() {
@@ -3773,11 +3796,22 @@ function generarMsgCKI() {
   const fi = document.getElementById('cki-fi').value;
   const ff = document.getElementById('cki-ff').value;
   const tarifa = Number(document.getElementById('cki-tarifa').value) || 0;
-  const iva = Math.round(tarifa * 0.19);
-  const total = tarifa + iva;
+  const moneda = document.getElementById('cki-moneda')?.value || 'COP';
+  const fmt = (n) => moneda === 'USD'
+    ? n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
+    : n.toLocaleString('es-CO');
+  let iva, total;
+  if (moneda === 'USD') {
+    iva = Math.round(tarifa * 0.19 * 100) / 100;
+    total = Math.round((tarifa + iva) * 100) / 100;
+  } else {
+    iva = Math.round(tarifa * 0.19);
+    total = tarifa + iva;
+  }
   const fv = document.getElementById('cki-fv').value.trim();
   const pago = document.getElementById('cki-pago').value;
   const equipaje = document.getElementById('cki-equipaje').value;
+  const acta = document.getElementById('cki-acta').value;
   const quien = document.getElementById('cki-quien').value.trim();
   const obs = document.getElementById('cki-obs').value.trim();
 
@@ -3788,7 +3822,7 @@ function generarMsgCKI() {
   const fechasAloj = fi && ff ? `${di}/${mi}/${yi} - ${df}/${mf}/${yf}` : fi ? `desde ${di}/${mi}/${yi}` : '';
 
   const msg = `${new Date().getHours()<12?'Buenos días':'Buenas tardes'},
-Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${tarifa.toLocaleString('es-CO')} + IVA ($${iva.toLocaleString('es-CO')}) = $${total.toLocaleString('es-CO')}${fv?' se genera '+fv+' en '+pago:' pago en '+pago}, ${equipaje}, se relaciona check list, se envía book de servicios y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
+Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} + IVA ($${fmt(iva)}) = $${fmt(total)} ${moneda}${fv?' se genera '+fv+' en '+pago:' pago en '+pago}, ${equipaje}, ${acta}, se relaciona check list, se envía book de servicios y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
   compartirInforme(`CKI — ${huesped} Apto ${apto}`, msg);
@@ -3831,7 +3865,16 @@ function renderInformeCKO(aptoPreload, huesped, canal) {
           <select id="cko-maletas"><option>Sin maletas</option><option>Deja 1 maleta para recoger</option><option>Deja 2 maletas para recoger</option><option>Deja 3 maletas para recoger</option><option>Se lleva todo</option></select>
         </div>
       </div>
-      <div class="form-group"><label>Quien reporta</label><input type="text" id="cko-quien" value="${nombre}" placeholder="Tu nombre"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Acta final</label>
+          <select id="cko-acta">
+            <option>Firma acta final</option>
+            <option>Acta final pendiente de firma</option>
+            <option>No firma acta final</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Quien reporta</label><input type="text" id="cko-quien" value="${nombre}" placeholder="Tu nombre"></div>
+      </div>
       <div class="form-group"><label>Observaciones adicionales</label><textarea id="cko-obs" placeholder="Detalles adicionales..." style="min-height:60px"></textarea></div>
       <div class="form-actions">
         <button class="btn btn-outline btn-sm" onclick="loadView(window._currentView||'dashboard')">Cancelar</button>
@@ -3850,6 +3893,7 @@ function generarMsgCKO() {
   const migracion = document.getElementById('cko-migracion').value;
   const encuesta = document.getElementById('cko-encuesta').value;
   const maletas = document.getElementById('cko-maletas').value;
+  const acta = document.getElementById('cko-acta').value;
   const quien = document.getElementById('cko-quien').value.trim();
   const obs = document.getElementById('cko-obs').value.trim();
 
@@ -3860,10 +3904,11 @@ function generarMsgCKO() {
   const fvStr = fv ? `, se genera ${fv}` : '';
   const mig = migracion.includes('Sí') ? ', se envía reporte de salida a Migración Colombia' : '';
   const enc = encuesta.includes('No') ? '' : ', se envía encuesta de satisfacción por solicitud';
+  const actaStr = ', ' + acta.charAt(0).toLowerCase() + acta.slice(1);
   const maletasStr = maletas === 'Sin maletas' || maletas === 'Se lleva todo' ? '' : `. ${maletas.replace('Deja','Deja')} las cuales vendrán a recogerlas`;
 
   const msg = `${h<12?'Buenos días':'Buenas tardes'},
-Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${consumosStr}${fvStr}${mig}${enc} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}
+Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${consumosStr}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}
 R/${quien}`;
 
   // Mostrar modal de compartir + botón para marcar como Libre
