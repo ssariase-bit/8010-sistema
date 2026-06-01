@@ -617,9 +617,66 @@ rrhh: [
   ],
 };
 
+const MENU_COMPLETO = [
+  { section: 'Principal' },
+  { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+  { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
+  { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
+  { section: 'Operación' },
+  { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
+  { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
+  { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
+  { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
+  { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
+  { id: 'novedades-list', icon: '⚠️', label: 'Novedades' },
+  { id: 'mant-form', icon: '🔧', label: 'Orden Mantenimiento' },
+  { id: 'mantenimiento-list', icon: '🔧', label: 'Ver Mantenimiento' },
+  { id: 'hk-form', icon: '🧹', label: 'Registrar Limpieza' },
+  { id: 'hk-list', icon: '🧹', label: 'Tiempos Camareras' },
+  { id: 'control-personal-form', icon: '➕', label: 'Registrar Ingreso Personal' },
+  { id: 'control-personal-list', icon: '⏱', label: 'Control Personal' },
+  { id: 'entrega-efectivos-form', icon: '➕', label: 'Nueva Entrega' },
+  { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
+  { id: 'transportes-form', icon: '🚗', label: 'Registrar Transporte' },
+  { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
+  { id: 'caja-form', icon: '💰', label: 'Movimiento Caja' },
+  { id: 'caja-list', icon: '💰', label: 'Caja' },
+  { section: 'Huéspedes' },
+  { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+  { id: 'formato-huespedes', icon: '📅', label: 'Calendario Huéspedes' },
+  { id: 'contratos-form', icon: '➕', label: 'Nuevo Contrato' },
+  { id: 'contratos-list', icon: '📄', label: 'Contratos' },
+  { id: 'visitantes-form', icon: '➕', label: 'Registrar Visitante' },
+  { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
+  { id: 'maletas-form', icon: '🧳', label: 'Maleta en Bodega' },
+  { id: 'maletas-list', icon: '🧳', label: 'Maletas Bodega' },
+  { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
+  { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
+  { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
+  { id: 'prestamos-form', icon: '💻', label: 'Préstamo Tecnología' },
+  { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tec.' },
+  { section: 'Financiero / Admin' },
+  { id: 'requisiciones-form', icon: '➕', label: 'Nueva Requisición' },
+  { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
+  { id: 'personal-form', icon: '➕', label: 'Nuevo Personal' },
+  { id: 'personal-list', icon: '👤', label: 'Personal / RRHH' },
+  { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
+  { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
+  { id: 'magnifique-form', icon: '➕', label: 'Nuevo Recibo' },
+  { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
+  { id: 'cargos-form', icon: '➕', label: 'Registrar Cargo' },
+  { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
+  { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
+  { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
+  { section: 'Auditoría' },
+  { id: 'novedades-diarias', icon: '📋', label: 'Novedades del Día' },
+  { id: 'semana-resumen', icon: '📅', label: 'Semana en Curso' },
+  { section: 'Sistema' },
+  { id: 'import-rack', icon: '🔄', label: 'Importar Rack 2026' },
+];
+
 function buildSidebar() {
-  const rol = currentProfile?.rol || 'recepcion';
-  const items = NAV_ITEMS[rol] || NAV_ITEMS.recepcion;
+  const items = MENU_COMPLETO;
   const sb2 = document.getElementById('sidebar');
   sb2.innerHTML = items.map(item => {
     if (item.section) return `<div class="nav-section">${item.section}</div>`;
