@@ -57,6 +57,8 @@ body{background:var(--gris);min-height:100vh}
 #app{display:none;min-height:100vh}
 .topbar{background:var(--negro);color:var(--blanco);padding:0 20px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 16px rgba(0,0,0,.4);border-bottom:1px solid rgba(201,168,76,.25)}
 .topbar-brand{display:flex;align-items:center;gap:14px}
+.menu-toggle{display:none;background:none;border:none;color:#fff;font-size:24px;line-height:1;cursor:pointer;padding:4px 8px;margin-right:4px}
+#sidebar-overlay{display:none;position:fixed;inset:0;top:64px;background:rgba(0,0,0,.45);z-index:1100}
 .logo-8010{display:flex;align-items:center;gap:0}
 .logo-8010 .num{font-size:26px;font-weight:900;color:white;font-family:Georgia,serif;letter-spacing:-1px;line-height:1}
 .logo-8010 .sep{font-size:26px;font-weight:100;color:var(--dorado);margin:0 1px;line-height:1}
@@ -165,7 +167,10 @@ textarea{resize:vertical;min-height:80px}
 
 /* ── RESPONSIVE ───────────────────────────────────────── */
 @media(max-width:768px){
-  .sidebar{display:none}
+  .menu-toggle{display:flex}
+  .sidebar{transform:translateX(-100%);transition:transform .25s ease;z-index:1200;width:260px;box-shadow:2px 0 18px rgba(0,0,0,.3)}
+  .sidebar.open{transform:translateX(0)}
+  #sidebar-overlay.show{display:block}
   .main{margin-left:0;padding:16px}
   .grid-2,.grid-3{grid-template-columns:1fr}
   .kpi-grid{grid-template-columns:1fr 1fr}
@@ -219,6 +224,7 @@ textarea{resize:vertical;min-height:80px}
   <!-- TOPBAR -->
   <div class="topbar">
     <div class="topbar-brand">
+      <button class="menu-toggle" id="menu-toggle" onclick="toggleSidebar()" aria-label="Menú">☰</button>
       <div class="logo-8010">
         <img id="topbar-logo-img" src="" alt="8010 Urban Living" style="height:38px;display:block">
       </div>
@@ -230,6 +236,9 @@ textarea{resize:vertical;min-height:80px}
       <button class="btn-logout" onclick="doLogout()">Salir</button>
     </div>
   </div>
+
+  <!-- OVERLAY (cierra el menú en móvil al tocar fuera) -->
+  <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
   <!-- SIDEBAR -->
   <div class="sidebar" id="sidebar">
@@ -629,7 +638,23 @@ function setActiveNav(id) {
 // ═══════════════════════════════════════════════════════════
 // ROUTER
 // ═══════════════════════════════════════════════════════════
+// Abre/cierra el menú lateral (drawer) en móvil
+function toggleSidebar() {
+  const sb2 = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebar-overlay');
+  if (!sb2) return;
+  const abierto = sb2.classList.toggle('open');
+  if (ov) ov.classList.toggle('show', abierto);
+}
+function cerrarSidebar() {
+  const sb2 = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebar-overlay');
+  if (sb2) sb2.classList.remove('open');
+  if (ov) ov.classList.remove('show');
+}
+
 async function loadView(view) {
+  cerrarSidebar(); // cerrar el menú al elegir una opción (móvil)
   // Guardar vista anterior para el botón Volver en formularios
   if (!view.endsWith('-form') && view !== 'dashboard') window._prevView = view;
   window._currentView = view;
@@ -2976,6 +3001,23 @@ function renderGenForm(tabla, titulo, campos) {
     const tot = document.getElementById('gf-total_efectivo');
     if (tot) { tot.readOnly = true; tot.style.background = '#E2EFDA'; tot.style.fontWeight = '700'; }
   }
+
+  // Auto-calcular retraso y tiempo adicional en control de personal
+  if (tabla === 'control_personal') {
+    ['gf-horario','gf-marcacion_ingreso','gf-marcacion_salida'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', calcControlPersonal);
+    });
+    ['gf-tiempo_retraso','gf-tiempo_adicional'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.readOnly = true;
+        el.style.background = '#E2EFDA';
+        el.style.fontWeight = '700';
+        el.title = 'Calculado automáticamente con base en el horario asignado';
+      }
+    });
+  }
 }
 
 async function submitGenForm(tabla, ids, reqs) {
@@ -3184,6 +3226,50 @@ function compartirInforme(titulo, texto, emailDest) {
 // ═══════════════════════════════════════════════════════════
 // CONTROL DE INGRESO PERSONAL
 // ═══════════════════════════════════════════════════════════
+// Convierte "HH:MM" (24h) a minutos desde medianoche
+function _timeToMin(t) {
+  if (!t) return null;
+  const p = String(t).split(':');
+  if (p.length < 2) return null;
+  const h = Number(p[0]), m = Number(p[1]);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+// Parsea un horario tipo "6:00 AM - 6:00 PM" -> { inicio, fin } en minutos (o null)
+function parseHorario(txt) {
+  if (!txt) return null;
+  const re = /(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/g;
+  const found = [];
+  let mt;
+  while ((mt = re.exec(txt)) !== null) {
+    let h = Number(mt[1]); const m = Number(mt[2]); const ap = (mt[3] || '').toUpperCase();
+    if (ap === 'PM' && h !== 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    found.push(h * 60 + m);
+  }
+  if (found.length === 0) return null;
+  return { inicio: found[0], fin: found.length > 1 ? found[1] : null };
+}
+
+// Recalcula retraso y tiempo adicional en el formulario de control de personal
+function calcControlPersonal() {
+  const h = parseHorario(document.getElementById('gf-horario')?.value || '');
+  const ingMin = _timeToMin(document.getElementById('gf-marcacion_ingreso')?.value);
+  const salMin = _timeToMin(document.getElementById('gf-marcacion_salida')?.value);
+  const elRet = document.getElementById('gf-tiempo_retraso');
+  const elAdi = document.getElementById('gf-tiempo_adicional');
+  if (!h) return;
+  if (elRet && h.inicio != null && ingMin != null) {
+    const r = ingMin - h.inicio;
+    elRet.value = r > 0 ? r : 0;
+  }
+  if (elAdi && h.fin != null && salMin != null) {
+    const a = salMin - h.fin;
+    elAdi.value = a > 0 ? a : 0;
+  }
+}
+
 async function renderControlPersonal() {
   const { data } = await sb.from('control_personal').select('*').order('fecha', {ascending:false}).order('nombre').limit(200);
   const rows = data || [];
@@ -3235,7 +3321,16 @@ async function registrarSalidaPersonal(id) {
   const ahora = new Date().toTimeString().slice(0,5);
   const hora = prompt('Hora de salida (HH:MM):', ahora);
   if (!hora) return;
-  const { error } = await sb.from('control_personal').update({ marcacion_salida: hora }).eq('id', id);
+  const upd = { marcacion_salida: hora };
+  // Recalcular tiempo adicional con base en el horario asignado
+  const { data: reg } = await sb.from('control_personal').select('horario').eq('id', id).single();
+  const h = reg ? parseHorario(reg.horario) : null;
+  const salMin = _timeToMin(hora);
+  if (h && h.fin != null && salMin != null) {
+    const a = salMin - h.fin;
+    upd.tiempo_adicional = a > 0 ? a : 0;
+  }
+  const { error } = await sb.from('control_personal').update(upd).eq('id', id);
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
   showToast('✅ Salida registrada', 'success');
   renderControlPersonal();
