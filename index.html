@@ -686,7 +686,7 @@ async function loadView(view) {
       {id:'caja_ltm3',label:'Caja LTM3 ($)',type:'number',default:'0'},
       {id:'caja_ot',label:'Caja OT ($)',type:'number',default:'0'},
       {id:'caja_ph',label:'Caja PH ($)',type:'number',default:'0'},
-      {id:'total_efectivo',label:'Total efectivo ($)',type:'number',default:'0'},
+      {id:'total_efectivo',label:'Total efectivo ($) — se calcula automático',type:'number',default:'0'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'turno-form':      renderTurnoForm(); break;
@@ -2965,6 +2965,17 @@ function renderGenForm(tabla, titulo, campos) {
         </button>
       </div>
     </div>`;
+
+  // Auto-calcular total en entrega de efectivos
+  if (tabla === 'entrega_efectivos') {
+    ['gf-caja_ltm3','gf-caja_ot','gf-caja_ph'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', calcEntregaEfectivos);
+    });
+    // Hacer el campo total de solo lectura
+    const tot = document.getElementById('gf-total_efectivo');
+    if (tot) { tot.readOnly = true; tot.style.background = '#E2EFDA'; tot.style.fontWeight = '700'; }
+  }
 }
 
 async function submitGenForm(tabla, ids, reqs) {
@@ -3922,6 +3933,14 @@ function calcCajaTurno() {
   const total = ltm3 + ot + ph;
   const el = document.getElementById('t-caja');
   if (el) el.value = total;
+}
+
+function calcEntregaEfectivos() {
+  const ltm3 = Number(document.getElementById('gf-caja_ltm3')?.value) || 0;
+  const ot   = Number(document.getElementById('gf-caja_ot')?.value) || 0;
+  const ph   = Number(document.getElementById('gf-caja_ph')?.value) || 0;
+  const el = document.getElementById('gf-total_efectivo');
+  if (el) { el.value = ltm3 + ot + ph; el.style.fontWeight = '700'; el.style.color = 'var(--verde)'; }
 }
 
 async function registrarSalidaHK(id) {
