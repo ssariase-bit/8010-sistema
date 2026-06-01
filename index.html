@@ -3631,10 +3631,12 @@ async function renderFormatoHuespedes() {
   const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const dayNames = ['D','L','M','Mi','J','V','S'];
 
+  const hoyDia = (month===now.getMonth() && year===now.getFullYear()) ? now.getDate() : -1;
+
   const { data } = await sb.from('rack').select('*').gte('fecha',monthStart).lte('fecha',monthEnd).order('fecha');
   const rows = data||[];
 
-  // Agrupar por apto
+  // Agrupar por apto y día
   const porApto = {};
   rows.forEach(r => {
     if(!porApto[r.apto]) porApto[r.apto] = {};
@@ -3652,54 +3654,103 @@ async function renderFormatoHuespedes() {
     '1001','1001A','1002','1002A',
     '1101','1102'
   ];
-  const colorMap = {'Ocupado':'#C6EFCE','Check-in hoy':'#BDD7EE','Check-out hoy':'#FFEB9C','Libre':'#F2F2F2','Limpieza':'#E8D5F5','Mantenimiento':'#FCE4D6'};
+  // [fondo, texto] por tipo de barra
+  const COL = {
+    casa:['#9FE1CB','#04342C'], in:['#85B7EB','#0C447C'], out:['#FAC775','#854F0B'],
+    limp:['#CECBF6','#3C3489'], mant:['#F5C4B3','#993C1D']
+  };
+  const colW = 34, aptoW = 56;
+  const totalW = aptoW + daysInMonth*colW;
 
-  // Headers de días
-  const dayHeaders = Array.from({length:daysInMonth},(_,i)=>{
-    const d = new Date(year, month, i+1);
-    const isHoy = i+1 === now.getDate() && month === now.getMonth();
-    return `<th style="min-width:32px;padding:3px 2px;text-align:center;font-size:9px;background:${isHoy?'#1D3461':'#2B4A8A'};color:white;border-right:1px solid #fff3">
-      <div style="font-weight:700">${i+1}</div>
-      <div style="opacity:.7">${dayNames[d.getDay()]}</div>
-    </th>`;
-  }).join('');
-
-  const filas = APTOS.map(apto => {
+  // Detecta tramos contiguos (reservas/estados) por apto
+  function segmentos(apto){
     const dias = porApto[apto] || {};
-    const huesped = Object.values(dias).find(d=>d.huesped)?.huesped || 'Libre';
-    const cells = Array.from({length:daysInMonth},(_,i)=>{
-      const d = dias[i+1];
-      const bg = d ? (colorMap[d.estado]||'#F2F2F2') : '#F2F2F2';
-      const txt = d?.huesped ? d.huesped.split(' ')[0].substring(0,6) : (d?.estado==='Libre'?'':d?.estado?.substring(0,3)||'');
-      const clickAct = d?.id ? `onclick="openAptoModal('${d.id}','${apto}')" style="cursor:pointer"` : '';
-      return `<td ${clickAct} style="background:${bg};text-align:center;font-size:8px;padding:2px 1px;border-right:1px solid #eee;white-space:nowrap;overflow:hidden;max-width:32px" title="${d?.huesped||d?.estado||'Libre — clic para asignar'}">${txt}</td>`;
+    const segs = [];
+    let i = 1;
+    while (i <= daysInMonth){
+      const d = dias[i];
+      if (!d){ i++; continue; }
+      const est = d.estado || '';
+      if (!d.huesped && (est==='Libre' || est==='')){ i++; continue; }
+      const key = d.huesped ? 'H:'+d.huesped : 'E:'+est;
+      let j = i;
+      while (j+1<=daysInMonth && dias[j+1] && (dias[j+1].huesped?('H:'+dias[j+1].huesped):('E:'+(dias[j+1].estado||'')))===key) j++;
+      let tipo = 'casa', label = d.huesped || est;
+      if (!d.huesped){
+        if (est.indexOf('Limpieza')>=0) tipo='limp';
+        else if (est.indexOf('Mantenimiento')>=0) tipo='mant';
+        else { i=j+1; continue; }
+      } else {
+        const estHoy = (hoyDia>=i && hoyDia<=j && dias[hoyDia]) ? (dias[hoyDia].estado||'') : '';
+        if (estHoy.indexOf('Check-in')>=0) tipo='in';
+        else if (estHoy.indexOf('Check-out')>=0) tipo='out';
+      }
+      segs.push({start:i,end:j,tipo,label,id:d.id});
+      i = j+1;
+    }
+    return segs;
+  }
+  const pisoDe = (a)=> a.replace('A','').slice(0,-2);
+
+  // Encabezado de días
+  let dayCells = '';
+  for (let dd=1; dd<=daysInMonth; dd++){
+    const dt = new Date(year,month,dd);
+    const wknd = (dt.getDay()===0 || dt.getDay()===6);
+    const esHoy = dd===hoyDia;
+    const bg = esHoy?'#1D3461':(wknd?'#eef0f4':'#fff');
+    const cl = esHoy?'#fff':(wknd?'#777':'#555');
+    dayCells += `<div style="width:${colW}px;flex:0 0 ${colW}px;text-align:center;font-size:9px;padding:3px 0;background:${bg};color:${cl};border-right:1px solid #eee"><div style="font-weight:700">${dd}</div><div style="opacity:.7">${dayNames[dt.getDay()]}</div></div>`;
+  }
+
+  // Filas con separadores de piso
+  let body = '';
+  let pisoPrev = '';
+  const bgGrid = `repeating-linear-gradient(to right,transparent,transparent ${colW-0.5}px,#eee ${colW-0.5}px,#eee ${colW}px)`;
+  APTOS.forEach(apto=>{
+    const piso = pisoDe(apto);
+    if (piso!==pisoPrev){
+      body += `<div style="width:${totalW}px;font-size:10px;font-weight:700;letter-spacing:.5px;color:#888;padding:3px 8px;background:#f4f5f7;border-bottom:1px solid #e8e8e8">PISO ${piso}</div>`;
+      pisoPrev = piso;
+    }
+    const esA = apto.endsWith('A');
+    const barsHTML = segmentos(apto).map(s=>{
+      const bg=COL[s.tipo][0], tx=COL[s.tipo][1];
+      const nm=(s.label||'').replace(/"/g,'&quot;');
+      const clk = s.id?`onclick="openAptoModal('${s.id}','${apto}')"`:'';
+      const cur = s.id?'cursor:pointer':'';
+      return `<div ${clk} title="${nm} (días ${s.start}–${s.end})" style="grid-column:${s.start+1}/${s.end+2};grid-row:1;z-index:1;margin:4px 2px;border-radius:6px;background:${bg};color:${tx};font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0 6px;overflow:hidden;white-space:nowrap;${cur}">${nm}</div>`;
     }).join('');
-    return `<tr><td style="position:sticky;left:0;background:white;font-weight:700;font-size:11px;color:#1D3461;padding:4px 8px;min-width:50px;border-right:2px solid #e2e4e8;z-index:1">${apto}</td>${cells}</tr>`;
-  }).join('');
+    body += `<div style="display:grid;grid-template-columns:${aptoW}px repeat(${daysInMonth},${colW}px);width:${totalW}px;border-bottom:1px solid #f0f0f0">
+      <div style="position:sticky;left:0;z-index:3;background:#fff;font-size:11px;font-weight:700;color:${esA?'#999':'#1D3461'};display:flex;align-items:center;justify-content:center;border-right:2px solid #e2e4e8;min-height:34px">${apto}</div>
+      <div style="grid-column:2 / -1;grid-row:1;background-image:${bgGrid}"></div>
+      ${barsHTML}
+    </div>`;
+  });
 
   document.getElementById('main-content').innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div class="page-title" style="margin-bottom:0">📅 Estado de Huéspedes — ${monthNames[month]} ${year}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <div class="page-title" style="margin-bottom:0">📅 Calendario de Huéspedes — ${monthNames[month]} ${year}</div>
       <div style="display:flex;gap:6px">
         <button onclick="window.print()" class="btn btn-outline btn-sm">🖨️ Imprimir</button>
         <button onclick="compartirEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
       </div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:11px">
-      <span style="background:#C6EFCE;padding:2px 8px;border-radius:4px">Ocupado</span>
-      <span style="background:#BDD7EE;padding:2px 8px;border-radius:4px">Check-in</span>
-      <span style="background:#FFEB9C;padding:2px 8px;border-radius:4px">Check-out</span>
-      <span style="background:#E8D5F5;padding:2px 8px;border-radius:4px">Limpieza</span>
-      <span style="background:#F2F2F2;border:1px solid #ddd;padding:2px 8px;border-radius:4px">Libre</span>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;align-items:center">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#9FE1CB"></span>En casa</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#85B7EB"></span>Entra hoy</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#FAC775"></span>Sale hoy</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#CECBF6"></span>Limpieza</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#F5C4B3"></span>Mantenimiento</span>
     </div>
-    <div style="overflow-x:auto;border-radius:8px;box-shadow:0 1px 8px rgba(0,0,0,.08)">
-      <table style="border-collapse:collapse;min-width:100%">
-        <thead><tr>
-          <th style="position:sticky;left:0;z-index:2;background:#1D3461;color:white;padding:6px 8px;font-size:11px;min-width:50px">Apto</th>
-          ${dayHeaders}
-        </tr></thead>
-        <tbody>${filas}</tbody>
-      </table>
+    <div style="overflow-x:auto;border:1px solid #e2e4e8;border-radius:8px;box-shadow:0 1px 8px rgba(0,0,0,.06)">
+      <div style="width:${totalW}px">
+        <div style="display:flex;background:#1D3461">
+          <div style="position:sticky;left:0;z-index:4;width:${aptoW}px;flex:0 0 ${aptoW}px;background:#1D3461;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">Apto</div>
+          ${dayCells}
+        </div>
+        ${body}
+      </div>
     </div>`;
 }
 
