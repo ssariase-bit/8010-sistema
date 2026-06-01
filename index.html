@@ -1113,9 +1113,8 @@ async function renderRack() {
   // Auto-refresh cada 60s para ver cambios de otros usuarios
   clearTimeout(window._rackTimer);
   window._rackTimer = setTimeout(() => {
-    if (document.querySelector('.nav-item.active')?.dataset?.view === 'rack' ||
-        window._currentView === 'rack') renderRack();
-  }, 60000);
+    if (window._currentView === 'rack') renderRack();
+  }, 900000); // 15 minutos
 
   const rol = currentProfile?.rol;
   const canEdit = ['gerente_general','gerencia_operativa','administrador','recepcion'].includes(rol);
