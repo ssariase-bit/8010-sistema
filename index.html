@@ -944,7 +944,7 @@ async function renderDashboard() {
   window._dashTimer = setTimeout(() => {
     // Solo refrescar si estamos viendo el dashboard (no si estamos en un formulario)
     if (window._currentView === 'dashboard') loadView('dashboard');
-  }, 300000); // 5 minutos en lugar de 3
+  }, 900000); // 15 minutos
 
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px">
