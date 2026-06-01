@@ -1747,9 +1747,15 @@ ${notas ? '\n*OBSERVACIONES:*\n' + notas : ''}`;
 // ═══════════════════════════════════════════════════════════
 // NOVEDAD RÁPIDA
 // ═══════════════════════════════════════════════════════════
-function renderNovedadForm() {
+async function renderNovedadForm() {
   const h = new Date().getHours();
   const turnoAuto = h < 14 ? 'Mañana' : (h < 22 ? 'Tarde' : 'Noche');
+  let personasOpts = '<option value="">— Sin asignar —</option>';
+  try {
+    const { data: pers } = await sb.from('profiles').select('nombre').order('nombre');
+    (pers||[]).forEach(p => { if (p.nombre) personasOpts += `<option>${p.nombre}</option>`; });
+  } catch(e) {}
+  const areaGestorOpts = ['Recepción','Apartamento','Mantenimiento','Housekeeping','Seguridad','Zonas comunes','Financiero','Huésped','General'].map(a=>`<option>${a}</option>`).join('');
   document.getElementById('main-content').innerHTML = `
     <div class="page-title">⚠️ Reportar Novedad</div>
     <div class="card" style="max-width:640px">
@@ -1798,6 +1804,14 @@ function renderNovedadForm() {
           <input type="text" id="n-accion" placeholder="¿Qué se hizo hasta ahora?">
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label>Gestionado por</label>
+          <select id="n-gestor">${personasOpts}</select>
+        </div>
+        <div class="form-group"><label>Área del gestor</label>
+          <select id="n-area-gestor">${areaGestorOpts}</select>
+        </div>
+      </div>
       <div class="form-actions">
         <button class="btn btn-outline btn-sm" onclick="loadView('novedades-list')">Cancelar</button>
         <button class="btn btn-success" onclick="enviarNovedad()" style="min-width:180px">📤 Reportar novedad</button>
@@ -1821,6 +1835,8 @@ async function enviarNovedad() {
     prioridad: document.getElementById('n-prio').value,
     descripcion: descFinal,
     reportado_por: document.getElementById('n-quien').value,
+    gestionado_por: document.getElementById('n-gestor')?.value || null,
+    area_gestor: document.getElementById('n-area-gestor')?.value || null,
     estado: document.getElementById('n-estado-ini').value,
     user_id: currentUser.id,
   });
@@ -2029,6 +2045,8 @@ async function verNovedad(id) {
         <div><strong>Turno:</strong> ${n.turno||'-'}</div>
         <div><strong>Área:</strong> ${n.area||'-'}</div>
         <div><strong>Reportó:</strong> ${n.reportado_por||'-'}</div>
+        <div><strong>Gestiona:</strong> ${n.gestionado_por||'— Sin asignar'}</div>
+        <div><strong>Área gestor:</strong> ${n.area_gestor||'-'}</div>
         <div><strong>Prioridad:</strong> <span class="badge b-${(n.prioridad||'').toLowerCase()}">${n.prioridad||'-'}</span></div>
         <div><strong>Estado:</strong> ${badgeEst(n.estado)}</div>
       </div>
