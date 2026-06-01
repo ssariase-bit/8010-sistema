@@ -3640,9 +3640,19 @@ async function renderSemanaResumen() {
 // ═══════════════════════════════════════════════════════════
 // FORMATO HUÉSPEDES MENSUAL (desde rack)
 // ═══════════════════════════════════════════════════════════
-async function renderFormatoHuespedes() {
+function navFormatoHuespedes(delta){
+  let y = (window._fhYear != null) ? window._fhYear : new Date().getFullYear();
+  let m = ((window._fhMonth != null) ? window._fhMonth : new Date().getMonth()) + delta;
+  if (m < 0){ m = 11; y--; }
+  if (m > 11){ m = 0; y++; }
+  renderFormatoHuespedes(y, m);
+}
+
+async function renderFormatoHuespedes(yArg, mArg) {
   const now = new Date();
-  const year = now.getFullYear(), month = now.getMonth();
+  const year  = (yArg != null) ? Number(yArg) : now.getFullYear();
+  const month = (mArg != null) ? Number(mArg) : now.getMonth();
+  window._fhYear = year; window._fhMonth = month;
   const daysInMonth = new Date(year, month+1, 0).getDate();
   const monthStart = `${year}-${String(month+1).padStart(2,'0')}-01`;
   const monthEnd   = `${year}-${String(month+1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
@@ -3773,7 +3783,17 @@ async function renderFormatoHuespedes() {
 
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-      <div class="page-title" style="margin-bottom:0">📅 Calendario de Huéspedes — ${monthNames[month]} ${year}</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <div class="page-title" style="margin-bottom:0">📅 Calendario de Huéspedes</div>
+        <button onclick="navFormatoHuespedes(-1)" class="btn btn-outline btn-sm" title="Mes anterior" style="padding:5px 10px">◀</button>
+        <select onchange="renderFormatoHuespedes(window._fhYear, Number(this.value))" style="padding:6px 8px;border-radius:6px;border:1px solid var(--gris-b);font-size:13px">
+          ${monthNames.map((mn,idx)=>`<option value="${idx}" ${idx===month?'selected':''}>${mn}</option>`).join('')}
+        </select>
+        <select onchange="renderFormatoHuespedes(Number(this.value), window._fhMonth)" style="padding:6px 8px;border-radius:6px;border:1px solid var(--gris-b);font-size:13px">
+          ${[year-1,year,year+1,year+2].map(y=>`<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('')}
+        </select>
+        <button onclick="navFormatoHuespedes(1)" class="btn btn-outline btn-sm" title="Mes siguiente" style="padding:5px 10px">▶</button>
+      </div>
       <div style="display:flex;gap:6px">
         <button onclick="window.print()" class="btn btn-outline btn-sm">🖨️ Imprimir</button>
         <button onclick="compartirEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
