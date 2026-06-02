@@ -934,7 +934,7 @@ async function loadView(view) {
     case 'control-personal-form': renderGenForm('control_personal','⏱ Control de Ingreso Personal',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del empleado',type:'text',req:true},
-      {id:'cargo',label:'Cargo',type:'select',opts:['Recepcionista','Camarera','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Otro']},
+      {id:'cargo',label:'Cargo',type:'select',opts:['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro']},
       {id:'horario',label:'Horario asignado',type:'text',default:'8:00 AM - 5:00 PM'},
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540'},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
@@ -3569,14 +3569,14 @@ function _durMin(ini, fin){
 function _fmtDur(m){ if (m == null) return '-'; const h = Math.floor(m/60), mm = m%60; return h+'h '+(mm<10?'0':'')+mm+'m'; }
 
 // Jornada base por cargo (en minutos): en turnos de 12h el tiempo extra cuenta A PARTIR de aquí
-const JORNADA_BASE = { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':540, 'Camarera':530, 'Otro':540 };
+const JORNADA_BASE = { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 };
 // Calcula el tiempo extra del día según cargo y tipo de turno
 function calcExtraMin(cargo, horarioStr, ingreso, salida, baseOverride){
   const total = _durMin(ingreso, salida);
   const h = parseHorario(horarioStr);
   let durHorario = null;
   if (h && h.inicio!=null && h.fin!=null){ durHorario = h.fin - h.inicio; if (durHorario<0) durHorario += 1440; }
-  const esTurno12h = (durHorario!=null && durHorario>=660) || (total!=null && total>=660);
+  const esTurno12h = true; // aplicar jornada base en todos los turnos, no solo 12h
   let extra = 0;
   if (total!=null && esTurno12h){
     const base = (Number(baseOverride)>0) ? Number(baseOverride) : (JORNADA_BASE[cargo] || 540);
