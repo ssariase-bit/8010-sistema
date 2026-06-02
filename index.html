@@ -1277,13 +1277,14 @@ async function renderRack() {
   if (aptos.length === 0) aptos = [...APTOS_DEFAULT];
 
   const colorMap = {
-    'Ocupado':      {bg:'#C6EFCE',color:'#276221',code:'IN'},
-    'Check-in hoy': {bg:'#BDD7EE',color:'#1F3864',code:'CKI'},
-    'Check-out hoy':{bg:'#FFEB9C',color:'#9C6500',code:'CKO'},
-    'Libre':        {bg:'#F2F2F2',color:'#888',code:''},
-    'Limpieza':     {bg:'#E8D5F5',color:'#6b21a8',code:'HK'},
-    'Mantenimiento':{bg:'#FCE4D6',color:'#C00000',code:'MT'},
-    'Bloqueado':    {bg:'#D9D9D9',color:'#555',code:'BLQ'},
+    'Ocupado':      {bg:'#B7E1A1',color:'#2D5016',code:'IN'},
+    'Check-in hoy': {bg:'#9EC5F0',color:'#0C447C',code:'CKI'},
+    'Check-out hoy':{bg:'#FBC97D',color:'#854F0B',code:'CKO'},
+    'Libre':        {bg:'#F7F7F7',color:'#999',code:''},
+    'Limpieza':     {bg:'#E7D4F7',color:'#5B2A86',code:'HK'},
+    'Mantenimiento':{bg:'#F4A8A0',color:'#8B1A1A',code:'MT'},
+    'Bloqueado':    {bg:'#CFCFCF',color:'#444',code:'BLQ'},
+    'Completo':     {bg:'#7FC97F',color:'#15401a',code:'COMP'},
   };
 
   // Indicadores del Rack Gráfico para este mes
@@ -1317,19 +1318,25 @@ async function renderRack() {
 
   // Generar filas del rack
   const filas = aptos.map(apto => {
+    const _varAdeApto = APTO_A_MAP[apto];   // si este apto es padre, su habitación A
+    const _esVarA = apto.endsWith('A');
     const celdas = Array.from({length:daysInMonth},(_,i)=>{
       const d = i+1;
       const rec = rack[apto]?.[d];
-      const est = rec?.estado || 'Libre';
+      let est = rec?.estado || 'Libre';
+      // Día "apto completo": la A incluida, o el padre cuya A está completa ese día
+      const aIncluida = _esVarA && (rec?.observaciones||'').includes('Apto completo');
+      const padreConA = _varAdeApto && (rack[_varAdeApto]?.[d]?.observaciones||'').includes('Apto completo');
+      if (aIncluida || padreConA) est = 'Completo';
       const cm = colorMap[est] || colorMap['Libre'];
       const isHoy = esMesActual && d === todayDay;
       const apellido = rec?.huesped ? rec.huesped.split(' ').slice(-1)[0].substring(0,5) : '';
       const border = isHoy ? '2px solid #1F3864' : '1px solid #ddd';
-      const title = rec?.huesped ? `${rec.huesped} — ${est}${rec.tarifa ? ' — $'+Number(rec.tarifa).toLocaleString('es-CO') : ''}` : est;
+      const estTxt = est === 'Completo' ? 'Apto completo' : est;
+      const title = rec?.huesped ? `${rec.huesped} — ${estTxt}${rec.tarifa ? ' — $'+Number(rec.tarifa).toLocaleString('es-CO') : ''}` : estTxt;
       const onclick = canEdit && rec?.id ? `openAptoModal('${rec.id}','${apto}')` : (canEdit ? `crearDiaRack('${apto}','${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}')` : '');
-      const esCompletoA = est === 'Bloqueado' && rec?.observaciones?.includes('Apto completo');
-      return `<td title="${title}" onclick="${onclick}" style="background:${esCompletoA?'#FFD700':cm.bg};color:${esCompletoA?'#7c4a03':cm.color};text-align:center;padding:2px 1px;border:${esCompletoA?'2px solid #D35400':border};cursor:${canEdit?'pointer':'default'};min-width:${CELL_W}px;max-width:${CELL_W}px;overflow:hidden;height:32px">
-        <div style="font-size:10px;font-weight:800;line-height:1.3">${esCompletoA?'🔒':cm.code||''}</div>
+      return `<td title="${title}" onclick="${onclick}" style="background:${cm.bg};color:${cm.color};text-align:center;padding:2px 1px;border:${border};cursor:${canEdit?'pointer':'default'};min-width:${CELL_W}px;max-width:${CELL_W}px;overflow:hidden;height:32px">
+        <div style="font-size:10px;font-weight:800;line-height:1.3">${cm.code||''}</div>
         <div style="font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:${CELL_W-2}px;font-weight:600">${apellido}</div>
       </td>`;
     }).join('');
@@ -1339,28 +1346,23 @@ async function renderRack() {
       const r = rack[apto]?.[d2];
       if(r && r.estado !== 'Libre') { estHoy = r.estado; huesHoy = r.huesped || ''; break; }
     }
-    const cm = colorMap[estHoy] || colorMap['Libre'];
+    let cmFila = colorMap[estHoy] || colorMap['Libre'];
     const tarHoy = rack[apto]?.[todayDay]?.tarifa;
-    // Indicadores de relación apto completo
+    // Relación apto completo
     const esVarianteA = apto.endsWith('A');
-    const padreDeA = Object.keys(APTO_A_MAP).find(k => APTO_A_MAP[k] === apto);
     const varADeEste = APTO_A_MAP[apto];
-    const padreOcupadoHoy = padreDeA && rack[padreDeA]?.[todayDay]?.estado === 'Ocupado';
-    const recHoyPadre = padreDeA ? rack[padreDeA]?.[todayDay] : null;
-    const esAptoCompletoBloqueado = esVarianteA && estHoy === 'Bloqueado' && rack[apto]?.[todayDay]?.observaciones?.includes('Apto completo');
-    const aCompletaHoy = varADeEste && rack[varADeEste]?.[todayDay]?.estado === 'Bloqueado' && (rack[varADeEste]?.[todayDay]?.observaciones||'').includes('Apto completo');
+    const aIncluidaHoy = esVarianteA && (rack[apto]?.[todayDay]?.observaciones||'').includes('Apto completo');
+    const aCompletaHoy = varADeEste && (rack[varADeEste]?.[todayDay]?.observaciones||'').includes('Apto completo');
+    if (aIncluidaHoy || aCompletaHoy) cmFila = colorMap['Completo'];
 
     return `<tr style="height:34px;${esVarianteA?'background:#fafafa;':''}">
-      <td style="position:sticky;left:0;background:${esAptoCompletoBloqueado?'#FFD700':cm.bg};color:${esAptoCompletoBloqueado?'#7c4a03':cm.color};font-weight:800;padding:4px 8px;font-size:12px;border:1px solid #ccc;white-space:nowrap;z-index:2;min-width:${APTO_W}px">
+      <td style="position:sticky;left:0;background:${cmFila.bg};color:${cmFila.color};font-weight:800;padding:4px 8px;font-size:12px;border:1px solid #ccc;white-space:nowrap;z-index:2;min-width:${APTO_W}px">
         ${esVarianteA ? `<span style="font-size:9px;color:#9CA3AF">↳</span> ` : ''}${apto}
-        ${esAptoCompletoBloqueado ? '<span style="font-size:9px">🔒</span>' : ''}
       </td>
-      <td style="position:sticky;left:${APTO_W}px;background:${esAptoCompletoBloqueado?'#FFD700':cm.bg};color:${esAptoCompletoBloqueado?'#7c4a03':cm.color};padding:4px 8px;font-size:11px;border:1px solid #ccc;white-space:nowrap;z-index:2;min-width:${HUES_W}px;max-width:${HUES_W}px;overflow:hidden;text-overflow:ellipsis" title="${huesHoy}">
-        ${esAptoCompletoBloqueado
-          ? `<span style="font-size:11px;font-style:italic">🔒 Incluida en apto ${padreDeA}</span>`
-          : `<div style="font-weight:600">${huesHoy || (estHoy==='Libre'?'<span style="color:#aaa;font-style:italic">Libre</span>':'')}</div>
-             ${tarHoy ? `<div style="font-size:9px;opacity:.7">$${Number(tarHoy).toLocaleString('es-CO')}/noche</div>` : ''}
-             ${varADeEste && estHoy==='Ocupado' && canEdit ? `<div style="margin-top:2px"><button onclick="marcarCompletoDirecto('${rack[apto]?.[todayDay]?.id}','${apto}')" style="font-size:8px;background:${aCompletaHoy?'var(--verde)':'var(--naran)'};color:white;border:none;border-radius:3px;padding:1px 7px;cursor:pointer">${aCompletaHoy?'🏠 Completo ✓':'🏠 Marcar completo'}</button></div>` : ''}`}
+      <td style="position:sticky;left:${APTO_W}px;background:${cmFila.bg};color:${cmFila.color};padding:4px 8px;font-size:11px;border:1px solid #ccc;white-space:nowrap;z-index:2;min-width:${HUES_W}px;max-width:${HUES_W}px;overflow:hidden;text-overflow:ellipsis" title="${huesHoy}">
+        <div style="font-weight:600">${huesHoy || (estHoy==='Libre' && !aIncluidaHoy ? '<span style="color:#aaa;font-style:italic">Libre</span>':'')}${aIncluidaHoy?' <span style="font-size:9px;font-style:italic">· completo</span>':''}</div>
+        ${tarHoy && !aIncluidaHoy ? `<div style="font-size:9px;opacity:.7">$${Number(tarHoy).toLocaleString('es-CO')}/noche</div>` : ''}
+        ${varADeEste && ['Ocupado','Check-in hoy','Check-out hoy'].includes(estHoy) && canEdit ? `<div style="margin-top:2px"><button onclick="marcarCompletoDirecto('${rack[apto]?.[todayDay]?.id}','${apto}')" style="font-size:8px;background:${aCompletaHoy?'#15401a':'var(--naran)'};color:white;border:none;border-radius:3px;padding:1px 7px;cursor:pointer">${aCompletaHoy?'🏠 Completo ✓':'🏠 Marcar completo'}</button></div>` : ''}
       </td>
       ${celdas}
     </tr>`;
@@ -1384,7 +1386,8 @@ async function renderRack() {
           let ocu=0, disp=0; const tar=[];
           lista.forEach(a=>{
             const r = rack[a]?.[todayDay]; const e = r?.estado||'Libre';
-            if (FUERA.includes(e)) return; // sale del denominador
+            const incluida = (r?.observaciones||'').includes('Apto completo'); // A de apto completo: fuera de inventario
+            if (FUERA.includes(e) || incluida) return; // sale del denominador
             disp++;
             if (OCU.includes(e)){ ocu++; if (r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa)); }
           });
@@ -1462,24 +1465,50 @@ async function crearDiaRack(apto, fecha) {
   }
 }
 
-// Marca/libera "Apto completo" con un solo clic (bloquea la variante A)
+// Genera lista de fechas YYYY-MM-DD entre ini y fin (inclusive)
+function rangoFechasRack(ini, fin){
+  const out = [];
+  if (!ini) return out;
+  const d = new Date(ini + 'T00:00:00');
+  const f = fin ? new Date(fin + 'T00:00:00') : new Date(ini + 'T00:00:00');
+  let guard = 0;
+  while (d <= f && guard < 400){ out.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); guard++; }
+  return out;
+}
+
+// Ocupa (o libera) la habitación A "de largo" durante la estadía del apto padre
+async function aplicarCompleto(apto, fechaBase, checkin, checkout, huesped, activar){
+  const varA = APTO_A_MAP[apto];
+  if (!varA) return;
+  // Rango = noches de la estadía (checkin .. checkout-1); si no hay datos, solo el día base
+  let finStr = checkout || fechaBase;
+  if (checkin && checkout && checkout > checkin){
+    const fd = new Date(checkout + 'T00:00:00'); fd.setDate(fd.getDate()-1);
+    finStr = fd.toISOString().slice(0,10);
+  }
+  const fechas = rangoFechasRack(checkin || fechaBase, finStr);
+  for (const f of fechas){
+    const { data: aRow } = await sb.from('rack').select('id').eq('fecha', f).eq('apto', varA).single();
+    if (activar){
+      const upd = { estado:'Ocupado', huesped: huesped||null, tarifa:null, observaciones:`Apto completo — incluido en ${apto}`, updated_by:currentUser.id };
+      if (aRow) await sb.from('rack').update(upd).eq('id', aRow.id);
+      else await sb.from('rack').insert({ fecha:f, apto:varA, ...upd });
+    } else if (aRow){
+      await sb.from('rack').update({ estado:'Libre', huesped:null, tarifa:null, observaciones:null, updated_by:currentUser.id }).eq('id', aRow.id);
+    }
+  }
+}
+
+// Marca/libera "Apto completo" con un solo clic — ocupa la A de largo
 async function marcarCompletoDirecto(id, apto){
   const varA = APTO_A_MAP[apto];
   if (!varA){ showToast('Este apto no tiene habitación A', 'error'); return; }
-  const { data: rec } = await sb.from('rack').select('fecha').eq('id', id).single();
-  if (!rec){ showToast('No se encontró el registro', 'error'); return; }
-  const fecha = rec.fecha;
-  const { data: aRow } = await sb.from('rack').select('id,estado,observaciones').eq('fecha', fecha).eq('apto', varA).single();
-  const yaCompleto = aRow?.estado === 'Bloqueado' && (aRow?.observaciones||'').includes('Apto completo');
-  if (yaCompleto){
-    await sb.from('rack').update({ estado:'Libre', huesped:null, observaciones:null, updated_by:currentUser.id }).eq('id', aRow.id);
-    showToast(`Apto ${apto}: habitación ${varA} liberada`, 'success');
-  } else {
-    const upd = { estado:'Bloqueado', huesped:null, tarifa:null, observaciones:`Apto completo — incluido en ${apto}`, updated_by:currentUser.id };
-    if (aRow) await sb.from('rack').update(upd).eq('id', aRow.id);
-    else await sb.from('rack').insert({ fecha, apto:varA, ...upd });
-    showToast(`✅ Apto ${apto} completo — ${varA} bloqueado`, 'success');
-  }
+  const { data: padre } = await sb.from('rack').select('fecha,checkin,checkout,huesped').eq('id', id).single();
+  if (!padre){ showToast('No se encontró el registro', 'error'); return; }
+  const { data: aBase } = await sb.from('rack').select('observaciones').eq('fecha', padre.fecha).eq('apto', varA).single();
+  const yaCompleto = (aBase?.observaciones||'').includes('Apto completo');
+  await aplicarCompleto(apto, padre.fecha, padre.checkin, padre.checkout, padre.huesped, !yaCompleto);
+  showToast(yaCompleto ? `Apto ${apto}: habitación ${varA} liberada` : `✅ Apto ${apto} completo — ${varA} ocupada de largo`, 'success');
   renderRack();
 }
 
@@ -1494,7 +1523,8 @@ function infoDiaRack(dia){
     let ocu=0, disp=0; const tar=[];
     lista.forEach(a=>{
       const r = rack[a]?.[dia]; const e = r?.estado||'Libre';
-      if (FUERA.includes(e)) return;
+      const incluida = (r?.observaciones||'').includes('Apto completo');
+      if (FUERA.includes(e) || incluida) return;
       disp++;
       if (OCU.includes(e)){ ocu++; if (r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa)); }
     });
@@ -1599,23 +1629,10 @@ async function saveApto() {
   const { error } = await sb.from('rack').update(updates).eq('id', currentAptoId);
   if (error) { showToast('Error al guardar', 'error'); return; }
 
-  // Auto-bloquear/desbloquear la variante A
-  if (varA && updates.estado === 'Ocupado') {
-    // Buscar o crear registro de la A para esta fecha
-    const { data: aRow } = await sb.from('rack').select('id').eq('fecha', fecha).eq('apto', varA).single();
-    const aUpd = esCompleto
-      ? { estado: 'Bloqueado', huesped: null, tarifa: null, observaciones: `Apto completo — incluido en ${aNum}`, updated_by: currentUser.id }
-      : (aRow ? null : { estado: 'Libre', updated_by: currentUser.id }); // No tocar si existe con otro huésped
-
-    if (esCompleto && aRow) {
-      await sb.from('rack').update(aUpd).eq('id', aRow.id);
-    } else if (esCompleto && !aRow) {
-      await sb.from('rack').insert({ fecha, apto: varA, ...aUpd });
-    } else if (!esCompleto && aRow?.estado === 'Bloqueado') {
-      // Desbloquear si ya no es completo
-      await sb.from('rack').update({ estado: 'Libre', huesped: null, observaciones: null, updated_by: currentUser.id }).eq('id', aRow.id);
-    }
-    if (esCompleto) showToast(`✅ Apto ${aNum} guardado — ${varA} bloqueado`, 'success');
+  // Apto completo: ocupar/liberar la variante A "de largo" durante la estadía
+  if (varA && ['Ocupado','Check-in hoy','Check-out hoy'].includes(updates.estado)) {
+    await aplicarCompleto(aNum, fecha, updates.checkin, updates.checkout, updates.huesped, esCompleto);
+    showToast(esCompleto ? `✅ Apto ${aNum} guardado — ${varA} completo de largo` : '✅ Apartamento actualizado', 'success');
   } else {
     showToast('✅ Apartamento actualizado', 'success');
   }
