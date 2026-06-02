@@ -1269,7 +1269,9 @@ async function renderRack() {
 
   let aptos = [...new Set((allRack||[]).map(r => r.apto))].sort((a,b) => {
     const na = parseInt(a); const nb = parseInt(b);
-    return isNaN(na)||isNaN(nb) ? a.localeCompare(b) : na-nb;
+    if (isNaN(na)||isNaN(nb)) return a.localeCompare(b);
+    if (na !== nb) return na - nb;
+    return a.length - b.length; // '501' antes de '501A'
   });
   // Para meses sin datos usa la lista de aptos por defecto
   if (aptos.length === 0) aptos = [...APTOS_DEFAULT];
@@ -1373,20 +1375,37 @@ async function renderRack() {
     </div>
     <div class="kpi-grid" style="margin-bottom:14px">
       ${(() => {
-        // KPIs del día con datos REALES del rack
-        // Solo los 21 aptos base (excluye A variants del denominador)
-        const APTOS_BASE = ['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'];
-        const hoyAptos = APTOS_BASE.map(a => rack[a]?.[todayDay]);
-        const ocupadosReal = hoyAptos.filter(r => r && (r.estado==='Ocupado'||r.estado==='Check-in hoy'||r.estado==='Check-out hoy')).length;
-        const ocuPctReal = Math.round(ocupadosReal / 21 * 100);
-        const conTarifa = hoyAptos.filter(r => r?.tarifa && Number(r.tarifa)>0);
-        const adrReal = conTarifa.length>0 ? Math.round(conTarifa.reduce((s,r)=>s+Number(r.tarifa),0)/conTarifa.length) : 0;
-        const ingresosHoy = conTarifa.reduce((s,r)=>s+Number(r.tarifa),0);
+        // Ocupación con dos bases: 21 unidades-apto y 33 habitaciones
+        const BASE21 = ['301','302','303','304','401','402','403','501','502','601','602','701','702','801','802','901','902','1001','1002','1101','1102'];
+        const AS = ['501A','502A','601A','602A','701A','702A','801A','802A','901A','902A','1001A','1002A'];
+        const OCU = ['Ocupado','Check-in hoy','Check-out hoy'];
+        const FUERA = ['Bloqueado','Mantenimiento']; // fuera de inventario ese día
+        const calcBase = (lista) => {
+          let ocu=0, disp=0; const tar=[];
+          lista.forEach(a=>{
+            const r = rack[a]?.[todayDay]; const e = r?.estado||'Libre';
+            if (FUERA.includes(e)) return; // sale del denominador
+            disp++;
+            if (OCU.includes(e)){ ocu++; if (r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa)); }
+          });
+          return {ocu, disp, tar};
+        };
+        const b21 = calcBase(BASE21);
+        const b33 = calcBase([...BASE21, ...AS]);
+        const pct21 = Math.round(b21.ocu/(b21.disp||1)*100);
+        const pct33 = Math.round(b33.ocu/(b33.disp||1)*100);
+        const adrReal = b33.tar.length>0 ? Math.round(b33.tar.reduce((s,x)=>s+x,0)/b33.tar.length) : 0;
+        const ingresosHoy = b33.tar.reduce((s,x)=>s+x,0);
         return `
       <div class="kpi k-verde" style="border-left-width:5px">
-        <div class="kpi-lbl">Ocupación hoy</div>
-        <div class="kpi-val">${ocuPctReal}%</div>
-        <div class="kpi-sub">${ocupadosReal} de 21 aptos</div>
+        <div class="kpi-lbl">Ocupación hoy · 21 aptos</div>
+        <div class="kpi-val">${pct21}%</div>
+        <div class="kpi-sub">${b21.ocu} de ${b21.disp} unidades</div>
+      </div>
+      <div class="kpi k-verde">
+        <div class="kpi-lbl">Ocupación hoy · 33 hab.</div>
+        <div class="kpi-val">${pct33}%</div>
+        <div class="kpi-sub">${b33.ocu} de ${b33.disp} habitaciones</div>
       </div>
       <div class="kpi k-azul">
         <div class="kpi-lbl">ADR del día</div>
@@ -1396,7 +1415,7 @@ async function renderRack() {
       <div class="kpi k-verde">
         <div class="kpi-lbl">Ingresos del día</div>
         <div class="kpi-val" style="font-size:18px">$${fmtNum(ingresosHoy)}</div>
-        <div class="kpi-sub">${conTarifa.length} aptos con tarifa</div>
+        <div class="kpi-sub">${b33.tar.length} hab. con tarifa</div>
       </div>`;
       })()}
       <div class="kpi k-azul"><div class="kpi-lbl">Check-in hoy</div><div class="kpi-val">${ckiHoy}</div></div>
@@ -1467,28 +1486,37 @@ async function marcarCompletoDirecto(id, apto){
 // Muestra ocupación y tarifa promedio (ADR) de un día al hacer clic en su encabezado
 function infoDiaRack(dia){
   const rack = window._rackData || {};
-  const BASE = ['301','302','303','304','401','402','403','501','502','601','602','701','702','801','802','901','902','1001','1002','1101','1102'];
-  let ocupados = 0; const tarifas = [];
-  BASE.forEach(a=>{
-    const r = rack[a]?.[dia];
-    if (r && ['Ocupado','Check-in hoy','Check-out hoy'].includes(r.estado)){
-      ocupados++;
-      if (r.tarifa && Number(r.tarifa)>0) tarifas.push(Number(r.tarifa));
-    }
-  });
-  const pct = Math.round(ocupados/21*100);
-  const adr = tarifas.length ? Math.round(tarifas.reduce((s,x)=>s+x,0)/tarifas.length) : 0;
-  const ing = tarifas.reduce((s,x)=>s+x,0);
+  const BASE21 = ['301','302','303','304','401','402','403','501','502','601','602','701','702','801','802','901','902','1001','1002','1101','1102'];
+  const AS = ['501A','502A','601A','602A','701A','702A','801A','802A','901A','902A','1001A','1002A'];
+  const OCU = ['Ocupado','Check-in hoy','Check-out hoy'];
+  const FUERA = ['Bloqueado','Mantenimiento'];
+  const calc = (lista) => {
+    let ocu=0, disp=0; const tar=[];
+    lista.forEach(a=>{
+      const r = rack[a]?.[dia]; const e = r?.estado||'Libre';
+      if (FUERA.includes(e)) return;
+      disp++;
+      if (OCU.includes(e)){ ocu++; if (r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa)); }
+    });
+    return {ocu, disp, tar};
+  };
+  const b21 = calc(BASE21);
+  const b33 = calc([...BASE21, ...AS]);
+  const pct21 = Math.round(b21.ocu/(b21.disp||1)*100);
+  const pct33 = Math.round(b33.ocu/(b33.disp||1)*100);
+  const adr = b33.tar.length ? Math.round(b33.tar.reduce((s,x)=>s+x,0)/b33.tar.length) : 0;
+  const ing = b33.tar.reduce((s,x)=>s+x,0);
   let pop = document.getElementById('rack-dia-pop');
   if (!pop){ pop = document.createElement('div'); pop.id='rack-dia-pop'; document.body.appendChild(pop); }
-  pop.style.cssText = 'position:fixed;top:90px;left:50%;transform:translateX(-50%);background:#1F3864;color:#fff;padding:14px 22px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.35);z-index:9999;font-size:13px;text-align:center;min-width:240px';
-  pop.innerHTML = `<div style="font-weight:700;margin-bottom:6px;font-size:14px">📅 Día ${dia} · ${window._rackMesNombre||''}</div>
-    <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Ocupación</span><b>${pct}% (${ocupados}/21)</b></div>
+  pop.style.cssText = 'position:fixed;top:90px;left:50%;transform:translateX(-50%);background:#1F3864;color:#fff;padding:14px 22px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.35);z-index:9999;font-size:13px;text-align:left;min-width:280px';
+  pop.innerHTML = `<div style="font-weight:700;margin-bottom:8px;font-size:14px;text-align:center">📅 Día ${dia} · ${window._rackMesNombre||''}</div>
+    <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Ocupación · 21 aptos</span><b>${pct21}% (${b21.ocu}/${b21.disp})</b></div>
+    <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Ocupación · 33 hab.</span><b>${pct33}% (${b33.ocu}/${b33.disp})</b></div>
     <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Tarifa promedio (ADR)</span><b>$${adr.toLocaleString('es-CO')}</b></div>
     <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Ingresos del día</span><b>$${ing.toLocaleString('es-CO')}</b></div>
-    <button onclick="this.parentElement.remove()" style="margin-top:8px;background:#fff;color:#1F3864;border:none;border-radius:6px;padding:4px 16px;cursor:pointer;font-size:11px;font-weight:600">Cerrar</button>`;
+    <div style="text-align:center"><button onclick="this.parentElement.parentElement.remove()" style="margin-top:8px;background:#fff;color:#1F3864;border:none;border-radius:6px;padding:4px 16px;cursor:pointer;font-size:11px;font-weight:600">Cerrar</button></div>`;
   clearTimeout(window._diaPopTimer);
-  window._diaPopTimer = setTimeout(()=>{ const p=document.getElementById('rack-dia-pop'); if(p) p.remove(); }, 7000);
+  window._diaPopTimer = setTimeout(()=>{ const p=document.getElementById('rack-dia-pop'); if(p) p.remove(); }, 8000);
 }
 
 let _aptoData = {};
