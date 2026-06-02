@@ -3549,10 +3549,11 @@ async function renderControlPersonal() {
             <span style="font-size:11px;color:var(--gris-t)">${porFecha[fecha].length} empleados</span>
           </div>
           <div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th>Empleado</th><th>Cargo</th><th>Horario</th><th>Ingreso</th><th>Salida</th><th>Retraso</th><th>Adicional</th><th>Obs.</th></tr></thead>
+            <thead><tr><th>Empleado</th><th>Cargo</th><th>Horario</th><th>Ingreso</th><th>Salida</th><th>Retraso</th><th>Adicional</th><th>Neto</th><th>Obs.</th></tr></thead>
             <tbody>${porFecha[fecha].map(r => {
               const retraso = Number(r.tiempo_retraso)||0;
               const adicional = Number(r.tiempo_adicional)||0;
+              const neto = adicional - retraso;
               const salidaBtn = r.marcacion_salida ? r.marcacion_salida : '<button onclick="registrarSalidaPersonal(\''+r.id+'\')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Salida</button>';
               return '<tr>'
                 +'<td><strong>'+(r.nombre||'-')+'</strong></td>'
@@ -3562,6 +3563,7 @@ async function renderControlPersonal() {
                 +'<td>'+salidaBtn+'</td>'
                 +'<td>'+(retraso>0?'<span style="color:var(--rojo);font-weight:600">'+retraso+' min</span>':'-')+'</td>'
                 +'<td>'+(adicional>0?'<span style="color:var(--verde);font-weight:600">'+adicional+' min</span>':'-')+'</td>'
+                +'<td>'+(neto>0?'<span style="color:var(--verde);font-weight:700">+'+neto+' min</span>':neto<0?'<span style="color:var(--rojo);font-weight:700">'+neto+' min</span>':'<span style="color:var(--gris-t)">0</span>')+'</td>'
                 +'<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r.observaciones||'-')+'</td>'
                 +'</tr>';
             }).join('')}</tbody>
@@ -4106,7 +4108,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
       <div class="form-row col3">
         <div class="form-group"><label>No. Factura</label><input type="text" id="cki-fv" placeholder="FV UL0000"></div>
         <div class="form-group"><label>Forma de pago</label>
-          <select id="cki-pago"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Cortesía</option></select>
+          <select id="cki-pago"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Cortesía</option><option>No paga al CKI</option><option>CxC Full</option><option>CxC Alojamiento</option></select>
         </div>
         <div class="form-group"><label>Equipaje</label>
           <select id="cki-equipaje"><option>Declina acompañamiento</option><option>Acepta acompañamiento</option></select>
@@ -4185,8 +4187,14 @@ function generarMsgCKI() {
   const [yf,mf,df] = ff ? ff.split('-') : ['-','-','-'];
   const fechasAloj = fi && ff ? `${di}/${mi}/${yi} - ${df}/${mf}/${yf}` : fi ? `desde ${di}/${mi}/${yi}` : '';
 
+  const condTxt = { 'No paga al CKI':'no realiza pago al CKI (pendiente)', 'CxC Full':'queda como CxC Full (cuenta por cobrar total)', 'CxC Alojamiento':'el alojamiento queda como CxC' };
+  const cond = condTxt[pago];
+  const pagoSeg = cond
+    ? (fv ? ` se genera ${fv}, ${cond}` : `, ${cond}`)
+    : (fv ? ` se genera ${fv} en ${pago}` : ` pago en ${pago}`);
+
   const msg = `${new Date().getHours()<12?'Buenos días':'Buenas tardes'},
-Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${fv?' se genera '+fv+' en '+pago:' pago en '+pago}, ${equipaje}, ${acta}, se relaciona check list, se envía book de servicios y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
+Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}, ${equipaje}, ${acta}, se relaciona check list, se envía book de servicios y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
   compartirInforme(`CKI — ${huesped} Apto ${apto}`, msg);
