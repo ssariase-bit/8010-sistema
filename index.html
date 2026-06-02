@@ -3349,7 +3349,8 @@ async function renderList(tabla, titulo, formView, cols, headers) {
       let v = r[c];
       if (v === null || v === undefined) return '<td>-</td>';
       if (typeof v === 'boolean') return `<td>${v ? '✅' : '❌'}</td>`;
-      if (String(c).includes('valor') || String(c).includes('costo')) return `<td>$${fmtNum(v)}</td>`;
+      const _cl = String(c).toLowerCase();
+      if (['valor','costo','iva','total','tarifa','transporte','lavander','minibar','varios','monto','subtotal','abono','saldo','utilidad','efectivo'].some(m=>_cl.includes(m)) && v!=='' && !isNaN(Number(v))) return `<td>$${fmtNum(Number(v))}</td>`;
       if (String(c).includes('fecha') && String(v).includes('-')) return `<td>${fmtDate(String(v).substring(0,10))}</td>`;
       if (c === 'estado') return `<td><span class="badge b-${v==='Activo'||v==='Ocupado'||v==='Prestado'?'proceso':v==='Resuelto'||v==='Devuelto'||v==='Recibido'?'resuelto':'alta'}">${v}</span></td>`;
       return `<td>${String(v).length > 35 ? String(v).substring(0,35)+'…' : v}</td>`;
@@ -3538,6 +3539,14 @@ function calcControlPersonal() {
   }
 }
 
+function _durMin(ini, fin){
+  const a = _timeToMin(ini), b = _timeToMin(fin);
+  if (a == null || b == null) return null;
+  let m = b - a; if (m < 0) m += 1440; // cruza medianoche
+  return m;
+}
+function _fmtDur(m){ if (m == null) return '-'; const h = Math.floor(m/60), mm = m%60; return h+'h '+(mm<10?'0':'')+mm+'m'; }
+
 async function renderControlPersonal() {
   const { data } = await sb.from('control_personal').select('*').order('fecha', {ascending:false}).order('nombre').limit(200);
   const rows = data || [];
@@ -3565,7 +3574,7 @@ async function renderControlPersonal() {
             <span style="font-size:11px;color:var(--gris-t)">${porFecha[fecha].length} empleados</span>
           </div>
           <div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th>Empleado</th><th>Cargo</th><th>Horario</th><th>Ingreso</th><th>Salida</th><th>Retraso</th><th>Adicional</th><th>Neto</th><th>Obs.</th></tr></thead>
+            <thead><tr><th>Empleado</th><th>Cargo</th><th>Horario</th><th>Ingreso</th><th>Salida</th><th>Total trab.</th><th>Retraso</th><th>Adicional</th><th>Neto</th><th>Obs.</th></tr></thead>
             <tbody>${porFecha[fecha].map(r => {
               const retraso = Number(r.tiempo_retraso)||0;
               const adicional = Number(r.tiempo_adicional)||0;
@@ -3577,6 +3586,7 @@ async function renderControlPersonal() {
                 +'<td style="font-size:11px;color:var(--gris-t)">'+(r.horario||'-')+'</td>'
                 +'<td style="color:'+(retraso>0?'var(--rojo)':'var(--verde)')+'">'+(r.marcacion_ingreso||'-')+'</td>'
                 +'<td>'+salidaBtn+'</td>'
+                +'<td style="font-weight:600;color:var(--azul)">'+_fmtDur(_durMin(r.marcacion_ingreso, r.marcacion_salida))+'</td>'
                 +'<td>'+(retraso>0?'<span style="color:var(--rojo);font-weight:600">'+retraso+' min</span>':'-')+'</td>'
                 +'<td>'+(adicional>0?'<span style="color:var(--verde);font-weight:600">'+adicional+' min</span>':'-')+'</td>'
                 +'<td>'+(neto>0?'<span style="color:var(--verde);font-weight:700">+'+neto+' min</span>':neto<0?'<span style="color:var(--rojo);font-weight:700">'+neto+' min</span>':'<span style="color:var(--gris-t)">0</span>')+'</td>'
