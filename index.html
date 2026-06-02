@@ -660,6 +660,7 @@ const MENU_COMPLETO = [
   { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
   { id: 'personal-form', icon: '➕', label: 'Nuevo Personal' },
   { id: 'personal-list', icon: '👤', label: 'Personal / RRHH' },
+  { id: 'cuadro-extras', icon: '⏲️', label: 'Cuadro Horas Extra' },
   { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
   { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
   { id: 'magnifique-form', icon: '➕', label: 'Nuevo Recibo' },
@@ -880,7 +881,7 @@ async function loadView(view) {
       {id:'estado',label:'Estado',type:'select',opts:['Pendiente','En proceso','Recibido','Cancelado']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
-    case 'personal-list':      await renderList('personal','👤 Personal / RRHH','personal-form',['nombre','cargo','area','fecha_ingreso','tipo_contrato','estado'],['Nombre','Cargo','Área','Ingreso','Contrato','Estado']); break;
+    case 'personal-list':      await renderList('personal','👤 Personal / RRHH','personal-form',['nombre','cargo','area','salario','fecha_ingreso','tipo_contrato','estado'],['Nombre','Cargo','Área','Salario','Ingreso','Contrato','Estado']); break;
     case 'personal-form':      renderGenForm('personal','👤 Registrar Personal',[
       {id:'nombre',label:'Nombre completo',type:'text',req:true},
       {id:'cargo',label:'Cargo',type:'text',req:true},
@@ -888,11 +889,13 @@ async function loadView(view) {
       {id:'documento',label:'No. Documento',type:'text'},
       {id:'telefono',label:'Teléfono',type:'text'},
       {id:'email',label:'Email',type:'email'},
+      {id:'salario',label:'Salario mensual ($)',type:'number',default:'0'},
       {id:'fecha_ingreso',label:'Fecha ingreso',type:'date'},
       {id:'tipo_contrato',label:'Tipo contrato',type:'select',opts:['Prestación servicios','Laboral fijo','Laboral indefinido','Temporal']},
       {id:'estado',label:'Estado',type:'select',opts:['Activo','Inactivo','Vacaciones','Incapacidad']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
+    case 'cuadro-extras':      await renderCuadroExtras(); break;
     case 'import-rack':        renderImportRack(); break;
 
     // ── MÓDULOS DE AUDITORÍA ───────────────────────────────
@@ -2265,7 +2268,7 @@ async function renderNovedadesList(filtro='') {
       ${rows.length === 0
         ? '<div class="empty"><div class="empty-icon">✅</div><p>Sin novedades</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th>Fecha</th><th>Hora</th><th>Área</th><th>Apto/Ubic.</th><th>Descripción</th><th>Prioridad</th><th>Estado</th><th>Reportó</th><th>Acciones</th></tr></thead>
+            <thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Fecha ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Hora ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Área ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Apto/Ubic. ⇅</th><th>Descripción</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Prioridad ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Estado ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Reportó ⇅</th><th>Acciones</th></tr></thead>
             <tbody>${rows.map(n => `<tr>
               <td>${fmtDate(n.fecha || (n.created_at ? n.created_at.split('T')[0] : null))}</td>
               <td style="white-space:nowrap;color:var(--gris-t);font-size:11px">${fmtHour(n.created_at)}</td>
@@ -3354,6 +3357,22 @@ function buscarEnListado(inp){
     tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
 }
+// Ordena una tabla por la columna del encabezado clicado (alterna asc/desc)
+function ordenarTabla(th){
+  const table = th.closest('table'); if(!table) return;
+  const idx = Array.from(th.parentNode.children).indexOf(th);
+  const tbody = table.querySelector('tbody'); if(!tbody) return;
+  const asc = th.getAttribute('data-asc') !== 'true';
+  Array.from(th.parentNode.children).forEach(t=>t.removeAttribute('data-asc'));
+  th.setAttribute('data-asc', asc?'true':'false');
+  const filas = Array.from(tbody.querySelectorAll('tr')).filter(tr=>tr.children.length>idx);
+  filas.sort((a,b)=>{
+    const x=(a.children[idx]?.textContent||'').trim(), y=(b.children[idx]?.textContent||'').trim();
+    const cmp = x.localeCompare(y,'es',{numeric:true,sensitivity:'base'});
+    return asc?cmp:-cmp;
+  });
+  filas.forEach(f=>tbody.appendChild(f));
+}
 
 async function renderList(tabla, titulo, formView, cols, headers) {
   const { data } = await sb.from(tabla).select('*').order('created_at', { ascending: false }).limit(100);
@@ -3394,7 +3413,7 @@ async function renderList(tabla, titulo, formView, cols, headers) {
       ${rows.length === 0
         ? '<div class="empty"><div class="empty-icon">📋</div><p>Sin registros todavía</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}<th></th></tr></thead>
+            <thead><tr>${headers.map(h=>`<th onclick="ordenarTabla(this)" style="cursor:pointer" title="Clic para ordenar">${h} ⇅</th>`).join('')}<th></th></tr></thead>
             <tbody>${tableRows}</tbody>
            </table></div>`}
     </div>`;
@@ -3588,6 +3607,105 @@ function calcExtraMin(cargo, horarioStr, ingreso, salida, baseOverride){
   return { extra, total, esTurno12h };
 }
 
+// Festivos Colombia 2026 (verificar con calendario oficial)
+const FESTIVOS_2026 = ['2026-01-01','2026-01-12','2026-03-23','2026-04-02','2026-04-03','2026-05-01','2026-05-18','2026-06-08','2026-06-15','2026-06-29','2026-07-20','2026-08-07','2026-08-17','2026-10-12','2026-11-02','2026-11-16','2026-12-08','2026-12-25'];
+
+function factorExtraNomina(tipo, fechaStr){
+  const domRec = (fechaStr >= '2026-07-01') ? 0.90 : 0.80; // reforma: 80% hasta jun-2026, 90% desde jul-2026
+  if (tipo==='diurna') return 1.25;
+  if (tipo==='nocturna') return 1.75;
+  if (tipo==='diurna_fest') return 1 + 0.25 + domRec;
+  if (tipo==='nocturna_fest') return 1 + 0.75 + domRec;
+  return 1;
+}
+// Clasifica los minutos extra (ubicados al final del turno) en diurno/nocturno y festivo/dominical
+function clasificaExtra(salida, extraMin, fecha){
+  const out = { diurna:0, nocturna:0, diurna_fest:0, nocturna_fest:0 };
+  if (!extraMin || extraMin<=0) return out;
+  const salMin = _timeToMin(salida);
+  if (salMin==null) return out;
+  const ini = salMin - extraMin;
+  const d = new Date(fecha+'T00:00:00');
+  const esFest = d.getDay()===0 || FESTIVOS_2026.includes(fecha);
+  let diur=0, noct=0;
+  for (let m=ini; m<salMin; m++){
+    const hm = ((m%1440)+1440)%1440;
+    if (hm>=1140 || hm<360) noct++; else diur++; // noche: 7pm–6am
+  }
+  if (esFest){ out.diurna_fest=diur; out.nocturna_fest=noct; }
+  else { out.diurna=diur; out.nocturna=noct; }
+  return out;
+}
+
+async function renderCuadroExtras(){
+  const now = new Date();
+  const year = (window._ceYear!=null) ? window._ceYear : now.getFullYear();
+  const month = (window._ceMes!=null) ? window._ceMes : now.getMonth();
+  window._ceYear = year; window._ceMes = month;
+  const mm = String(month+1).padStart(2,'0');
+  const ini = `${year}-${mm}-01`;
+  const fin = `${year}-${mm}-${String(new Date(year,month+1,0).getDate()).padStart(2,'0')}`;
+  const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  const [cpRes, persRes] = await Promise.all([
+    sb.from('control_personal').select('*').gte('fecha',ini).lte('fecha',fin),
+    sb.from('personal').select('nombre,cargo,salario')
+  ]);
+  const regs = cpRes.data || [];
+  const pers = persRes.data || [];
+  const norm = s => (s||'').trim().toLowerCase();
+  const salarioDe = {};
+  pers.forEach(p => { if(p.nombre) salarioDe[norm(p.nombre)] = Number(p.salario)||0; });
+
+  const acc = {};
+  regs.forEach(r => {
+    if (!r.marcacion_salida) return;
+    const extra = calcExtraMin(r.cargo, r.horario, r.marcacion_ingreso, r.marcacion_salida, r.jornada_base).extra;
+    if (extra<=0) return;
+    const c = clasificaExtra(r.marcacion_salida, extra, r.fecha);
+    const k = norm(r.nombre);
+    if (!acc[k]) acc[k] = { nombre:r.nombre, cargo:r.cargo, min:{diurna:0,nocturna:0,diurna_fest:0,nocturna_fest:0}, salario: salarioDe[k]||0 };
+    acc[k].min.diurna+=c.diurna; acc[k].min.nocturna+=c.nocturna; acc[k].min.diurna_fest+=c.diurna_fest; acc[k].min.nocturna_fest+=c.nocturna_fest;
+  });
+
+  let totalPagar = 0;
+  const hm = m => (m/60).toFixed(2).replace('.',',')+'h';
+  const filas = Object.values(acc).map(e => {
+    const vh = e.salario>0 ? e.salario/240 : 0;
+    const pago = t => (e.min[t]/60) * vh * factorExtraNomina(t, ini);
+    const pagoTotal = pago('diurna')+pago('nocturna')+pago('diurna_fest')+pago('nocturna_fest');
+    totalPagar += pagoTotal;
+    const totMin = e.min.diurna+e.min.nocturna+e.min.diurna_fest+e.min.nocturna_fest;
+    return `<tr>
+      <td><strong>${e.nombre||'-'}</strong></td>
+      <td>${e.cargo||'-'}</td>
+      <td>${e.salario>0?'$'+fmtNum(e.salario):'<span style="color:var(--rojo);font-size:11px">sin salario</span>'}</td>
+      <td>${hm(e.min.diurna)}</td>
+      <td>${hm(e.min.nocturna)}</td>
+      <td>${hm(e.min.diurna_fest+e.min.nocturna_fest)}</td>
+      <td><strong>${hm(totMin)}</strong></td>
+      <td style="font-weight:700;color:var(--verde)">$${fmtNum(Math.round(pagoTotal))}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('main-content').innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      <div class="page-title" style="margin-bottom:0">⏲️ Cuadro de Horas Extra</div>
+      <button onclick="window._ceMes=(${month}+11)%12;window._ceYear=${month===0?year-1:year};loadView('cuadro-extras')" class="btn btn-outline btn-sm">◀</button>
+      <strong>${monthNames[month]} ${year}</strong>
+      <button onclick="window._ceMes=(${month}+1)%12;window._ceYear=${month===11?year+1:year};loadView('cuadro-extras')" class="btn btn-outline btn-sm">▶</button>
+      <button onclick="window.print()" class="btn btn-outline btn-sm">🖨️ Imprimir</button>
+    </div>
+    <div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Valor hora = salario ÷ 240. Extra diurna 25%, nocturna (desde 7pm) 75%, festivo/dominical +${ini>='2026-07-01'?'90':'80'}%. Verifica salarios en Personal y los festivos.</div>
+    <div class="card">
+      ${filas ? `<div style="overflow-x:auto"><table class="tabla">
+        <thead><tr><th>Empleado</th><th>Cargo</th><th>Salario</th><th>Extra diurna</th><th>Extra nocturna</th><th>Festivo/dom.</th><th>Total extra</th><th>A pagar</th></tr></thead>
+        <tbody>${filas}</tbody>
+        <tfoot><tr style="background:var(--azul-c);font-weight:700"><td colspan="7" style="text-align:right">TOTAL A PAGAR</td><td style="color:var(--verde)">$${fmtNum(Math.round(totalPagar))}</td></tr></tfoot>
+      </table></div>` : '<div class="empty"><div class="empty-icon">⏲️</div><p>Sin horas extra registradas este mes</p></div>'}
+    </div>`;
+}
+
 async function renderControlPersonal() {
   const { data } = await sb.from('control_personal').select('*').order('fecha', {ascending:false}).order('nombre').limit(200);
   const rows = data || [];
@@ -3618,7 +3736,7 @@ async function renderControlPersonal() {
             <span style="font-size:11px;color:var(--gris-t)">${porFecha[fecha].length} empleados</span>
           </div>
           <div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th>Empleado</th><th>Cargo</th><th>Horario</th><th>Ingreso</th><th>Salida</th><th>Total trab.</th><th>Retraso</th><th>Adicional</th><th>Neto</th><th>Obs.</th></tr></thead>
+            <thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Empleado ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Cargo ⇅</th><th>Horario</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Ingreso ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Salida ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Total trab. ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Retraso ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Adicional ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Neto ⇅</th><th>Obs.</th></tr></thead>
             <tbody>${porFecha[fecha].slice().sort((a,b)=>(a.cargo||'').localeCompare(b.cargo||'')).map(r => {
               const retraso = Number(r.tiempo_retraso)||0;
               const adicional = r.marcacion_salida ? calcExtraMin(r.cargo, r.horario, r.marcacion_ingreso, r.marcacion_salida, r.jornada_base).extra : (Number(r.tiempo_adicional)||0);
