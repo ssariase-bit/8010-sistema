@@ -2175,14 +2175,15 @@ async function enviarOT() {
 // ═══════════════════════════════════════════════════════════
 // HOUSEKEEPING
 // ═══════════════════════════════════════════════════════════
-function renderHKForm() {
+async function renderHKForm() {
   document.getElementById('main-content').innerHTML = `
     <div class="page-title">🧹 Registrar Limpieza</div>
     <div class="card" style="max-width:600px">
       <div class="form-row">
         <div class="form-group"><label>Fecha</label><input type="date" id="hk-fecha" value="${TODAY}"></div>
         <div class="form-group"><label>Camarera</label>
-          <input type="text" id="hk-cam" value="${currentProfile?.nombre || ''}">
+          <input type="text" id="hk-cam" list="dl-camareras" placeholder="Nombre de la camarera" autocomplete="off">
+          <datalist id="dl-camareras"></datalist>
         </div>
       </div>
       <div class="form-row">
@@ -2205,6 +2206,12 @@ function renderHKForm() {
         <button class="btn btn-success" onclick="enviarHK()" style="min-width:180px">📤 Registrar limpieza</button>
       </div>
     </div>`;
+  try {
+    const [hk, pe] = await Promise.all([ sb.from('housekeeping').select('camarera'), sb.from('personal').select('nombre') ]);
+    const nombres = [...new Set([...(hk.data||[]).map(x=>x.camarera), ...(pe.data||[]).map(x=>x.nombre)].filter(Boolean))].sort((a,b)=>String(a).localeCompare(b));
+    const dl = document.getElementById('dl-camareras');
+    if (dl) dl.innerHTML = nombres.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}">`).join('');
+  } catch(e){}
 }
 
 async function enviarHK() {
@@ -3278,6 +3285,14 @@ function renderGenForm(tabla, titulo, campos) {
 
   // Auto-calcular retraso y tiempo adicional en control de personal
   if (tabla === 'control_personal') {
+    (async () => {
+      try {
+        const [cp, pe] = await Promise.all([ sb.from('control_personal').select('nombre'), sb.from('personal').select('nombre') ]);
+        const nombres = [...new Set([...(cp.data||[]).map(x=>x.nombre), ...(pe.data||[]).map(x=>x.nombre)].filter(Boolean))].sort((a,b)=>String(a).localeCompare(b));
+        const inp = document.getElementById('gf-nombre');
+        if (inp){ let dl=document.getElementById('dl-nombres'); if(!dl){dl=document.createElement('datalist');dl.id='dl-nombres';inp.parentNode.appendChild(dl);} dl.innerHTML=nombres.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}">`).join(''); inp.setAttribute('list','dl-nombres'); inp.setAttribute('autocomplete','off'); }
+      } catch(e){}
+    })();
     ['gf-horario','gf-marcacion_ingreso','gf-marcacion_salida','gf-jornada_base'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', calcControlPersonal);
