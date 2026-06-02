@@ -364,7 +364,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser = null;
 let currentProfile = null;
 let currentAptoId = null;
-const TODAY = new Date().toISOString().split('T')[0];
+const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 
 // ═══════════════════════════════════════════════════════════
 // AUTH
@@ -744,8 +744,8 @@ async function loadView(view) {
 
     // Listado General de Cargos
     case 'cargos-list': await renderList('listado_cargos','📋 Listado General de Cargos','cargos-form',
-      ['fecha','semana','apto','arrendatario','num_comanda','transporte','lavanderia','varios','total'],
-      ['Fecha','Semana','Apto','Arrendatario','Comanda','Transporte','Lavandería','Varios','Total']); break;
+      ['fecha','semana','apto','arrendatario','num_comanda','transporte','lavanderia','minibar','varios','total'],
+      ['Fecha','Semana','Apto','Arrendatario','Comanda','Transporte','Lavandería','Minibar','Varios','Total']); break;
     case 'cargos-form': renderGenForm('listado_cargos','📋 Registrar Cargo',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'semana',label:'Semana (ej: 25 MAY - 31 MAY)',type:'text'},
@@ -756,6 +756,8 @@ async function loadView(view) {
       {id:'utilidad_transporte',label:'Utilidad transporte ($)',type:'number',default:'0'},
       {id:'lavanderia',label:'Lavandería ($)',type:'number',default:'0'},
       {id:'utilidad_lavanderia',label:'Utilidad lavandería ($)',type:'number',default:'0'},
+      {id:'minibar',label:'Minibar ($)',type:'number',default:'0'},
+      {id:'utilidad_minibar',label:'Utilidad minibar ($)',type:'number',default:'0'},
       {id:'varios',label:'Varios ($)',type:'number',default:'0'},
       {id:'total',label:'Total ($)',type:'number',default:'0'},
       {id:'observaciones',label:'Observaciones',type:'text'},
@@ -4082,8 +4084,8 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
         </div>
       </div>
       <div class="form-row col3">
-        <div class="form-group"><label>Fecha aloj. inicio</label><input type="date" id="cki-fi" value="${TODAY}"></div>
-        <div class="form-group"><label>Fecha aloj. fin</label><input type="date" id="cki-ff"></div>
+        <div class="form-group"><label>Fecha aloj. inicio</label><input type="date" id="cki-fi" value="${TODAY}" onchange="calcCKI()"></div>
+        <div class="form-group"><label>Fecha aloj. fin</label><input type="date" id="cki-ff" onchange="calcCKI()"></div>
         <div class="form-group"><label>Moneda</label>
           <select id="cki-moneda" onchange="calcCKI()">
             <option value="COP">COP ($)</option>
@@ -4093,8 +4095,13 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
       </div>
       <div class="form-row col3">
         <div class="form-group"><label>Tarifa/noche</label><input type="number" id="cki-tarifa" value="${tarifa||''}" placeholder="0" onchange="calcCKI()"></div>
+        <div class="form-group"><label>Noches</label><input type="number" id="cki-noches" readonly style="background:#f5f5f5"></div>
+        <div class="form-group"><label>Subtotal</label><input type="number" id="cki-subtotal" readonly style="background:#f5f5f5"></div>
+      </div>
+      <div class="form-row col3">
         <div class="form-group"><label>IVA (19%)</label><input type="number" id="cki-iva" readonly style="background:#f5f5f5"></div>
         <div class="form-group"><label>Total</label><input type="number" id="cki-total" readonly style="background:#E2EFDA;font-weight:bold"></div>
+        <div class="form-group"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;padding-top:8px"><input type="checkbox" id="cki-exento" onchange="calcCKI()" style="width:auto;margin:0"> Exento de IVA</label></div>
       </div>
       <div class="form-row col3">
         <div class="form-group"><label>No. Factura</label><input type="text" id="cki-fv" placeholder="FV UL0000"></div>
@@ -4123,19 +4130,28 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
     </div>`;
 }
 
+function _nochesCKI(fi, ff){
+  if (!fi || !ff) return 0;
+  const d1 = new Date(fi+'T00:00:00'), d2 = new Date(ff+'T00:00:00');
+  return Math.max(0, Math.round((d2 - d1) / 86400000));
+}
 function calcCKI() {
   const tarifa = Number(document.getElementById('cki-tarifa').value) || 0;
   const moneda = document.getElementById('cki-moneda')?.value || 'COP';
-  let iva, total;
-  if (moneda === 'USD') {
-    iva = Math.round(tarifa * 0.19 * 100) / 100;
-    total = Math.round((tarifa + iva) * 100) / 100;
-  } else {
-    iva = Math.round(tarifa * 0.19);
-    total = tarifa + iva;
-  }
-  document.getElementById('cki-iva').value = iva;
-  document.getElementById('cki-total').value = total;
+  const exento = document.getElementById('cki-exento')?.checked || false;
+  const fi = document.getElementById('cki-fi')?.value;
+  const ff = document.getElementById('cki-ff')?.value;
+  let noches = _nochesCKI(fi, ff);
+  if (noches === 0 && tarifa > 0) noches = 1; // sin fechas: asumir 1 noche
+  const r2 = (n) => moneda === 'USD' ? Math.round(n*100)/100 : Math.round(n);
+  const subtotal = r2(tarifa * noches);
+  const iva = exento ? 0 : r2(tarifa * noches * 0.19);
+  const total = r2(subtotal + iva);
+  const set = (id,v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('cki-noches', noches);
+  set('cki-subtotal', subtotal);
+  set('cki-iva', iva);
+  set('cki-total', total);
 }
 
 function generarMsgCKI() {
@@ -4146,17 +4162,16 @@ function generarMsgCKI() {
   const ff = document.getElementById('cki-ff').value;
   const tarifa = Number(document.getElementById('cki-tarifa').value) || 0;
   const moneda = document.getElementById('cki-moneda')?.value || 'COP';
+  const exento = document.getElementById('cki-exento')?.checked || false;
   const fmt = (n) => moneda === 'USD'
     ? n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
     : n.toLocaleString('es-CO');
-  let iva, total;
-  if (moneda === 'USD') {
-    iva = Math.round(tarifa * 0.19 * 100) / 100;
-    total = Math.round((tarifa + iva) * 100) / 100;
-  } else {
-    iva = Math.round(tarifa * 0.19);
-    total = tarifa + iva;
-  }
+  const r2 = (n) => moneda === 'USD' ? Math.round(n*100)/100 : Math.round(n);
+  let noches = _nochesCKI(fi, ff);
+  if (noches === 0 && tarifa > 0) noches = 1;
+  const subtotal = r2(tarifa * noches);
+  const iva = exento ? 0 : r2(tarifa * noches * 0.19);
+  const total = r2(subtotal + iva);
   const fv = document.getElementById('cki-fv').value.trim();
   const pago = document.getElementById('cki-pago').value;
   const equipaje = document.getElementById('cki-equipaje').value;
@@ -4171,7 +4186,7 @@ function generarMsgCKI() {
   const fechasAloj = fi && ff ? `${di}/${mi}/${yi} - ${df}/${mf}/${yf}` : fi ? `desde ${di}/${mi}/${yi}` : '';
 
   const msg = `${new Date().getHours()<12?'Buenos días':'Buenas tardes'},
-Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} + IVA ($${fmt(iva)}) = $${fmt(total)} ${moneda}${fv?' se genera '+fv+' en '+pago:' pago en '+pago}, ${equipaje}, ${acta}, se relaciona check list, se envía book de servicios y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
+Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${fv?' se genera '+fv+' en '+pago:' pago en '+pago}, ${equipaje}, ${acta}, se relaciona check list, se envía book de servicios y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
   compartirInforme(`CKI — ${huesped} Apto ${apto}`, msg);
