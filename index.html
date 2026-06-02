@@ -1264,6 +1264,8 @@ async function renderRack() {
     if (!rack[r.apto]) rack[r.apto] = {};
     rack[r.apto][dia] = r;
   });
+  window._rackData = rack;
+  window._rackMesNombre = monthNames[month];
 
   let aptos = [...new Set((allRack||[]).map(r => r.apto))].sort((a,b) => {
     const na = parseInt(a); const nb = parseInt(b);
@@ -1306,7 +1308,7 @@ async function renderRack() {
     const dow = new Date(year, month, d).getDay();
     const isHoy = esMesActual && d === todayDay;
     const esFinde = dow===0||dow===6;
-    return `<th style="min-width:${CELL_W}px;width:${CELL_W}px;padding:2px;text-align:center;font-size:10px;background:${isHoy?'#1F3864':esFinde?'#8EA8C3':'#2F5597'};color:${isHoy?'#FFD700':'white'};position:sticky;top:0;white-space:nowrap;">
+    return `<th onclick="infoDiaRack(${d})" title="Ver ocupación y tarifa promedio del día ${d}" style="min-width:${CELL_W}px;width:${CELL_W}px;padding:2px;text-align:center;font-size:10px;background:${isHoy?'#1F3864':esFinde?'#8EA8C3':'#2F5597'};color:${isHoy?'#FFD700':'white'};position:sticky;top:0;white-space:nowrap;cursor:pointer;">
       <div style="font-weight:700">${d}</div><div style="font-size:8px;opacity:.8">${dayNames[dow]}</div>
     </th>`;
   }).join('');
@@ -1344,6 +1346,7 @@ async function renderRack() {
     const padreOcupadoHoy = padreDeA && rack[padreDeA]?.[todayDay]?.estado === 'Ocupado';
     const recHoyPadre = padreDeA ? rack[padreDeA]?.[todayDay] : null;
     const esAptoCompletoBloqueado = esVarianteA && estHoy === 'Bloqueado' && rack[apto]?.[todayDay]?.observaciones?.includes('Apto completo');
+    const aCompletaHoy = varADeEste && rack[varADeEste]?.[todayDay]?.estado === 'Bloqueado' && (rack[varADeEste]?.[todayDay]?.observaciones||'').includes('Apto completo');
 
     return `<tr style="height:34px;${esVarianteA?'background:#fafafa;':''}">
       <td style="position:sticky;left:0;background:${esAptoCompletoBloqueado?'#FFD700':cm.bg};color:${esAptoCompletoBloqueado?'#7c4a03':cm.color};font-weight:800;padding:4px 8px;font-size:12px;border:1px solid #ccc;white-space:nowrap;z-index:2;min-width:${APTO_W}px">
@@ -1355,7 +1358,7 @@ async function renderRack() {
           ? `<span style="font-size:11px;font-style:italic">🔒 Incluida en apto ${padreDeA}</span>`
           : `<div style="font-weight:600">${huesHoy || (estHoy==='Libre'?'<span style="color:#aaa;font-style:italic">Libre</span>':'')}</div>
              ${tarHoy ? `<div style="font-size:9px;opacity:.7">$${Number(tarHoy).toLocaleString('es-CO')}/noche</div>` : ''}
-             ${varADeEste && estHoy==='Ocupado' && canEdit ? `<div style="margin-top:2px"><button onclick="openAptoModal('${rack[apto]?.[todayDay]?.id}','${apto}')" style="font-size:8px;background:var(--naran);color:white;border:none;border-radius:3px;padding:1px 5px;cursor:pointer">🏠 Completo?</button></div>` : ''}`}
+             ${varADeEste && estHoy==='Ocupado' && canEdit ? `<div style="margin-top:2px"><button onclick="marcarCompletoDirecto('${rack[apto]?.[todayDay]?.id}','${apto}')" style="font-size:8px;background:${aCompletaHoy?'var(--verde)':'var(--naran)'};color:white;border:none;border-radius:3px;padding:1px 7px;cursor:pointer">${aCompletaHoy?'🏠 Completo ✓':'🏠 Marcar completo'}</button></div>` : ''}`}
       </td>
       ${celdas}
     </tr>`;
@@ -1438,6 +1441,54 @@ async function crearDiaRack(apto, fecha) {
       if (nuevo) openAptoModal(nuevo.id, apto);
     }
   }
+}
+
+// Marca/libera "Apto completo" con un solo clic (bloquea la variante A)
+async function marcarCompletoDirecto(id, apto){
+  const varA = APTO_A_MAP[apto];
+  if (!varA){ showToast('Este apto no tiene habitación A', 'error'); return; }
+  const { data: rec } = await sb.from('rack').select('fecha').eq('id', id).single();
+  if (!rec){ showToast('No se encontró el registro', 'error'); return; }
+  const fecha = rec.fecha;
+  const { data: aRow } = await sb.from('rack').select('id,estado,observaciones').eq('fecha', fecha).eq('apto', varA).single();
+  const yaCompleto = aRow?.estado === 'Bloqueado' && (aRow?.observaciones||'').includes('Apto completo');
+  if (yaCompleto){
+    await sb.from('rack').update({ estado:'Libre', huesped:null, observaciones:null, updated_by:currentUser.id }).eq('id', aRow.id);
+    showToast(`Apto ${apto}: habitación ${varA} liberada`, 'success');
+  } else {
+    const upd = { estado:'Bloqueado', huesped:null, tarifa:null, observaciones:`Apto completo — incluido en ${apto}`, updated_by:currentUser.id };
+    if (aRow) await sb.from('rack').update(upd).eq('id', aRow.id);
+    else await sb.from('rack').insert({ fecha, apto:varA, ...upd });
+    showToast(`✅ Apto ${apto} completo — ${varA} bloqueado`, 'success');
+  }
+  renderRack();
+}
+
+// Muestra ocupación y tarifa promedio (ADR) de un día al hacer clic en su encabezado
+function infoDiaRack(dia){
+  const rack = window._rackData || {};
+  const BASE = ['301','302','303','304','401','402','403','501','502','601','602','701','702','801','802','901','902','1001','1002','1101','1102'];
+  let ocupados = 0; const tarifas = [];
+  BASE.forEach(a=>{
+    const r = rack[a]?.[dia];
+    if (r && ['Ocupado','Check-in hoy','Check-out hoy'].includes(r.estado)){
+      ocupados++;
+      if (r.tarifa && Number(r.tarifa)>0) tarifas.push(Number(r.tarifa));
+    }
+  });
+  const pct = Math.round(ocupados/21*100);
+  const adr = tarifas.length ? Math.round(tarifas.reduce((s,x)=>s+x,0)/tarifas.length) : 0;
+  const ing = tarifas.reduce((s,x)=>s+x,0);
+  let pop = document.getElementById('rack-dia-pop');
+  if (!pop){ pop = document.createElement('div'); pop.id='rack-dia-pop'; document.body.appendChild(pop); }
+  pop.style.cssText = 'position:fixed;top:90px;left:50%;transform:translateX(-50%);background:#1F3864;color:#fff;padding:14px 22px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.35);z-index:9999;font-size:13px;text-align:center;min-width:240px';
+  pop.innerHTML = `<div style="font-weight:700;margin-bottom:6px;font-size:14px">📅 Día ${dia} · ${window._rackMesNombre||''}</div>
+    <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Ocupación</span><b>${pct}% (${ocupados}/21)</b></div>
+    <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Tarifa promedio (ADR)</span><b>$${adr.toLocaleString('es-CO')}</b></div>
+    <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Ingresos del día</span><b>$${ing.toLocaleString('es-CO')}</b></div>
+    <button onclick="this.parentElement.remove()" style="margin-top:8px;background:#fff;color:#1F3864;border:none;border-radius:6px;padding:4px 16px;cursor:pointer;font-size:11px;font-weight:600">Cerrar</button>`;
+  clearTimeout(window._diaPopTimer);
+  window._diaPopTimer = setTimeout(()=>{ const p=document.getElementById('rack-dia-pop'); if(p) p.remove(); }, 7000);
 }
 
 let _aptoData = {};
