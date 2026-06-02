@@ -2065,7 +2065,8 @@ async function enviarNovedad() {
   const { error } = await sb.from('novedades').insert({
     fecha: document.getElementById('n-fecha').value,
     turno: document.getElementById('n-turno').value,
-    area: apto ? `${document.getElementById('n-area').value} — ${apto}` : document.getElementById('n-area').value,
+    area: document.getElementById('n-area').value,
+    apto: apto || null,
     prioridad: document.getElementById('n-prio').value,
     descripcion: descFinal,
     reportado_por: document.getElementById('n-quien').value,
@@ -2225,6 +2226,19 @@ async function enviarHK() {
 // ═══════════════════════════════════════════════════════════
 // LISTAS
 // ═══════════════════════════════════════════════════════════
+// Separa "Recepción — 601" en { area:'Recepción', apto:'601' } (registros viejos)
+function splitAreaApto(area){
+  if (!area) return { area:'-', apto:'' };
+  const p = String(area).split(/\s*[—–]\s*/);
+  if (p.length >= 2) return { area: p[0].trim(), apto: p.slice(1).join(' - ').trim() };
+  return { area: String(area).trim(), apto: '' };
+}
+// Devuelve área y apto de una novedad: usa la columna apto si existe; si no, separa el campo area
+function areaApto(n){
+  if (n && n.apto) return { area: (n.area||'-'), apto: n.apto };
+  return splitAreaApto(n && n.area);
+}
+
 async function renderNovedadesList(filtro='') {
   const q = sb.from('novedades').select('*').order('created_at', { ascending: false }).limit(200);
   if (filtro === 'abiertas') q.in('estado', ['Abierto','En proceso','Escalado']);
@@ -2249,11 +2263,12 @@ async function renderNovedadesList(filtro='') {
       ${rows.length === 0
         ? '<div class="empty"><div class="empty-icon">✅</div><p>Sin novedades</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th>Fecha</th><th>Hora</th><th>Área</th><th>Descripción</th><th>Prioridad</th><th>Estado</th><th>Reportó</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Hora</th><th>Área</th><th>Apto/Ubic.</th><th>Descripción</th><th>Prioridad</th><th>Estado</th><th>Reportó</th><th>Acciones</th></tr></thead>
             <tbody>${rows.map(n => `<tr>
               <td>${fmtDate(n.fecha || (n.created_at ? n.created_at.split('T')[0] : null))}</td>
               <td style="white-space:nowrap;color:var(--gris-t);font-size:11px">${fmtHour(n.created_at)}</td>
-              <td>${n.area||'-'}</td>
+              <td>${areaApto(n).area}</td>
+              <td><strong>${areaApto(n).apto||'-'}</strong></td>
               <td style="max-width:280px">${n.descripcion}</td>
               <td>${badgePrio(n.prioridad)}</td>
               <td>${badgeEst(n.estado)}</td>
@@ -2277,7 +2292,8 @@ async function verNovedad(id) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
         <div><strong>Fecha:</strong> ${fmtDate(n.fecha)}</div>
         <div><strong>Turno:</strong> ${n.turno||'-'}</div>
-        <div><strong>Área:</strong> ${n.area||'-'}</div>
+        <div><strong>Área:</strong> ${areaApto(n).area}</div>
+        <div><strong>Apto/Ubic.:</strong> ${areaApto(n).apto||'-'}</div>
         <div><strong>Reportó:</strong> ${n.reportado_por||'-'}</div>
         <div><strong>Gestiona:</strong> ${n.gestionado_por||'— Sin asignar'}</div>
         <div><strong>Área gestor:</strong> ${n.area_gestor||'-'}</div>
@@ -3764,7 +3780,7 @@ async function renderNovedadesDiarias() {
     <div class="card" style="margin-bottom:10px;border-left:4px solid ${n.prioridad==='Alta'?'var(--rojo)':n.prioridad==='Media'?'var(--naran)':'var(--gris-b)'}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
         <div>
-          <div style="font-size:11px;color:var(--gris-t)">${fmtHour(n.created_at)} · ${n.area||'-'} · ${n.reportado_por||'-'}</div>
+          <div style="font-size:11px;color:var(--gris-t)">${fmtHour(n.created_at)} · ${areaApto(n).area}${areaApto(n).apto?' · '+areaApto(n).apto:''} · ${n.reportado_por||'-'}</div>
           <div style="font-size:13px;font-weight:600;margin:4px 0">${n.descripcion}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
@@ -3779,7 +3795,7 @@ async function renderNovedadesDiarias() {
     <div style="font-size:11px;font-weight:700;color:var(--verde);text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px">✅ Resueltas hoy (${resueltas.length})</div>
     <div class="card" style="padding:10px">
       ${resueltas.map(n => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gris-b);font-size:12px">
-        <span>${fmtHour(n.created_at)} · <strong>${n.area||'-'}</strong> — ${n.descripcion?.substring(0,60)}</span>
+        <span>${fmtHour(n.created_at)} · <strong>${areaApto(n).area}${areaApto(n).apto?' '+areaApto(n).apto:''}</strong> — ${n.descripcion?.substring(0,60)}</span>
         <span style="color:var(--verde);font-weight:600">✓ ${n.reportado_por||''}</span>
       </div>`).join('')}
     </div>` : ''}
