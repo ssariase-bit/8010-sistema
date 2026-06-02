@@ -3523,19 +3523,20 @@ function parseHorario(txt) {
 
 // Recalcula retraso y tiempo adicional en el formulario de control de personal
 function calcControlPersonal() {
-  const h = parseHorario(document.getElementById('gf-horario')?.value || '');
-  const ingMin = _timeToMin(document.getElementById('gf-marcacion_ingreso')?.value);
-  const salMin = _timeToMin(document.getElementById('gf-marcacion_salida')?.value);
+  const horario = document.getElementById('gf-horario')?.value || '';
+  const ingreso = document.getElementById('gf-marcacion_ingreso')?.value;
+  const salida = document.getElementById('gf-marcacion_salida')?.value;
+  const cargo = document.getElementById('gf-cargo')?.value || '';
+  const h = parseHorario(horario);
+  const ingMin = _timeToMin(ingreso);
   const elRet = document.getElementById('gf-tiempo_retraso');
   const elAdi = document.getElementById('gf-tiempo_adicional');
-  if (!h) return;
-  if (elRet && h.inicio != null && ingMin != null) {
+  if (elRet && h && h.inicio != null && ingMin != null) {
     const r = ingMin - h.inicio;
     elRet.value = r > 0 ? r : 0;
   }
-  if (elAdi && h.fin != null && salMin != null) {
-    const a = salMin - h.fin;
-    elAdi.value = a > 0 ? a : 0;
+  if (elAdi && salida) {
+    elAdi.value = calcExtraMin(cargo, horario, ingreso, salida).extra;
   }
 }
 
@@ -3546,6 +3547,26 @@ function _durMin(ini, fin){
   return m;
 }
 function _fmtDur(m){ if (m == null) return '-'; const h = Math.floor(m/60), mm = m%60; return h+'h '+(mm<10?'0':'')+mm+'m'; }
+
+// Jornada base por cargo (en minutos): en turnos de 12h el tiempo extra cuenta A PARTIR de aquí
+const JORNADA_BASE = { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':540, 'Camarera':530, 'Otro':540 };
+// Calcula el tiempo extra del día según cargo y tipo de turno
+function calcExtraMin(cargo, horarioStr, ingreso, salida){
+  const total = _durMin(ingreso, salida);
+  const h = parseHorario(horarioStr);
+  let durHorario = null;
+  if (h && h.inicio!=null && h.fin!=null){ durHorario = h.fin - h.inicio; if (durHorario<0) durHorario += 1440; }
+  const esTurno12h = (durHorario!=null && durHorario>=660) || (total!=null && total>=660);
+  let extra = 0;
+  if (total!=null && esTurno12h){
+    const base = JORNADA_BASE[cargo] || 540;
+    extra = Math.max(0, total - base);  // extra = total trabajado − jornada base del cargo
+  } else if (h && h.fin!=null){
+    const salMin = _timeToMin(salida);
+    if (salMin!=null) extra = Math.max(0, salMin - h.fin);  // turnos normales: salida vs hora fin
+  }
+  return { extra, total, esTurno12h };
+}
 
 async function renderControlPersonal() {
   const { data } = await sb.from('control_personal').select('*').order('fecha', {ascending:false}).order('nombre').limit(200);
@@ -3577,7 +3598,7 @@ async function renderControlPersonal() {
             <thead><tr><th>Empleado</th><th>Cargo</th><th>Horario</th><th>Ingreso</th><th>Salida</th><th>Total trab.</th><th>Retraso</th><th>Adicional</th><th>Neto</th><th>Obs.</th></tr></thead>
             <tbody>${porFecha[fecha].map(r => {
               const retraso = Number(r.tiempo_retraso)||0;
-              const adicional = Number(r.tiempo_adicional)||0;
+              const adicional = r.marcacion_salida ? calcExtraMin(r.cargo, r.horario, r.marcacion_ingreso, r.marcacion_salida).extra : (Number(r.tiempo_adicional)||0);
               const neto = adicional - retraso;
               const salidaBtn = r.marcacion_salida ? r.marcacion_salida : '<button onclick="registrarSalidaPersonal(\''+r.id+'\')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Salida</button>';
               return '<tr>'
@@ -3602,13 +3623,10 @@ async function registrarSalidaPersonal(id) {
   const hora = prompt('Hora de salida (HH:MM):', ahora);
   if (!hora) return;
   const upd = { marcacion_salida: hora };
-  // Recalcular tiempo adicional con base en el horario asignado
-  const { data: reg } = await sb.from('control_personal').select('horario').eq('id', id).single();
-  const h = reg ? parseHorario(reg.horario) : null;
-  const salMin = _timeToMin(hora);
-  if (h && h.fin != null && salMin != null) {
-    const a = salMin - h.fin;
-    upd.tiempo_adicional = a > 0 ? a : 0;
+  // Recalcular tiempo extra según cargo y tipo de turno
+  const { data: reg } = await sb.from('control_personal').select('horario,cargo,marcacion_ingreso').eq('id', id).single();
+  if (reg) {
+    upd.tiempo_adicional = calcExtraMin(reg.cargo, reg.horario, reg.marcacion_ingreso, hora).extra;
   }
   const { error } = await sb.from('control_personal').update(upd).eq('id', id);
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
