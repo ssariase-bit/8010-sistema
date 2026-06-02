@@ -4435,7 +4435,7 @@ function generarMsgCKI() {
     ? (fv ? ` se genera ${fv}, ${cond}` : `, ${cond}`)
     : (fv ? ` se genera ${fv} en ${pago}` : ` pago en ${pago}`);
 
-  const _fh = new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const _fh = new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
   const msg = `${new Date().getHours()<12?'Buenos días':'Buenas tardes'}, ${_fh}
 Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}, ${equipaje}, ${acta}, se relaciona check list, se envía book de servicios y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
@@ -4522,7 +4522,7 @@ function generarMsgCKO() {
   const actaStr = ', ' + acta.charAt(0).toLowerCase() + acta.slice(1);
   const maletasStr = maletas === 'Sin maletas' || maletas === 'Se lleva todo' ? '' : `. ${maletas.replace('Deja','Deja')} las cuales vendrán a recogerlas`;
 
-  const _fh = new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const _fh = new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
   const msg = `${h<12?'Buenos días':'Buenas tardes'}, ${_fh}
 Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${consumosStr}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}
 R/${quien}`;
