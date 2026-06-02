@@ -936,6 +936,7 @@ async function loadView(view) {
       {id:'nombre',label:'Nombre del empleado',type:'text',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:['Recepcionista','Camarera','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Otro']},
       {id:'horario',label:'Horario asignado',type:'text',default:'8:00 AM - 5:00 PM'},
+      {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540'},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
       {id:'tiempo_retraso',label:'Minutos de retraso',type:'number',default:'0'},
@@ -2258,6 +2259,7 @@ async function renderNovedadesList(filtro='') {
       <button class="btn btn-outline btn-sm" onclick="renderNovedadesList('abiertas')">Solo abiertas</button>
       <button class="btn btn-outline btn-sm" onclick="renderNovedadesList('')">Todas</button>
       <button onclick="compartirNovedades()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
+      <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (fecha, área, apto, texto...)" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px;flex:1;min-width:180px">
     </div>
     <div class="card">
       ${rows.length === 0
@@ -3272,10 +3274,16 @@ function renderGenForm(tabla, titulo, campos) {
 
   // Auto-calcular retraso y tiempo adicional en control de personal
   if (tabla === 'control_personal') {
-    ['gf-horario','gf-marcacion_ingreso','gf-marcacion_salida'].forEach(id => {
+    ['gf-horario','gf-marcacion_ingreso','gf-marcacion_salida','gf-jornada_base'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', calcControlPersonal);
     });
+    const cargoEl = document.getElementById('gf-cargo');
+    if (cargoEl) {
+      const setBase = () => { const jb = document.getElementById('gf-jornada_base'); if (jb) jb.value = JORNADA_BASE[cargoEl.value] || 540; calcControlPersonal(); };
+      cargoEl.addEventListener('change', setBase);
+      setBase(); // prellenar al abrir según el cargo inicial
+    }
     ['gf-tiempo_retraso','gf-tiempo_adicional'].forEach(id => {
       const el = document.getElementById(id);
       if (el) {
@@ -3339,6 +3347,14 @@ async function submitGenForm(tabla, ids, reqs) {
   setTimeout(() => loadView(listaView), 1500);
 }
 
+// Buscador client-side: filtra las filas de las tablas del contenido por texto
+function buscarEnListado(inp){
+  const q = (inp.value||'').toLowerCase();
+  document.querySelectorAll('#main-content table tbody tr').forEach(tr=>{
+    tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
 async function renderList(tabla, titulo, formView, cols, headers) {
   const { data } = await sb.from(tabla).select('*').order('created_at', { ascending: false }).limit(100);
   const rows = data || [];
@@ -3370,7 +3386,10 @@ async function renderList(tabla, titulo, formView, cols, headers) {
     <div class="card">
       <div class="card-header">
         <div class="card-title">${rows.length} registros</div>
-        <button class="btn btn-success btn-sm" onclick="loadView('${formView}')">+ Nuevo registro</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar..." style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
+          <button class="btn btn-success btn-sm" onclick="loadView('${formView}')">+ Nuevo registro</button>
+        </div>
       </div>
       ${rows.length === 0
         ? '<div class="empty"><div class="empty-icon">📋</div><p>Sin registros todavía</p></div>'
@@ -3535,8 +3554,9 @@ function calcControlPersonal() {
     const r = ingMin - h.inicio;
     elRet.value = r > 0 ? r : 0;
   }
+  const base = document.getElementById('gf-jornada_base')?.value;
   if (elAdi && salida) {
-    elAdi.value = calcExtraMin(cargo, horario, ingreso, salida).extra;
+    elAdi.value = calcExtraMin(cargo, horario, ingreso, salida, base).extra;
   }
 }
 
@@ -3551,7 +3571,7 @@ function _fmtDur(m){ if (m == null) return '-'; const h = Math.floor(m/60), mm =
 // Jornada base por cargo (en minutos): en turnos de 12h el tiempo extra cuenta A PARTIR de aquí
 const JORNADA_BASE = { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':540, 'Camarera':530, 'Otro':540 };
 // Calcula el tiempo extra del día según cargo y tipo de turno
-function calcExtraMin(cargo, horarioStr, ingreso, salida){
+function calcExtraMin(cargo, horarioStr, ingreso, salida, baseOverride){
   const total = _durMin(ingreso, salida);
   const h = parseHorario(horarioStr);
   let durHorario = null;
@@ -3559,8 +3579,8 @@ function calcExtraMin(cargo, horarioStr, ingreso, salida){
   const esTurno12h = (durHorario!=null && durHorario>=660) || (total!=null && total>=660);
   let extra = 0;
   if (total!=null && esTurno12h){
-    const base = JORNADA_BASE[cargo] || 540;
-    extra = Math.max(0, total - base);  // extra = total trabajado − jornada base del cargo
+    const base = (Number(baseOverride)>0) ? Number(baseOverride) : (JORNADA_BASE[cargo] || 540);
+    extra = Math.max(0, total - base);  // extra = total trabajado − jornada base
   } else if (h && h.fin!=null){
     const salMin = _timeToMin(salida);
     if (salMin!=null) extra = Math.max(0, salMin - h.fin);  // turnos normales: salida vs hora fin
@@ -3584,7 +3604,10 @@ async function renderControlPersonal() {
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <div class="page-title" style="margin-bottom:0">⏱ Control de Ingreso Personal</div>
-      <button class="btn btn-success btn-sm" onclick="loadView('control-personal-form')" style="padding:10px 20px">+ Registrar</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (nombre, cargo...)" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
+        <button class="btn btn-success btn-sm" onclick="loadView('control-personal-form')" style="padding:10px 20px">+ Registrar</button>
+      </div>
     </div>
     ${fechas.length === 0
       ? '<div class="card"><div class="empty"><div class="empty-icon">⏱</div><p>Sin registros</p></div></div>'
@@ -3596,9 +3619,9 @@ async function renderControlPersonal() {
           </div>
           <div style="overflow-x:auto"><table class="tabla">
             <thead><tr><th>Empleado</th><th>Cargo</th><th>Horario</th><th>Ingreso</th><th>Salida</th><th>Total trab.</th><th>Retraso</th><th>Adicional</th><th>Neto</th><th>Obs.</th></tr></thead>
-            <tbody>${porFecha[fecha].map(r => {
+            <tbody>${porFecha[fecha].slice().sort((a,b)=>(a.cargo||'').localeCompare(b.cargo||'')).map(r => {
               const retraso = Number(r.tiempo_retraso)||0;
-              const adicional = r.marcacion_salida ? calcExtraMin(r.cargo, r.horario, r.marcacion_ingreso, r.marcacion_salida).extra : (Number(r.tiempo_adicional)||0);
+              const adicional = r.marcacion_salida ? calcExtraMin(r.cargo, r.horario, r.marcacion_ingreso, r.marcacion_salida, r.jornada_base).extra : (Number(r.tiempo_adicional)||0);
               const neto = adicional - retraso;
               const salidaBtn = r.marcacion_salida ? r.marcacion_salida : '<button onclick="registrarSalidaPersonal(\''+r.id+'\')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Salida</button>';
               return '<tr>'
@@ -3624,9 +3647,9 @@ async function registrarSalidaPersonal(id) {
   if (!hora) return;
   const upd = { marcacion_salida: hora };
   // Recalcular tiempo extra según cargo y tipo de turno
-  const { data: reg } = await sb.from('control_personal').select('horario,cargo,marcacion_ingreso').eq('id', id).single();
+  const { data: reg } = await sb.from('control_personal').select('horario,cargo,marcacion_ingreso,jornada_base').eq('id', id).single();
   if (reg) {
-    upd.tiempo_adicional = calcExtraMin(reg.cargo, reg.horario, reg.marcacion_ingreso, hora).extra;
+    upd.tiempo_adicional = calcExtraMin(reg.cargo, reg.horario, reg.marcacion_ingreso, hora, reg.jornada_base).extra;
   }
   const { error } = await sb.from('control_personal').update(upd).eq('id', id);
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
