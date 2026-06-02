@@ -2767,6 +2767,15 @@ function renderNuevaReserva() {
             <input type="date" id="res-checkout" onchange="calcReserva()">
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Configuración del apto (si tiene habitación A)</label>
+            <select id="res-config">
+              <option value="completo">Completo — 126/132 m² · 2 habitaciones (King + doble)</option>
+              <option value="dividido">Dividido — 90/96 m² · 1 habitación (King)</option>
+            </select>
+          </div>
+        </div>
         <div class="form-row col3">
           <div class="form-group">
             <label>Noches</label>
@@ -3011,6 +3020,7 @@ function previsualizarConfirmacion() {
   if (!apto || !ci || !nombre) { showToast('Completa apto, fechas y nombre primero', 'error'); return; }
   generarConfirmacion({
     nombre, apto, noches, tarifa,
+    config: document.getElementById('res-config')?.value || 'completo',
     moneda: document.getElementById('res-moneda')?.value || 'COP',
     checkin: ci, checkout: co,
     canal: document.getElementById('res-canal').value,
@@ -3072,12 +3082,20 @@ function fmtFechaLarga(d) {
   return `${parseInt(day)} de ${meses[parseInt(m)-1]} de ${y}`;
 }
 
+// Metraje cuando el apto se renta DIVIDIDO (sin su habitación A): "01"=96 m², "02"=90 m²
+const METRAJE_DIVIDIDO = { '501':'96','502':'90','601':'96','602':'90','701':'96','702':'90','801':'96','802':'90','901':'96','902':'90','1001':'96','1002':'90' };
+
 function generarConfirmacion(r) {
   const hoy = new Date();
   const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   const fechaDoc = `${hoy.getDate()} de ${meses[hoy.getMonth()]} de ${hoy.getFullYear()}`;
-  const tipo = TIPOS_APTO[r.apto] || `Apartamento ${r.apto}`;
-  const desc = DESC_APTO[r.apto] || tipo + '.';
+  let tipo = TIPOS_APTO[r.apto] || `Apartamento ${r.apto}`;
+  let desc = DESC_APTO[r.apto] || tipo + '.';
+  if (r.config === 'dividido' && METRAJE_DIVIDIDO[r.apto]) {
+    const _m = METRAJE_DIVIDIDO[r.apto];
+    tipo = `Apartamento de ${_m} m²`;
+    desc = `Apartamento de ${_m} m² con 1 habitación:<br>01 cama King.`;
+  }
   const moneda = r.moneda || 'COP';
   const esUSD = moneda === 'USD';
   const simb = esUSD ? 'USD $' : '$';
