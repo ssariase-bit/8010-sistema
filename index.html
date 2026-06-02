@@ -2601,7 +2601,7 @@ async function renderHKList() {
               </div>
             </div>
             <div style="overflow-x:auto"><table class="tabla">
-              <thead><tr><th>Apto</th><th>Camarera</th><th>Ingreso</th><th>Salida</th><th>⏱ Duración</th><th>Estado</th><th>Observaciones</th></tr></thead>
+              <thead><tr><th>Apto</th><th>Camarera</th><th>Ingreso</th><th>Salida</th><th>⏱ Duración</th><th>Estado</th><th>Observaciones</th><th></th></tr></thead>
               <tbody>${dia.map(h => {
                 const mins = calcMin(h.hora_ingreso, h.hora_salida);
                 const durColor = !mins ? '#999' : mins <= 30 ? 'var(--verde)' : mins <= 45 ? 'var(--naran)' : 'var(--rojo)';
@@ -2616,6 +2616,7 @@ async function renderHKList() {
                   <td style="font-weight:700;color:${durColor}">${fmtMin(mins)}</td>
                   <td><span class="badge b-${h.estado==='Limpio'?'resuelto':h.estado==='Declina limpieza'?'alta':'proceso'}">${h.estado||'-'}</span></td>
                   <td style="max-width:140px;font-size:11px">${h.observaciones||'-'}</td>
+                  <td style="white-space:nowrap">${_btnsEdit('housekeeping', h.id)}</td>
                 </tr>`;
               }).join('')}</tbody>
             </table></div>
@@ -3374,6 +3375,46 @@ function ordenarTabla(th){
   filas.forEach(f=>tbody.appendChild(f));
 }
 
+// Edición/eliminación genérica de cualquier registro
+async function abrirEditarGen(tabla, id){
+  const { data: r } = await sb.from(tabla).select('*').eq('id', id).single();
+  if (!r){ showToast('No se encontró el registro', 'error'); return; }
+  const ocultar = ['id','user_id','created_at','updated_at','updated_by'];
+  const campos = Object.keys(r).filter(k=>!ocultar.includes(k)).map(k=>{
+    const val = (r[k]==null?'':String(r[k])).replace(/"/g,'&quot;');
+    return `<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--gris-t);display:block;text-transform:capitalize">${k.replace(/_/g,' ')}</label><input id="edt-${k}" value="${val}" style="width:100%;padding:7px 9px;border:1px solid #ccc;border-radius:6px;font-size:13px"></div>`;
+  }).join('');
+  let m=document.getElementById('modal-edit-gen'); if(!m){m=document.createElement('div');m.id='modal-edit-gen';document.body.appendChild(m);}
+  m.setAttribute('data-tabla',tabla); m.setAttribute('data-id',id);
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  m.innerHTML=`<div style="background:#fff;border-radius:12px;padding:20px;max-width:480px;width:100%;max-height:85vh;overflow:auto">
+    <h3 style="margin:0 0 12px;font-size:16px">✏️ Editar registro</h3>${campos}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('modal-edit-gen').remove()">Cancelar</button>
+      <button class="btn btn-success btn-sm" onclick="guardarEditarGen()">Guardar cambios</button>
+    </div></div>`;
+}
+async function guardarEditarGen(){
+  const m=document.getElementById('modal-edit-gen'); if(!m) return;
+  const tabla=m.getAttribute('data-tabla'), id=m.getAttribute('data-id');
+  const upd={};
+  m.querySelectorAll('[id^="edt-"]').forEach(el=>{ upd[el.id.slice(4)] = el.value===''?null:el.value; });
+  const { error } = await sb.from(tabla).update(upd).eq('id', id);
+  if(error){ showToast('Error: '+error.message,'error'); return; }
+  m.remove(); showToast('✅ Registro actualizado','success');
+  loadView(window._currentView||'dashboard');
+}
+async function eliminarGen(tabla, id){
+  if(!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+  const { error } = await sb.from(tabla).delete().eq('id', id);
+  if(error){ showToast('Error: '+error.message,'error'); return; }
+  showToast('🗑️ Registro eliminado','success');
+  loadView(window._currentView||'dashboard');
+}
+function _btnsEdit(tabla, id){
+  return `<button onclick="abrirEditarGen('${tabla}','${id}')" title="Editar" style="border:none;background:none;cursor:pointer;font-size:15px;padding:2px">✏️</button><button onclick="eliminarGen('${tabla}','${id}')" title="Eliminar" style="border:none;background:none;cursor:pointer;font-size:15px;padding:2px">🗑️</button>`;
+}
+
 async function renderList(tabla, titulo, formView, cols, headers) {
   const { data } = await sb.from(tabla).select('*').order('created_at', { ascending: false }).limit(100);
   const rows = data || [];
@@ -3393,9 +3434,9 @@ async function renderList(tabla, titulo, formView, cols, headers) {
     // Columna de acciones
     let acciones = '';
     if (esVisitantes && !r.hora_salida) {
-      acciones = `<td><button onclick="registrarSalidaVisita('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Salida</button></td>`;
+      acciones = `<td style="white-space:nowrap"><button onclick="registrarSalidaVisita('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Salida</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else {
-      acciones = '<td></td>';
+      acciones = `<td style="white-space:nowrap">${_btnsEdit(tabla, r.id)}</td>`;
     }
     return `<tr>${celdas}${acciones}</tr>`;
   }).join('');
@@ -3736,7 +3777,7 @@ async function renderControlPersonal() {
             <span style="font-size:11px;color:var(--gris-t)">${porFecha[fecha].length} empleados</span>
           </div>
           <div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Empleado ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Cargo ⇅</th><th>Horario</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Ingreso ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Salida ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Total trab. ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Retraso ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Adicional ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Neto ⇅</th><th>Obs.</th></tr></thead>
+            <thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Empleado ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Cargo ⇅</th><th>Horario</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Ingreso ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Salida ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Total trab. ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Retraso ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Adicional ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Neto ⇅</th><th>Obs.</th><th></th></tr></thead>
             <tbody>${porFecha[fecha].slice().sort((a,b)=>(a.cargo||'').localeCompare(b.cargo||'')).map(r => {
               const retraso = Number(r.tiempo_retraso)||0;
               const adicional = r.marcacion_salida ? calcExtraMin(r.cargo, r.horario, r.marcacion_ingreso, r.marcacion_salida, r.jornada_base).extra : (Number(r.tiempo_adicional)||0);
@@ -3753,6 +3794,7 @@ async function renderControlPersonal() {
                 +'<td>'+(adicional>0?'<span style="color:var(--verde);font-weight:600">'+adicional+' min</span>':'-')+'</td>'
                 +'<td>'+(neto>0?'<span style="color:var(--verde);font-weight:700">+'+neto+' min</span>':neto<0?'<span style="color:var(--rojo);font-weight:700">'+neto+' min</span>':'<span style="color:var(--gris-t)">0</span>')+'</td>'
                 +'<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r.observaciones||'-')+'</td>'
+                +'<td style="white-space:nowrap">'+_btnsEdit('control_personal', r.id)+'</td>'
                 +'</tr>';
             }).join('')}</tbody>
           </table></div>
