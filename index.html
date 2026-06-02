@@ -977,8 +977,22 @@ const RACK_AS = ['501A','502A','601A','602A','701A','702A','801A','802A','901A',
 
 // Cálculo único de KPIs del día — usado por Dashboard y Rack para que SIEMPRE concuerden.
 // getRec(apto) devuelve el registro de rack de ese apto para el día evaluado (o undefined).
-function calcKpisDia(getRec){
-  const OCU = ['Ocupado','Check-in hoy','Check-out hoy'];
+function calcKpisDia(registrosHoy){
+  // Resolver duplicados (mismo apto/fecha) con criterio único: estado más relevante; en empate, el más reciente
+  const PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1 };
+  const byApto = {};
+  (registrosHoy||[]).forEach(r=>{
+    const cur = byApto[r.apto];
+    if (!cur){ byApto[r.apto] = r; return; }
+    const pr = PRIO[r.estado]||0, pc = PRIO[cur.estado]||0;
+    if (pr > pc) byApto[r.apto] = r;
+    else if (pr === pc){
+      const tr = r.updated_at||r.created_at||''; const tc = cur.updated_at||cur.created_at||'';
+      if (tr > tc) byApto[r.apto] = r;
+    }
+  });
+  const getRec = (a) => byApto[a];
+  const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo'];
   const FUERA = ['Bloqueado','Mantenimiento'];
   const calc = (lista) => {
     let ocu=0, disp=0; const tar=[];
@@ -1043,7 +1057,7 @@ async function renderDashboard() {
   const ultTurnos  = turnosUlt.data || [];
 
   // ── KPIs DE HOY (cálculo unificado con el Rack) ──────────
-  const _k = calcKpisDia((a)=> aptosHoy.find(r=>r.apto===a));
+  const _k = calcKpisDia(aptosHoy);
   const TOTAL_APTOS = 21; // 21 aptos base (los A son habitaciones secundarias adicionales)
   const ocupados  = _k.b21.ocu;
   const checkins  = _k.cki;
@@ -1287,11 +1301,16 @@ async function renderRack() {
   }
 
   // Construir mapa: {apto: {dia: {estado, huesped, id}}}
+  const _PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1 };
   const rack = {};
   allRack.forEach(r => {
     const dia = parseInt(r.fecha.split('-')[2]);
     if (!rack[r.apto]) rack[r.apto] = {};
-    rack[r.apto][dia] = r;
+    const cur = rack[r.apto][dia];
+    if (!cur){ rack[r.apto][dia] = r; return; }
+    const pr=_PRIO[r.estado]||0, pc=_PRIO[cur.estado]||0; // resolver duplicados igual que los KPIs
+    if (pr>pc) rack[r.apto][dia]=r;
+    else if (pr===pc){ const tr=r.updated_at||r.created_at||'', tc=cur.updated_at||cur.created_at||''; if(tr>tc) rack[r.apto][dia]=r; }
   });
   window._rackData = rack;
   window._rackMesNombre = monthNames[month];
@@ -1324,7 +1343,7 @@ async function renderRack() {
   // KPIs — usar datos del Rack Gráfico oficial para el mes
   const todayDay = now.getDate();
   // Contar estados para HOY desde la BD (rack map)
-  const _kr = calcKpisDia((a)=> rack[a]?.[todayDay]);
+  const _kr = calcKpisDia(allRack.filter(r => r.fecha === TODAY));
   const ocupHoy  = indMes ? Math.round(indMes.noches / daysInMonth) : _kr.b21.ocu;
   const ckiHoy   = _kr.cki;
   const ckoHoy   = _kr.cko;
