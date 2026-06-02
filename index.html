@@ -971,6 +971,35 @@ async function loadView(view) {
 // ═══════════════════════════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════════════════════════
+// Listas maestras de unidades para cálculo de ocupación (consistente en todo el sistema)
+const RACK_BASE21 = ['301','302','303','304','401','402','403','501','502','601','602','701','702','801','802','901','902','1001','1002','1101','1102'];
+const RACK_AS = ['501A','502A','601A','602A','701A','702A','801A','802A','901A','902A','1001A','1002A'];
+
+// Cálculo único de KPIs del día — usado por Dashboard y Rack para que SIEMPRE concuerden.
+// getRec(apto) devuelve el registro de rack de ese apto para el día evaluado (o undefined).
+function calcKpisDia(getRec){
+  const OCU = ['Ocupado','Check-in hoy','Check-out hoy'];
+  const FUERA = ['Bloqueado','Mantenimiento'];
+  const calc = (lista) => {
+    let ocu=0, disp=0; const tar=[];
+    lista.forEach(a=>{
+      const r = getRec(a); const e = r?.estado||'Libre';
+      const incluida = (r?.observaciones||'').includes('Apto completo'); // A de apto completo: fuera de inventario
+      if (FUERA.includes(e) || incluida) return;
+      disp++;
+      if (OCU.includes(e)){ ocu++; if (r && r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa)); }
+    });
+    return {ocu, disp, tar};
+  };
+  const b21 = calc(RACK_BASE21);
+  const b33 = calc([...RACK_BASE21, ...RACK_AS]);
+  let cki=0, cko=0;
+  RACK_BASE21.forEach(a=>{ const e=getRec(a)?.estado; if(e==='Check-in hoy')cki++; else if(e==='Check-out hoy')cko++; });
+  const adr = b33.tar.length ? Math.round(b33.tar.reduce((s,x)=>s+x,0)/b33.tar.length) : 0;
+  const ing = b33.tar.reduce((s,x)=>s+x,0);
+  return { b21, b33, pct21: Math.round(b21.ocu/(b21.disp||1)*100), pct33: Math.round(b33.ocu/(b33.disp||1)*100), cki, cko, adr, ing };
+}
+
 async function renderDashboard() {
   const now = new Date();
   const year = now.getFullYear();
@@ -1013,16 +1042,16 @@ async function renderDashboard() {
   const turnosDeHoy = turnosHoy.data || [];
   const ultTurnos  = turnosUlt.data || [];
 
-  // ── KPIs DE HOY ──────────────────────────────────────────
+  // ── KPIs DE HOY (cálculo unificado con el Rack) ──────────
+  const _k = calcKpisDia((a)=> aptosHoy.find(r=>r.apto===a));
   const TOTAL_APTOS = 21; // 21 aptos base (los A son habitaciones secundarias adicionales)
-  const ocupados  = aptosHoy.filter(a=>['Ocupado','Check-in hoy','Check-out hoy'].includes(a.estado)).length;
-  const checkins  = aptosHoy.filter(a=>a.estado==='Check-in hoy').length;
-  const checkouts = aptosHoy.filter(a=>a.estado==='Check-out hoy').length;
-  const libres    = aptosHoy.filter(a=>a.estado==='Libre').length;
-  const conTarifaHoy = aptosHoy.filter(a=>a.tarifa && Number(a.tarifa)>0);
-  const ingresoHoy = conTarifaHoy.reduce((s,a)=>s+Number(a.tarifa),0);
-  const adrHoy = conTarifaHoy.length > 0 ? ingresoHoy/conTarifaHoy.length : 0;
-  const ocuHoyPct = Math.round(ocupados/TOTAL_APTOS*100);
+  const ocupados  = _k.b21.ocu;
+  const checkins  = _k.cki;
+  const checkouts = _k.cko;
+  const libres    = _k.b21.disp - _k.b21.ocu;
+  const ingresoHoy = _k.ing;
+  const adrHoy = _k.adr;
+  const ocuHoyPct = _k.pct21;
 
   // ── KPIs DEL MES ─────────────────────────────────────────
   const conTarifaMes = rackMesAll.filter(r=>r.tarifa&&Number(r.tarifa)>0);
@@ -1295,10 +1324,10 @@ async function renderRack() {
   // KPIs — usar datos del Rack Gráfico oficial para el mes
   const todayDay = now.getDate();
   // Contar estados para HOY desde la BD (rack map)
-  const estadosHoy = aptos.map(a => rack[a]?.[todayDay]?.estado || 'Libre');
-  const ocupHoy  = indMes ? Math.round(indMes.noches / daysInMonth) : estadosHoy.filter(s=>s==='Ocupado').length;
-  const ckiHoy   = estadosHoy.filter(s=>s==='Check-in hoy').length;
-  const ckoHoy   = estadosHoy.filter(s=>s==='Check-out hoy').length;
+  const _kr = calcKpisDia((a)=> rack[a]?.[todayDay]);
+  const ocupHoy  = indMes ? Math.round(indMes.noches / daysInMonth) : _kr.b21.ocu;
+  const ckiHoy   = _kr.cki;
+  const ckoHoy   = _kr.cko;
   const ocuPct   = indMes ? Math.round(indMes.ocu * 100) : Math.round(ocupHoy / (aptos.length||1) * 100);
 
   const CELL_W = 36; // ancho celda en px (más grande)
@@ -1376,51 +1405,26 @@ async function renderRack() {
       ${month === now.getMonth() && year === now.getFullYear() ? '' : `<button onclick="window._rackMes=new Date().getMonth();window._rackYear=new Date().getFullYear();loadView('rack')" style="background:var(--gris-b);color:var(--azul);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px">Hoy</button>`}
     </div>
     <div class="kpi-grid" style="margin-bottom:14px">
-      ${(() => {
-        // Ocupación con dos bases: 21 unidades-apto y 33 habitaciones
-        const BASE21 = ['301','302','303','304','401','402','403','501','502','601','602','701','702','801','802','901','902','1001','1002','1101','1102'];
-        const AS = ['501A','502A','601A','602A','701A','702A','801A','802A','901A','902A','1001A','1002A'];
-        const OCU = ['Ocupado','Check-in hoy','Check-out hoy'];
-        const FUERA = ['Bloqueado','Mantenimiento']; // fuera de inventario ese día
-        const calcBase = (lista) => {
-          let ocu=0, disp=0; const tar=[];
-          lista.forEach(a=>{
-            const r = rack[a]?.[todayDay]; const e = r?.estado||'Libre';
-            const incluida = (r?.observaciones||'').includes('Apto completo'); // A de apto completo: fuera de inventario
-            if (FUERA.includes(e) || incluida) return; // sale del denominador
-            disp++;
-            if (OCU.includes(e)){ ocu++; if (r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa)); }
-          });
-          return {ocu, disp, tar};
-        };
-        const b21 = calcBase(BASE21);
-        const b33 = calcBase([...BASE21, ...AS]);
-        const pct21 = Math.round(b21.ocu/(b21.disp||1)*100);
-        const pct33 = Math.round(b33.ocu/(b33.disp||1)*100);
-        const adrReal = b33.tar.length>0 ? Math.round(b33.tar.reduce((s,x)=>s+x,0)/b33.tar.length) : 0;
-        const ingresosHoy = b33.tar.reduce((s,x)=>s+x,0);
-        return `
       <div class="kpi k-verde" style="border-left-width:5px">
         <div class="kpi-lbl">Ocupación hoy · 21 aptos</div>
-        <div class="kpi-val">${pct21}%</div>
-        <div class="kpi-sub">${b21.ocu} de ${b21.disp} unidades</div>
+        <div class="kpi-val">${_kr.pct21}%</div>
+        <div class="kpi-sub">${_kr.b21.ocu} de ${_kr.b21.disp} unidades</div>
       </div>
       <div class="kpi k-verde">
         <div class="kpi-lbl">Ocupación hoy · 33 hab.</div>
-        <div class="kpi-val">${pct33}%</div>
-        <div class="kpi-sub">${b33.ocu} de ${b33.disp} habitaciones</div>
+        <div class="kpi-val">${_kr.pct33}%</div>
+        <div class="kpi-sub">${_kr.b33.ocu} de ${_kr.b33.disp} habitaciones</div>
       </div>
       <div class="kpi k-azul">
         <div class="kpi-lbl">ADR del día</div>
-        <div class="kpi-val" style="font-size:20px">$${fmtNum(adrReal)}</div>
+        <div class="kpi-val" style="font-size:20px">$${fmtNum(_kr.adr)}</div>
         <div class="kpi-sub">tarifa promedio/noche</div>
       </div>
       <div class="kpi k-verde">
         <div class="kpi-lbl">Ingresos del día</div>
-        <div class="kpi-val" style="font-size:18px">$${fmtNum(ingresosHoy)}</div>
-        <div class="kpi-sub">${b33.tar.length} hab. con tarifa</div>
-      </div>`;
-      })()}
+        <div class="kpi-val" style="font-size:18px">$${fmtNum(_kr.ing)}</div>
+        <div class="kpi-sub">${_kr.b33.tar.length} hab. con tarifa</div>
+      </div>
       <div class="kpi k-azul"><div class="kpi-lbl">Check-in hoy</div><div class="kpi-val">${ckiHoy}</div></div>
       <div class="kpi k-naran"><div class="kpi-lbl">Check-out hoy</div><div class="kpi-val">${ckoHoy}</div></div>
       <div class="kpi k-azul"><div class="kpi-lbl">Ocupación del mes</div><div class="kpi-val">${ocuPct}%</div><div class="kpi-sub">${indMes ? indMes.noches+' de '+indMes.disp+' noches' : ''}</div></div>
