@@ -793,13 +793,13 @@ async function loadView(view) {
       {id:'carpeta_completa',label:'¿Carpeta completa?',type:'select',opts:['true','false']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
-    case 'caja-list':          await renderList('caja','💰 Caja y Movimientos','caja-form',['fecha','tipo','concepto','area','valor','recibo_no','entregado_por'],['Fecha','Tipo','Concepto','Área','Valor','Recibo','Entregó']); break;
+    case 'caja-list':          await renderList('caja','💰 Caja y Movimientos','caja-form',['fecha','tipo','concepto','area','empresa','valor','recibo_no','entregado_por'],['Fecha','Tipo','Concepto','Área','Caja / Razón Social','Valor','Recibo','Entregó']); break;
     case 'caja-form':          renderGenForm('caja','💰 Movimiento de Caja',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'tipo',label:'Tipo',type:'select',opts:['Ingreso','Egreso','Fondo','Reembolso','Entrega efectivo'],req:true},
       {id:'concepto',label:'Concepto / Descripción',type:'text',req:true},
       {id:'area',label:'Área',type:'select',opts:['Recepción','Mantenimiento','Housekeeping','Administración','General']},
-      {id:'empresa',label:'Empresa',type:'select',opts:['8010 SAS','LTM3 SAS','Propiedad Horizontal']},
+      {id:'empresa',label:'Caja / Razón Social',type:'select',opts:['8010 SAS','LTM3 SAS','Propiedad Horizontal']},
       {id:'valor',label:'Valor ($)',type:'number',req:true},
       {id:'recibo_no',label:'No. Recibo',type:'text'},
       {id:'entregado_por',label:'Entregado por',type:'text'},
