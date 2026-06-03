@@ -371,7 +371,8 @@ const EDIFICIOS = {
     mapaAptoA: {'501':'501A','502':'502A','601':'601A','602':'602A','701':'701A','702':'702A','801':'801A','802':'802A','901':'901A','902':'902A','1001':'1001A','1002':'1002A'},
     metrajes: { '01': {privado:96, total:132}, '02': {privado:90, total:126} },
     cajas: ['OT (8010 SAS)','LTM3 (LTM3 SAS)','PH (Propiedad Horizontal)'],
-    jornadas: { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 }
+    jornadas: { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 },
+    indicadoresMes: {'2026-01':{noches:374,disp:651,adr:796301,ocu:0.5745},'2026-02':{noches:507,disp:588,adr:729055,ocu:0.8622},'2026-03':{noches:491,disp:651,adr:752681,ocu:0.7542},'2026-04':{noches:397,disp:630,adr:733852,ocu:0.6302},'2026-05':{noches:612,disp:651,adr:716838,ocu:0.9401},'2026-06':{noches:434,disp:630,adr:708910,ocu:0.6889},'2026-07':{noches:380,disp:651,adr:636366,ocu:0.5837},'2026-08':{noches:290,disp:651,adr:619572,ocu:0.4455},'2026-09':{noches:210,disp:630,adr:570174,ocu:0.3333},'2026-10':{noches:217,disp:651,adr:551781,ocu:0.3333},'2026-11':{noches:213,disp:630,adr:572487,ocu:0.3381},'2026-12':{noches:78,disp:651,adr:686969,ocu:0.1198}}
   },
   'kubik': {
     nombre: 'Kubik Living 8i8',
@@ -383,7 +384,8 @@ const EDIFICIOS = {
     noEntregados: ['201','202','203','204','204A'],
     metrajes: {'201':100,'202':29,'203':56,'204':79,'204A':37,'301':100,'302':29,'303':56,'304':79,'304A':37,'401':100,'402':29,'403':56,'404':79,'404A':37,'501':100,'502':29,'503':56,'504':79,'504A':37,'601':100,'602':29,'603':56,'604':79,'604A':37,'701':100,'702':29,'703':56,'704':79,'704A':37,'801':100,'802':29,'803':56,'804':79,'804A':37,'901':100,'902':29,'903':56,'904':79,'904A':37,'1001':130,'1002':113},
     cajas: ['8I8 (8i8 Operadora SAS)','LTM3 (LTM3 SAS)'],
-    jornadas: { 'Administrador':540, 'Camarera':500, 'Mantenimiento':540, 'Otro':540 }
+    jornadas: { 'Administrador':540, 'Camarera':500, 'Mantenimiento':540, 'Otro':540 },
+    indicadoresMes: {}
   }
 };
 function EB(){ return EDIFICIOS[EDIFICIO_ACTIVO]; } // atajo al edificio activo
@@ -1115,20 +1117,7 @@ async function renderDashboard() {
   const monthEnd = `${year}-${month}-${String(daysInMonth).padStart(2,'0')}`;
   const mesKey = `${year}-${month}`;
 
-  const INDICADORES_2026 = {
-    '2026-01':{noches:374,disp:651,adr:796301,ocu:0.5745},
-    '2026-02':{noches:507,disp:588,adr:729055,ocu:0.8622},
-    '2026-03':{noches:491,disp:651,adr:752681,ocu:0.7542},
-    '2026-04':{noches:397,disp:630,adr:733852,ocu:0.6302},
-    '2026-05':{noches:612,disp:651,adr:716838,ocu:0.9401},
-    '2026-06':{noches:434,disp:630,adr:708910,ocu:0.6889},
-    '2026-07':{noches:380,disp:651,adr:636366,ocu:0.5837},
-    '2026-08':{noches:290,disp:651,adr:619572,ocu:0.4455},
-    '2026-09':{noches:210,disp:630,adr:570174,ocu:0.3333},
-    '2026-10':{noches:217,disp:651,adr:551781,ocu:0.3333},
-    '2026-11':{noches:213,disp:630,adr:572487,ocu:0.3381},
-    '2026-12':{noches:78, disp:651,adr:686969,ocu:0.1198},
-  };
+  const INDICADORES_2026 = EB().indicadoresMes;
   const indMes = INDICADORES_2026[mesKey] || null;
 
   // Cargar todo en paralelo
@@ -1150,7 +1139,7 @@ async function renderDashboard() {
 
   // ── KPIs DE HOY (cálculo unificado con el Rack) ──────────
   const _k = calcKpisDia(aptosHoy);
-  const TOTAL_APTOS = 21; // 21 aptos base (los A son habitaciones secundarias adicionales)
+  const TOTAL_APTOS = EB().aptosBase.length; // 21 aptos base (los A son habitaciones secundarias adicionales)
   const ocupados  = _k.b21.ocu;
   const checkins  = _k.cki;
   const checkouts = _k.cko;
@@ -1428,7 +1417,7 @@ async function renderRack() {
   };
 
   // Indicadores del Rack Gráfico para este mes
-  const _ind2026 = {'2026-01':{noches:374,disp:651,adr:796301,ocu:0.5745},'2026-02':{noches:507,disp:588,adr:729055,ocu:0.8622},'2026-03':{noches:491,disp:651,adr:752681,ocu:0.7542},'2026-04':{noches:397,disp:630,adr:733852,ocu:0.6302},'2026-05':{noches:612,disp:651,adr:716838,ocu:0.9401},'2026-06':{noches:434,disp:630,adr:708910,ocu:0.6889},'2026-07':{noches:380,disp:651,adr:636366,ocu:0.5837},'2026-08':{noches:290,disp:651,adr:619572,ocu:0.4455},'2026-09':{noches:210,disp:630,adr:570174,ocu:0.3333},'2026-10':{noches:217,disp:651,adr:551781,ocu:0.3333},'2026-11':{noches:213,disp:630,adr:572487,ocu:0.3381},'2026-12':{noches:78,disp:651,adr:686969,ocu:0.1198}};
+  const _ind2026 = EB().indicadoresMes;
   const mesKey = `${year}-${String(month+1).padStart(2,'0')}`;
   const indMes = _ind2026[mesKey] || null;
 
