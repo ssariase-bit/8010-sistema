@@ -401,7 +401,7 @@ function EB(){ return EDIFICIOS[EDIFICIO_ACTIVO]; } // atajo al edificio activo
 const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitantes',
   'mantenimiento','control_personal','turnos','personal','contratos','transportes',
   'reembolsos','prestamos_tec','maletas','entrega_efectivos','capsulas','caja',
-  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos']);
+  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones']);
 (function(){
   const _from = sb.from.bind(sb);
   sb.from = function(tabla){
@@ -565,6 +565,9 @@ const NAV_ITEMS = {
     { id: 'magnifique-form', icon: '➕', label: 'Nuevo Recibo' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
     { id: 'cargos-form', icon: '➕', label: 'Registrar Cargo' },
+    { section: 'Comercial' },
+    { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
+    { id: 'comercial-form', icon: '➕', label: 'Nueva Cotización' },
     { section: 'Sistema' },
     { id: 'import-rack', icon: '🔄', label: 'Importar Rack 2026' },
   ],
@@ -597,6 +600,9 @@ const NAV_ITEMS = {
     { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
     { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
     { id: 'contratos-list', icon: '📄', label: 'Contratos' },
+    { section: 'Comercial' },
+    { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
+    { id: 'comercial-form', icon: '➕', label: 'Nueva Cotización' },
     { section: 'Auditoría' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
@@ -818,6 +824,21 @@ async function loadView(view) {
     case 'informe-cki':     renderInformeCKI(); break;
     case 'informe-cko':     renderInformeCKO(); break;
     case 'entrega-efectivos': await renderEntregaEfectivos(); break;
+
+    // Módulo Comercial (cotizaciones / leads)
+    case 'comercial-list': await renderComercial(); break;
+    case 'comercial-form': renderGenForm('cotizaciones','📞 Nueva Cotización / Lead',[
+      {id:'fecha_solicitud',label:'Fecha de solicitud',type:'date',default:TODAY,req:true},
+      {id:'nombre',label:'Nombre del interesado',type:'text',req:true},
+      {id:'telefono',label:'Teléfono',type:'text'},
+      {id:'correo',label:'Correo electrónico',type:'text'},
+      {id:'interes',label:'Interés (apto / fechas / estadía)',type:'text'},
+      {id:'canal',label:'Canal de contacto',type:'select',opts:['Llamada','WhatsApp','Correo','Referido','Página web','Instagram','Booking','Visita directa','Otro']},
+      {id:'estado',label:'Estado del seguimiento',type:'select',opts:['Nuevo','Contactado','Cotizado','En negociación','Ganada','Perdida']},
+      {id:'valor_cotizado',label:'Valor cotizado ($)',type:'number',default:'0'},
+      {id:'proximo_contacto',label:'Próximo contacto',type:'date'},
+      {id:'notas',label:'Notas',type:'textarea'},
+    ]); break;
 
     // Recibos Magnifique
     case 'magnifique-list': await renderList('recibos_magnifique','🍽️ Recibos Magnifique','magnifique-form',
@@ -4681,6 +4702,109 @@ async function renderEntregaEfectivos() {
         </tr>`).join('')}</tbody>
       </table></div>`}
     </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MÓDULO COMERCIAL · Cotizaciones / Leads
+// ═══════════════════════════════════════════════════════════
+const COT_ESTADOS = ['Nuevo','Contactado','Cotizado','En negociación','Ganada','Perdida'];
+const COT_COLORES = {
+  'Nuevo':          {bg:'#DBEAFE', color:'#1E40AF'},
+  'Contactado':     {bg:'#FEF3C7', color:'#92400E'},
+  'Cotizado':       {bg:'#E0E7FF', color:'#3730A3'},
+  'En negociación': {bg:'#FDE68A', color:'#78350F'},
+  'Ganada':         {bg:'#D1FAE5', color:'#065F46'},
+  'Perdida':        {bg:'#FEE2E2', color:'#991B1B'},
+};
+
+async function renderComercial() {
+  const { data } = await sb.from('cotizaciones').select('*').order('fecha_solicitud',{ascending:false});
+  window._cotRows = data || [];
+  const rows = window._cotRows;
+  const filtro = window._cotFE || '';
+  const chips = COT_ESTADOS.map(e => {
+    const n = rows.filter(r=>r.estado===e).length;
+    const c = COT_COLORES[e]; const act = filtro===e;
+    return `<span onclick="cotFiltrarEstado('${e}')" style="cursor:pointer;background:${c.bg};color:${c.color};padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;border:2px solid ${act?c.color:'transparent'}">${e}: ${n}</span>`;
+  }).join('');
+  document.getElementById('main-content').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div class="page-title" style="margin-bottom:0">📞 Comercial — Cotizaciones / Leads</div>
+      <button class="btn btn-success btn-sm" onclick="loadView('comercial-form')" style="padding:10px 20px">+ Nueva Cotización</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${chips}
+      ${filtro?`<span onclick="cotFiltrarEstado('')" style="cursor:pointer;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;background:#E5E7EB;color:#374151">✕ Quitar filtro</span>`:''}
+    </div>
+    <div class="card">
+      <input type="text" id="cot-buscar" placeholder="🔎 Buscar por nombre, teléfono, correo, interés..." oninput="cotRenderTabla()" style="margin-bottom:12px;max-width:420px">
+      <div id="cot-tabla" style="overflow-x:auto"></div>
+    </div>`;
+  cotRenderTabla();
+}
+
+function cotFiltrarEstado(e) { window._cotFE = (window._cotFE===e?'':e); renderComercial(); }
+
+function cotRenderTabla() {
+  const q = (document.getElementById('cot-buscar')?.value || '').toLowerCase();
+  const filtro = window._cotFE || '';
+  let rows = window._cotRows || [];
+  if (filtro) rows = rows.filter(r=>r.estado===filtro);
+  if (q) rows = rows.filter(r=>[r.nombre,r.telefono,r.correo,r.interes,r.notas].join(' ').toLowerCase().includes(q));
+  const cont = document.getElementById('cot-tabla');
+  if (!rows.length) { cont.innerHTML = '<div class="empty"><div class="empty-icon">📞</div><p>Sin cotizaciones registradas</p></div>'; return; }
+  cont.innerHTML = `<table class="tabla">
+    <thead><tr><th>Fecha</th><th>Nombre</th><th>Contacto</th><th>Interés</th><th>Canal</th><th>Valor</th><th>Estado</th><th>Próx. contacto</th><th>Seguimiento</th></tr></thead>
+    <tbody>${rows.map(r=>{
+      const c = COT_COLORES[r.estado] || COT_COLORES['Nuevo'];
+      const venc = r.proximo_contacto && r.proximo_contacto <= TODAY && !['Ganada','Perdida'].includes(r.estado);
+      const ultNota = (r.notas||'').split('\n').filter(Boolean).pop() || '';
+      return `<tr>
+        <td>${fmtDate(r.fecha_solicitud)}</td>
+        <td><strong>${r.nombre||'-'}</strong></td>
+        <td style="font-size:12px">${r.telefono?`📱 ${r.telefono}<br>`:''}${r.correo?`✉️ ${r.correo}`:''}</td>
+        <td style="font-size:12px">${r.interes||'-'}</td>
+        <td>${r.canal||'-'}</td>
+        <td>${Number(r.valor_cotizado)>0?'$'+fmtNum(r.valor_cotizado):'-'}</td>
+        <td><select onchange="cotEstado('${r.id}',this.value)" style="background:${c.bg};color:${c.color};font-weight:700;border:none;border-radius:8px;padding:6px 8px;font-size:12px">
+          ${COT_ESTADOS.map(e=>`<option value="${e}" ${r.estado===e?'selected':''}>${e}</option>`).join('')}
+        </select></td>
+        <td style="${venc?'color:var(--rojo);font-weight:700':''}">${r.proximo_contacto?fmtDate(r.proximo_contacto)+(venc?' ⏰':''):'-'}</td>
+        <td style="font-size:12px;max-width:220px">${ultNota?`<span title="${(r.notas||'').replace(/"/g,'&quot;')}">${ultNota.substring(0,60)}${ultNota.length>60?'…':''}</span><br>`:''}
+          <a href="javascript:void(0)" onclick="cotNota('${r.id}')" style="font-size:11px">📝 Agregar nota</a> ·
+          <a href="javascript:void(0)" onclick="cotProx('${r.id}')" style="font-size:11px">📅 Próx. contacto</a></td>
+      </tr>`;}).join('')}</tbody>
+  </table>`;
+}
+
+async function cotEstado(id, estado) {
+  const { error } = await sb.from('cotizaciones').update({ estado }).eq('id', id).eq('edificio', EDIFICIO_ACTIVO);
+  if (error) { showToast('Error: '+error.message,'error'); return; }
+  const r = (window._cotRows||[]).find(x=>x.id===id); if (r) r.estado = estado;
+  showToast('Estado actualizado a '+estado,'success');
+  renderComercial();
+}
+
+async function cotNota(id) {
+  const nota = prompt('Nota de seguimiento:');
+  if (!nota || !nota.trim()) return;
+  const r = (window._cotRows||[]).find(x=>x.id===id);
+  const quien = currentProfile?.nombre ? ' — '+currentProfile.nombre : '';
+  const notas = ((r?.notas||'') + (r?.notas?'\n':'') + `[${fmtDate(TODAY)}${quien}] ` + nota.trim());
+  const { error } = await sb.from('cotizaciones').update({ notas }).eq('id', id).eq('edificio', EDIFICIO_ACTIVO);
+  if (error) { showToast('Error: '+error.message,'error'); return; }
+  if (r) r.notas = notas;
+  showToast('Nota agregada','success');
+  cotRenderTabla();
+}
+
+async function cotProx(id) {
+  const f = prompt('Fecha del próximo contacto (AAAA-MM-DD):', TODAY);
+  if (!f || !/^\d{4}-\d{2}-\d{2}$/.test(f.trim())) { if(f) showToast('Formato inválido. Usa AAAA-MM-DD','error'); return; }
+  const { error } = await sb.from('cotizaciones').update({ proximo_contacto: f.trim() }).eq('id', id).eq('edificio', EDIFICIO_ACTIVO);
+  if (error) { showToast('Error: '+error.message,'error'); return; }
+  const r = (window._cotRows||[]).find(x=>x.id===id); if (r) r.proximo_contacto = f.trim();
+  showToast('Próximo contacto agendado','success');
+  cotRenderTabla();
 }
 
 async function compartirEstadoHuespedes() {
