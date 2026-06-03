@@ -3645,9 +3645,9 @@ function fmtNum(n) { return Math.round(n||0).toLocaleString('es-CO'); }
 // ═══════════════════════════════════════════════════════════
 function compartirInforme(titulo, texto, emailDest) {
   const dest = emailDest || 'gerencia@8010urbanliving.com';
-  const asunto = encodeURIComponent('8010 Urban Living — ' + titulo);
+  const asunto = encodeURIComponent(EB().nombre + ' — ' + titulo);
   const cuerpo = encodeURIComponent(texto);
-  const waText = encodeURIComponent('*8010 Urban Living — ' + titulo + '*\n\n' + texto);
+  const waText = encodeURIComponent(texto.includes(EB().nombre) ? texto : '*' + EB().nombre + ' — ' + titulo + '*\n\n' + texto);
 
   // Modal de compartir
   const modal = document.createElement('div');
@@ -4691,17 +4691,17 @@ async function compartirEstadoHuespedes() {
   const cki = rows.filter(r=>r.estado==='Check-in hoy').length;
   const cko = rows.filter(r=>r.estado==='Check-out hoy').length;
   const ingresos = rows.filter(r=>r.tarifa).reduce((s,r)=>s+Number(r.tarifa),0);
-  const txt = `🏢 *8010 Urban Living — Estado de Huéspedes*
-📅 Fecha: ${fmtDate(TODAY)}
+  const _tot = EB().aptosBase.length;
+  const txt = `🏢 *${EB().nombre} — Estado de Huéspedes*
+📅 ${fmtDate(TODAY)}
 
-*OCUPACIÓN:* ${rows.length}/21 aptos (${Math.round(rows.length/21*100)}%)
-▪️ Ocupados: ${ocu} | Check-in: ${cki} | Check-out: ${cko}
-▪️ Ingresos del día: $${fmtNum(ingresos)} COP
+*Ocupación: ${rows.length} de ${_tot} (${Math.round(rows.length/_tot*100)}%)*
+🟢 Ocupados: ${ocu}   🔵 Check-in: ${cki}   🟠 Check-out: ${cko}
+💰 Ingresos del día: *$${fmtNum(ingresos)} COP*
 
-*DETALLE POR APTO:*
-${rows.map(r=>`▪️ Apto ${r.apto} — ${r.huesped||'N/A'} [${r.estado}]${r.tarifa?' $'+fmtNum(r.tarifa):''}`).join('\n')}
+${rows.map(r=>`*${r.apto}* · ${r.huesped||'—'}\n    ${r.estado}${r.tarifa?' · $'+fmtNum(r.tarifa):''}`).join('\n')}
 
-_Generado desde Sistema 8010 Urban Living_`;
+_Sistema ${EB().nombre}_`;
   compartirInforme('Estado de Huéspedes — ' + fmtDate(TODAY), txt);
 }
 
@@ -4712,28 +4712,37 @@ async function compartirHK() {
   function calcMin(i,s){if(!i||!s)return null;const[hi,mi]=i.split(':').map(Number);const[hs,ms]=s.split(':').map(Number);const d=(hs*60+ms)-(hi*60+mi);return d>0?d:null;}
   const tiempos = rows.map(r=>calcMin(r.hora_ingreso,r.hora_salida)).filter(Boolean);
   const prom = tiempos.length>0?Math.round(tiempos.reduce((a,b)=>a+b,0)/tiempos.length):0;
-  const txt = `🧹 *8010 Urban Living — Informe Housekeeping*
-📅 Fecha: ${fmtDate(TODAY)}
+  const hhmm = h => (h && h !== '00:00:00') ? h.slice(0,5) : '--:--';
+  const porCam = {}; const pend = [];
+  rows.forEach(r=>{ const m = calcMin(r.hora_ingreso, r.hora_salida);
+    if (r.estado === 'Limpio' && m) { const c = r.camarera || 'Sin asignar'; (porCam[c] = porCam[c] || []).push({apto:r.apto, i:hhmm(r.hora_ingreso), s:hhmm(r.hora_salida), m}); }
+    else pend.push(`${r.apto} — ${r.camarera||'sin asignar'}${r.estado && r.estado!=='Limpio' ? ' (' + r.estado + ')' : ''}`);
+  });
+  const bloques = Object.keys(porCam).sort().map(c=>{
+    const l = porCam[c]; const p = Math.round(l.reduce((s,x)=>s+x.m,0)/l.length);
+    return `*${c}* — ${l.length} apto${l.length>1?'s':''} · prom. ${p} min\n` + l.map(x=>`    ${x.apto}   ${x.i} a ${x.s}   ${x.m} min`).join('\n');
+  }).join('\n\n');
+  const txt = `🧹 *${EB().nombre} — Housekeeping*
+📅 ${fmtDate(TODAY)}
 
-▪️ Aptos limpiados: ${completadas}/${rows.length}
-▪️ Tiempo promedio: ${prom} min
+✅ Aptos limpios: *${completadas} de ${rows.length}*
+🕐 Tiempo promedio: *${prom} min*
 
-*DETALLE:*
-${rows.map(r=>{const m=calcMin(r.hora_ingreso,r.hora_salida);return`▪️ Apto ${r.apto} — ${r.camarera||'N/A'} | ${r.hora_ingreso||'--'} → ${r.hora_salida||'--'} | ${m?m+' min':'pendiente'} | ${r.estado||'-'}`;}).join('\n')}
+${bloques}${pend.length ? `\n\n⏳ *Pendientes (${pend.length}):*\n` + pend.map(p=>`    ${p}`).join('\n') : ''}
 
-_Generado desde Sistema 8010 Urban Living_`;
+_Sistema ${EB().nombre}_`;
   compartirInforme('Housekeeping — ' + fmtDate(TODAY), txt);
 }
 
 async function compartirNovedades() {
   const { data } = await sb.from('novedades').select('*').in('estado',['Abierto','En proceso','Escalado']).order('created_at',{ascending:false});
   const rows = data || [];
-  const txt = `⚠️ *8010 Urban Living — Novedades Abiertas*
-📅 ${fmtDate(TODAY)} — ${rows.length} novedades activas
+  const txt = `🚨 *${EB().nombre} — Novedades Abiertas*
+📅 ${fmtDate(TODAY)} — ${rows.length} activas
 
-${rows.map(r=>`▪️ [${r.prioridad}] ${r.area||'General'} — ${r.descripcion?.substring(0,80)} | Estado: ${r.estado}`).join('\n')||'Sin novedades abiertas ✅'}
+${rows.map(r=>`*[${r.prioridad}] ${r.area||'General'}* · ${r.estado}\n    ${r.descripcion?.substring(0,80)||''}`).join('\n')||'Sin novedades abiertas ✅'}
 
-_Generado desde Sistema 8010 Urban Living_`;
+_Sistema ${EB().nombre}_`;
   compartirInforme('Novedades abiertas — ' + fmtDate(TODAY), txt);
 }
 
