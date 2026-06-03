@@ -2843,6 +2843,7 @@ function renderNuevaReserva() {
             <select id="res-config">
               <option value="completo">Completo — 126/132 m² · 2 habitaciones (King + doble)</option>
               <option value="dividido">Dividido — 90/96 m² · 1 habitación (King)</option>
+              <option value="deluxe">Habitación Deluxe — 22/25 m² · 1 habitación (King)</option>
             </select>
           </div>
         </div>
@@ -3175,7 +3176,7 @@ function generarConfirmacion(r) {
   const fechaDoc = `${hoy.getDate()} de ${meses[hoy.getMonth()]} de ${hoy.getFullYear()}`;
   let tipo = TIPOS_APTO[r.apto] || `Apartamento ${r.apto}`;
   let desc = DESC_APTO[r.apto] || tipo + '.';
-  if (String(r.apto).endsWith('A')) { tipo = 'Habitación Deluxe'; desc = 'Habitación Deluxe de 60 m²:<br>01 cama King.'; }
+  if (r.config === 'deluxe' || String(r.apto).endsWith('A')) { const _b=String(r.apto).replace(/A$/,''); const _m2=_b.endsWith('1')?25:22; tipo = 'Habitación Deluxe'; desc = `Habitación Deluxe de ${_m2} m²:<br>01 cama King.`; }
   if (r.config === 'dividido' && METRAJE_DIVIDIDO[r.apto]) {
     const _m = METRAJE_DIVIDIDO[r.apto];
     tipo = `Apartamento de ${_m} m²`;
