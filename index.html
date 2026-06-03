@@ -264,8 +264,8 @@ textarea{resize:vertical;min-height:80px}
     <div class="form-group">
       <label>Estado</label>
       <select id="m-estado">
-        <option>Libre</option><option>Ocupado</option><option>Check-in hoy</option>
-        <option>Check-out hoy</option><option>Limpieza</option><option>Mantenimiento</option><option>Bloqueado</option>
+        <option>Libre</option><option value="Ocupado">Ocupado / En casa (IN)</option><option>Check-in hoy</option>
+        <option>Check-out hoy</option><option>Sale de viaje</option><option>Limpieza</option><option>Mantenimiento</option><option>Bloqueado</option>
       </select>
     </div>
     <div class="form-group">
@@ -1074,7 +1074,7 @@ const RACK_AS = EB().habitacionesA;
 // getRec(apto) devuelve el registro de rack de ese apto para el día evaluado (o undefined).
 function calcKpisDia(registrosHoy){
   // Resolver duplicados (mismo apto/fecha) con criterio único: estado más relevante; en empate, el más reciente
-  const PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1 };
+  const PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1,'Sale de viaje':5 };
   const byApto = {};
   (registrosHoy||[]).forEach(r=>{
     const cur = byApto[r.apto];
@@ -1087,7 +1087,7 @@ function calcKpisDia(registrosHoy){
     }
   });
   const getRec = (a) => byApto[a];
-  const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo'];
+  const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
   const FUERA = ['Bloqueado','Mantenimiento'];
   const calc = (lista) => {
     let ocu=0, disp=0; const tar=[];
@@ -1383,7 +1383,7 @@ async function renderRack() {
   }
 
   // Construir mapa: {apto: {dia: {estado, huesped, id}}}
-  const _PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1 };
+  const _PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1,'Sale de viaje':5 };
   const rack = {};
   allRack.forEach(r => {
     const dia = parseInt(r.fecha.split('-')[2]);
@@ -1415,6 +1415,7 @@ async function renderRack() {
     'Mantenimiento':{bg:'#F4A8A0',color:'#8B1A1A',code:'MT'},
     'Bloqueado':    {bg:'#CFCFCF',color:'#444',code:'BLQ'},
     'Completo':     {bg:'#7FC97F',color:'#15401a',code:'COMP'},
+    'Sale de viaje':{bg:'#FDE68A',color:'#92400E',code:'OUT'},
   };
 
   // Indicadores del Rack Gráfico para este mes
@@ -2939,6 +2940,16 @@ function renderNuevaReserva() {
             </select>
           </div>
         </div>
+        <div class="form-row" id="res-cxc-bloque">
+          <div class="form-group">
+            <label>Cuenta por cobrar (si es "Por facturar")</label>
+            <select id="res-cxc-tipo"><option>CxC Full</option><option>CxC Aloj</option></select>
+          </div>
+          <div class="form-group">
+            <label>A cargo de (razón social)</label>
+            <select id="res-cxc-razon"><option>80|10 S.A.S</option><option>LTM3 S.A.S</option></select>
+          </div>
+        </div>
         <div class="form-group">
           <label>Observaciones</label>
           <textarea id="res-obs" placeholder="Solicitudes especiales, restricciones, notas de la reserva..."></textarea>
@@ -3069,6 +3080,8 @@ async function guardarReserva() {
     checkin: ci, checkout: co,
     canal, empresa: document.getElementById('res-empresa').value.trim(),
     pago: document.getElementById('res-pago').value,
+    cxcTipo: document.getElementById('res-cxc-tipo')?.value || 'CxC Full',
+    cxcRazon: document.getElementById('res-cxc-razon')?.value || '80|10 S.A.S',
     personas: document.getElementById('res-personas')?.value || '1 adulto',
     obs: document.getElementById('res-obs').value,
     firmante: document.getElementById('res-firmante').value || currentProfile?.nombre || 'Fabio Malaver',
@@ -3102,6 +3115,8 @@ function previsualizarConfirmacion() {
     canal: document.getElementById('res-canal').value,
     empresa: document.getElementById('res-empresa')?.value.trim() || '',
     pago: document.getElementById('res-pago').value,
+    cxcTipo: document.getElementById('res-cxc-tipo')?.value || 'CxC Full',
+    cxcRazon: document.getElementById('res-cxc-razon')?.value || '80|10 S.A.S',
     personas: document.getElementById('res-personas')?.value || '1 adulto',
     obs: document.getElementById('res-obs').value,
     email: document.getElementById('res-email').value.trim(),
@@ -3253,7 +3268,7 @@ function generarConfirmacion(r) {
     <tr><td>Tarifa Apartamento por Mes</td><td>N/A</td></tr>
     <tr><td>Valor Total del Contrato</td><td class="bold-val">$ ${totalConIva.toLocaleString('es-CO')} ${monedaLabel}${esUSD ? '' : ' (IVA incluido)'}</td></tr>
     ${esUSD ? `<tr><td>Moneda de cobro</td><td><strong>USD — Dólares americanos</strong></td></tr>` : `<tr><td>TRM</td><td>N/A</td></tr>`}
-    <tr><td>Forma de Pago</td><td>Pago <strong>${r.pago.toUpperCase()}</strong> por parte del Cliente a su llegada.<br>Facturar por <strong>80|10 S.A.S</strong></td></tr>
+    <tr><td>Forma de Pago</td><td>${/factur/i.test(r.pago||'') ? `Pago <strong>POR FACTURAR</strong> &mdash; <strong>${r.cxcTipo||'CxC Full'}</strong> a cargo de la empresa.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>` : `Pago <strong>${r.pago.toUpperCase()}</strong> por parte del Cliente a su llegada.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>`}</td></tr>
     <tr>
       <td>Incluidos en la Tarifa</td>
       <td>
