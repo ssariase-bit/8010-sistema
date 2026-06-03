@@ -1361,17 +1361,7 @@ async function renderRack() {
   let allRack = rawRack || [];
 
   // AUTO-INICIALIZAR: solo si estamos viendo el mes actual
-  const APTOS_DEFAULT = [
-    '301','302','303','304',
-    '401','402','403',
-    '501','501A','502','502A',
-    '601','601A','602','602A',
-    '701','701A','702','702A',
-    '801','801A','802','802A',
-    '901','901A','902','902A',
-    '1001','1001A','1002','1002A',
-    '1101','1102'
-  ];
+  const APTOS_DEFAULT = EB().aptosFull;
   const esMesActual = (month === now.getMonth() && year === now.getFullYear());
   if (esMesActual && canEdit) {
     const todayStr = TODAY;
@@ -2828,7 +2818,7 @@ function renderNuevaReserva() {
             <label>Apartamento *</label>
             <select id="res-apto" onchange="calcReserva()">
               <option value="">— Seleccionar —</option>
-              ${['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'].map(a=>`<option value="${a}">${a}</option>`).join('')}
+              ${EB().aptosFull.map(a=>`<option value="${a}">${a}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
@@ -4256,17 +4246,7 @@ async function renderFormatoHuespedes(yArg, mArg) {
     porApto[r.apto][parseInt(r.fecha.split('-')[2])] = r;
   });
 
-  const APTOS = [
-    '301','302','303','304',
-    '401','402','403',
-    '501','501A','502','502A',
-    '601','601A','602','602A',
-    '701','701A','702','702A',
-    '801','801A','802','802A',
-    '901','901A','902','902A',
-    '1001','1001A','1002','1002A',
-    '1101','1102'
-  ];
+  const APTOS = EB().aptosFull;
   // [fondo, texto] por tipo de barra (según estatus)
   const COL = {
     casa:['#9FE1CB','#04342C'],     // en casa (ocupado, incluye hoy)
@@ -4419,7 +4399,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
       <div class="form-row col3">
         <div class="form-group"><label>Apartamento *</label>
           <select id="cki-apto">
-            ${['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'].map(a=>`<option ${a===aptoPreload?'selected':''}>${a}</option>`).join('')}
+            ${EB().aptosFull.map(a=>`<option ${a===aptoPreload?'selected':''}>${a}</option>`).join('')}
           </select>
         </div>
         <div class="form-group"><label>Huésped *</label><input type="text" id="cki-huesped" value="${huesped||''}" placeholder="Sr./Sra. Nombre Apellido"></div>
@@ -4561,7 +4541,7 @@ function renderInformeCKO(aptoPreload, huesped, canal) {
       <div class="form-row col3">
         <div class="form-group"><label>Apartamento *</label>
           <select id="cko-apto">
-            ${['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'].map(a=>`<option ${a===aptoPreload?'selected':''}>${a}</option>`).join('')}
+            ${EB().aptosFull.map(a=>`<option ${a===aptoPreload?'selected':''}>${a}</option>`).join('')}
           </select>
         </div>
         <div class="form-group"><label>Huésped *</label><input type="text" id="cko-huesped" value="${huesped||''}" placeholder="Sr./Sra. Nombre Apellido"></div>
