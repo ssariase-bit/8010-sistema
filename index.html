@@ -229,6 +229,7 @@ textarea{resize:vertical;min-height:80px}
         <img id="topbar-logo-img" src="" alt="8010 Urban Living" style="height:38px;display:block">
       </div>
       <span id="topbar-edificio" style="font-size:11px;color:rgba(255,255,255,.4);margin-left:8px"></span>
+      <span id="selector-edificio" style="display:none;margin-left:12px"></span>
     </div>
     <div class="topbar-user">
       <span id="topbar-nombre">—</span>
@@ -358,6 +359,61 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+/* ===== PARAMETRIZACIÓN MULTI-EDIFICIO · Fase 1 (santiago) ===== */
+const EDIFICIO_ACTIVO = (function(){ try{ var e=localStorage.getItem('edificio_activo'); return (e && ['8010','kubik'].indexOf(e)>=0) ? e : '8010'; }catch(_){ return '8010'; } })(); // Fase 2.1: edificio activo (default 8010)
+function setEdificioActivo(id){ try{ if(['8010','kubik'].indexOf(id)<0) return; localStorage.setItem('edificio_activo', id); }catch(_){}; location.reload(); }
+const EDIFICIOS = {
+  '8010': {
+    nombre: '8010 Urban Living',
+    aptosBase: ['301','302','303','304','401','402','403','501','502','601','602','701','702','801','802','901','902','1001','1002','1101','1102'],
+    habitacionesA: ['501A','502A','601A','602A','701A','702A','801A','802A','901A','902A','1001A','1002A'],
+    aptosFull: ['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'],
+    mapaAptoA: {'501':'501A','502':'502A','601':'601A','602':'602A','701':'701A','702':'702A','801':'801A','802':'802A','901':'901A','902':'902A','1001':'1001A','1002':'1002A'},
+    metrajes: { '01': {privado:96, total:132}, '02': {privado:90, total:126} },
+    cajas: ['OT (8010 SAS)','LTM3 (LTM3 SAS)','PH (Propiedad Horizontal)'],
+    jornadas: { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 }
+  },
+  'kubik': {
+    nombre: 'Kubik Living 8i8',
+    nit: '902026873-8',
+    aptosBase: ['201','202','203','204','301','302','303','304','401','402','403','404','501','502','503','504','601','602','603','604','701','702','703','704','801','802','803','804','901','902','903','904','1001','1002'],
+    habitacionesA: ['204A','304A','404A','504A','604A','704A','804A','904A'],
+    aptosFull: ['201','202','203','204','204A','301','302','303','304','304A','401','402','403','404','404A','501','502','503','504','504A','601','602','603','604','604A','701','702','703','704','704A','801','802','803','804','804A','901','902','903','904','904A','1001','1002'],
+    mapaAptoA: {'204':'204A','304':'304A','404':'404A','504':'504A','604':'604A','704':'704A','804':'804A','904':'904A'},
+    noEntregados: ['201','202','203','204','204A'],
+    metrajes: {'201':100,'202':29,'203':56,'204':79,'204A':37,'301':100,'302':29,'303':56,'304':79,'304A':37,'401':100,'402':29,'403':56,'404':79,'404A':37,'501':100,'502':29,'503':56,'504':79,'504A':37,'601':100,'602':29,'603':56,'604':79,'604A':37,'701':100,'702':29,'703':56,'704':79,'704A':37,'801':100,'802':29,'803':56,'804':79,'804A':37,'901':100,'902':29,'903':56,'904':79,'904A':37,'1001':130,'1002':113},
+    cajas: ['8I8 (8i8 Operadora SAS)','LTM3 (LTM3 SAS)'],
+    jornadas: { 'Administrador':540, 'Camarera':500, 'Mantenimiento':540, 'Otro':540 }
+  }
+};
+function EB(){ return EDIFICIOS[EDIFICIO_ACTIVO]; } // atajo al edificio activo
+
+// ─── Fase 2.3: aislamiento de datos por edificio ───────────────
+// Intercepta sb.from(): en tablas operativas, filtra lecturas por
+// edificio y estampa el edificio activo en inserts/upserts.
+// profiles y config NO llevan edificio -> pasan sin cambios.
+const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitantes',
+  'mantenimiento','control_personal','turnos','personal','contratos','transportes',
+  'reembolsos','prestamos_tec','maletas','entrega_efectivos','capsulas','caja',
+  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos']);
+(function(){
+  const _from = sb.from.bind(sb);
+  sb.from = function(tabla){
+    const qb = _from(tabla);
+    if (!TABLAS_POR_EDIFICIO.has(tabla)) return qb;
+    const ed = EDIFICIO_ACTIVO;
+    const stamp = r => Object.assign({}, r, { edificio: ed });
+    const _select = qb.select.bind(qb);
+    qb.select = function(){ return _select.apply(null, arguments).eq('edificio', ed); };
+    const _insert = qb.insert.bind(qb);
+    qb.insert = function(rows, opts){ return _insert(Array.isArray(rows)? rows.map(stamp): stamp(rows), opts); };
+    const _upsert = qb.upsert.bind(qb);
+    qb.upsert = function(rows, opts){ return _upsert(Array.isArray(rows)? rows.map(stamp): stamp(rows), opts); };
+    return qb;
+  };
+})();
+
+
 // ═══════════════════════════════════════════════════════════
 // ESTADO GLOBAL
 // ═══════════════════════════════════════════════════════════
@@ -409,17 +465,47 @@ function showError(el, msg) { el.textContent = msg; el.classList.remove('hidden'
 // ═══════════════════════════════════════════════════════════
 // INIT APP
 // ═══════════════════════════════════════════════════════════
+// ─── Fase 2.2: edificio activo · permisos · branding · selector ───
+function edificiosPermitidos(){
+  var e = currentProfile && currentProfile.edificios;
+  if (Array.isArray(e) && e.length) return e;
+  return ['8010']; // fallback seguro: sin campo -> solo 8010 (igual que hoy)
+}
+function aplicarBrandingEdificio(){
+  var ed = EB();
+  var tl = document.getElementById('topbar-logo-img');
+  if (tl){
+    if (EDIFICIO_ACTIVO==='8010'){ tl.src=LOGO_WHITE; tl.style.display='block'; }
+    else if (ed.logo){ tl.src=ed.logo; tl.style.display='block'; }
+    else { tl.style.display='none'; }
+  }
+  var te = document.getElementById('topbar-edificio');
+  if (te){ te.textContent = (EDIFICIO_ACTIVO==='8010') ? (currentProfile && currentProfile.edificio || '') : ed.nombre; }
+  try{ document.title = ed.nombre + ' \u2014 Sistema Operativo'; }catch(_){}
+}
+function renderSelectorEdificio(){
+  var permit = edificiosPermitidos();
+  var cont = document.getElementById('selector-edificio');
+  if (!cont) return;
+  if (permit.length < 2){ cont.style.display='none'; return; }
+  cont.style.display='inline-flex';
+  cont.innerHTML = permit.map(function(id){
+    var nom=(EDIFICIOS[id]&&EDIFICIOS[id].nombre)||id;
+    var on=(id===EDIFICIO_ACTIVO);
+    return '<button type="button" onclick="setEdificioActivo(\''+id+'\')" style="cursor:pointer;border:1px solid rgba(255,255,255,.25);background:'+(on?'rgba(201,168,76,.25)':'transparent')+';color:'+(on?'#fff':'rgba(255,255,255,.6)')+';padding:3px 10px;border-radius:4px;font-size:11px;margin-right:4px">'+nom+'</button>';
+  }).join('');
+}
 function initApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('topbar-nombre').textContent = currentProfile?.nombre || currentUser.email;
   document.getElementById('topbar-rol').textContent = currentProfile?.rol || 'usuario';
-  document.getElementById('topbar-edificio').textContent = currentProfile?.edificio || '';
-  // Cargar logos
-  const tl = document.getElementById('topbar-logo-img');
-  if (tl) tl.src = LOGO_WHITE;
+  // Fase 2.2: validar acceso al edificio activo y aplicar branding por edificio
+  if (edificiosPermitidos().indexOf(EDIFICIO_ACTIVO) < 0) { setEdificioActivo(edificiosPermitidos()[0]); return; }
   const ll = document.getElementById('login-logo-img');
   if (ll) ll.src = LOGO_WHITE;
+  aplicarBrandingEdificio();
+  renderSelectorEdificio();
   buildSidebar();
   // Mostrar FAB de novedad rápida para roles operativos
   const rolOp = ['administrador','recepcion','gerencia_operativa','gerente_general'];
@@ -733,7 +819,7 @@ async function loadView(view) {
       ['Fecha','Apto','Arrendatario','Comanda','Productos','Valor','IVA','Total']); break;
     case 'magnifique-form': renderGenForm('recibos_magnifique','🍽️ Registrar Recibo Magnifique',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
-      {id:'apto',label:'Apartamento',type:'select',opts:['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'],req:true},
+      {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'num_comanda',label:'No. Comanda',type:'text'},
       {id:'productos',label:'Productos (descripción)',type:'textarea'},
@@ -750,7 +836,7 @@ async function loadView(view) {
     case 'cargos-form': renderGenForm('listado_cargos','📋 Registrar Cargo',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'semana',label:'Semana (ej: 25 MAY - 31 MAY)',type:'text'},
-      {id:'apto',label:'Apartamento',type:'select',opts:['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'],req:true},
+      {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text'},
       {id:'num_comanda',label:'No. Comanda / Producto',type:'text'},
       {id:'transporte',label:'Transporte ($)',type:'number',default:'0'},
@@ -799,7 +885,7 @@ async function loadView(view) {
       {id:'tipo',label:'Tipo',type:'select',opts:['Ingreso','Egreso','Fondo','Reembolso','Entrega efectivo'],req:true},
       {id:'concepto',label:'Concepto / Descripción',type:'text',req:true},
       {id:'area',label:'Área',type:'select',opts:['Recepción','Mantenimiento','Housekeeping','Administración','General']},
-      {id:'empresa',label:'Caja / Razón Social',type:'select',opts:['OT (8010 SAS)','LTM3 (LTM3 SAS)','PH (Propiedad Horizontal)']},
+      {id:'empresa',label:'Caja / Razón Social',type:'select',opts:EB().cajas},
       {id:'valor',label:'Valor ($)',type:'number',req:true},
       {id:'recibo_no',label:'No. Recibo',type:'text'},
       {id:'entregado_por',label:'Entregado por',type:'text'},
@@ -812,7 +898,7 @@ async function loadView(view) {
       {id:'nombre_visitante',label:'Nombre del visitante',type:'text',req:true},
       {id:'hora_ingreso',label:'Hora ingreso',type:'time'},
       {id:'hora_salida',label:'Hora salida',type:'time'},
-      {id:'apto',label:'Apartamento que visita',type:'select',opts:['301','302','303','304','401','402','403','501','502','601','602','701','702','801','802','901','902','1001','1002','1101','1102'],req:true},
+      {id:'apto',label:'Apartamento que visita',type:'select',opts:EB().aptosBase,req:true},
       {id:'arrendatario_autoriza',label:'Arrendatario que autoriza',type:'text',req:true},
       {id:'num_acompanantes',label:'No. acompañantes',type:'number'},
       {id:'pernocta',label:'¿Pernocta en el edificio?',type:'select',opts:['false','true']},
@@ -904,7 +990,7 @@ async function loadView(view) {
       ['Fecha','Apto','Arrendatario','Contrato','Registro','Docs','Completa']); break;
     case 'check-carpetas-form': renderGenForm('check_carpetas','📂 Carpeta de Apto',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY},
-      {id:'apto',label:'Apartamento',type:'select',opts:['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'],req:true},
+      {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'empresa',label:'Empresa',type:'text'},
       {id:'facturar_a',label:'Facturar a',type:'select',opts:['LTM3 SAS','8010 SAS','Particular','Otra']},
@@ -923,7 +1009,7 @@ async function loadView(view) {
       ['Fecha','Apto','Arrendatario','Empresa','Master','Saldo','Obs.']); break;
     case 'saldos-form': renderGenForm('saldos_aptos','💳 Registrar Saldo de Apto',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
-      {id:'apto',label:'Apartamento',type:'select',opts:['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'],req:true},
+      {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'empresa',label:'Empresa',type:'text'},
       {id:'master',label:'Master / Canal',type:'text'},
@@ -978,8 +1064,8 @@ async function loadView(view) {
 // DASHBOARD
 // ═══════════════════════════════════════════════════════════
 // Listas maestras de unidades para cálculo de ocupación (consistente en todo el sistema)
-const RACK_BASE21 = ['301','302','303','304','401','402','403','501','502','601','602','701','702','801','802','901','902','1001','1002','1101','1102'];
-const RACK_AS = ['501A','502A','601A','602A','701A','702A','801A','802A','901A','902A','1001A','1002A'];
+const RACK_BASE21 = EB().aptosBase;
+const RACK_AS = EB().habitacionesA;
 
 // Cálculo único de KPIs del día — usado por Dashboard y Rack para que SIEMPRE concuerden.
 // getRec(apto) devuelve el registro de rack de ese apto para el día evaluado (o undefined).
@@ -1300,7 +1386,7 @@ async function renderRack() {
     const faltanHoy = APTOS_DEFAULT.filter(a => !aptosDehoy.includes(a));
     if (faltanHoy.length > 0) {
       const newRows = faltanHoy.map(a => ({ fecha: todayStr, apto: a, estado: 'Libre', updated_by: currentUser.id }));
-      await sb.from('rack').upsert(newRows, { onConflict: 'fecha,apto', ignoreDuplicates: true });
+      await sb.from('rack').upsert(newRows, { onConflict: 'fecha,apto,edificio', ignoreDuplicates: true });
       const { data: refreshed } = await sb.from('rack').select('*').gte('fecha', monthStart).lte('fecha', monthEnd);
       if (refreshed) allRack = refreshed;
     }
@@ -1537,7 +1623,7 @@ async function crearDiaRack(apto, fecha) {
   // Upsert: crear o actualizar el registro para ese apto+día
   const { data } = await sb.from('rack').upsert({
     fecha, apto, estado: 'Libre', updated_by: currentUser.id
-  }, { onConflict: 'fecha,apto' }).select().single();
+  }, { onConflict: 'fecha,apto,edificio' }).select().single();
   if (data) openAptoModal(data.id, apto);
   else {
     // Si no tiene constraint, buscar o crear
@@ -1600,7 +1686,7 @@ async function marcarCompletoDirecto(id, apto){
 // Muestra ocupación y tarifa promedio (ADR) de un día al hacer clic en su encabezado
 function infoDiaRack(dia){
   const rack = window._rackData || {};
-  const BASE21 = ['301','302','303','304','401','402','403','501','502','601','602','701','702','801','802','901','902','1001','1002','1101','1102'];
+  const BASE21 = EB().aptosBase;
   const AS = ['501A','502A','601A','602A','701A','702A','801A','802A','901A','902A','1001A','1002A'];
   const OCU = ['Ocupado','Check-in hoy','Check-out hoy'];
   const FUERA = ['Bloqueado','Mantenimiento'];
@@ -3662,7 +3748,7 @@ function _durMin(ini, fin){
 function _fmtDur(m){ if (m == null) return '-'; const h = Math.floor(m/60), mm = m%60; return h+'h '+(mm<10?'0':'')+mm+'m'; }
 
 // Jornada base por cargo (en minutos): en turnos de 12h el tiempo extra cuenta A PARTIR de aquí
-const JORNADA_BASE = { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 };
+const JORNADA_BASE = EB().jornadas;
 // Calcula el tiempo extra del día según cargo y tipo de turno
 function calcExtraMin(cargo, horarioStr, ingreso, salida, baseOverride){
   const total = _durMin(ingreso, salida);
@@ -3856,7 +3942,7 @@ async function registrarSalidaPersonal(id) {
 async function renderEstadoHuespedes() {
   const today = TODAY;
   const { data: rawData } = await sb.from('rack').select('*').eq('fecha', today);
-  const _aptoOrder = ['301','302','303','304','401','402','403','501','501A','502','502A','601','601A','602','602A','701','701A','702','702A','801','801A','802','802A','901','901A','902','902A','1001','1001A','1002','1002A','1101','1102'];
+  const _aptoOrder = EB().aptosFull;
   const data = (rawData||[]).sort((a,b) => _aptoOrder.indexOf(a.apto) - _aptoOrder.indexOf(b.apto));
   const rows = (data||[]).filter(r => r.estado !== 'Libre');
 
@@ -3900,7 +3986,7 @@ async function renderEstadoHuespedes() {
 }
 
 async function declinarLimpiezaHK() {
-  const aptos = ['301','302','303','304','401','402','403','501','502','601','602','701','702','801','802','901','902','1001','1002','1101','1102'];
+  const aptos = EB().aptosBase;
   const aptoOpts = aptos.map(a => `<option value="${a}">${a}</option>`).join('');
   const nombre = currentProfile?.nombre || '';
 
