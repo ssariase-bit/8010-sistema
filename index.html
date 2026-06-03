@@ -1397,7 +1397,7 @@ async function renderRack() {
   window._rackData = rack;
   window._rackMesNombre = monthNames[month];
 
-  let aptos = [...new Set((allRack||[]).map(r => r.apto))].sort((a,b) => {
+  let aptos = [...new Set([...EB().aptosFull, ...(allRack||[]).map(r => r.apto)])].sort((a,b) => {
     const na = parseInt(a); const nb = parseInt(b);
     if (isNaN(na)||isNaN(nb)) return a.localeCompare(b);
     if (na !== nb) return na - nb;
