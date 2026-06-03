@@ -1712,15 +1712,8 @@ function infoDiaRack(dia){
 }
 
 let _aptoData = {};
-// Mapa de aptos base → su variante A
-const APTO_A_MAP = {
-  '501':'501A','502':'502A',
-  '601':'601A','602':'602A',
-  '701':'701A','702':'702A',
-  '801':'801A','802':'802A',
-  '901':'901A','902':'902A',
-  '1001':'1001A','1002':'1002A'
-};
+// Mapa de aptos base → su variante A (por edificio activo)
+const APTO_A_MAP = EB().mapaAptoA;
 
 function toggleAptoCompleto(chk) {
   const aNum = document.getElementById('modal-apto-num').textContent;
