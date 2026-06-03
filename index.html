@@ -3167,6 +3167,7 @@ function generarConfirmacion(r) {
   const fechaDoc = `${hoy.getDate()} de ${meses[hoy.getMonth()]} de ${hoy.getFullYear()}`;
   let tipo = TIPOS_APTO[r.apto] || `Apartamento ${r.apto}`;
   let desc = DESC_APTO[r.apto] || tipo + '.';
+  if (String(r.apto).endsWith('A')) { tipo = 'Habitación Deluxe'; desc = 'Habitación Deluxe de 60 m²:<br>01 cama King.'; }
   if (r.config === 'dividido' && METRAJE_DIVIDIDO[r.apto]) {
     const _m = METRAJE_DIVIDIDO[r.apto];
     tipo = `Apartamento de ${_m} m²`;
