@@ -849,7 +849,7 @@ async function loadView(view) {
       ['Fecha','Apto','Arrendatario','Comanda','Productos','Valor','IVA','Total']); break;
     case 'magnifique-form': renderGenForm('recibos_magnifique','🍽️ Registrar Recibo Magnifique',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
-      {id:'apto',label:'Apartamento / Centro de consumo',type:'select',opts:[...EB().aptosFull,'NOVAL','SALAS / EVENTOS','LTM3'],req:true},
+      {id:'apto',label:'Apartamento / Evento / Cliente (elige o escribe)',type:'text',req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'num_comanda',label:'No. Comanda',type:'text'},
       {id:'productos',label:'Productos (descripción)',type:'textarea'},
@@ -3420,6 +3420,18 @@ function renderGenForm(tabla, titulo, campos) {
     // Hacer el campo total de solo lectura
     const tot = document.getElementById('gf-total_efectivo');
     if (tot) { tot.readOnly = true; tot.style.background = '#E2EFDA'; tot.style.fontWeight = '700'; }
+  }
+
+  // Recibos Magnifique: apto, evento o cliente — texto libre con sugerencias
+  if (tabla === 'recibos_magnifique') {
+    const inp = document.getElementById('gf-apto');
+    if (inp) {
+      let dl = document.getElementById('dl-aptos-mag');
+      if (!dl) { dl = document.createElement('datalist'); dl.id = 'dl-aptos-mag'; inp.parentNode.appendChild(dl); }
+      dl.innerHTML = [...EB().aptosFull, 'NOVAL', 'SALAS / EVENTOS', 'LTM3'].map(a => `<option value="${a}">`).join('');
+      inp.setAttribute('list', 'dl-aptos-mag');
+      inp.setAttribute('autocomplete', 'off');
+    }
   }
 
   // Auto-calcular retraso y tiempo adicional en control de personal
