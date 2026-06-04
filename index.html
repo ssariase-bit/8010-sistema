@@ -998,7 +998,7 @@ async function loadView(view) {
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'personal-list': {
-      const _vs = ['gerente_general','gerencia_operativa'].includes(currentProfile?.rol);
+      const _vs = currentProfile?.rol === 'gerente_general';
       await renderList('personal','👤 Personal / RRHH','personal-form',
         _vs ? ['nombre','cargo','area','salario','fecha_ingreso','tipo_contrato','estado'] : ['nombre','cargo','area','fecha_ingreso','tipo_contrato','estado'],
         _vs ? ['Nombre','Cargo','Área','Salario','Ingreso','Contrato','Estado'] : ['Nombre','Cargo','Área','Ingreso','Contrato','Estado']);
@@ -3867,8 +3867,8 @@ async function renderCuadroExtras(){
     acc[k].min.diurna+=c.diurna; acc[k].min.nocturna+=c.nocturna; acc[k].min.diurna_fest+=c.diurna_fest; acc[k].min.nocturna_fest+=c.nocturna_fest;
   });
 
-  // Los valores en $ (salario y pago) SOLO los ve la gerencia
-  const _verSal = ['gerente_general','gerencia_operativa'].includes(currentProfile?.rol);
+  // Los valores en $ (salario y pago) SOLO los ve el gerente general
+  const _verSal = currentProfile?.rol === 'gerente_general';
   let totalPagar = 0;
   const hm = m => (m/60).toFixed(2).replace('.',',')+'h';
   const filas = Object.values(acc).map(e => {
