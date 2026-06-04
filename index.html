@@ -3064,8 +3064,8 @@ async function guardarReserva() {
   const dco = new Date(co);
   rows.push({ fecha: co, apto, estado: 'Check-out hoy', huesped: nombre, tarifa: tarifa || null, canal, updated_by: currentUser.id });
 
-  // Insertar — primero borrar días que ya existan para ese apto en ese rango
-  await sb.from('rack').delete().eq('apto', apto).gte('fecha', ci).lte('fecha', co);
+  // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
+  await sb.from('rack').delete().eq('apto', apto).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
   const { error } = await sb.from('rack').insert(rows);
 
   if (error) {
@@ -3629,8 +3629,12 @@ async function doImportRack() {
     d.appendChild(l); d.scrollTop = d.scrollHeight;
   }
 
-  irLog('Borrando datos anteriores de 2026...');
-  const { error: de } = await sb.from('rack').delete().gte('fecha','2026-01-01').lte('fecha','2026-12-31');
+  if (EDIFICIO_ACTIVO !== '8010') {
+    irLog('⛔ Esta herramienta importa el rack histórico de 8010. Cambia al edificio 8010 para usarla.', '#E74C3C');
+    btn.disabled = false; btn.textContent = 'Importar Rack'; return;
+  }
+  irLog('Borrando datos anteriores de 2026 (solo 8010)...');
+  const { error: de } = await sb.from('rack').delete().gte('fecha','2026-01-01').lte('fecha','2026-12-31').eq('edificio','8010');
   irLog(de ? 'Advertencia: '+de.message : '✓ Datos anteriores eliminados', de ? '#E74C3C' : '#27AE60');
 
   const batches = [];
@@ -4551,6 +4555,25 @@ function generarMsgCKI() {
 Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}, ${equipaje}, ${acta}, se relaciona check list, se envía book de servicios y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
+  // Comunicar la estadía al RACK: una fila por noche (Check-in hoy → Ocupado → Check-out hoy)
+  (async () => {
+    try {
+      if (!fi) return;
+      const addDay = s => { const [y,m,d] = s.split('-').map(Number); return new Date(Date.UTC(y, m-1, d+1)).toISOString().split('T')[0]; };
+      const rows = [];
+      let f = fi;
+      for (let i = 0; i < 400; i++) {
+        const estado = f === fi ? 'Check-in hoy' : (f === ff ? 'Check-out hoy' : 'Ocupado');
+        rows.push({ fecha: f, apto, estado, huesped, tarifa: tarifa || null, canal, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+        if (!ff || f === ff) break;
+        f = addDay(f);
+      }
+      const { error } = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
+      if (error) showToast('Informe generado, pero el rack NO se actualizó: ' + error.message, 'error');
+      else showToast(`📅 Rack actualizado: Apto ${apto}, ${rows.length} día(s) de estadía`, 'success');
+    } catch(e) { console.error('CKI→rack:', e); }
+  })();
+
   compartirInforme(`CKI — ${huesped} Apto ${apto}`, msg);
 }
 
@@ -4638,11 +4661,12 @@ function generarMsgCKO() {
 Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${consumosStr}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}
 R/${quien}`;
 
-  // Mostrar modal de compartir + botón para marcar como Libre
+  // Mostrar modal de compartir + botón para actualizar el rack
+  window._ckoHuesped = huesped; // para que el rack registre el CKO aunque hoy no tenga fila
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
-  const waText = encodeURIComponent('*8010 Urban Living — CKO — ' + huesped + ' Apto ' + apto + '*\n\n' + msg);
-  const emailSubj = encodeURIComponent('8010 Urban Living — CKO ' + huesped + ' Apto ' + apto);
+  const waText = encodeURIComponent('*' + EB().nombre + ' — CKO — ' + huesped + ' Apto ' + apto + '*\n\n' + msg);
+  const emailSubj = encodeURIComponent(EB().nombre + ' — CKO ' + huesped + ' Apto ' + apto);
   const emailBody = encodeURIComponent(msg);
   modal.innerHTML = `
     <div style="background:white;border-radius:16px;padding:28px 32px;max-width:440px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)">
@@ -4660,7 +4684,7 @@ R/${quien}`;
         </a>
         <button id="cko-libre-btn" onclick="marcarAptoCKOLibre('${apto}')"
            style="background:#C0392B;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700">
-          ✅ Confirmar salida — Marcar Apto ${apto} como Libre
+          ✅ Confirmar salida — Actualizar Rack (Apto ${apto})
         </button>
         <button onclick="document.body.removeChild(this.closest('[style*=fixed]'))"
            style="background:transparent;border:none;padding:6px;cursor:pointer;font-size:12px;color:#9CA3AF">
@@ -4672,12 +4696,29 @@ R/${quien}`;
 }
 
 async function marcarAptoCKOLibre(apto) {
-  const { error } = await sb.from('rack').update({ estado: 'Libre', huesped: null, tarifa: null, canal: null, observaciones: null, updated_by: currentUser.id }).eq('fecha', TODAY).eq('apto', apto);
+  const ed = EDIFICIO_ACTIVO;
+  const hForm = (window._ckoHuesped || '').trim();
+  // 1) La fila de HOY queda como 'Check-out hoy' (conserva el huésped para el histórico).
+  //    Si no existe fila para hoy, se crea — así el rack SIEMPRE refleja el CKO.
+  const { data: hoyD } = await sb.from('rack').select('huesped,tarifa,canal').eq('fecha', TODAY).eq('apto', apto).limit(1);
+  const hoy = (hoyD && hoyD[0]) || null;
+  const huesped = (hoy && hoy.huesped) || hForm || null;
+  const { error } = await sb.from('rack').upsert([{ fecha: TODAY, apto, estado: 'Check-out hoy', huesped, tarifa: hoy ? hoy.tarifa : null, canal: hoy ? hoy.canal : null, edificio: ed, updated_by: currentUser.id }], { onConflict: 'fecha,apto,edificio' });
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  // 2) Liberar los días FUTUROS de la misma estadía (mismo huésped, mismo apto, solo este edificio)
+  let liberados = 0;
+  if (huesped) {
+    const { data: fut } = await sb.from('rack').select('id,huesped').eq('apto', apto).gt('fecha', TODAY).neq('estado', 'Libre');
+    const ids = (fut || []).filter(r => (r.huesped || '').trim().toLowerCase() === huesped.trim().toLowerCase()).map(r => r.id);
+    if (ids.length) {
+      const r2 = await sb.from('rack').update({ estado: 'Libre', huesped: null, tarifa: null, canal: null, observaciones: null, updated_by: currentUser.id }).in('id', ids).eq('edificio', ed);
+      if (!r2.error) liberados = ids.length;
+    }
+  }
   // Cerrar modal
   const m = document.querySelector('[style*="position:fixed"][style*="inset:0"]');
   if (m) document.body.removeChild(m);
-  showToast(`✅ Apto ${apto} marcado como Libre — CKO completado`, 'success');
+  showToast(`✅ CKO Apto ${apto}: hoy queda como Check-out${liberados ? ' · ' + liberados + ' día(s) futuros liberados' : ''}`, 'success');
   if (window._currentView === 'rack') renderRack();
   if (window._currentView === 'estado-huespedes') renderEstadoHuespedes();
 }
