@@ -268,7 +268,7 @@ textarea{resize:vertical;min-height:80px}
       <label>Estado</label>
       <select id="m-estado">
         <option>Libre</option><option value="Ocupado">Ocupado / En casa (IN)</option><option>Check-in hoy</option>
-        <option>Check-out hoy</option><option>Sale de viaje</option><option>Limpieza</option><option>Mantenimiento</option><option>Bloqueado</option>
+        <option>Check-out hoy</option><option>Sucio</option><option>Sale de viaje</option><option>Limpieza</option><option>Mantenimiento</option><option>Bloqueado</option>
       </select>
     </div>
     <div class="form-group">
@@ -1427,6 +1427,7 @@ async function renderRack() {
     'Ocupado':      {bg:'#B7E1A1',color:'#2D5016',code:'IN'},
     'Check-in hoy': {bg:'#9EC5F0',color:'#0C447C',code:'CKI'},
     'Check-out hoy':{bg:'#FBC97D',color:'#854F0B',code:'CKO'},
+    'Sucio':        {bg:'#E7C9A9',color:'#6B3F19',code:'SUC'},
     'Libre':        {bg:'#F7F7F7',color:'#999',code:''},
     'Limpieza':     {bg:'#E7D4F7',color:'#5B2A86',code:'HK'},
     'Mantenimiento':{bg:'#F4A8A0',color:'#8B1A1A',code:'MT'},
@@ -2318,6 +2319,18 @@ async function enviarHK() {
   });
   if (error) { showToast('Error al registrar', 'error'); btn.innerHTML = '📤 Registrar limpieza'; btn.disabled = false; return; }
   showToast('✅ Limpieza registrada', 'success');
+  // Cierre del ciclo CKO→Sucio→Limpio: si el apto estaba Sucio o en Limpieza en el rack, queda Libre
+  try {
+    const _fhk = document.getElementById('hk-fecha').value;
+    const _ehk = document.getElementById('hk-est').value;
+    if (_ehk === 'Limpio') {
+      const { data: rSuc } = await sb.from('rack').select('id,estado').eq('fecha', _fhk).eq('apto', apto).in('estado', ['Sucio','Limpieza']).limit(1);
+      if (rSuc && rSuc[0]) {
+        const r2 = await sb.from('rack').update({ estado: 'Libre', huesped: null, tarifa: null, canal: null, observaciones: null, updated_by: currentUser.id }).eq('id', rSuc[0].id).eq('edificio', EDIFICIO_ACTIVO);
+        if (!r2.error) showToast(`🏠 Apto ${apto} quedó LIBRE en el rack`, 'success');
+      }
+    }
+  } catch(e) { console.error('HK→rack:', e); }
   setTimeout(() => loadView('hk-list'), 1500);
 }
 
@@ -4684,7 +4697,7 @@ R/${quien}`;
         </a>
         <button id="cko-libre-btn" onclick="marcarAptoCKOLibre('${apto}')"
            style="background:#C0392B;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700">
-          ✅ Confirmar salida — Actualizar Rack (Apto ${apto})
+          ✅ Confirmar salida — Apto ${apto} queda SUCIO (por limpiar)
         </button>
         <button onclick="document.body.removeChild(this.closest('[style*=fixed]'))"
            style="background:transparent;border:none;padding:6px;cursor:pointer;font-size:12px;color:#9CA3AF">
@@ -4698,12 +4711,13 @@ R/${quien}`;
 async function marcarAptoCKOLibre(apto) {
   const ed = EDIFICIO_ACTIVO;
   const hForm = (window._ckoHuesped || '').trim();
-  // 1) La fila de HOY queda como 'Check-out hoy' (conserva el huésped para el histórico).
-  //    Si no existe fila para hoy, se crea — así el rack SIEMPRE refleja el CKO.
+  // 1) La fila de HOY queda como 'Sucio' (salió el huésped, pendiente de limpieza).
+  //    Quién salió queda en observaciones. Si no existe fila para hoy, se crea.
   const { data: hoyD } = await sb.from('rack').select('huesped,tarifa,canal').eq('fecha', TODAY).eq('apto', apto).limit(1);
   const hoy = (hoyD && hoyD[0]) || null;
   const huesped = (hoy && hoy.huesped) || hForm || null;
-  const { error } = await sb.from('rack').upsert([{ fecha: TODAY, apto, estado: 'Check-out hoy', huesped, tarifa: hoy ? hoy.tarifa : null, canal: hoy ? hoy.canal : null, edificio: ed, updated_by: currentUser.id }], { onConflict: 'fecha,apto,edificio' });
+  const _hrCKO = new Date().toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'2-digit',minute:'2-digit',hour12:true});
+  const { error } = await sb.from('rack').upsert([{ fecha: TODAY, apto, estado: 'Sucio', huesped: null, tarifa: null, canal: null, observaciones: `CKO ${_hrCKO}${huesped ? ' — ' + huesped : ''} · pendiente limpieza`, edificio: ed, updated_by: currentUser.id }], { onConflict: 'fecha,apto,edificio' });
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
   // 2) Liberar los días FUTUROS de la misma estadía (mismo huésped, mismo apto, solo este edificio)
   let liberados = 0;
@@ -4718,7 +4732,7 @@ async function marcarAptoCKOLibre(apto) {
   // Cerrar modal
   const m = document.querySelector('[style*="position:fixed"][style*="inset:0"]');
   if (m) document.body.removeChild(m);
-  showToast(`✅ CKO Apto ${apto}: hoy queda como Check-out${liberados ? ' · ' + liberados + ' día(s) futuros liberados' : ''}`, 'success');
+  showToast(`✅ CKO Apto ${apto}: queda SUCIO hasta que Housekeeping registre la limpieza${liberados ? ' · ' + liberados + ' día(s) futuros liberados' : ''}`, 'success');
   if (window._currentView === 'rack') renderRack();
   if (window._currentView === 'estado-huespedes') renderEstadoHuespedes();
 }
