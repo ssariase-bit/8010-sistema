@@ -337,6 +337,9 @@ textarea{resize:vertical;min-height:80px}
       <button class="btn btn-outline btn-sm" onclick="abrirInformeCKO()" style="color:var(--rojo);border-color:var(--rojo)" title="Generar informe de Check-Out y marcar como libre">
         🔴 Generar CKO
       </button>
+      <button class="btn btn-outline btn-sm" onclick="liberarRangoApto()" style="color:#92400E;border-color:#92400E" title="Anula el bloqueo o la estadía: pone Libre todas las fechas del rango Check-in/Check-out de este apto">
+        🗑 Liberar rango
+      </button>
       <button class="btn btn-primary btn-sm" onclick="saveApto()">💾 Guardar cambios</button>
     </div>
   </div>
@@ -2858,7 +2861,7 @@ function renderNuevaReserva() {
         <div class="form-row col3">
           <div class="form-group">
             <label>Apartamento *</label>
-            <select id="res-apto" onchange="calcReserva()">
+            <select id="res-apto" onchange="calcReserva();actualizarConfigApto()">
               <option value="">— Seleccionar —</option>
               ${EB().aptosFull.map(a=>`<option value="${a}">${a}</option>`).join('')}
             </select>
@@ -3919,6 +3922,30 @@ async function renderCuadroExtras(){
     </div>`;
 }
 
+async function compartirControlPersonal() {
+  // Informe del día más reciente con registros (normalmente hoy o ayer)
+  const { data } = await sb.from('control_personal').select('*').order('fecha',{ascending:false}).limit(60);
+  const rows = data || [];
+  if (!rows.length) { showToast('Sin registros de control de personal','error'); return; }
+  const fecha = rows[0].fecha;
+  const dia = rows.filter(r=>r.fecha===fecha).sort((a,b)=>String(a.cargo).localeCompare(b.cargo)||String(a.nombre).localeCompare(b.nombre));
+  const hhmm = h => (h||'').slice(0,5) || '--:--';
+  const min2txt = m => { m=Number(m)||0; if(!m) return ''; const h=Math.floor(m/60), mm=m%60; return (h?h+'h ':'')+(mm?mm+' min':''); };
+  const porCargo = {};
+  dia.forEach(r => { const c = r.cargo || 'Otro'; (porCargo[c]=porCargo[c]||[]).push(r); });
+  const bloques = Object.keys(porCargo).sort().map(c => `*${c.toUpperCase()}*\n` + porCargo[c].map(r => {
+    const ret = Number(r.tiempo_retraso)||0, adi = Number(r.tiempo_adicional)||0;
+    return `    ${r.nombre}\n    ${hhmm(r.marcacion_ingreso)} a ${r.marcacion_salida?hhmm(r.marcacion_salida):'(en turno)'}${ret?' · retraso '+min2txt(ret):''}${adi?' · adicional '+min2txt(adi):''}${r.observaciones?'\n    '+r.observaciones:''}`;
+  }).join('\n')).join('\n\n');
+  const txt = `⏱ *${EB().nombre} — Control de Ingreso y Salida de Personal*
+📅 ${fmtDate(fecha)} — ${dia.length} registro${dia.length>1?'s':''}
+
+${bloques}
+
+_Sistema ${EB().nombre}_`;
+  compartirInforme('Control de Personal — ' + fmtDate(fecha), txt);
+}
+
 async function renderControlPersonal() {
   const { data } = await sb.from('control_personal').select('*').order('fecha', {ascending:false}).order('nombre').limit(200);
   const rows = data || [];
@@ -3937,6 +3964,7 @@ async function renderControlPersonal() {
       <div class="page-title" style="margin-bottom:0">⏱ Control de Ingreso Personal</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (nombre, cargo...)" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
+        <button class="btn btn-outline btn-sm" onclick="compartirControlPersonal()" style="padding:10px 16px">📤 Compartir</button>
         <button class="btn btn-success btn-sm" onclick="loadView('control-personal-form')" style="padding:10px 20px">+ Registrar</button>
       </div>
     </div>
@@ -4600,6 +4628,13 @@ R/${quien}`;
         if (!ff || f === ff) break;
         f = addDay(f);
       }
+      // GUARDIA: si en esas fechas ya hay OTRO huésped, pedir confirmación (evita pisar estadías por elegir mal el apto)
+      const { data: exist } = await sb.from('rack').select('fecha,huesped,estado').eq('apto', apto).gte('fecha', fi).lte('fecha', ff || fi).neq('estado','Libre');
+      const otros = [...new Set((exist||[]).map(r=>(r.huesped||'').trim()).filter(h=>h && h.toLowerCase()!==huesped.trim().toLowerCase()))];
+      if (otros.length) {
+        const ok = confirm(`⚠️ ATENCIÓN: el Apto ${apto} ya tiene a ${otros.join(', ')} en esas fechas.\n\n¿Seguro que el CKI es del Apto ${apto}? Si continúas, se SOBREESCRIBE la estadía existente.`);
+        if (!ok) { showToast(`Rack NO modificado — verifica el apartamento del CKI`, 'error'); return; }
+      }
       const { error } = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
       if (error) showToast('Informe generado, pero el rack NO se actualizó: ' + error.message, 'error');
       else showToast(`📅 Rack actualizado: Apto ${apto}, ${rows.length} día(s) de estadía`, 'success');
@@ -4727,6 +4762,24 @@ R/${quien}`;
   document.body.appendChild(modal);
 }
 
+// Anula un bloqueo o estadía completa: pone Libre todas las fechas del rango del apto
+async function liberarRangoApto() {
+  const apto = document.getElementById('modal-apto-num').textContent;
+  let ci = document.getElementById('m-checkin').value;
+  let co = document.getElementById('m-checkout').value;
+  if (!ci && !co) { ci = co = (window._aptoData?.fecha || TODAY); }
+  if (!ci) ci = co; if (!co) co = ci;
+  const huesped = document.getElementById('m-huesped')?.value?.trim() || '';
+  if (!confirm(`¿Liberar el Apto ${apto} del ${fmtDate(ci)} al ${fmtDate(co)}${huesped ? ' (' + huesped + ')' : ''}?\n\nTodas esas fechas quedarán LIBRES en el rack.`)) return;
+  const { error } = await sb.from('rack')
+    .update({ estado: 'Libre', huesped: null, tarifa: null, canal: null, observaciones: null, checkin: null, checkout: null, updated_by: currentUser.id })
+    .eq('apto', apto).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  closeModal('modal-apto');
+  showToast(`🗑 Apto ${apto} liberado del ${fmtDate(ci)} al ${fmtDate(co)}`, 'success');
+  if (window._currentView === 'rack') renderRack();
+}
+
 async function marcarAptoCKOLibre(apto) {
   const ed = EDIFICIO_ACTIVO;
   const hForm = (window._ckoHuesped || '').trim();
@@ -4779,6 +4832,29 @@ async function renderEntregaEfectivos() {
         </tr>`).join('')}</tbody>
       </table></div>`}
     </div>`;
+}
+
+// Actualiza los textos del selector de configuración según el apto elegido
+// (metrajes reales del edificio activo, en vez de los 126/132 fijos de 8010)
+function actualizarConfigApto() {
+  const sel = document.getElementById('res-config'); if (!sel || sel.options.length < 3) return;
+  const apto = (document.getElementById('res-apto')?.value || '').trim();
+  const M = EB().metrajes || {};
+  let mComp = null, mDiv = null, mDel = null;
+  if (apto) {
+    const base = apto.replace(/A$/, '');
+    const plano = M[base], planoA = M[base + 'A'];
+    if (typeof plano === 'number') {            // metrajes por apto (Kubik)
+      mDiv = plano;
+      if (typeof planoA === 'number') { mDel = planoA; mComp = plano + planoA; }
+    } else {                                     // metrajes por terminación (8010)
+      const mt = M[base.slice(-2)];
+      if (mt && typeof mt === 'object') { mComp = mt.total; mDiv = mt.privado; mDel = base.endsWith('1') ? 25 : 22; }
+    }
+  }
+  sel.options[0].text = mComp != null ? `Completo — ${mComp} m² · apto + habitación A` : 'Completo — apto + habitación A';
+  sel.options[1].text = mDiv != null ? `Dividido — ${mDiv} m² · solo apto principal` : 'Dividido — solo apto principal';
+  sel.options[2].text = mDel != null ? `Habitación Deluxe — ${mDel} m² · 1 habitación (King)` : 'Habitación Deluxe — 1 habitación (King)';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4893,14 +4969,14 @@ async function compartirEstadoHuespedes() {
   const cko = rows.filter(r=>r.estado==='Check-out hoy').length;
   const ingresos = rows.filter(r=>r.tarifa).reduce((s,r)=>s+Number(r.tarifa),0);
   const _tot = EB().aptosBase.length;
+  // Informe operativo: sin tarifas ni ingresos (eso vive en el rack/dashboard)
   const txt = `🏢 *${EB().nombre} — Estado de Huéspedes*
 📅 ${fmtDate(TODAY)}
 
 *Ocupación: ${rows.length} de ${_tot} (${Math.round(rows.length/_tot*100)}%)*
 🟢 Ocupados: ${ocu}   🔵 Check-in: ${cki}   🟠 Check-out: ${cko}
-💰 Ingresos del día: *$${fmtNum(ingresos)} COP*
 
-${rows.map(r=>`*${r.apto}* · ${r.huesped||'—'}\n    ${r.estado}${r.tarifa?' · $'+fmtNum(r.tarifa):''}`).join('\n')}
+${rows.map(r=>`*${r.apto}* · ${r.huesped||'—'} · ${r.estado}${r.observaciones?'\n    '+r.observaciones:''}`).join('\n')}
 
 _Sistema ${EB().nombre}_`;
   compartirInforme('Estado de Huéspedes — ' + fmtDate(TODAY), txt);
@@ -4936,15 +5012,24 @@ _Sistema ${EB().nombre}_`;
 }
 
 async function compartirNovedades() {
-  const { data } = await sb.from('novedades').select('*').in('estado',['Abierto','En proceso','Escalado']).order('created_at',{ascending:false});
-  const rows = data || [];
-  const txt = `🚨 *${EB().nombre} — Novedades Abiertas*
-📅 ${fmtDate(TODAY)} — ${rows.length} activas
+  const [ab, ce] = await Promise.all([
+    sb.from('novedades').select('*').in('estado',['Abierto','En proceso','Escalado']).order('fecha',{ascending:false}),
+    sb.from('novedades').select('*').eq('fecha', TODAY).in('estado',['Resuelto','Cerrado']).order('created_at',{ascending:true})
+  ]);
+  const abiertas = ab.data || [];
+  const cerradas = ce.data || [];
+  const linea = r => `*[${r.prioridad||'-'}] ${r.area||'General'}*${r.fecha && r.fecha!==TODAY ? ' · desde '+fmtDate(r.fecha) : ''}\n${(r.descripcion||'').trim()}`;
+  const txt = `🚨 *${EB().nombre} — Novedades*
+📅 ${fmtDate(TODAY)}
 
-${rows.map(r=>`*[${r.prioridad}] ${r.area||'General'}* · ${r.estado}\n    ${r.descripcion?.substring(0,80)||''}`).join('\n')||'Sin novedades abiertas ✅'}
+⚠️ *ABIERTAS / EN PROCESO (${abiertas.length}):*
+${abiertas.map(linea).join('\n\n') || 'Sin novedades abiertas ✅'}
+
+✅ *CERRADAS HOY (${cerradas.length}):*
+${cerradas.map(linea).join('\n\n') || 'Ninguna cerrada hoy'}
 
 _Sistema ${EB().nombre}_`;
-  compartirInforme('Novedades abiertas — ' + fmtDate(TODAY), txt);
+  compartirInforme('Novedades — ' + fmtDate(TODAY), txt);
 }
 
 function abrirInformeCKO() {
