@@ -849,7 +849,7 @@ async function loadView(view) {
       ['Fecha','Apto','Arrendatario','Comanda','Productos','Valor','IVA','Total']); break;
     case 'magnifique-form': renderGenForm('recibos_magnifique','🍽️ Registrar Recibo Magnifique',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
-      {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
+      {id:'apto',label:'Apartamento / Centro de consumo',type:'select',opts:[...EB().aptosFull,'NOVAL','SALAS / EVENTOS','LTM3'],req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'num_comanda',label:'No. Comanda',type:'text'},
       {id:'productos',label:'Productos (descripción)',type:'textarea'},
