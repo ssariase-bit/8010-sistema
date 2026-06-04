@@ -997,7 +997,12 @@ async function loadView(view) {
       {id:'estado',label:'Estado',type:'select',opts:['Pendiente','En proceso','Recibido','Cancelado']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
-    case 'personal-list':      await renderList('personal','👤 Personal / RRHH','personal-form',['nombre','cargo','area','salario','fecha_ingreso','tipo_contrato','estado'],['Nombre','Cargo','Área','Salario','Ingreso','Contrato','Estado']); break;
+    case 'personal-list': {
+      const _vs = ['gerente_general','gerencia_operativa'].includes(currentProfile?.rol);
+      await renderList('personal','👤 Personal / RRHH','personal-form',
+        _vs ? ['nombre','cargo','area','salario','fecha_ingreso','tipo_contrato','estado'] : ['nombre','cargo','area','fecha_ingreso','tipo_contrato','estado'],
+        _vs ? ['Nombre','Cargo','Área','Salario','Ingreso','Contrato','Estado'] : ['Nombre','Cargo','Área','Ingreso','Contrato','Estado']);
+    } break;
     case 'personal-form':      renderGenForm('personal','👤 Registrar Personal',[
       {id:'nombre',label:'Nombre completo',type:'text',req:true},
       {id:'cargo',label:'Cargo',type:'text',req:true},
@@ -3862,6 +3867,8 @@ async function renderCuadroExtras(){
     acc[k].min.diurna+=c.diurna; acc[k].min.nocturna+=c.nocturna; acc[k].min.diurna_fest+=c.diurna_fest; acc[k].min.nocturna_fest+=c.nocturna_fest;
   });
 
+  // Los valores en $ (salario y pago) SOLO los ve la gerencia
+  const _verSal = ['gerente_general','gerencia_operativa'].includes(currentProfile?.rol);
   let totalPagar = 0;
   const hm = m => (m/60).toFixed(2).replace('.',',')+'h';
   const filas = Object.values(acc).map(e => {
@@ -3873,12 +3880,12 @@ async function renderCuadroExtras(){
     return `<tr>
       <td><strong>${e.nombre||'-'}</strong></td>
       <td>${e.cargo||'-'}</td>
-      <td>${e.salario>0?'$'+fmtNum(e.salario):'<span style="color:var(--rojo);font-size:11px">sin salario</span>'}</td>
+      ${_verSal?`<td>${e.salario>0?'$'+fmtNum(e.salario):'<span style="color:var(--rojo);font-size:11px">sin salario</span>'}</td>`:''}
       <td>${hm(e.min.diurna)}</td>
       <td>${hm(e.min.nocturna)}</td>
       <td>${hm(e.min.diurna_fest+e.min.nocturna_fest)}</td>
       <td><strong>${hm(totMin)}</strong></td>
-      <td style="font-weight:700;color:var(--verde)">$${fmtNum(Math.round(pagoTotal))}</td>
+      ${_verSal?`<td style="font-weight:700;color:var(--verde)">$${fmtNum(Math.round(pagoTotal))}</td>`:''}
     </tr>`;
   }).join('');
 
@@ -3890,12 +3897,12 @@ async function renderCuadroExtras(){
       <button onclick="window._ceMes=(${month}+1)%12;window._ceYear=${month===11?year+1:year};loadView('cuadro-extras')" class="btn btn-outline btn-sm">▶</button>
       <button onclick="window.print()" class="btn btn-outline btn-sm">🖨️ Imprimir</button>
     </div>
-    <div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Valor hora = salario ÷ 240. Extra diurna 25%, nocturna (desde 7pm) 75%, festivo/dominical +${ini>='2026-07-01'?'90':'80'}%. Verifica salarios en Personal y los festivos.</div>
+    ${_verSal?`<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Valor hora = salario ÷ 240. Extra diurna 25%, nocturna (desde 7pm) 75%, festivo/dominical +${ini>='2026-07-01'?'90':'80'}%. Verifica salarios en Personal y los festivos.</div>`:''}
     <div class="card">
       ${filas ? `<div style="overflow-x:auto"><table class="tabla">
-        <thead><tr><th>Empleado</th><th>Cargo</th><th>Salario</th><th>Extra diurna</th><th>Extra nocturna</th><th>Festivo/dom.</th><th>Total extra</th><th>A pagar</th></tr></thead>
+        <thead><tr><th>Empleado</th><th>Cargo</th>${_verSal?'<th>Salario</th>':''}<th>Extra diurna</th><th>Extra nocturna</th><th>Festivo/dom.</th><th>Total extra</th>${_verSal?'<th>A pagar</th>':''}</tr></thead>
         <tbody>${filas}</tbody>
-        <tfoot><tr style="background:var(--azul-c);font-weight:700"><td colspan="7" style="text-align:right">TOTAL A PAGAR</td><td style="color:var(--verde)">$${fmtNum(Math.round(totalPagar))}</td></tr></tfoot>
+        ${_verSal?`<tfoot><tr style="background:var(--azul-c);font-weight:700"><td colspan="7" style="text-align:right">TOTAL A PAGAR</td><td style="color:var(--verde)">$${fmtNum(Math.round(totalPagar))}</td></tr></tfoot>`:''}
       </table></div>` : '<div class="empty"><div class="empty-icon">⏲️</div><p>Sin horas extra registradas este mes</p></div>'}
     </div>`;
 }
