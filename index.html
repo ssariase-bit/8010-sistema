@@ -1207,6 +1207,10 @@ async function renderDashboard() {
   const ocupados  = _k.b21.ocu;
   const checkins  = _k.cki;
   const checkouts = _k.cko;
+  // Detalle de quiénes entran y salen hoy (apto · apellido)
+  const _nomCorto = h => h ? ' ' + String(h).trim().split(/\s+/).slice(-1)[0] : '';
+  const _ckiDet = aptosHoy.filter(r=>r.estado==='Check-in hoy').map(r=>r.apto+_nomCorto(r.huesped)).join(' | ');
+  const _ckoDet = aptosHoy.filter(r=>r.estado==='Check-out hoy').map(r=>r.apto+_nomCorto(r.huesped)).join(' | ');
   const libres    = _k.b21.disp - _k.b21.ocu;
   const ingresoHoy = _k.ing;
   const adrHoy = _k.adr;
@@ -1258,12 +1262,12 @@ async function renderDashboard() {
       <div class="kpi k-azul">
         <div class="kpi-lbl">Check-in hoy</div>
         <div class="kpi-val">${checkins}</div>
-        <div class="kpi-sub">por ingresar</div>
+        <div class="kpi-sub">${_ckiDet || 'por ingresar'}</div>
       </div>
       <div class="kpi k-naran">
         <div class="kpi-lbl">Check-out hoy</div>
         <div class="kpi-val">${checkouts}</div>
-        <div class="kpi-sub">por salir</div>
+        <div class="kpi-sub">${_ckoDet || 'por salir'}</div>
       </div>
       <div class="kpi k-verde">
         <div class="kpi-lbl">Ingresos hoy</div>
@@ -1484,6 +1488,11 @@ async function renderRack() {
   const ocupHoy  = indMes ? Math.round(indMes.noches / daysInMonth) : _kr.b21.ocu;
   const ckiHoy   = _kr.cki;
   const ckoHoy   = _kr.cko;
+  // Detalle de quiénes entran y salen hoy (apto · apellido)
+  const _rkHoy = allRack.filter(r => r.fecha === TODAY);
+  const _nomC = h => h ? ' ' + String(h).trim().split(/\s+/).slice(-1)[0] : '';
+  const _ckiDet = _rkHoy.filter(r=>r.estado==='Check-in hoy').map(r=>r.apto+_nomC(r.huesped)).join(' | ');
+  const _ckoDet = _rkHoy.filter(r=>r.estado==='Check-out hoy').map(r=>r.apto+_nomC(r.huesped)).join(' | ');
   const ocuPct   = indMes ? Math.round(indMes.ocu * 100) : Math.round(ocupHoy / (aptos.length||1) * 100);
 
   const CELL_W = 36; // ancho celda en px (más grande)
@@ -1602,8 +1611,8 @@ async function renderRack() {
         <div class="kpi-val" style="font-size:18px">$${fmtNum(_kr.ing)}</div>
         <div class="kpi-sub">${_kr.b33.tar.length} hab. con tarifa</div>
       </div>
-      <div class="kpi k-azul"><div class="kpi-lbl">Check-in hoy</div><div class="kpi-val">${ckiHoy}</div></div>
-      <div class="kpi k-naran"><div class="kpi-lbl">Check-out hoy</div><div class="kpi-val">${ckoHoy}</div></div>
+      <div class="kpi k-azul"><div class="kpi-lbl">Check-in hoy</div><div class="kpi-val">${ckiHoy}</div><div class="kpi-sub">${_ckiDet}</div></div>
+      <div class="kpi k-naran"><div class="kpi-lbl">Check-out hoy</div><div class="kpi-val">${ckoHoy}</div><div class="kpi-sub">${_ckoDet}</div></div>
       ${indMes ? `<div class="kpi k-azul"><div class="kpi-lbl">Ocupación del mes</div><div class="kpi-val">${ocuPct}%</div><div class="kpi-sub">${indMes.noches+' de '+indMes.disp+' noches'}</div></div>
       <div class="kpi k-verde"><div class="kpi-lbl">ADR del mes</div><div class="kpi-val" style="font-size:22px">$${Number(indMes.adr).toLocaleString('es-CO')}</div></div>` : ''}
     </div>
