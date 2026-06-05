@@ -1583,15 +1583,15 @@ async function renderRack() {
     </div>` : ''}
     <div class="kpi-grid" style="margin-bottom:14px">
       <div class="kpi k-verde" style="border-left-width:5px">
-        <div class="kpi-lbl">Ocupación hoy · 21 aptos</div>
+        <div class="kpi-lbl">Ocupación hoy · ${EB().aptosBase.length} aptos</div>
         <div class="kpi-val">${_kr.pct21}%</div>
         <div class="kpi-sub">${_kr.b21.ocu} de ${_kr.b21.disp} unidades</div>
       </div>
-      <div class="kpi k-verde">
-        <div class="kpi-lbl">Ocupación hoy · 33 hab.</div>
+      ${EB().aptosFull.length !== EB().aptosBase.length ? `<div class="kpi k-verde">
+        <div class="kpi-lbl">Ocupación hoy · ${EB().aptosFull.length} hab.</div>
         <div class="kpi-val">${_kr.pct33}%</div>
         <div class="kpi-sub">${_kr.b33.ocu} de ${_kr.b33.disp} habitaciones</div>
-      </div>
+      </div>` : ''}
       <div class="kpi k-azul">
         <div class="kpi-lbl">ADR del día</div>
         <div class="kpi-val" style="font-size:20px">$${fmtNum(_kr.adr)}</div>
@@ -1604,8 +1604,8 @@ async function renderRack() {
       </div>
       <div class="kpi k-azul"><div class="kpi-lbl">Check-in hoy</div><div class="kpi-val">${ckiHoy}</div></div>
       <div class="kpi k-naran"><div class="kpi-lbl">Check-out hoy</div><div class="kpi-val">${ckoHoy}</div></div>
-      <div class="kpi k-azul"><div class="kpi-lbl">Ocupación del mes</div><div class="kpi-val">${ocuPct}%</div><div class="kpi-sub">${indMes ? indMes.noches+' de '+indMes.disp+' noches' : ''}</div></div>
-      <div class="kpi k-verde"><div class="kpi-lbl">ADR del mes</div><div class="kpi-val" style="font-size:22px">$${indMes ? Number(indMes.adr).toLocaleString('es-CO') : '—'}</div></div>
+      ${indMes ? `<div class="kpi k-azul"><div class="kpi-lbl">Ocupación del mes</div><div class="kpi-val">${ocuPct}%</div><div class="kpi-sub">${indMes.noches+' de '+indMes.disp+' noches'}</div></div>
+      <div class="kpi k-verde"><div class="kpi-lbl">ADR del mes</div><div class="kpi-val" style="font-size:22px">$${Number(indMes.adr).toLocaleString('es-CO')}</div></div>` : ''}
     </div>
     <div class="card" style="padding:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
