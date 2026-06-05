@@ -1207,10 +1207,11 @@ async function renderDashboard() {
   const ocupados  = _k.b21.ocu;
   const checkins  = _k.cki;
   const checkouts = _k.cko;
-  // Detalle de quiénes entran y salen hoy (apto · apellido)
-  const _nomCorto = h => h ? ' ' + String(h).trim().split(/\s+/).slice(-1)[0] : '';
-  const _ckiDet = aptosHoy.filter(r=>r.estado==='Check-in hoy').map(r=>r.apto+_nomCorto(r.huesped)).join(' | ');
-  const _ckoDet = aptosHoy.filter(r=>r.estado==='Check-out hoy').map(r=>r.apto+_nomCorto(r.huesped)).join(' | ');
+  // Listas de quiénes entran y salen hoy (se muestran al hacer clic en la tarjeta)
+  window._ckRows = {
+    'Check-in hoy':  aptosHoy.filter(r=>r.estado==='Check-in hoy').map(r=>({apto:r.apto, huesped:r.huesped})),
+    'Check-out hoy': aptosHoy.filter(r=>r.estado==='Check-out hoy').map(r=>({apto:r.apto, huesped:r.huesped})),
+  };
   const libres    = _k.b21.disp - _k.b21.ocu;
   const ingresoHoy = _k.ing;
   const adrHoy = _k.adr;
@@ -1259,15 +1260,15 @@ async function renderDashboard() {
         <div class="kpi-val">${libres}</div>
         <div class="kpi-sub">aptos libres</div>
       </div>
-      <div class="kpi k-azul" onclick="window._rkResaltar='Check-in hoy';loadView('rack')" style="cursor:pointer" title="Clic para verlos resaltados en el rack">
+      <div class="kpi k-azul" onclick="mostrarListaCK('Check-in hoy')" style="cursor:pointer" title="Clic para ver quiénes llegan hoy">
         <div class="kpi-lbl">Check-in hoy</div>
         <div class="kpi-val">${checkins}</div>
-        <div class="kpi-sub">${_ckiDet || 'por ingresar'}</div>
+        <div class="kpi-sub">por ingresar · clic para ver</div>
       </div>
-      <div class="kpi k-naran" onclick="window._rkResaltar='Check-out hoy';loadView('rack')" style="cursor:pointer" title="Clic para verlos resaltados en el rack">
+      <div class="kpi k-naran" onclick="mostrarListaCK('Check-out hoy')" style="cursor:pointer" title="Clic para ver quiénes salen hoy">
         <div class="kpi-lbl">Check-out hoy</div>
         <div class="kpi-val">${checkouts}</div>
-        <div class="kpi-sub">${_ckoDet || 'por salir'}</div>
+        <div class="kpi-sub">por salir · clic para ver</div>
       </div>
       <div class="kpi k-verde">
         <div class="kpi-lbl">Ingresos hoy</div>
@@ -1488,11 +1489,12 @@ async function renderRack() {
   const ocupHoy  = indMes ? Math.round(indMes.noches / daysInMonth) : _kr.b21.ocu;
   const ckiHoy   = _kr.cki;
   const ckoHoy   = _kr.cko;
-  // Detalle de quiénes entran y salen hoy (apto · apellido)
+  // Listas de quiénes entran y salen hoy (se muestran al hacer clic en la tarjeta)
   const _rkHoy = allRack.filter(r => r.fecha === TODAY);
-  const _nomC = h => h ? ' ' + String(h).trim().split(/\s+/).slice(-1)[0] : '';
-  const _ckiDet = _rkHoy.filter(r=>r.estado==='Check-in hoy').map(r=>r.apto+_nomC(r.huesped)).join(' | ');
-  const _ckoDet = _rkHoy.filter(r=>r.estado==='Check-out hoy').map(r=>r.apto+_nomC(r.huesped)).join(' | ');
+  window._ckRows = {
+    'Check-in hoy':  _rkHoy.filter(r=>r.estado==='Check-in hoy').map(r=>({apto:r.apto, huesped:r.huesped})),
+    'Check-out hoy': _rkHoy.filter(r=>r.estado==='Check-out hoy').map(r=>({apto:r.apto, huesped:r.huesped})),
+  };
   const ocuPct   = indMes ? Math.round(indMes.ocu * 100) : Math.round(ocupHoy / (aptos.length||1) * 100);
 
   const CELL_W = 36; // ancho celda en px (más grande)
@@ -1612,8 +1614,8 @@ async function renderRack() {
         <div class="kpi-val" style="font-size:18px">$${fmtNum(_kr.ing)}</div>
         <div class="kpi-sub">${_kr.b33.tar.length} hab. con tarifa</div>
       </div>
-      <div class="kpi k-azul" onclick="rkToggleResaltar('Check-in hoy')" style="cursor:pointer${window._rkResaltar==='Check-in hoy'?';box-shadow:0 0 0 3px #0C447C':''}" title="Clic para resaltarlos en el rack"><div class="kpi-lbl">Check-in hoy</div><div class="kpi-val">${ckiHoy}</div><div class="kpi-sub">${_ckiDet}</div></div>
-      <div class="kpi k-naran" onclick="rkToggleResaltar('Check-out hoy')" style="cursor:pointer${window._rkResaltar==='Check-out hoy'?';box-shadow:0 0 0 3px #C2410C':''}" title="Clic para resaltarlos en el rack"><div class="kpi-lbl">Check-out hoy</div><div class="kpi-val">${ckoHoy}</div><div class="kpi-sub">${_ckoDet}</div></div>
+      <div class="kpi k-azul" onclick="mostrarListaCK('Check-in hoy')" style="cursor:pointer" title="Clic para ver quiénes llegan hoy"><div class="kpi-lbl">Check-in hoy</div><div class="kpi-val">${ckiHoy}</div><div class="kpi-sub">clic para ver</div></div>
+      <div class="kpi k-naran" onclick="mostrarListaCK('Check-out hoy')" style="cursor:pointer" title="Clic para ver quiénes salen hoy"><div class="kpi-lbl">Check-out hoy</div><div class="kpi-val">${ckoHoy}</div><div class="kpi-sub">clic para ver</div></div>
       ${indMes ? `<div class="kpi k-azul"><div class="kpi-lbl">Ocupación del mes</div><div class="kpi-val">${ocuPct}%</div><div class="kpi-sub">${indMes.noches+' de '+indMes.disp+' noches'}</div></div>
       <div class="kpi k-verde"><div class="kpi-lbl">ADR del mes</div><div class="kpi-val" style="font-size:22px">$${Number(indMes.adr).toLocaleString('es-CO')}</div></div>` : ''}
     </div>
@@ -1649,6 +1651,25 @@ async function renderRack() {
 function rkToggleResaltar(est) {
   window._rkResaltar = (window._rkResaltar === est ? null : est);
   renderRack();
+}
+
+// Clic en las tarjetas Check-in/Check-out hoy: muestra la lista de quiénes llegan o salen
+function mostrarListaCK(est) {
+  const rows = (window._ckRows && window._ckRows[est]) || [];
+  const esCKI = est === 'Check-in hoy';
+  const color = esCKI ? '#0C447C' : '#C2410C';
+  const m = document.createElement('div');
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  m.onclick = e => { if (e.target === m) document.body.removeChild(m); };
+  m.innerHTML = `<div style="background:white;border-radius:16px;padding:24px 28px;max-width:420px;width:90%;max-height:70vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-size:16px;font-weight:800;color:${color};margin-bottom:12px">${esCKI ? '🔵 Llegan hoy' : '🟠 Salen hoy'} (${rows.length})</div>
+    ${rows.length ? rows.map(r => `<div style="display:flex;gap:12px;padding:9px 0;border-bottom:1px solid #eee;align-items:center">
+      <strong style="min-width:58px;color:${color};font-size:15px">${r.apto}</strong>
+      <span style="flex:1;font-size:13px;${r.huesped?'':'color:#999;font-style:italic'}">${r.huesped || 'sin nombre'}</span>
+    </div>`).join('') : '<div style="color:#999;padding:10px 0">Ninguno por hoy ✅</div>'}
+    <button onclick="document.body.removeChild(this.closest('[style*=fixed]'))" style="margin-top:16px;background:#1D3461;color:white;border:none;border-radius:8px;padding:10px 18px;cursor:pointer;font-weight:600;width:100%">Cerrar</button>
+  </div>`;
+  document.body.appendChild(m);
 }
 
 // Consulta de disponibilidad por rango de fechas (para responder llamadas al instante)
