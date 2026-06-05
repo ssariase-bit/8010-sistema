@@ -2337,9 +2337,15 @@ function renderMantForm() {
         <div class="form-group"><label>Área / Apartamento</label>
           <input type="text" id="ot-area" placeholder="Ej: Apto 301, Lobby, Terraza...">
         </div>
-        <div class="form-group"><label>Técnico asignado</label>
-          <input type="text" id="ot-tec" value="${currentProfile?.nombre || ''}">
+        <div class="form-group"><label>Técnico asignado (quien lo hace)</label>
+          <input type="text" id="ot-tec" value="">
         </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Solicitado por (quien lo pide) *</label>
+          <input type="text" id="ot-solicita" value="${currentProfile?.nombre || ''}" placeholder="Huésped, recepción, gerencia...">
+        </div>
+        <div class="form-group"></div>
       </div>
       <div class="form-group"><label>Descripción del trabajo</label>
         <textarea id="ot-desc" placeholder="Describe detalladamente qué se debe hacer o qué ocurrió..." style="min-height:120px"></textarea>
@@ -2360,16 +2366,25 @@ async function enviarOT() {
   if (!desc || !area) { showToast('Completa área y descripción', 'error'); return; }
   const btn = document.querySelector('.btn-success');
   btn.innerHTML = '<span class="spinner"></span>Guardando...'; btn.disabled = true;
-  const { error } = await sb.from('mantenimiento').insert({
+  const _ot = {
     fecha: document.getElementById('ot-fecha').value,
     area_apto: area,
     descripcion: desc,
     tecnico: document.getElementById('ot-tec').value,
+    solicitado_por: document.getElementById('ot-solicita')?.value?.trim() || null,
     prioridad: document.getElementById('ot-prio').value,
     estado: 'Pendiente',
     costo: Number(document.getElementById('ot-costo').value) || null,
     user_id: currentUser.id,
-  });
+  };
+  let { error } = await sb.from('mantenimiento').insert(_ot);
+  // Compatibilidad: si la columna solicitado_por aún no existe en la BD, guardar dentro de la descripción
+  if (error && /solicitado_por/.test(error.message || '')) {
+    const _ot2 = { ..._ot };
+    delete _ot2.solicitado_por;
+    if (_ot.solicitado_por) _ot2.descripcion = desc + `\n(Solicitado por: ${_ot.solicitado_por})`;
+    ({ error } = await sb.from('mantenimiento').insert(_ot2));
+  }
   if (error) { showToast('Error al guardar OT', 'error'); btn.innerHTML = '📤 Abrir Orden de Trabajo'; btn.disabled = false; return; }
   showToast('✅ Orden de trabajo creada', 'success');
   setTimeout(() => loadView('mantenimiento-list'), 1500);
@@ -2656,6 +2671,7 @@ async function renderMantList(filtroApto='') {
                   <div>
                     <div style="font-size:11px;color:var(--gris-t);margin-bottom:3px">
                       📅 ${fmtDate(o.fecha || (o.created_at?o.created_at.split('T')[0]:null))}
+                      ${o.solicitado_por ? ` · 🙋 Solicitó: ${o.solicitado_por}` : ''}
                       ${o.tecnico ? ` · 👷 ${o.tecnico}` : ''}
                     </div>
                     <div style="font-size:13px;font-weight:600;color:#1F2937;line-height:1.5">${o.descripcion}</div>
@@ -2692,11 +2708,12 @@ async function renderMantList(filtroApto='') {
       ${rowsFiltrados.length === 0
         ? '<div class="empty"><div class="empty-icon">✅</div><p>Sin órdenes de trabajo</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th>Fecha</th><th>Área/Apto</th><th>Descripción del trabajo</th><th>Técnico</th><th>Prioridad</th><th>Estado</th><th>Costo</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Área/Apto</th><th>Descripción del trabajo</th><th>Solicitó</th><th>Técnico</th><th>Prioridad</th><th>Estado</th><th>Costo</th></tr></thead>
             <tbody>${rowsFiltrados.map(o=>`<tr style="${o.estado==='Pendiente'?'background:#fff9f5':''}">
               <td style="white-space:nowrap">${fmtDate(o.fecha || (o.created_at?o.created_at.split('T')[0]:null))}</td>
               <td><strong style="color:var(--azul)">${o.area_apto}</strong></td>
               <td style="max-width:260px">${o.descripcion}</td>
+              <td>${o.solicitado_por||'-'}</td>
               <td>${o.tecnico||'-'}</td>
               <td><span class="badge b-${o.prioridad==='Urgente'?'alta':o.prioridad==='Normal'?'media':'baja'}">${o.prioridad||'Normal'}</span></td>
               <td>
