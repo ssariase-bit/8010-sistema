@@ -2437,9 +2437,18 @@ async function enviarHK() {
   if (!apto) { showToast('Indica el apartamento', 'error'); return; }
   const btn = document.querySelector('.btn-success');
   btn.innerHTML = '<span class="spinner"></span>Guardando...'; btn.disabled = true;
+  // Normalizar el nombre contra la nómina (evita "GUILLERMINA" vs "Guillermina Sanabria")
+  let _cam = document.getElementById('hk-cam').value.trim();
+  try {
+    const { data: _p } = await sb.from('personal').select('nombre');
+    const _nrm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim().replace(/\s+/g,' ');
+    const _toks = _nrm(_cam).split(' ').filter(Boolean);
+    const _m = (_p||[]).filter(p => p.nombre && _toks.every(t => _nrm(p.nombre).split(' ').includes(t)));
+    if (_m.length === 1) _cam = _m[0].nombre;
+  } catch(e) {}
   const { error } = await sb.from('housekeeping').insert({
     fecha: document.getElementById('hk-fecha').value,
-    camarera: document.getElementById('hk-cam').value,
+    camarera: _cam,
     apto,
     estado: document.getElementById('hk-est').value,
     hora_ingreso: document.getElementById('hk-in').value || null,
@@ -2786,14 +2795,34 @@ async function renderHKList() {
     porFecha[h.fecha].push(h);
   });
 
-  // Promedio por camarera (global)
+  // Unificar variantes del mismo nombre contra la nómina oficial
+  // ("GUILLERMINA", "guillermina", "Guillermina Sanabria" => una sola persona)
+  let _nomina = [];
+  try {
+    const { data: _pers } = await sb.from('personal').select('nombre');
+    _nomina = (_pers||[]).filter(p=>p.nombre).map(p=>({ full: p.nombre, toks: _normNom(p.nombre).split(' ') }));
+  } catch(e) {}
+  function _normNom(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim().replace(/\s+/g,' '); }
+  const _canonCache = {};
+  function _canonNom(nombre){
+    const n = _normNom(nombre);
+    if (_canonCache[n] !== undefined) return _canonCache[n];
+    const toks = n.split(' ').filter(Boolean);
+    const matches = _nomina.filter(p => toks.every(t => p.toks.includes(t)));
+    _canonCache[n] = (matches.length === 1) ? matches[0].full : String(nombre).trim();
+    return _canonCache[n];
+  }
+
+  // Promedio por camarera (global), agrupando por nombre unificado
   const promedios = {};
   rows.forEach(h => {
     const m = calcMin(h.hora_ingreso, h.hora_salida);
     if (m && h.camarera) {
-      if (!promedios[h.camarera]) promedios[h.camarera] = {total:0, count:0};
-      promedios[h.camarera].total += m;
-      promedios[h.camarera].count++;
+      const nomC = _canonNom(h.camarera);
+      const k = _normNom(nomC);
+      if (!promedios[k]) promedios[k] = {nombre: nomC, total:0, count:0};
+      promedios[k].total += m;
+      promedios[k].count++;
     }
   });
 
@@ -2805,7 +2834,6 @@ async function renderHKList() {
       <div style="display:flex;gap:8px">
         <button class="btn btn-danger btn-sm" onclick="declinarLimpiezaHK()" style="padding:10px 16px">🚫 Declina limpieza</button>
         <button onclick="compartirHK()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
-      <button class="btn btn-danger btn-sm" onclick="declinarLimpiezaHK()">🚫 Declina limpieza</button>
       <button class="btn btn-success btn-sm" onclick="loadView('hk-form')" style="padding:10px 20px">+ Registrar limpieza</button>
       </div>
     </div>
@@ -2815,11 +2843,11 @@ async function renderHKList() {
     <div class="card" style="margin-bottom:16px">
       <div class="card-title" style="margin-bottom:12px">📊 Promedio de tiempo por camarera</div>
       <div style="display:flex;flex-wrap:wrap;gap:12px">
-        ${Object.entries(promedios).sort((a,b)=>a[0].localeCompare(b[0])).map(([nombre, d]) => {
+        ${Object.values(promedios).sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(d => {
           const avg = Math.round(d.total / d.count);
           const color = avg <= 30 ? 'var(--verde)' : avg <= 45 ? 'var(--naran)' : 'var(--rojo)';
           return `<div style="background:var(--gris);border-radius:10px;padding:14px 18px;text-align:center;min-width:140px;border-left:4px solid ${color}">
-            <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">${nombre}</div>
+            <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">${d.nombre}</div>
             <div style="font-size:22px;font-weight:800;color:${color}">${fmtMin(avg)}</div>
             <div style="font-size:10px;color:var(--gris-t)">${d.count} apto${d.count>1?'s':''} limpiado${d.count>1?'s':''}</div>
           </div>`;
