@@ -2177,11 +2177,22 @@ async function renderNovedadForm() {
           <select id="n-estado-ini"><option>Abierto</option><option>En proceso</option></select>
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label>Causa</label>
+          <input type="text" id="n-causa" placeholder="¿Qué originó la novedad?">
+        </div>
+        <div class="form-group"><label>Fuente</label>
+          <select id="n-fuente"><option value="">— Seleccionar —</option><option>Huésped</option><option>WhatsApp</option><option>Llamada</option><option>Correo</option><option>Inspección</option><option>Personal interno</option><option>Proveedor</option><option>Otro</option></select>
+        </div>
+      </div>
       <div class="form-group"><label>Descripción de la novedad *</label>
         <textarea id="n-desc" placeholder="Describe con detalle: qué ocurrió, dónde exactamente, a qué hora, qué acción se tomó..." style="min-height:130px"></textarea>
       </div>
+      <div class="form-group"><label>Tratamiento / plan de acción</label>
+        <textarea id="n-tratamiento" placeholder="¿Cómo se va a resolver? Pasos a seguir..." style="min-height:60px"></textarea>
+      </div>
       <div class="form-row">
-        <div class="form-group"><label>Reportado por</label>
+        <div class="form-group"><label>Reportado por (quien registra)</label>
           <input type="text" id="n-quien" value="${currentProfile?.nombre || ''}">
         </div>
         <div class="form-group"><label>Acción inmediata tomada</label>
@@ -2222,6 +2233,9 @@ async function enviarNovedad() {
     reportado_por: document.getElementById('n-quien').value,
     gestionado_por: document.getElementById('n-gestor')?.value || null,
     area_gestor: document.getElementById('n-area-gestor')?.value || null,
+    causa: document.getElementById('n-causa')?.value?.trim() || null,
+    fuente: document.getElementById('n-fuente')?.value || null,
+    tratamiento: document.getElementById('n-tratamiento')?.value?.trim() || null,
     estado: document.getElementById('n-estado-ini').value,
     user_id: currentUser.id,
   });
@@ -2337,7 +2351,7 @@ async function renderHKForm() {
           <input type="text" id="hk-apto" placeholder="Ej: 301">
         </div>
         <div class="form-group"><label>Estado</label>
-          <select id="hk-est"><option>Limpio</option><option>Sucio</option><option>En proceso</option><option>Revisión pendiente</option></select>
+          <select id="hk-est"><option>Limpio</option><option>Sucio</option><option>En proceso</option><option>Declina limpieza</option><option>Revisión pendiente</option></select>
         </div>
       </div>
       <div class="form-row">
@@ -3759,6 +3773,7 @@ function fmtNum(n) { return Math.round(n||0).toLocaleString('es-CO'); }
 // COMPARTIR INFORMES — Email y WhatsApp
 // ═══════════════════════════════════════════════════════════
 function compartirInforme(titulo, texto, emailDest) {
+  window._txtCompartir = texto; // para el botón "Copiar texto"
   const dest = emailDest || 'gerencia@8010urbanliving.com';
   const asunto = encodeURIComponent(EB().nombre + ' — ' + titulo);
   const cuerpo = encodeURIComponent(texto);
@@ -3779,6 +3794,10 @@ function compartirInforme(titulo, texto, emailDest) {
            onclick="document.body.removeChild(this.closest('[style*=fixed]'))">
           📧 Enviar por Email
         </a>
+        <button onclick="navigator.clipboard.writeText(window._txtCompartir||'').then(()=>{this.innerHTML='✅ Copiado al portapapeles';setTimeout(()=>{this.innerHTML='📋 Copiar texto'},2000)}).catch(()=>{this.innerHTML='❌ No se pudo copiar'})"
+           style="display:flex;align-items:center;gap:10px;background:#6B7280;color:white;border:none;padding:12px 16px;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px;width:100%">
+          📋 Copiar texto
+        </button>
         <a href="https://wa.me/?text=${waText}" target="_blank"
            style="display:flex;align-items:center;gap:10px;background:#25D366;color:white;padding:12px 16px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px"
            onclick="document.body.removeChild(this.closest('[style*=fixed]'))">
@@ -5069,7 +5088,7 @@ _Sistema ${EB().nombre}_`;
 }
 
 async function compartirNovedades() {
-  const _linea = r => `*[${r.prioridad||'-'}] ${r.area||'General'}* · ${r.estado||'-'}\n${(r.descripcion||'').trim()}`;
+  const _linea = r => `*[${r.prioridad||'-'}] ${r.area||'General'}* · ${r.estado||'-'}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}`;
   // Si hay una fecha seleccionada en el listado, el informe es de ESA fecha (todas: abiertas y cerradas)
   if (window._novFecha) {
     const f = window._novFecha;
@@ -5090,7 +5109,7 @@ _Sistema ${EB().nombre}_`;
   ]);
   const abiertas = ab.data || [];
   const cerradas = ce.data || [];
-  const linea = r => `*[${r.prioridad||'-'}] ${r.area||'General'}*${r.fecha && r.fecha!==TODAY ? ' · desde '+fmtDate(r.fecha) : ''}\n${(r.descripcion||'').trim()}`;
+  const linea = r => `*[${r.prioridad||'-'}] ${r.area||'General'}*${r.fecha && r.fecha!==TODAY ? ' · desde '+fmtDate(r.fecha) : ''}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}`;
   const txt = `🚨 *${EB().nombre} — Novedades*
 📅 ${fmtDate(TODAY)}
 
