@@ -5018,16 +5018,19 @@ async function compartirEstadoHuespedes() {
   const { data: _rd } = await sb.from('rack').select('*').eq('fecha', TODAY);
   const data = (_rd||[]).sort((a,b)=>(parseInt(a.apto)||0)-(parseInt(b.apto)||0));
   const rows = data.filter(r => r.estado !== 'Libre');
-  const ocu = rows.filter(r=>r.estado==='Ocupado').length;
-  const cki = rows.filter(r=>r.estado==='Check-in hoy').length;
-  const cko = rows.filter(r=>r.estado==='Check-out hoy').length;
+  // Para los conteos de ocupación solo cuentan las unidades base (las habitaciones A
+  // acompañan al apto titular y NO suman unidades — evita el "30 de 21" imposible)
+  const base = rows.filter(r => !String(r.apto).endsWith('A'));
+  const ocu = base.filter(r=>r.estado==='Ocupado'||r.estado==='Sale de viaje').length;
+  const cki = base.filter(r=>r.estado==='Check-in hoy').length;
+  const cko = base.filter(r=>r.estado==='Check-out hoy').length;
   const ingresos = rows.filter(r=>r.tarifa).reduce((s,r)=>s+Number(r.tarifa),0);
   const _tot = EB().aptosBase.length;
   // Informe operativo: sin tarifas ni ingresos (eso vive en el rack/dashboard)
   const txt = `🏢 *${EB().nombre} — Estado de Huéspedes*
 📅 ${fmtDate(TODAY)}
 
-*Ocupación: ${rows.length} de ${_tot} (${Math.round(rows.length/_tot*100)}%)*
+*Ocupación: ${base.length} de ${_tot} (${Math.round(base.length/_tot*100)}%)*
 🟢 Ocupados: ${ocu}   🔵 Check-in: ${cki}   🟠 Check-out: ${cko}
 
 ${rows.map(r=>`*${r.apto}* · ${r.huesped||'—'} · ${r.estado}${r.observaciones?'\n    '+r.observaciones:''}`).join('\n')}
