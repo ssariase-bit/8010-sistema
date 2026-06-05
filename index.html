@@ -411,7 +411,7 @@ function EB(){ return EDIFICIOS[EDIFICIO_ACTIVO]; } // atajo al edificio activo
 const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitantes',
   'mantenimiento','control_personal','turnos','personal','contratos','transportes',
   'reembolsos','prestamos_tec','maletas','entrega_efectivos','capsulas','caja',
-  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones']);
+  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion']);
 (function(){
   const _from = sb.from.bind(sb);
   sb.from = function(tabla){
@@ -780,6 +780,8 @@ const MENU_COMPLETO = [
   { section: 'Comercial' },
   { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
   { id: 'comercial-form', icon: '➕', label: 'Nueva Cotización' },
+  { id: 'facturacion-list', icon: '🧾', label: 'Facturación' },
+  { id: 'facturacion-form', icon: '➕', label: 'Registrar Factura' },
   { section: 'Auditoría' },
   { id: 'novedades-diarias', icon: '📋', label: 'Novedades del Día' },
   { id: 'semana-resumen', icon: '📅', label: 'Semana en Curso' },
@@ -837,6 +839,25 @@ async function loadView(view) {
     case 'informe-cki':     renderInformeCKI(); break;
     case 'informe-cko':     renderInformeCKO(); break;
     case 'entrega-efectivos': await renderEntregaEfectivos(); break;
+
+    // Facturación (seguimiento de facturas por reserva)
+    case 'facturacion-list': await renderList('facturacion','🧾 Facturación — Seguimiento por Reserva','facturacion-form',
+      ['num_reserva','apto','titular','empresa','estadia_inicio','estadia_fin','valor','factura','nc','factura_nueva','estado'],
+      ['#','Apto','Titular','Empresa','Inicio','Fin','Valor','Factura','NC','Fact. nueva','Estado']); break;
+    case 'facturacion-form': renderGenForm('facturacion','🧾 Registrar Factura',[
+      {id:'num_reserva',label:'No. de reserva',type:'number'},
+      {id:'apto',label:'Apartamento',type:'text',req:true},
+      {id:'titular',label:'Titular',type:'text',req:true},
+      {id:'empresa',label:'Empresa / Canal',type:'text'},
+      {id:'estadia_inicio',label:'Estadía — inicio',type:'date'},
+      {id:'estadia_fin',label:'Estadía — fin',type:'date'},
+      {id:'valor',label:'Valor ($)',type:'number',default:'0'},
+      {id:'factura',label:'No. Factura',type:'text'},
+      {id:'nc',label:'Nota Crédito (NC)',type:'text'},
+      {id:'factura_nueva',label:'Factura nueva (si hubo NC)',type:'text'},
+      {id:'estado',label:'Estado de facturación',type:'select',opts:['REALIZADA','PDTE','PDTE CONFIRMACIÓN','PDTE PAGO DE SALDO','ANULADA']},
+      {id:'observaciones',label:'Observaciones',type:'textarea'},
+    ]); break;
 
     // Módulo Comercial (cotizaciones / leads)
     case 'comercial-list': await renderComercial(); break;
