@@ -1259,12 +1259,12 @@ async function renderDashboard() {
         <div class="kpi-val">${libres}</div>
         <div class="kpi-sub">aptos libres</div>
       </div>
-      <div class="kpi k-azul">
+      <div class="kpi k-azul" onclick="window._rkResaltar='Check-in hoy';loadView('rack')" style="cursor:pointer" title="Clic para verlos resaltados en el rack">
         <div class="kpi-lbl">Check-in hoy</div>
         <div class="kpi-val">${checkins}</div>
         <div class="kpi-sub">${_ckiDet || 'por ingresar'}</div>
       </div>
-      <div class="kpi k-naran">
+      <div class="kpi k-naran" onclick="window._rkResaltar='Check-out hoy';loadView('rack')" style="cursor:pointer" title="Clic para verlos resaltados en el rack">
         <div class="kpi-lbl">Check-out hoy</div>
         <div class="kpi-val">${checkouts}</div>
         <div class="kpi-sub">${_ckoDet || 'por salir'}</div>
@@ -1551,6 +1551,7 @@ async function renderRack() {
       if(r && r.estado !== 'Libre') { estHoy = r.estado; huesHoy = r.huesped || ''; break; }
     }
     let cmFila = colorMap[estHoy] || colorMap['Libre'];
+    const _hl = window._rkResaltar && estHoy === window._rkResaltar; // resaltar CKI/CKO al espichar la tarjeta
     const tarHoy = rack[apto]?.[todayDay]?.tarifa;
     // Relación apto completo
     const esVarianteA = apto.endsWith('A');
@@ -1559,7 +1560,7 @@ async function renderRack() {
     const aCompletaHoy = varADeEste && (rack[varADeEste]?.[todayDay]?.observaciones||'').includes('Apto completo');
     if (aIncluidaHoy || aCompletaHoy) cmFila = colorMap['Completo'];
 
-    return `<tr style="height:34px;${esVarianteA?'background:#fafafa;':''}">
+    return `<tr ${_hl?'data-hl="1"':''} style="height:34px;${esVarianteA?'background:#fafafa;':''}${_hl?`outline:3px solid ${window._rkResaltar==='Check-in hoy'?'#0C447C':'#C2410C'};outline-offset:-2px;`:''}">
       <td style="position:sticky;left:0;background:${cmFila.bg};color:${cmFila.color};font-weight:800;padding:4px 8px;font-size:12px;border:1px solid #ccc;white-space:nowrap;z-index:2;min-width:${APTO_W}px">
         ${esVarianteA ? `<span style="font-size:9px;color:#9CA3AF">↳</span> ` : ''}${apto}
       </td>
@@ -1611,8 +1612,8 @@ async function renderRack() {
         <div class="kpi-val" style="font-size:18px">$${fmtNum(_kr.ing)}</div>
         <div class="kpi-sub">${_kr.b33.tar.length} hab. con tarifa</div>
       </div>
-      <div class="kpi k-azul"><div class="kpi-lbl">Check-in hoy</div><div class="kpi-val">${ckiHoy}</div><div class="kpi-sub">${_ckiDet}</div></div>
-      <div class="kpi k-naran"><div class="kpi-lbl">Check-out hoy</div><div class="kpi-val">${ckoHoy}</div><div class="kpi-sub">${_ckoDet}</div></div>
+      <div class="kpi k-azul" onclick="rkToggleResaltar('Check-in hoy')" style="cursor:pointer${window._rkResaltar==='Check-in hoy'?';box-shadow:0 0 0 3px #0C447C':''}" title="Clic para resaltarlos en el rack"><div class="kpi-lbl">Check-in hoy</div><div class="kpi-val">${ckiHoy}</div><div class="kpi-sub">${_ckiDet}</div></div>
+      <div class="kpi k-naran" onclick="rkToggleResaltar('Check-out hoy')" style="cursor:pointer${window._rkResaltar==='Check-out hoy'?';box-shadow:0 0 0 3px #C2410C':''}" title="Clic para resaltarlos en el rack"><div class="kpi-lbl">Check-out hoy</div><div class="kpi-val">${ckoHoy}</div><div class="kpi-sub">${_ckoDet}</div></div>
       ${indMes ? `<div class="kpi k-azul"><div class="kpi-lbl">Ocupación del mes</div><div class="kpi-val">${ocuPct}%</div><div class="kpi-sub">${indMes.noches+' de '+indMes.disp+' noches'}</div></div>
       <div class="kpi k-verde"><div class="kpi-lbl">ADR del mes</div><div class="kpi-val" style="font-size:22px">$${Number(indMes.adr).toLocaleString('es-CO')}</div></div>` : ''}
     </div>
@@ -1636,6 +1637,18 @@ async function renderRack() {
         </table>
       </div>
     </div>`;
+
+  // Si hay resaltado activo (clic en tarjeta CKI/CKO), llevar la vista a la primera fila resaltada
+  if (window._rkResaltar) {
+    const f = document.querySelector('tr[data-hl]');
+    if (f) setTimeout(() => f.scrollIntoView({ block: 'center', behavior: 'smooth' }), 150);
+  }
+}
+
+// Clic en las tarjetas Check-in/Check-out hoy: resalta esas filas en el rack (clic de nuevo para quitar)
+function rkToggleResaltar(est) {
+  window._rkResaltar = (window._rkResaltar === est ? null : est);
+  renderRack();
 }
 
 // Consulta de disponibilidad por rango de fechas (para responder llamadas al instante)
