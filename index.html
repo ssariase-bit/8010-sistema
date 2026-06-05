@@ -326,6 +326,13 @@ textarea{resize:vertical;min-height:80px}
       <label>Observaciones</label>
       <textarea id="m-obs" placeholder="Notas sobre este apartamento..."></textarea>
     </div>
+    <div class="form-group" style="background:#FFF7E6;border:1px solid #FBC97D;border-radius:8px;padding:10px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:600">
+        <input type="checkbox" id="m-rango" style="width:16px;height:16px">
+        📆 Aplicar a toda la estadía (todas las fechas entre Check-in y Check-out)
+      </label>
+      <div style="font-size:11px;color:#7c4a03;margin-top:4px">Con esto, el cambio que hagas aquí se replica en todo el rango de fechas, no solo en el día seleccionado.</div>
+    </div>
     <div class="form-actions">
       <button class="btn btn-outline btn-sm" onclick="closeModal('modal-apto')">Cancelar</button>
       <button class="btn btn-danger btn-sm" onclick="declinarLimpieza()" title="Registra novedad automática: el arrendatario no quiere limpieza hoy">
@@ -1807,6 +1814,28 @@ async function saveApto() {
     updated_at: new Date().toISOString(),
   };
 
+  // ¿Aplicar a toda la estadía? (todas las fechas del rango CI–CO)
+  const _rango = document.getElementById('m-rango')?.checked && updates.checkin && updates.checkout && updates.checkin <= updates.checkout;
+  if (_rango) {
+    const addDay = s => { const [y,m,d] = s.split('-').map(Number); return new Date(Date.UTC(y, m-1, d+1)).toISOString().split('T')[0]; };
+    const ocupacional = ['Ocupado','Check-in hoy','Check-out hoy','Sale de viaje'].includes(updates.estado);
+    const rows = []; let f = updates.checkin;
+    for (let i = 0; i < 400; i++) {
+      // Estadías: patrón CKI → Ocupado → CKO. Bloqueos/Mantenimiento/etc: el mismo estado en todo el rango.
+      const est = ocupacional ? (f === updates.checkin ? 'Check-in hoy' : (f === updates.checkout ? 'Check-out hoy' : 'Ocupado')) : updates.estado;
+      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, observaciones: updates.observaciones, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      if (f === updates.checkout) break;
+      f = addDay(f);
+    }
+    const rr = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
+    if (rr.error) { showToast('Error al aplicar el rango: ' + rr.error.message, 'error'); return; }
+    if (varA && ocupacional) await aplicarCompleto(aNum, fecha, updates.checkin, updates.checkout, updates.huesped, esCompleto);
+    showToast(`✅ Apto ${aNum}: cambios aplicados a ${rows.length} día(s) (${fmtDate(updates.checkin)} a ${fmtDate(updates.checkout)})`, 'success');
+    closeModal('modal-apto');
+    renderRack();
+    return;
+  }
+
   const { error } = await sb.from('rack').update(updates).eq('id', currentAptoId);
   if (error) { showToast('Error al guardar', 'error'); return; }
 
@@ -2358,9 +2387,11 @@ function areaApto(n){
   return splitAreaApto(n && n.area);
 }
 
-async function renderNovedadesList(filtro='') {
+async function renderNovedadesList(filtro='', fechaSel='') {
+  window._novFecha = fechaSel || '';
   const q = sb.from('novedades').select('*').order('created_at', { ascending: false }).limit(200);
   if (filtro === 'abiertas') q.in('estado', ['Abierto','En proceso','Escalado']);
+  if (fechaSel) q.eq('fecha', fechaSel);
   const { data } = await q;
   const rows = data || [];
 
@@ -2376,7 +2407,9 @@ async function renderNovedadesList(filtro='') {
       <button class="btn btn-success btn-sm" onclick="loadView('novedad-form')">+ Nueva novedad</button>
       <button class="btn btn-outline btn-sm" onclick="renderNovedadesList('abiertas')">Solo abiertas</button>
       <button class="btn btn-outline btn-sm" onclick="renderNovedadesList('')">Todas</button>
-      <button onclick="compartirNovedades()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
+      <input type="date" value="${fechaSel}" onchange="renderNovedadesList('', this.value)" title="Ver solo las novedades de una fecha" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
+      ${fechaSel?`<button class="btn btn-outline btn-sm" onclick="renderNovedadesList('')">✕ ${fmtDate(fechaSel)}</button>`:''}
+      <button onclick="compartirNovedades()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir${fechaSel?' ('+fmtDate(fechaSel)+')':''}</button>
       <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (fecha, área, apto, texto...)" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px;flex:1;min-width:180px">
     </div>
     <div class="card">
@@ -5012,6 +5045,21 @@ _Sistema ${EB().nombre}_`;
 }
 
 async function compartirNovedades() {
+  const _linea = r => `*[${r.prioridad||'-'}] ${r.area||'General'}* · ${r.estado||'-'}\n${(r.descripcion||'').trim()}`;
+  // Si hay una fecha seleccionada en el listado, el informe es de ESA fecha (todas: abiertas y cerradas)
+  if (window._novFecha) {
+    const f = window._novFecha;
+    const { data } = await sb.from('novedades').select('*').eq('fecha', f).order('created_at',{ascending:true});
+    const rows = data || [];
+    const txt = `🚨 *${EB().nombre} — Novedades del ${fmtDate(f)}*
+${rows.length} registro${rows.length===1?'':'s'}
+
+${rows.map(_linea).join('\n\n') || 'Sin novedades ese día'}
+
+_Sistema ${EB().nombre}_`;
+    compartirInforme('Novedades — ' + fmtDate(f), txt);
+    return;
+  }
   const [ab, ce] = await Promise.all([
     sb.from('novedades').select('*').in('estado',['Abierto','En proceso','Escalado']).order('fecha',{ascending:false}),
     sb.from('novedades').select('*').eq('fecha', TODAY).in('estado',['Resuelto','Cerrado']).order('created_at',{ascending:true})
