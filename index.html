@@ -2862,6 +2862,13 @@ async function renderHKList() {
           // Promedio del día
           const minsDelDia = dia.map(h => calcMin(h.hora_ingreso, h.hora_salida)).filter(Boolean);
           const promDia = minsDelDia.length > 0 ? Math.round(minsDelDia.reduce((a,b)=>a+b,0)/minsDelDia.length) : null;
+          // Ordenar según el criterio elegido (apto / camarera / estado)
+          const _ord = window._hkOrden || 'apto';
+          const _diaOrd = [...dia].sort((a,b)=>{
+            if (_ord === 'camarera') return String(a.camarera||'').localeCompare(String(b.camarera||'')) || (parseInt(a.apto)||0)-(parseInt(b.apto)||0);
+            if (_ord === 'estado')   return String(a.estado||'').localeCompare(String(b.estado||'')) || (parseInt(a.apto)||0)-(parseInt(b.apto)||0);
+            return (parseInt(a.apto)||0)-(parseInt(b.apto)||0) || String(a.apto).localeCompare(String(b.apto));
+          });
           return `
           <div class="card" style="margin-bottom:16px">
             <div class="card-header">
@@ -2872,8 +2879,13 @@ async function renderHKList() {
               </div>
             </div>
             <div style="overflow-x:auto"><table class="tabla">
-              <thead><tr><th>Apto</th><th>Camarera</th><th>Ingreso</th><th>Salida</th><th>⏱ Duración</th><th>Estado</th><th>Observaciones</th><th></th></tr></thead>
-              <tbody>${dia.map(h => {
+              <thead><tr>
+                <th onclick="window._hkOrden='apto';renderHKList()" style="cursor:pointer" title="Ordenar por apto">Apto ${_ord==='apto'?'▾':''}</th>
+                <th onclick="window._hkOrden='camarera';renderHKList()" style="cursor:pointer" title="Ordenar por camarera">Camarera ${_ord==='camarera'?'▾':''}</th>
+                <th>Ingreso</th><th>Salida</th><th>⏱ Duración</th>
+                <th onclick="window._hkOrden='estado';renderHKList()" style="cursor:pointer" title="Ordenar por estado">Estado ${_ord==='estado'?'▾':''}</th>
+                <th>Observaciones</th><th></th></tr></thead>
+              <tbody>${_diaOrd.map(h => {
                 const mins = calcMin(h.hora_ingreso, h.hora_salida);
                 const durColor = !mins ? '#999' : mins <= 30 ? 'var(--verde)' : mins <= 45 ? 'var(--naran)' : 'var(--rojo)';
                 return `<tr>
@@ -4083,13 +4095,18 @@ async function renderCuadroExtras(){
     </div>`;
 }
 
-async function compartirControlPersonal() {
-  // Informe del día más reciente con registros (normalmente hoy o ayer)
-  const { data } = await sb.from('control_personal').select('*').order('fecha',{ascending:false}).limit(60);
+async function compartirControlPersonal(fechaSel) {
+  // Informe de la fecha elegida (o la más reciente con registros). Incluye los turnos
+  // del día anterior que cruzan medianoche (auditor nocturno) para no dejarlos por fuera.
+  const { data } = await sb.from('control_personal').select('*').order('fecha',{ascending:false}).limit(120);
   const rows = data || [];
   if (!rows.length) { showToast('Sin registros de control de personal','error'); return; }
-  const fecha = rows[0].fecha;
-  const dia = rows.filter(r=>r.fecha===fecha).sort((a,b)=>String(a.cargo).localeCompare(b.cargo)||String(a.nombre).localeCompare(b.nombre));
+  const fecha = fechaSel || document.getElementById('cp-fecha-informe')?.value || rows[0].fecha;
+  const _prev = (s => { const [y,m,d] = s.split('-').map(Number); return new Date(Date.UTC(y, m-1, d-1)).toISOString().split('T')[0]; })(fecha);
+  const cruzados = rows.filter(r => r.fecha === _prev && (!r.marcacion_salida || r.marcacion_salida < r.marcacion_ingreso))
+    .map(r => ({ ...r, nombre: r.nombre + ' (turno nocturno del ' + fmtDate(_prev) + ')' }));
+  const dia = [...rows.filter(r=>r.fecha===fecha), ...cruzados].sort((a,b)=>String(a.cargo).localeCompare(b.cargo)||String(a.nombre).localeCompare(b.nombre));
+  if (!dia.length) { showToast('Sin registros para ' + fmtDate(fecha), 'error'); return; }
   const hhmm = h => (h||'').slice(0,5) || '--:--';
   const min2txt = m => { m=Number(m)||0; if(!m) return ''; const h=Math.floor(m/60), mm=m%60; return (h?h+'h ':'')+(mm?mm+' min':''); };
   const porCargo = {};
@@ -4125,6 +4142,7 @@ async function renderControlPersonal() {
       <div class="page-title" style="margin-bottom:0">⏱ Control de Ingreso Personal</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (nombre, cargo...)" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
+        <input type="date" id="cp-fecha-informe" value="${TODAY}" title="Fecha del informe a compartir" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
         <button class="btn btn-outline btn-sm" onclick="compartirControlPersonal()" style="padding:10px 16px">📤 Compartir</button>
         <button class="btn btn-success btn-sm" onclick="loadView('control-personal-form')" style="padding:10px 20px">+ Registrar</button>
       </div>
