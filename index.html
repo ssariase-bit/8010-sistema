@@ -2512,6 +2512,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
       <input type="date" value="${fechaSel}" onchange="renderNovedadesList('', this.value)" title="Ver solo las novedades de una fecha" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
       ${fechaSel?`<button class="btn btn-outline btn-sm" onclick="renderNovedadesList('')">✕ ${fmtDate(fechaSel)}</button>`:''}
       <button onclick="compartirNovedades()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir${fechaSel?' ('+fmtDate(fechaSel)+')':''}</button>
+      <button onclick="tablaNovedades('${fechaSel}')" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">🖨️ Ver tabla / Imprimir</button>
       <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (fecha, área, apto, texto...)" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px;flex:1;min-width:180px">
     </div>
     <div class="card">
@@ -4210,7 +4211,7 @@ async function renderEstadoHuespedes() {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <div class="page-title" style="margin-bottom:0">🏠 Estado de Huéspedes — ${fmtDate(today)}</div>
       <div style="display:flex;gap:6px">
-        <button onclick="window.print()" class="btn btn-outline btn-sm">🖨️ Imprimir</button>
+        <button onclick="tablaEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">🖨️ Ver tabla / Imprimir</button>
         <button onclick="compartirEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
       </div>
     </div>
@@ -4627,7 +4628,7 @@ async function renderFormatoHuespedes(yArg, mArg) {
         <button onclick="navFormatoHuespedes(1)" class="btn btn-outline btn-sm" title="Mes siguiente" style="padding:5px 10px">▶</button>
       </div>
       <div style="display:flex;gap:6px">
-        <button onclick="window.print()" class="btn btn-outline btn-sm">🖨️ Imprimir</button>
+        <button onclick="tablaEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">🖨️ Ver tabla / Imprimir</button>
         <button onclick="compartirEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
       </div>
     </div>
@@ -5158,7 +5159,7 @@ async function compartirEstadoHuespedes() {
 *Ocupación: ${base.length} de ${_tot} (${Math.round(base.length/_tot*100)}%)*
 🟢 Ocupados: ${ocu}   🔵 Check-in: ${cki}   🟠 Check-out: ${cko}
 
-${rows.map(r=>`*${r.apto}* · ${r.huesped||'—'} · ${r.estado}${r.observaciones?'\n    '+r.observaciones:''}`).join('\n')}
+${rows.map(r=>{const est=(r.checkin||r.checkout)?` · 🗓 ${r.checkin?fmtDate(r.checkin):'—'} a ${r.checkout?fmtDate(r.checkout):'—'}`:'';return `*${r.apto}* · ${r.huesped||'—'} · ${r.estado}${est}${r.observaciones?'\n    '+r.observaciones:''}`;}).join('\n')}
 
 _Sistema ${EB().nombre}_`;
   compartirInforme('Estado de Huéspedes — ' + fmtDate(TODAY), txt);
@@ -5193,17 +5194,27 @@ _Sistema ${EB().nombre}_`;
   compartirInforme('Housekeeping — ' + fmtDate(TODAY), txt);
 }
 
+// Hora de la novedad: si la descripción empieza con [HH:MM] usa esa; si no, la de creación
+function _horaNov(r){
+  const m = String(r.descripcion||'').match(/^\s*\[(\d{1,2}:\d{2})\]/);
+  return m ? m[1] : fmtHour(r.created_at);
+}
 async function compartirNovedades() {
-  const _linea = r => `*[${r.prioridad||'-'}] ${r.area||'General'}* · ${r.estado||'-'}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}`;
-  // Si hay una fecha seleccionada en el listado, el informe es de ESA fecha (todas: abiertas y cerradas)
+  const _linea = r => `🕐 ${_horaNov(r)} · *[${r.prioridad||'-'}] ${r.area||'General'}* · ${r.estado||'-'}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}`;
+  // Si hay una fecha seleccionada: novedades de ESA fecha + las ABIERTAS de días anteriores (seguimiento)
   if (window._novFecha) {
     const f = window._novFecha;
-    const { data } = await sb.from('novedades').select('*').eq('fecha', f).order('created_at',{ascending:true});
-    const rows = data || [];
+    const [delDia, seguim] = await Promise.all([
+      sb.from('novedades').select('*').eq('fecha', f).order('created_at',{ascending:true}),
+      sb.from('novedades').select('*').lt('fecha', f).in('estado',['Abierto','En proceso','Escalado']).order('fecha',{ascending:false})
+    ]);
+    const rows = delDia.data || [];
+    const previas = seguim.data || [];
     const txt = `🚨 *${EB().nombre} — Novedades del ${fmtDate(f)}*
-${rows.length} registro${rows.length===1?'':'s'}
+${rows.length} del día${previas.length?` · ${previas.length} en seguimiento`:''}
 
 ${rows.map(_linea).join('\n\n') || 'Sin novedades ese día'}
+${previas.length?`\n🔁 *EN SEGUIMIENTO (días anteriores):*\n${previas.map(r=>`🕐 ${_horaNov(r)} · *[${r.prioridad||'-'}] ${r.area||'General'}* · desde ${fmtDate(r.fecha)} · ${r.estado}\n${(r.descripcion||'').trim()}`).join('\n\n')}`:''}
 
 _Sistema ${EB().nombre}_`;
     compartirInforme('Novedades — ' + fmtDate(f), txt);
@@ -5215,7 +5226,7 @@ _Sistema ${EB().nombre}_`;
   ]);
   const abiertas = ab.data || [];
   const cerradas = ce.data || [];
-  const linea = r => `*[${r.prioridad||'-'}] ${r.area||'General'}*${r.fecha && r.fecha!==TODAY ? ' · desde '+fmtDate(r.fecha) : ''}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}`;
+  const linea = r => `🕐 ${_horaNov(r)} · *[${r.prioridad||'-'}] ${r.area||'General'}*${r.fecha && r.fecha!==TODAY ? ' · desde '+fmtDate(r.fecha) : ''}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}`;
   const txt = `🚨 *${EB().nombre} — Novedades*
 📅 ${fmtDate(TODAY)}
 
@@ -5357,6 +5368,78 @@ async function registrarSalidaVisita(id) {
 }
 function fmtDate(d) { if (!d) return '-'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; }
 function fmtHour(ts) { if (!ts) return '-'; return new Date(ts).toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'}); }
+
+// Vista en TABLA imprimible de novedades (formato similar al Excel del equipo).
+// Incluye las del día + las abiertas de días anteriores (seguimiento).
+async function tablaNovedades(fechaSel) {
+  const f = fechaSel || TODAY;
+  const [delDia, seguim] = await Promise.all([
+    sb.from('novedades').select('*').eq('fecha', f).order('created_at',{ascending:true}),
+    sb.from('novedades').select('*').lt('fecha', f).in('estado',['Abierto','En proceso','Escalado']).order('fecha',{ascending:false})
+  ]);
+  const filas = [...(delDia.data||[]).map(r=>({...r,_seg:false})), ...(seguim.data||[]).map(r=>({...r,_seg:true}))];
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const tr = filas.map(r=>`<tr style="${r._seg?'background:#FFFDF2':''}">
+    <td>${_horaNov(r)}</td>
+    <td>${esc(r._seg?fmtDate(r.fecha)+' (seg.)':'')}</td>
+    <td>${esc(r.area||'General')}${r.apto?' — '+esc(r.apto):''}</td>
+    <td style="text-align:left">${esc(r.descripcion).replace(/\n/g,'<br>')}</td>
+    <td>${esc(r.causa||'')}</td>
+    <td>${esc(r.fuente||'')}</td>
+    <td>${esc(r.tratamiento||r.gestionado_por||'')}</td>
+    <td>${esc(r.prioridad||'')}</td>
+    <td><b>${esc(r.estado||'')}</b></td>
+    <td>${esc(r.reportado_por||'')}</td>
+  </tr>`).join('');
+  const w = window.open('', '_blank');
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Novedades ${fmtDate(f)}</title>
+  <style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}
+  h2{color:#1D3461;margin:0 0 4px}.sub{color:#6b7280;font-size:13px;margin-bottom:14px}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center;vertical-align:top}
+  th{background:#1F3864;color:#fff;font-size:11px}
+  tr:nth-child(even){background:#f8fafc}
+  @media print{.noprint{display:none}}
+  .btn{background:#1D3461;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px}</style></head>
+  <body><button class="btn noprint" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+  <h2>${EB().nombre} — Novedades del ${fmtDate(f)}</h2>
+  <div class="sub">${(delDia.data||[]).length} del día${(seguim.data||[]).length?` · ${(seguim.data||[]).length} en seguimiento (filas resaltadas)`:''}</div>
+  <table><thead><tr><th>Hora</th><th>Seguim.</th><th>Área / Apto</th><th>Descripción</th><th>Causa</th><th>Fuente</th><th>Tratamiento / Realiza</th><th>Prioridad</th><th>Estado</th><th>Registra</th></tr></thead>
+  <tbody>${tr||'<tr><td colspan="10">Sin novedades</td></tr>'}</tbody></table>
+  <p class="sub">Generado desde Sistema ${EB().nombre} · ${new Date().toLocaleString('es-CO')}</p></body></html>`);
+  w.document.close();
+}
+
+// Vista en TABLA imprimible del estado de huéspedes (con estadía y acompañantes).
+async function tablaEstadoHuespedes() {
+  const { data: _rd } = await sb.from('rack').select('*').eq('fecha', TODAY);
+  const rows = (_rd||[]).filter(r=>r.estado!=='Libre').sort((a,b)=>(parseInt(a.apto)||0)-(parseInt(b.apto)||0)||String(a.apto).localeCompare(b.apto));
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const tr = rows.map(r=>{
+    const esA = String(r.apto).endsWith('A');
+    const estadia = (r.checkin||r.checkout) ? `${r.checkin?fmtDate(r.checkin):'—'} → ${r.checkout?fmtDate(r.checkout):'—'}` : '';
+    return `<tr style="${esA?'background:#fafafa;color:#666':''}">
+      <td><b>${esc(r.apto)}</b></td>
+      <td style="text-align:left">${esc(r.huesped||'—')}</td>
+      <td style="text-align:left">${esc((r.observaciones||'').trim()).replace(/\n/g,'<br>')}</td>
+      <td>${esc(estadia)}</td>
+      <td>${esc(r.estado||'')}</td>
+    </tr>`;}).join('');
+  const w = window.open('', '_blank');
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Estado de Huéspedes ${fmtDate(TODAY)}</title>
+  <style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}
+  h2{color:#1D3461;margin:0 0 4px}.sub{color:#6b7280;font-size:13px;margin-bottom:14px}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center;vertical-align:top}
+  th{background:#1F3864;color:#fff}@media print{.noprint{display:none}}
+  .btn{background:#1D3461;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px}</style></head>
+  <body><button class="btn noprint" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+  <h2>${EB().nombre} — Estado de Huéspedes</h2><div class="sub">${fmtDate(TODAY)}</div>
+  <table><thead><tr><th>Apto</th><th>Titular</th><th>Acompañantes / Observaciones</th><th>Estadía</th><th>Estado</th></tr></thead>
+  <tbody>${tr||'<tr><td colspan="5">Sin huéspedes</td></tr>'}</tbody></table>
+  <p class="sub">Generado desde Sistema ${EB().nombre} · ${new Date().toLocaleString('es-CO')}</p></body></html>`);
+  w.document.close();
+}
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function showToast(msg, type='') {
   const t = document.getElementById('toast');
