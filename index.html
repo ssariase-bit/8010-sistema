@@ -384,6 +384,9 @@ const EDIFICIOS = {
     mapaAptoA: {'501':'501A','502':'502A','601':'601A','602':'602A','701':'701A','702':'702A','801':'801A','802':'802A','901':'901A','902':'902A','1001':'1001A','1002':'1002A'},
     metrajes: { '01': {privado:96, total:132}, '02': {privado:90, total:126} },
     cajas: ['OT (8010 SAS)','LTM3 (LTM3 SAS)','PH (Propiedad Horizontal)'],
+    // Camareras + combinaciones de apoyo (Jaqueline apoya a la que necesite)
+    camareras: ['Guillermina Sanabria','Liliana Navarro','Maria Duran','Martha Oyola','Jaqueline Bautista',
+                'Guillermina Sanabria + Jaqueline','Liliana Navarro + Jaqueline','Maria Duran + Jaqueline','Martha Oyola + Jaqueline'],
     jornadas: { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 },
     indicadoresMes: {'2026-01':{noches:374,disp:651,adr:796301,ocu:0.5745},'2026-02':{noches:507,disp:588,adr:729055,ocu:0.8622},'2026-03':{noches:491,disp:651,adr:752681,ocu:0.7542},'2026-04':{noches:397,disp:630,adr:733852,ocu:0.6302},'2026-05':{noches:612,disp:651,adr:716838,ocu:0.9401},'2026-06':{noches:434,disp:630,adr:708910,ocu:0.6889},'2026-07':{noches:380,disp:651,adr:636366,ocu:0.5837},'2026-08':{noches:290,disp:651,adr:619572,ocu:0.4455},'2026-09':{noches:210,disp:630,adr:570174,ocu:0.3333},'2026-10':{noches:217,disp:651,adr:551781,ocu:0.3333},'2026-11':{noches:213,disp:630,adr:572487,ocu:0.3381},'2026-12':{noches:78,disp:651,adr:686969,ocu:0.1198}}
   },
@@ -398,6 +401,7 @@ const EDIFICIOS = {
     noEntregados: ['201','202','203','204','204A'],
     metrajes: {'201':100,'202':29,'203':56,'204':42,'204A':37,'301':100,'302':29,'303':56,'304':42,'304A':37,'401':100,'402':29,'403':56,'404':42,'404A':37,'501':100,'502':29,'503':56,'504':42,'504A':37,'601':100,'602':29,'603':56,'604':42,'604A':37,'701':100,'702':29,'703':56,'704':42,'704A':37,'801':100,'802':29,'803':56,'804':42,'804A':37,'901':100,'902':29,'903':56,'904':42,'904A':37,'PH1':130,'PH2':113},
     cajas: ['8I8 (8i8 Operadora SAS)','LTM3 (LTM3 SAS)'],
+    camareras: ['Yolimar Manzano','Luz Dary Rodríguez','Ángela Díaz'],
     jornadas: { 'Administrador':540, 'Camarera':500, 'Mantenimiento':540, 'Otro':540 },
     indicadoresMes: {}
   }
@@ -2424,12 +2428,10 @@ async function renderHKForm() {
         <button class="btn btn-success" onclick="enviarHK()" style="min-width:180px">📤 Registrar limpieza</button>
       </div>
     </div>`;
-  try {
-    const [hk, pe] = await Promise.all([ sb.from('housekeeping').select('camarera'), sb.from('personal').select('nombre') ]);
-    const nombres = [...new Set([...(hk.data||[]).map(x=>x.camarera), ...(pe.data||[]).map(x=>x.nombre)].filter(Boolean))].sort((a,b)=>String(a).localeCompare(b));
-    const dl = document.getElementById('dl-camareras');
-    if (dl) dl.innerHTML = nombres.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}">`).join('');
-  } catch(e){}
+  // Camareras + combinaciones de apoyo del edificio activo van PRIMERO en la lista.
+  const dl = document.getElementById('dl-camareras');
+  const oficiales = EB().camareras || [];
+  if (dl) dl.innerHTML = oficiales.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}">`).join('');
 }
 
 async function enviarHK() {
@@ -2437,15 +2439,18 @@ async function enviarHK() {
   if (!apto) { showToast('Indica el apartamento', 'error'); return; }
   const btn = document.querySelector('.btn-success');
   btn.innerHTML = '<span class="spinner"></span>Guardando...'; btn.disabled = true;
-  // Normalizar el nombre contra la nómina (evita "GUILLERMINA" vs "Guillermina Sanabria")
+  // Normalizar contra las camareras oficiales del edificio (incluye las duplas de apoyo).
+  // Evita "GUILLERMINA" vs "Guillermina Sanabria". Si es una dupla (+) se respeta tal cual.
   let _cam = document.getElementById('hk-cam').value.trim();
-  try {
-    const { data: _p } = await sb.from('personal').select('nombre');
-    const _nrm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim().replace(/\s+/g,' ');
-    const _toks = _nrm(_cam).split(' ').filter(Boolean);
-    const _m = (_p||[]).filter(p => p.nombre && _toks.every(t => _nrm(p.nombre).split(' ').includes(t)));
-    if (_m.length === 1) _cam = _m[0].nombre;
-  } catch(e) {}
+  if (!_cam.includes('+')) {
+    try {
+      const _nrm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim().replace(/\s+/g,' ');
+      const _toks = _nrm(_cam).split(' ').filter(Boolean);
+      const _ofi = (EB().camareras || []).filter(n => !n.includes('+'));
+      const _m = _ofi.filter(n => _toks.every(t => _nrm(n).split(' ').includes(t)));
+      if (_m.length === 1) _cam = _m[0];
+    } catch(e) {}
+  }
   const { error } = await sb.from('housekeeping').insert({
     fecha: document.getElementById('hk-fecha').value,
     camarera: _cam,
@@ -2796,20 +2801,18 @@ async function renderHKList() {
     porFecha[h.fecha].push(h);
   });
 
-  // Unificar variantes del mismo nombre contra la nómina oficial
-  // ("GUILLERMINA", "guillermina", "Guillermina Sanabria" => una sola persona)
-  let _nomina = [];
-  try {
-    const { data: _pers } = await sb.from('personal').select('nombre');
-    _nomina = (_pers||[]).filter(p=>p.nombre).map(p=>({ full: p.nombre, toks: _normNom(p.nombre).split(' ') }));
-  } catch(e) {}
+  // Unificar variantes del mismo nombre contra las camareras del edificio
+  // ("GUILLERMINA", "guillermina", "Guillermina Sanabria" => una sola persona).
+  // Las duplas de apoyo (con "+") se dejan como entradas propias.
   function _normNom(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim().replace(/\s+/g,' '); }
+  const _ofi = (EB().camareras || []).filter(n=>!n.includes('+')).map(n=>({ full:n, toks:_normNom(n).split(' ') }));
   const _canonCache = {};
   function _canonNom(nombre){
     const n = _normNom(nombre);
     if (_canonCache[n] !== undefined) return _canonCache[n];
+    if (String(nombre).includes('+')) { _canonCache[n] = String(nombre).trim(); return _canonCache[n]; }
     const toks = n.split(' ').filter(Boolean);
-    const matches = _nomina.filter(p => toks.every(t => p.toks.includes(t)));
+    const matches = _ofi.filter(p => toks.every(t => p.toks.includes(t)));
     _canonCache[n] = (matches.length === 1) ? matches[0].full : String(nombre).trim();
     return _canonCache[n];
   }
@@ -3611,7 +3614,8 @@ function renderGenForm(tabla, titulo, campos) {
     (async () => {
       try {
         const [cp, pe] = await Promise.all([ sb.from('control_personal').select('nombre'), sb.from('personal').select('nombre') ]);
-        const nombres = [...new Set([...(cp.data||[]).map(x=>x.nombre), ...(pe.data||[]).map(x=>x.nombre)].filter(Boolean))].sort((a,b)=>String(a).localeCompare(b));
+        // Incluye también las camareras y duplas de apoyo del edificio (para registrar ingresos/horarios)
+        const nombres = [...new Set([...(EB().camareras||[]), ...(cp.data||[]).map(x=>x.nombre), ...(pe.data||[]).map(x=>x.nombre)].filter(Boolean))].sort((a,b)=>String(a).localeCompare(b));
         const inp = document.getElementById('gf-nombre');
         if (inp){ let dl=document.getElementById('dl-nombres'); if(!dl){dl=document.createElement('datalist');dl.id='dl-nombres';inp.parentNode.appendChild(dl);} dl.innerHTML=nombres.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}">`).join(''); inp.setAttribute('list','dl-nombres'); inp.setAttribute('autocomplete','off'); }
       } catch(e){}
