@@ -5232,24 +5232,38 @@ async function cotProx(id) {
   cotRenderTabla();
 }
 
+// Arma la lista COMPLETA de unidades para el estado de huéspedes:
+// una fila por cada apto base del edificio (Libre si no hay datos) + las habitaciones A en uso.
+function _filasEstadoCompleto(rackHoy) {
+  const porApto = {};
+  (rackHoy||[]).forEach(r => { porApto[r.apto] = r; });
+  const filas = [];
+  EB().aptosBase.forEach(apto => {
+    const r = porApto[apto];
+    filas.push((r && r.estado) ? r : { apto, estado:'Libre', huesped:null });
+    // Si el apto tiene habitación A y está en uso, añadirla justo después
+    const a = (EB().mapaAptoA||{})[apto];
+    if (a && porApto[a] && porApto[a].estado && porApto[a].estado!=='Libre') filas.push(porApto[a]);
+  });
+  return filas;
+}
+
 async function compartirEstadoHuespedes() {
   const { data: _rd } = await sb.from('rack').select('*').eq('fecha', TODAY);
-  const data = (_rd||[]).sort((a,b)=>(parseInt(a.apto)||0)-(parseInt(b.apto)||0));
-  const rows = data.filter(r => r.estado !== 'Libre');
-  // Para los conteos de ocupación solo cuentan las unidades base (las habitaciones A
-  // acompañan al apto titular y NO suman unidades — evita el "30 de 21" imposible)
+  const rows = _filasEstadoCompleto(_rd);
+  // Conteos: solo unidades base (las A acompañan al titular y no suman)
   const base = rows.filter(r => !String(r.apto).endsWith('A'));
   const ocu = base.filter(r=>r.estado==='Ocupado'||r.estado==='Sale de viaje').length;
   const cki = base.filter(r=>r.estado==='Check-in hoy').length;
   const cko = base.filter(r=>r.estado==='Check-out hoy').length;
-  const ingresos = rows.filter(r=>r.tarifa).reduce((s,r)=>s+Number(r.tarifa),0);
+  const libres = base.filter(r=>r.estado==='Libre').length;
+  const ocupadas = base.length - libres;
   const _tot = EB().aptosBase.length;
-  // Informe operativo: sin tarifas ni ingresos (eso vive en el rack/dashboard)
   const txt = `🏢 *${EB().nombre} — Estado de Huéspedes*
 📅 ${fmtDate(TODAY)}
 
-*Ocupación: ${base.length} de ${_tot} (${Math.round(base.length/_tot*100)}%)*
-🟢 Ocupados: ${ocu}   🔵 Check-in: ${cki}   🟠 Check-out: ${cko}
+*Ocupación: ${ocupadas} de ${_tot} (${Math.round(ocupadas/_tot*100)}%)*
+🟢 Ocupados: ${ocu}   🔵 Check-in: ${cki}   🟠 Check-out: ${cko}   ⚪ Libres: ${libres}
 
 ${rows.map(r=>{const est=(r.checkin||r.checkout)?` · 🗓 ${r.checkin?fmtDate(r.checkin):'—'} a ${r.checkout?fmtDate(r.checkout):'—'}`:'';return `*${r.apto}* · ${r.huesped||'—'} · ${r.estado}${est}${r.observaciones?'\n    '+r.observaciones:''}`;}).join('\n')}
 
@@ -5505,14 +5519,15 @@ async function tablaNovedades(fechaSel) {
 // Vista en TABLA imprimible del estado de huéspedes (con estadía y acompañantes).
 async function tablaEstadoHuespedes() {
   const { data: _rd } = await sb.from('rack').select('*').eq('fecha', TODAY);
-  const rows = (_rd||[]).filter(r=>r.estado!=='Libre').sort((a,b)=>(parseInt(a.apto)||0)-(parseInt(b.apto)||0)||String(a.apto).localeCompare(b.apto));
+  const rows = _filasEstadoCompleto(_rd);  // incluye TODOS los aptos, también los Libres
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const tr = rows.map(r=>{
     const esA = String(r.apto).endsWith('A');
+    const libre = r.estado==='Libre';
     const estadia = (r.checkin||r.checkout) ? `${r.checkin?fmtDate(r.checkin):'—'} → ${r.checkout?fmtDate(r.checkout):'—'}` : '';
-    return `<tr style="${esA?'background:#fafafa;color:#666':''}">
+    return `<tr style="${esA?'background:#fafafa;color:#666':(libre?'color:#999':'')}">
       <td><b>${esc(r.apto)}</b></td>
-      <td style="text-align:left">${esc(r.huesped||'—')}</td>
+      <td style="text-align:left">${libre?'<i style="color:#bbb">Libre</i>':esc(r.huesped||'—')}</td>
       <td style="text-align:left">${esc((r.observaciones||'').trim()).replace(/\n/g,'<br>')}</td>
       <td>${esc(estadia)}</td>
       <td>${esc(r.estado||'')}</td>
