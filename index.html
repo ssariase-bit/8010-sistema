@@ -1100,7 +1100,8 @@ async function loadView(view) {
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
       {id:'tiempo_retraso',label:'Minutos de retraso',type:'number',default:'0'},
       {id:'tiempo_adicional',label:'Minutos adicionales',type:'number',default:'0'},
-      {id:'observaciones',label:'Observaciones',type:'textarea'},
+      {id:'obs_ingreso',label:'Observaciones de ingreso (ej: tráfico pesado)',type:'text'},
+      {id:'obs_salida',label:'Observaciones de salida (ej: Turno 12 horas, Autorizado G.O)',type:'text'},
     ]); break;
 
     case 'estado-huespedes': await renderEstadoHuespedes(); break;
@@ -3673,7 +3674,15 @@ async function submitGenForm(tabla, ids, reqs) {
     }
   });
 
-  const { error } = await sb.from(tabla).insert(obj);
+  let { error } = await sb.from(tabla).insert(obj);
+  // Compatibilidad: si la BD aún no tiene obs_ingreso/obs_salida, se combinan en 'observaciones' con "|"
+  if (error && /obs_ingreso|obs_salida/.test(error.message||'')) {
+    const o2 = { ...obj };
+    const _i = (o2.obs_ingreso||'').trim(), _s = (o2.obs_salida||'').trim();
+    delete o2.obs_ingreso; delete o2.obs_salida;
+    if (_i || _s) o2.observaciones = (_i || '') + ((_i && _s) ? ' | ' : (_s ? '| ' : '')) + (_s || '');
+    ({ error } = await sb.from(tabla).insert(o2));
+  }
   if (error) {
     showToast('Error al guardar: ' + error.message, 'error');
     btn.innerHTML = '📤 Guardar registro'; btn.disabled = false;
@@ -4118,7 +4127,8 @@ async function compartirControlPersonal(fechaSel) {
   dia.forEach(r => { const c = r.cargo || 'Otro'; (porCargo[c]=porCargo[c]||[]).push(r); });
   const bloques = Object.keys(porCargo).sort().map(c => `*${c.toUpperCase()}*\n` + porCargo[c].map(r => {
     const ret = Number(r.tiempo_retraso)||0, adi = Number(r.tiempo_adicional)||0;
-    return `    ${r.nombre}\n    ${hhmm(r.marcacion_ingreso)} a ${r.marcacion_salida?hhmm(r.marcacion_salida):'(en turno)'}${ret?' · retraso '+min2txt(ret):''}${adi?' · adicional '+min2txt(adi):''}${r.observaciones?'\n    '+r.observaciones:''}`;
+    const _obs = (r.obs_ingreso!==undefined||r.obs_salida!==undefined) ? [r.obs_ingreso,r.obs_salida].filter(Boolean).join(' · ') : (r.observaciones||'');
+    return `    ${r.nombre}\n    ${hhmm(r.marcacion_ingreso)} a ${r.marcacion_salida?hhmm(r.marcacion_salida):'(en turno)'}${ret?' · retraso '+min2txt(ret):''}${adi?' · adicional '+min2txt(adi):''}${_obs?'\n    '+_obs:''}`;
   }).join('\n')).join('\n\n');
   const txt = `⏱ *${EB().nombre} — Control de Ingreso y Salida de Personal*
 📅 ${fmtDate(fecha)} — ${dia.length} registro${dia.length>1?'s':''}
@@ -4159,9 +4169,15 @@ async function tablaControlPersonal(fechaSel) {
       const extra = (total!=null && total>jb) ? total-jb : 0;
       const noct = r._noct ? '<br><span style="font-size:9px;color:#888">(turno noct.)</span>' : '';
       const salidaCell = r.marcacion_salida ? esc(hhmm(r.marcacion_salida)) : '<i style="color:#999">en turno</i>';
-      const obsPartes = String(r.observaciones||'').split('|');
-      const obsIng = obsPartes.length>1 ? esc(obsPartes[0].trim()) : '';
-      const obsSal = obsPartes.length>1 ? esc(obsPartes.slice(1).join('|').trim()) : esc(r.observaciones||'');
+      // Usa los campos separados si existen; si no, parte el campo 'observaciones' por "|"
+      let obsIng, obsSal;
+      if (r.obs_ingreso !== undefined || r.obs_salida !== undefined) {
+        obsIng = esc(r.obs_ingreso||''); obsSal = esc(r.obs_salida||'');
+      } else {
+        const p = String(r.observaciones||'').split('|');
+        obsIng = p.length>1 ? esc(p[0].trim()) : '';
+        obsSal = p.length>1 ? esc(p.slice(1).join('|').trim()) : esc(r.observaciones||'');
+      }
       cuerpo += `<tr>
         <td>${esc(fmtDate(fecha))}${noct}</td>
         <td style="text-align:left;font-weight:600">${esc(r.nombre)}</td>
