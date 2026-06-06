@@ -2407,8 +2407,12 @@ async function renderHKForm() {
       <div class="form-row">
         <div class="form-group"><label>Fecha</label><input type="date" id="hk-fecha" value="${TODAY}"></div>
         <div class="form-group"><label>Camarera</label>
-          <input type="text" id="hk-cam" list="dl-camareras" placeholder="Nombre de la camarera" autocomplete="off">
-          <datalist id="dl-camareras"></datalist>
+          <select id="hk-cam-sel" onchange="hkCamSel(this.value)">
+            <option value="">— Selecciona camarera —</option>
+            ${(EB().camareras||[]).map(c=>`<option value="${String(c).replace(/"/g,'&quot;')}">${c}</option>`).join('')}
+            <option value="__otra__">✏️ Otra (escribir)…</option>
+          </select>
+          <input type="text" id="hk-cam" placeholder="Escribe el nombre" autocomplete="off" style="display:none;margin-top:6px">
         </div>
       </div>
       <div class="form-row">
@@ -2431,10 +2435,13 @@ async function renderHKForm() {
         <button class="btn btn-success" onclick="enviarHK()" style="min-width:180px">📤 Registrar limpieza</button>
       </div>
     </div>`;
-  // Camareras + combinaciones de apoyo del edificio activo van PRIMERO en la lista.
-  const dl = document.getElementById('dl-camareras');
-  const oficiales = EB().camareras || [];
-  if (dl) dl.innerHTML = oficiales.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}">`).join('');
+}
+
+// Selector de camarera: al elegir "Otra" muestra el campo de texto libre; si elige una de la lista, la usa.
+function hkCamSel(v) {
+  const inp = document.getElementById('hk-cam');
+  if (v === '__otra__') { inp.style.display = 'block'; inp.value = ''; inp.focus(); }
+  else { inp.style.display = 'none'; inp.value = v; }
 }
 
 async function enviarHK() {
@@ -2820,9 +2827,21 @@ async function renderHKList() {
     return _canonCache[n];
   }
 
-  // Promedio por camarera (global), agrupando por nombre unificado
+  // ── Filtros activos ──────────────────────────────────────
+  const _fCam = window._hkCamarera || '';        // '' = todas
+  const _fPer = window._hkPeriodo || 'todo';      // 'hoy' | 'todo'
+  // ¿Un registro corresponde a la camarera filtrada? (las duplas "X + Jaqueline" cuentan para ambas)
+  const _matchCam = (camara) => {
+    if (!_fCam) return true;
+    const cn = _normNom(_canonNom(camara)), raw = _normNom(camara), f = _normNom(_fCam);
+    return cn === f || raw.includes(f);
+  };
+
+  // Promedio por camarera, agrupando por nombre unificado (respeta filtros período/camarera)
   const promedios = {};
   rows.forEach(h => {
+    if (_fPer === 'hoy' && h.fecha !== TODAY) return;
+    if (!_matchCam(h.camarera)) return;
     const m = calcMin(h.hora_ingreso, h.hora_salida);
     if (m && h.camarera) {
       const nomC = _canonNom(h.camarera);
@@ -2832,6 +2851,9 @@ async function renderHKList() {
       promedios[k].count++;
     }
   });
+
+  // Lista de camareras para el filtro (oficiales del edificio + las que aparezcan en datos)
+  const _camsFiltro = [...new Set([...(EB().camareras||[]).filter(n=>!n.includes('+')), ...rows.map(r=>_canonNom(r.camarera)).filter(Boolean)])].sort((a,b)=>a.localeCompare(b));
 
   const fechas = Object.keys(porFecha).sort().reverse();
 
@@ -2845,10 +2867,28 @@ async function renderHKList() {
       </div>
     </div>
 
+    <!-- Filtros -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:#F2F3F5;border-radius:10px;padding:10px 14px;margin-bottom:14px">
+      <span style="font-size:12px;font-weight:700;color:var(--azul)">🔎 Filtrar:</span>
+      <label style="font-size:12px;color:#374151">Camarera
+        <select onchange="window._hkCamarera=this.value;renderHKList()" style="margin-left:4px;padding:5px 8px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
+          <option value="">Todas</option>
+          ${_camsFiltro.map(c=>`<option value="${String(c).replace(/"/g,'&quot;')}" ${c===_fCam?'selected':''}>${c}</option>`).join('')}
+        </select>
+      </label>
+      <label style="font-size:12px;color:#374151">Promedio
+        <select onchange="window._hkPeriodo=this.value;renderHKList()" style="margin-left:4px;padding:5px 8px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
+          <option value="todo" ${_fPer==='todo'?'selected':''}>Acumulado (todo)</option>
+          <option value="hoy" ${_fPer==='hoy'?'selected':''}>Solo hoy</option>
+        </select>
+      </label>
+      ${(_fCam||_fPer!=='todo')?`<button onclick="window._hkCamarera='';window._hkPeriodo='todo';renderHKList()" class="btn btn-outline btn-sm" style="padding:5px 12px;font-size:11px">✕ Limpiar filtros</button>`:''}
+    </div>
+
     ${Object.keys(promedios).length > 0 ? `
-    <!-- Promedios globales por camarera -->
+    <!-- Promedios por camarera -->
     <div class="card" style="margin-bottom:16px">
-      <div class="card-title" style="margin-bottom:12px">📊 Promedio de tiempo por camarera</div>
+      <div class="card-title" style="margin-bottom:12px">📊 Promedio de tiempo por camarera ${_fPer==='hoy'?'· HOY '+fmtDate(TODAY):'· acumulado'}${_fCam?' · '+_fCam:''}</div>
       <div style="display:flex;flex-wrap:wrap;gap:12px">
         ${Object.values(promedios).sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(d => {
           const avg = Math.round(d.total / d.count);
@@ -2865,7 +2905,8 @@ async function renderHKList() {
     ${fechas.length === 0
       ? '<div class="card"><div class="empty"><div class="empty-icon">🧹</div><p>Sin registros de limpieza</p></div></div>'
       : fechas.map(fecha => {
-          const dia = porFecha[fecha];
+          const dia = porFecha[fecha].filter(h => _matchCam(h.camarera));  // respeta filtro de camarera
+          if (!dia.length) return '';
           // Promedio del día
           const minsDelDia = dia.map(h => calcMin(h.hora_ingreso, h.hora_salida)).filter(Boolean);
           const promDia = minsDelDia.length > 0 ? Math.round(minsDelDia.reduce((a,b)=>a+b,0)/minsDelDia.length) : null;
