@@ -4039,14 +4039,21 @@ function calcExtraMin(cargo, horarioStr, ingreso, salida, baseOverride){
   const h = parseHorario(horarioStr);
   let durHorario = null;
   if (h && h.inicio!=null && h.fin!=null){ durHorario = h.fin - h.inicio; if (durHorario<0) durHorario += 1440; }
-  const esTurno12h = true; // aplicar jornada base en todos los turnos, no solo 12h
+  // Turno de 12h: el horario pactado dura 11h o más, o el texto lo indica
+  const esTurno12h = (durHorario!=null && durHorario>=660) || /12\s*h|12 horas/i.test(horarioStr||'');
   let extra = 0;
-  if (total!=null && esTurno12h){
+  if (esTurno12h && total!=null){
+    // Turnos 12h: extra = total trabajado menos jornada base
     const base = (Number(baseOverride)>0) ? Number(baseOverride) : (JORNADA_BASE[cargo] || 540);
-    extra = Math.max(0, total - base);  // extra = total trabajado − jornada base
+    extra = Math.max(0, total - base);
   } else if (h && h.fin!=null){
+    // Turnos normales: extra = lo que se quedó DESPUÉS de su hora de salida pactada
     const salMin = _timeToMin(salida);
-    if (salMin!=null) extra = Math.max(0, salMin - h.fin);  // turnos normales: salida vs hora fin
+    if (salMin!=null){ let d = salMin - h.fin; if (d < -720) d += 1440; extra = Math.max(0, d); }
+  } else if (total!=null){
+    // Sin horario válido: respaldo total menos base
+    const base = (Number(baseOverride)>0) ? Number(baseOverride) : (JORNADA_BASE[cargo] || 540);
+    extra = Math.max(0, total - base);
   }
   return { extra, total, esTurno12h };
 }
@@ -4208,8 +4215,8 @@ async function tablaControlPersonal(fechaSel) {
     cuerpo += `<tr><td colspan="11" style="background:#808080;color:#fff;font-weight:700;text-align:center">${esc((cargo+'es').toUpperCase().replace('ESES','ES').replace('CHEFES','CHEF').replace('OTROES','OTROS'))}</td></tr>`;
     porCargo[cargo].forEach(r=>{
       const total = calcMin(r.marcacion_ingreso, r.marcacion_salida);
-      const jb = Number(r.jornada_base)||540;
-      const extra = (total!=null && total>jb) ? total-jb : 0;
+      // Tiempo extra con la misma lógica del sistema (normal: salida vs hora fin; 12h: total - base)
+      const extra = (r.marcacion_salida) ? calcExtraMin(r.cargo, r.horario, r.marcacion_ingreso, r.marcacion_salida, r.jornada_base).extra : 0;
       const noct = r._noct ? '<br><span style="font-size:9px;color:#888">(turno noct.)</span>' : '';
       const salidaCell = r.marcacion_salida ? esc(hhmm(r.marcacion_salida)) : '<i style="color:#999">en turno</i>';
       // Usa los campos separados si existen; si no, parte el campo 'observaciones' por "|"
