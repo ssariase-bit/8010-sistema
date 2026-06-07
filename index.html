@@ -976,7 +976,7 @@ async function loadView(view) {
     case 'tareas-fds-list': await renderTareasFDS(); break;
     case 'seguimientos-list': await renderSeguimientosTurno(); break;
     case 'puntos-fijos-list': await renderPuntosFijos(); break;
-    case 'puntos-fijos-form': renderGenForm('puntos_fijos','🧽 Nuevo Punto Fijo',[{id:'fecha',label:'Fecha',type:'date',default:TODAY},{id:'piso',label:'Piso',type:'text',req:true},{id:'camarera',label:'Camarera',type:'text'},{id:'cuadros',label:'Cuadros',type:'select',opts:['No','Sí']},{id:'tapete',label:'Tapete',type:'select',opts:['No','Sí']},{id:'ventanas',label:'Ventanas y Marcos',type:'select',opts:['No','Sí']},{id:'edificio',type:'text',hidden:true,default:EDIFICIO_ACTIVO}]); break;
+    case 'puntos-fijos-form': renderPuntosFijosFormMulti(); break;
     case 'seguimientos-form': renderGenForm('seguimientos_turno','📌 Nuevo Seguimiento / Novedad',[{id:'fecha',label:'Fecha',type:'date',default:TODAY},{id:'turno',label:'Turno',type:'select',opts:['Turno 1','Turno 2','Turno 3','Turno 4','Turno 5','Mañana','Noche']},{id:'categoria',label:'Categoría',type:'select',opts:['Novedad','Préstamo','Mantenimiento','CKI / TRM','Cortesía','Otro']},{id:'apto',label:'Apto',type:'text'},{id:'detalle',label:'Detalle',type:'textarea',req:true},{id:'responsable',label:'Responsable',type:'text'},{id:'estado',label:'Estado',type:'select',opts:['Pendiente','En seguimiento','Resuelto']},{id:'observacion',label:'Actualización / Observación',type:'textarea'},{id:'edificio',type:'text',hidden:true,default:EDIFICIO_ACTIVO}]); break;
     case 'tareas-fds-form': renderGenForm('tareas_fds','🧹 Nueva Tarea de Fin de Semana',[{id:'fecha',label:'Fecha',type:'date',default:TODAY},{id:'dia',label:'Día',type:'select',opts:['Sábado','Domingo','Lunes','Martes','Miércoles','Jueves','Viernes']},{id:'area',label:'Área',type:'select',opts:['Áreas Públicas','Mantenimiento','Camareras','Administradores','Varios']},{id:'tarea',label:'Tarea',type:'text',req:true},{id:'responsable',label:'Responsable',type:'text'},{id:'observacion',label:'Observación',type:'textarea'},{id:'estado',label:'Estado',type:'select',opts:['Pendiente','Realizado']},{id:'edificio',type:'text',hidden:true,default:EDIFICIO_ACTIVO}]); break;
     case 'mantenimiento-list': await renderMantList(); break;
@@ -3963,6 +3963,45 @@ async function cicloEstadoSeg(id, actual){
   if(error){ showToast('Error: '+error.message,'error'); return; }
   showToast('Estado: '+next,'success');
   renderSeguimientosTurno();
+}
+function _pfRowHTML(piso){
+  const sel = c => `<select class="pf-${c}" style="padding:4px 6px;border:1px solid var(--gris-b);border-radius:6px"><option value="No">No</option><option value="Sí">Sí</option></select>`;
+  return `<tr class="pf-row">
+    <td><input type="text" class="pf-piso" value="${piso||''}" style="width:60px;padding:4px 6px"></td>
+    <td><input type="text" class="pf-cam" placeholder="Camarera" style="width:150px;padding:4px 6px"></td>
+    <td>${sel('cuadros')}</td>
+    <td>${sel('tapete')}</td>
+    <td>${sel('ventanas')}</td>
+    <td><button type="button" class="btn btn-outline btn-sm" onclick="this.closest('tr').remove()">✕</button></td>
+  </tr>`;
+}
+function renderPuntosFijosFormMulti(){
+  const pisos=[1,2,3,4,5,6,7,8,9,10,11,12];
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-title">🧽 Puntos Fijos de Pisos — Registro</div>
+    <div class="card" style="max-width:780px">
+      <div class="form-group" style="max-width:220px"><label>Fecha</label><input type="date" id="pf-fecha" value="${TODAY}"></div>
+      <div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Piso</th><th>Camarera</th><th>Cuadros</th><th>Tapete</th><th>Ventanas y Marcos</th><th></th></tr></thead>
+      <tbody id="pf-body">${pisos.map(_pfRowHTML).join('')}</tbody></table></div>
+      <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="document.getElementById('pf-body').insertAdjacentHTML('beforeend', _pfRowHTML(''))">+ Agregar piso</button>
+      <div class="form-actions" style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="loadView('puntos-fijos-list')">← Volver</button>
+        <button class="btn btn-success" style="width:auto" onclick="savePuntosFijos()">Guardar todos</button>
+      </div>
+    </div>`;
+}
+async function savePuntosFijos(){
+  const fecha=document.getElementById('pf-fecha').value||null;
+  const regs=[];
+  document.querySelectorAll('#pf-body .pf-row').forEach(f=>{
+    const piso=f.querySelector('.pf-piso').value.trim(); if(!piso) return;
+    regs.push({ edificio:EDIFICIO_ACTIVO, fecha, piso, camarera:f.querySelector('.pf-cam').value.trim()||null, cuadros:f.querySelector('.pf-cuadros').value, tapete:f.querySelector('.pf-tapete').value, ventanas:f.querySelector('.pf-ventanas').value });
+  });
+  if(!regs.length){ showToast('Agrega al menos un piso','error'); return; }
+  const { error } = await sb.from('puntos_fijos').insert(regs);
+  if(error){ showToast('Error: '+error.message,'error'); return; }
+  showToast('✅ '+regs.length+' pisos guardados','success');
+  loadView('puntos-fijos-list');
 }
 async function renderPuntosFijos(){
   const { data } = await sb.from('puntos_fijos').select('*').eq('edificio', EDIFICIO_ACTIVO).order('fecha',{ascending:false}).order('piso',{ascending:true});
