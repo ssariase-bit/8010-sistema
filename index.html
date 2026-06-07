@@ -1263,10 +1263,15 @@ async function renderDashboard() {
   const ocuHoyPct = _k.pct21;
 
   // ── KPIs DEL MES ─────────────────────────────────────────
-  const conTarifaMes = rackMesAll.filter(r=>r.tarifa&&Number(r.tarifa)>0);
-  const adrMes = indMes ? indMes.adr : (conTarifaMes.length>0 ? conTarifaMes.reduce((s,r)=>s+Number(r.tarifa),0)/conTarifaMes.length : 0);
-  const ocuMesPct = indMes ? Math.round(indMes.ocu*100) : 0;
-  const revpar = Math.round(adrMes * (indMes ? indMes.ocu : 0));
+  const OCU_MES = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
+  const FUERA_MES = ['Bloqueado','Mantenimiento'];
+  const dispMes = rackMesAll.filter(r=>!FUERA_MES.includes(r.estado)).length;
+  const ocuMesN = rackMesAll.filter(r=>OCU_MES.includes(r.estado)).length;
+  const conTarifaMes = rackMesAll.filter(r=>OCU_MES.includes(r.estado)&&r.tarifa&&Number(r.tarifa)>0);
+  const ventasMes = conTarifaMes.reduce((s,r)=>s+Number(r.tarifa),0);
+  const adrMes = conTarifaMes.length>0 ? Math.round(ventasMes/conTarifaMes.length) : 0;
+  const ocuMesPct = dispMes>0 ? Math.round(ocuMesN/dispMes*100) : 0;
+  const revpar = dispMes>0 ? Math.round(ventasMes/dispMes) : 0;
 
   // ── NOVEDADES ─────────────────────────────────────────────
   const novAltas = novs.filter(n=>n.prioridad==='Alta').length;
@@ -1333,7 +1338,12 @@ async function renderDashboard() {
       <div class="kpi k-azul">
         <div class="kpi-lbl">Ocupación del mes</div>
         <div class="kpi-val">${ocuMesPct}%</div>
-        <div class="kpi-sub">${indMes ? indMes.noches+' de '+indMes.disp+' noches' : ''}</div>
+        <div class="kpi-sub">${ocuMesN} de ${dispMes} noches</div>
+      </div>
+      <div class="kpi k-verde">
+        <div class="kpi-lbl">Ventas del mes</div>
+        <div class="kpi-val" style="font-size:20px">$${fmtNum(ventasMes)}</div>
+        <div class="kpi-sub">ingresos del mes</div>
       </div>
       <div class="kpi k-verde">
         <div class="kpi-lbl">ADR del mes</div>
