@@ -3704,6 +3704,12 @@ function renderGenForm(tabla, titulo, campos) {
       inp.setAttribute('list', 'dl-aptos-mag');
       inp.setAttribute('autocomplete', 'off');
     }
+    // Auto-calculo IVA 19% sobre valor base (editable; redondeo sin decimales)
+    const _vb=document.getElementById('gf-valor_recibo'), _ci=document.getElementById('gf-iva'), _ct=document.getElementById('gf-total');
+    const _calcIvaMag=()=>{const base=Math.round(parseFloat(_vb.value)||0);const iva=Math.round(base*0.19);if(_ci)_ci.value=iva;if(_ct)_ct.value=base+iva;};
+    const _calcTotMag=()=>{const base=Math.round(parseFloat(_vb.value)||0);const iva=Math.round(parseFloat(_ci.value)||0);if(_ct)_ct.value=base+iva;};
+    if(_vb)_vb.addEventListener('input',_calcIvaMag);
+    if(_ci)_ci.addEventListener('input',_calcTotMag);
   }
 
   // Auto-calcular retraso y tiempo adicional en control de personal
