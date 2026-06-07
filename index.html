@@ -4205,9 +4205,19 @@ async function renderCuadroExtras(){
   ]);
   const regs = cpRes.data || [];
   const pers = persRes.data || [];
-  const norm = s => (s||'').trim().toLowerCase();
-  const salarioDe = {};
-  pers.forEach(p => { if(p.nombre) salarioDe[norm(p.nombre)] = Number(p.salario)||0; });
+  const stripAcc = x => (x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const norm = s => stripAcc(s).trim().toLowerCase().replace(/\s+/g,' ');
+  const toks = s => norm(s).split(' ').filter(t => t.length>=2);
+  const persIdx = pers.filter(p=>p.nombre).map(p => ({ nombre:p.nombre, cargo:p.cargo, salario:Number(p.salario)||0, tk:toks(p.nombre) }));
+  function resolverPers(nom){
+    const nn=norm(nom);
+    const ex=persIdx.find(p=>norm(p.nombre)===nn); if(ex) return ex;
+    const t=toks(nom); if(!t.length) return null;
+    const cand=persIdx.filter(p=>t.every(x=>p.tk.includes(x)));
+    if(cand.length===1) return cand[0];
+    if(cand.length>1 && t.length>=2){ cand.sort((a,b)=>a.tk.length-b.tk.length); return cand[0]; }
+    return null;
+  }
 
   const acc = {};
   regs.forEach(r => {
@@ -4215,8 +4225,9 @@ async function renderCuadroExtras(){
     const extra = calcExtraMin(r.cargo, r.horario, r.marcacion_ingreso, r.marcacion_salida, r.jornada_base).extra;
     if (extra<=0) return;
     const c = clasificaExtra(r.marcacion_salida, extra, r.fecha);
-    const k = norm(r.nombre);
-    if (!acc[k]) acc[k] = { nombre:r.nombre, cargo:r.cargo, min:{diurna:0,nocturna:0,diurna_fest:0,nocturna_fest:0}, salario: salarioDe[k]||0 };
+    const mp = resolverPers(r.nombre);
+    const k = mp ? norm(mp.nombre) : norm(r.nombre);
+    if (!acc[k]) acc[k] = { nombre: mp?mp.nombre:r.nombre, cargo: mp?mp.cargo:r.cargo, min:{diurna:0,nocturna:0,diurna_fest:0,nocturna_fest:0}, salario: mp?mp.salario:0 };
     acc[k].min.diurna+=c.diurna; acc[k].min.nocturna+=c.nocturna; acc[k].min.diurna_fest+=c.diurna_fest; acc[k].min.nocturna_fest+=c.nocturna_fest;
   });
 
