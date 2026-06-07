@@ -3916,17 +3916,22 @@ function _btnsEdit(tabla, id){
 function _informeTextoDOM(){
   const mc=document.getElementById('main-content'); if(!mc) return '';
   const titulo=(mc.querySelector('.page-title')?.textContent||'Informe').trim();
+  const edi=(typeof EDIFICIO_ACTIVO!=='undefined')?(EDIFICIO_ACTIVO==='kubik'?'Kubik Living 8i8':'8010 Urban Living'):'';
   const tabla=mc.querySelector('table');
-  const lineas=[titulo, new Date().toLocaleDateString('es-CO'), ''];
+  const clean=v=>v.replace(/✅\s*Sí/gi,'✅').replace(/⬜\s*No/gi,'❌').replace(/\s+/g,' ').trim();
+  const out=['*'+titulo+'*'];
+  if(edi) out.push(edi);
+  out.push(new Date().toLocaleDateString('es-CO'),'━━━━━━━━━━','');
   if(tabla){
     const heads=[...tabla.querySelectorAll('thead th')].map(th=>th.textContent.trim());
     tabla.querySelectorAll('tbody tr').forEach(tr=>{
-      const tds=[...tr.querySelectorAll('td')]; const parts=[];
-      tds.forEach((td,idx)=>{ const h=heads[idx]||''; if(!h) return; const v=td.textContent.trim(); if(v) parts.push(h+': '+v); });
-      if(parts.length) lineas.push('• '+parts.join(' | '));
+      const tds=[...tr.querySelectorAll('td')];
+      let head='', partes=[];
+      tds.forEach((td,idx)=>{ const h=heads[idx]||''; if(!h) return; const v=clean(td.textContent); if(!v) return; if(!head){ head='*'+(h?h+' ':'')+v+'*'; } else { partes.push(h+': '+v); } });
+      if(head) out.push('• '+head+(partes.length?' — '+partes.join(' · '):''));
     });
   }
-  return lineas.join('\n');
+  return out.join('\n');
 }
 function _tituloInforme(){ const mc=document.getElementById('main-content'); return (mc&&mc.querySelector('.page-title')?.textContent||'Informe').trim(); }
 function compartirWA(){ window.open('https://wa.me/?text='+encodeURIComponent(_informeTextoDOM()),'_blank'); }
