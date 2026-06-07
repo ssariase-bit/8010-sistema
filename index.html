@@ -573,7 +573,7 @@ const NAV_ITEMS = {
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
     { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
-    { id: 'novedades-list', icon: '⚠️', label: 'Novedades' },
+    { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
     { id: 'hk-list', icon: '🧹', label: 'Housekeeping' },
     { id: 'control-personal-list', icon: '⏱', label: 'Control Personal' },
@@ -619,7 +619,7 @@ const NAV_ITEMS = {
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
     { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
-    { id: 'novedades-list', icon: '⚠️', label: 'Novedades' },
+    { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
     { id: 'hk-list', icon: '🧹', label: 'Housekeeping' },
     { id: 'control-personal-list', icon: '⏱', label: 'Control Personal' },
@@ -676,7 +676,7 @@ const NAV_ITEMS = {
     { id: 'prestamos-list', icon: '💻', label: 'Préstamos' },
     { section: 'Consultar' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-    { id: 'novedades-list', icon: '📋', label: 'Novedades' },
+    { id: 'novedades-list', icon: '📋', label: 'Novedades' }, { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
     { id: 'novedades-diarias', icon: '📋', label: 'Novedades del Día' },
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
     { section: 'Auditoría' },
@@ -743,7 +743,7 @@ rrhh: [
     { id: 'control-personal-form', icon: '➕', label: 'Registrar Ingreso Personal' },
     { section: 'Consultar' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-    { id: 'novedades-list', icon: '📋', label: 'Novedades abiertas' },
+    { id: 'novedades-list', icon: '📋', label: 'Novedades abiertas' }, { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
     { section: 'Auditoría' },
@@ -763,7 +763,7 @@ const MENU_COMPLETO = [
   { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
   { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
   { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
-  { id: 'novedades-list', icon: '⚠️', label: 'Novedades' },
+  { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
   { id: 'mant-form', icon: '🔧', label: 'Orden Mantenimiento' },
   { id: 'mantenimiento-list', icon: '🔧', label: 'Ver Mantenimiento' },
   { id: 'hk-form', icon: '🧹', label: 'Registrar Limpieza' },
@@ -973,6 +973,8 @@ async function loadView(view) {
     case 'mant-form':       renderMantForm(); break;
     case 'hk-form':         renderHKForm(); break;
     case 'novedades-list':     await renderNovedadesList(); break;
+    case 'tareas-fds-list': await renderTareasFDS(); break;
+    case 'tareas-fds-form': renderGenForm('tareas_fds','🧹 Nueva Tarea de Fin de Semana',[{id:'fecha',label:'Fecha',type:'date',default:TODAY},{id:'dia',label:'Día',type:'select',opts:['Sábado','Domingo','Lunes','Martes','Miércoles','Jueves','Viernes']},{id:'area',label:'Área',type:'select',opts:['Áreas Públicas','Mantenimiento','Camareras','Administradores','Varios']},{id:'tarea',label:'Tarea',type:'text',req:true},{id:'responsable',label:'Responsable',type:'text'},{id:'observacion',label:'Observación',type:'textarea'},{id:'estado',label:'Estado',type:'select',opts:['Pendiente','Realizado']},{id:'edificio',type:'text',hidden:true,default:EDIFICIO_ACTIVO}]); break;
     case 'mantenimiento-list': await renderMantList(); break;
     case 'turnos-list':        await renderTurnosList(); break;
     case 'hk-list':            await renderHKList(); break;
@@ -3907,6 +3909,39 @@ function _btnsEdit(tabla, id){
   return `<button onclick="abrirEditarGen('${tabla}','${id}')" title="Editar" style="border:none;background:none;cursor:pointer;font-size:15px;padding:2px">✏️</button><button onclick="eliminarGen('${tabla}','${id}')" title="Eliminar" style="border:none;background:none;cursor:pointer;font-size:15px;padding:2px">🗑️</button>`;
 }
 
+async function renderTareasFDS(){
+  const { data } = await sb.from('tareas_fds').select('*').eq('edificio', EDIFICIO_ACTIVO).order('fecha',{ascending:true});
+  const rows = data || [];
+  const esc = s => String(s==null?'':s).replace(/</g,'&lt;');
+  const filas = rows.map(r => {
+    const done = r.estado === 'Realizado';
+    return `<tr style="${done?'opacity:.55':''}">
+      <td>${r.fecha?fmtDate(String(r.fecha).substring(0,10)):'-'}</td>
+      <td>${esc(r.dia)||'-'}</td>
+      <td>${esc(r.area)||'-'}</td>
+      <td>${done?'<s>':''}${esc(r.tarea)}${done?'</s>':''}</td>
+      <td>${esc(r.responsable)||'-'}</td>
+      <td style="font-size:12px;color:var(--gris-t)">${esc(r.observacion)||''}</td>
+      <td><button onclick="toggleTareaFDS('${r.id}','${done?'Pendiente':'Realizado'}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">${done?'✅ Realizado':'⬜ Pendiente'}</button></td>
+      <td style="white-space:nowrap">${_btnsEdit('tareas_fds', r.id)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('main-content').innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <div class="page-title" style="margin-bottom:0">🧹 Tareas de Fin de Semana</div>
+      <button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('tareas-fds-form')">+ Nueva Tarea</button>
+    </div>
+    <div class="card">
+      <table class="tabla"><thead><tr><th>Fecha</th><th>Día</th><th>Área</th><th>Tarea</th><th>Responsable</th><th>Observación</th><th>Estado</th><th></th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px">Sin tareas. Crea una con “+ Nueva Tarea”.</td></tr>'}</tbody></table>
+    </div>`;
+}
+async function toggleTareaFDS(id, estado){
+  const { error } = await sb.from('tareas_fds').update({ estado, updated_at:new Date().toISOString() }).eq('id', id);
+  if(error){ showToast('Error: '+error.message,'error'); return; }
+  showToast(estado==='Realizado'?'✅ Realizada':'⬜ Pendiente','success');
+  renderTareasFDS();
+}
 async function renderList(tabla, titulo, formView, cols, headers) {
   const { data } = await sb.from(tabla).select('*').order('created_at', { ascending: false }).limit(100);
   const rows = data || [];
