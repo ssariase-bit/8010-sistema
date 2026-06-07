@@ -3717,6 +3717,38 @@ function renderGenForm(tabla, titulo, campos) {
     if(_dm)_dm.addEventListener('change',_recalc);
     if(_vr)_vr.addEventListener('input',_fromVr);
     if(_ci)_ci.addEventListener('input',_fromIva);
+    // Lista de productos (producto + cantidad + valor unitario) -> suma a Valor comanda
+    (function(){
+      const prodTa=document.getElementById('gf-productos'); if(!prodTa) return;
+      const grp=prodTa.closest('.form-group'); const row=grp?grp.closest('.form-row'):null;
+      const wrap=document.createElement('div'); wrap.className='form-group';
+      wrap.innerHTML='<label>Productos</label><div id="mq-lines"></div><button type="button" id="mq-add" class="btn btn-outline btn-sm" style="margin-top:6px">+ Agregar producto</button>';
+      if(row&&row.parentNode){ row.parentNode.insertBefore(wrap,row); } else { prodTa.parentNode.insertBefore(wrap,prodTa); }
+      if(grp) grp.style.display='none';
+      const cont=wrap.querySelector('#mq-lines');
+      function sync(){
+        let sum=0; const txt=[];
+        cont.querySelectorAll('.mq-line').forEach(function(l){
+          const p=l.querySelector('.mq-p').value.trim();
+          const c=parseFloat(l.querySelector('.mq-c').value)||0;
+          const v=parseFloat(l.querySelector('.mq-v').value)||0;
+          sum+=c*v;
+          if(p||v) txt.push((c||1)+' x '+p+(v?(' ($'+v.toLocaleString('es-CO')+')'):''));
+        });
+        prodTa.value=txt.join('\n');
+        const vc=document.getElementById('gf-valor_comanda');
+        if(vc){ vc.value=Math.round(sum*100)/100; vc.dispatchEvent(new Event('input')); }
+      }
+      function addLine(){
+        const d=document.createElement('div'); d.className='mq-line'; d.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
+        d.innerHTML='<input type="text" placeholder="Producto" class="mq-p" style="flex:2"><input type="number" placeholder="Cant" class="mq-c" value="1" style="flex:0 0 70px"><input type="number" placeholder="Vr unit" class="mq-v" style="flex:0 0 110px"><button type="button" class="mq-x btn btn-outline btn-sm">X</button>';
+        d.querySelectorAll('input').forEach(function(i){ i.addEventListener('input',sync); });
+        d.querySelector('.mq-x').addEventListener('click',function(){ d.remove(); sync(); });
+        cont.appendChild(d);
+      }
+      wrap.querySelector('#mq-add').addEventListener('click',addLine);
+      addLine();
+    })();
   }
 
   // Auto-calcular retraso y tiempo adicional en control de personal
