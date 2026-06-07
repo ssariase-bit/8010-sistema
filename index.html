@@ -438,7 +438,7 @@ function EB(){ return EDIFICIOS[EDIFICIO_ACTIVO]; } // atajo al edificio activo
 const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitantes',
   'mantenimiento','control_personal','turnos','personal','contratos','transportes',
   'reembolsos','prestamos_tec','maletas','entrega_efectivos','capsulas','caja',
-  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion']);
+  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes']);
 (function(){
   const _from = sb.from.bind(sb);
   sb.from = function(tabla){
@@ -785,6 +785,8 @@ const MENU_COMPLETO = [
   { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
   { id: 'maletas-form', icon: '🧳', label: 'Maleta en Bodega' },
   { id: 'maletas-list', icon: '🧳', label: 'Maletas Bodega' },
+  { id: 'paquetes-form', icon: '📦', label: 'Registrar Paquete' },
+  { id: 'paquetes-list', icon: '📦', label: 'Paquetes / Encargos' },
   { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
   { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
   { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
@@ -901,6 +903,19 @@ async function loadView(view) {
       {id:'notas',label:'Notas',type:'textarea'},
     ]); break;
 
+    // Paquetes / Encargos
+    case 'paquetes-list': await renderList('paquetes','📦 Paquetes / Encargos','paquetes-form',
+      ['fecha','apto','destinatario','descripcion','transportadora','recibido_por','estado','recogido_por','documento_recoge'],
+      ['Fecha','Apto','Destinatario','Descripción','Transportadora','Recibió','Estado','Recogido por','Documento']); break;
+    case 'paquetes-form': renderGenForm('paquetes','📦 Registrar Paquete',[
+      {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
+      {id:'apto',label:'Apartamento',type:'text',req:true},
+      {id:'destinatario',label:'Destinatario',type:'text'},
+      {id:'descripcion',label:'Descripción del paquete',type:'text',req:true},
+      {id:'transportadora',label:'Transportadora / Quién lo trajo',type:'text'},
+      {id:'recibido_por',label:'Recibido por',type:'text',default:(currentProfile?.nombre||'')},
+      {id:'observaciones',label:'Observaciones',type:'textarea'},
+    ]); break;
     // Recibos Magnifique
     case 'magnifique-list': await renderList('recibos_magnifique','🍽️ Recibos '+(EDIFICIO_ACTIVO==='kubik'?'Bagatelle':'Magnifique'),'magnifique-form',
       ['fecha','apto','arrendatario','num_comanda','productos','valor_recibo','iva','total'],
@@ -1120,7 +1135,7 @@ async function loadView(view) {
       {id:'nombre',label:'Nombre del empleado',type:'text',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro']},
       {id:'horario',label:'Horario asignado',type:'text',default:'8:00 AM - 5:00 PM'},
-      {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540'},
+      {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
       {id:'tiempo_retraso',label:'Minutos de retraso',type:'number',default:'0'},
@@ -3620,7 +3635,7 @@ function generarConfirmacion(r) {
 // ═══════════════════════════════════════════════════════════
 function renderGenForm(tabla, titulo, campos) {
   const nombre = currentProfile?.nombre || '';
-  const fieldsHTML = campos.map(f => {
+  const fieldsHTML = campos.filter(f => !f.hidden).map(f => {
     let input = '';
     const val = f.default || '';
     if (f.type === 'select') {
@@ -3643,10 +3658,12 @@ function renderGenForm(tabla, titulo, campos) {
     }
   }
 
+  const hiddenHTML = campos.filter(f => f.hidden).map(f => `<input type="${f.type}" id="gf-${f.id}" value="${f.default||''}" style="display:none">`).join('');
+
   document.getElementById('main-content').innerHTML = `
     <div class="page-title">${titulo}</div>
     <div class="card" style="max-width:700px">
-      ${rows}
+      ${rows}${hiddenHTML}
       <div class="form-actions">
         <button class="btn btn-outline btn-sm" onclick="loadView(window._prevView||'dashboard')">← Volver</button>
         <button class="btn btn-success" onclick="submitGenForm('${tabla}',${JSON.stringify(campos.map(f=>f.id)).replace(/"/g,'&quot;')},${JSON.stringify(campos.map(f=>f.req||false))})" style="min-width:160px">
@@ -3700,7 +3717,7 @@ function renderGenForm(tabla, titulo, campos) {
       cargoEl.addEventListener('change', setBase);
       setBase(); // prellenar al abrir según el cargo inicial
     }
-    ['gf-tiempo_retraso','gf-tiempo_adicional'].forEach(id => {
+    ['gf-tiempo_retraso'].forEach(id => {
       const el = document.getElementById(id);
       if (el) {
         el.readOnly = true;
@@ -3840,6 +3857,7 @@ async function renderList(tabla, titulo, formView, cols, headers) {
   const rows = data || [];
 
   const esVisitantes = tabla === 'visitantes';
+  const esPaquetes = tabla === 'paquetes';
   const tableRows = rows.map(r => {
     const celdas = cols.map(c => {
       let v = r[c];
@@ -3855,6 +3873,8 @@ async function renderList(tabla, titulo, formView, cols, headers) {
     let acciones = '';
     if (esVisitantes && !r.hora_salida) {
       acciones = `<td style="white-space:nowrap"><button onclick="registrarSalidaVisita('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Salida</button> ${_btnsEdit(tabla, r.id)}</td>`;
+    } else if (esPaquetes && r.estado !== 'Entregado') {
+      acciones = `<td style="white-space:nowrap"><button onclick="entregarPaquete('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--verde);border-color:var(--verde)">📦 Entregar</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else {
       acciones = `<td style="white-space:nowrap">${_btnsEdit(tabla, r.id)}</td>`;
     }
@@ -5470,6 +5490,22 @@ function calcEntregaEfectivos() {
   const ph   = Number(document.getElementById('gf-caja_ph')?.value) || 0;
   const el = document.getElementById('gf-total_efectivo');
   if (el) { el.value = ltm3 + ot + ph; el.style.fontWeight = '700'; el.style.color = 'var(--verde)'; }
+}
+
+async function entregarPaquete(id) {
+  const nombre = prompt('Nombre de quien recoge el paquete:');
+  if (!nombre || !nombre.trim()) return;
+  const doc = prompt('Documento de quien recoge:');
+  if (doc === null) return;
+  const { error } = await sb.from('paquetes').update({
+    estado: 'Entregado',
+    recogido_por: nombre.trim(),
+    documento_recoge: (doc||'').trim(),
+    fecha_entrega: new Date().toISOString()
+  }).eq('id', id).eq('edificio', EDIFICIO_ACTIVO);
+  if (error) { showToast('Error al entregar: ' + error.message, 'error'); return; }
+  showToast('✅ Paquete entregado a ' + nombre.trim(), 'success');
+  loadView('paquetes-list');
 }
 
 async function registrarSalidaHK(id) {
