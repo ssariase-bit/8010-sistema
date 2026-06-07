@@ -942,10 +942,12 @@ async function loadView(view) {
       {id:'turno',label:'Turno',type:'select',opts:['Mañana (6am-2pm)','Tarde (2pm-10pm)','Noche (10pm-6am)','Turno 12h Día (6am-6pm)','Turno 12h Noche (6pm-6am)']},
       {id:'entregado_por',label:'Entregado por',type:'text',req:true},
       {id:'recibido_por',label:'Recibido por',type:'text',req:true},
-      {id:'caja_ltm3',label:'Caja LTM3 ($)',type:'number',default:'0'},
-      {id:'caja_ot',label:'Caja OT ($)',type:'number',default:'0'},
-      {id:'caja_ph',label:'Caja PH ($)',type:'number',default:'0'},
-      {id:'total_efectivo',label:'Total efectivo ($) — se calcula automático',type:'number',default:'0'},
+      ...(EDIFICIO_ACTIVO==='kubik'
+        ? [{id:'total_efectivo',label:'Caja 8i8 ($)',type:'number',default:'0'}]
+        : [{id:'caja_ltm3',label:'Caja LTM3 ($)',type:'number',default:'0'},
+           {id:'caja_ot',label:'Caja OT ($)',type:'number',default:'0'},
+           {id:'caja_ph',label:'Caja PH ($)',type:'number',default:'0'},
+           {id:'total_efectivo',label:'Total efectivo ($) — se calcula automático',type:'number',default:'0'}]),
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'turno-form':      renderTurnoForm(); break;
@@ -3653,8 +3655,9 @@ function renderGenForm(tabla, titulo, campos) {
       </div>
     </div>`;
 
-  // Auto-calcular total en entrega de efectivos
-  if (tabla === 'entrega_efectivos') {
+  // Auto-calcular total en entrega de efectivos (8010: suma 3 cajas y total de solo lectura.
+  // Kubik: una sola caja 8i8 editable que ES el total, sin auto-cálculo.)
+  if (tabla === 'entrega_efectivos' && EDIFICIO_ACTIVO !== 'kubik') {
     ['gf-caja_ltm3','gf-caja_ot','gf-caja_ph'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('input', calcEntregaEfectivos);
@@ -5160,6 +5163,7 @@ async function marcarAptoCKOLibre(apto) {
 async function renderEntregaEfectivos() {
   const { data } = await sb.from('entrega_efectivos').select('*').order('created_at',{ascending:false}).limit(50);
   const rows = data || [];
+  const _kbk = EDIFICIO_ACTIVO === 'kubik';
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div class="page-title" style="margin-bottom:0">💵 Entrega de Efectivos</div>
@@ -5168,11 +5172,11 @@ async function renderEntregaEfectivos() {
     <div class="card">
       ${rows.length===0?'<div class="empty"><div class="empty-icon">💵</div><p>Sin entregas registradas</p></div>':
       `<div style="overflow-x:auto"><table class="tabla">
-        <thead><tr><th>Fecha</th><th>Turno</th><th>Entrega</th><th>Recibe</th><th>LTM3</th><th>OT</th><th>PH</th><th>Total</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Turno</th><th>Entrega</th><th>Recibe</th>${_kbk?'<th>8i8</th>':'<th>LTM3</th><th>OT</th><th>PH</th>'}<th>Total</th></tr></thead>
         <tbody>${rows.map(r=>`<tr>
           <td>${fmtDate(r.fecha)}</td><td>${r.turno||'-'}</td>
           <td>${r.entregado_por||'-'}</td><td>${r.recibido_por||'-'}</td>
-          <td>$${fmtNum(r.caja_ltm3)}</td><td>$${fmtNum(r.caja_ot)}</td><td>$${fmtNum(r.caja_ph)}</td>
+          ${_kbk?`<td>$${fmtNum(r.total_efectivo)}</td>`:`<td>$${fmtNum(r.caja_ltm3)}</td><td>$${fmtNum(r.caja_ot)}</td><td>$${fmtNum(r.caja_ph)}</td>`}
           <td><strong>$${fmtNum(r.total_efectivo)}</strong></td>
         </tr>`).join('')}</tbody>
       </table></div>`}
