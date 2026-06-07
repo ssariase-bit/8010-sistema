@@ -799,7 +799,7 @@ const MENU_COMPLETO = [
   { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
   { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
   { id: 'magnifique-form', icon: '➕', label: 'Nuevo Recibo' },
-  { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
+  { id: 'magnifique-list', icon: '🍽️', label: EDIFICIO_ACTIVO==='kubik'?'Recibos Bagatelle':'Recibos Magnifique' },
   { id: 'cargos-form', icon: '➕', label: 'Registrar Cargo' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
   { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
@@ -902,10 +902,10 @@ async function loadView(view) {
     ]); break;
 
     // Recibos Magnifique
-    case 'magnifique-list': await renderList('recibos_magnifique','🍽️ Recibos Magnifique','magnifique-form',
+    case 'magnifique-list': await renderList('recibos_magnifique','🍽️ Recibos '+(EDIFICIO_ACTIVO==='kubik'?'Bagatelle':'Magnifique'),'magnifique-form',
       ['fecha','apto','arrendatario','num_comanda','productos','valor_recibo','iva','total'],
       ['Fecha','Apto','Arrendatario','Comanda','Productos','Valor','IVA','Total']); break;
-    case 'magnifique-form': renderGenForm('recibos_magnifique','🍽️ Registrar Recibo Magnifique',[
+    case 'magnifique-form': renderGenForm('recibos_magnifique','🍽️ Registrar Recibo '+(EDIFICIO_ACTIVO==='kubik'?'Bagatelle':'Magnifique'),[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento / Evento / Cliente (elige o escribe)',type:'text',req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
