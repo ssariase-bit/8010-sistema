@@ -237,6 +237,7 @@ textarea{resize:vertical;min-height:80px}
     <div class="topbar-user">
       <span id="topbar-nombre">—</span>
       <span class="rol-badge" id="topbar-rol">—</span>
+      <button class="btn-logout" onclick="abrirCambiarPwd()" style="margin-right:8px">🔑 Clave</button>
       <button class="btn-logout" onclick="doLogout()">Salir</button>
     </div>
   </div>
@@ -353,6 +354,27 @@ textarea{resize:vertical;min-height:80px}
 </div>
 
 <!-- TOAST -->
+<!-- ═══════════════════════════════════════════════════════
+     MODAL CAMBIAR CONTRASEÑA
+═══════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-pwd">
+  <div class="modal">
+    <div class="modal-title">
+      🔑 Cambiar mi contraseña
+      <button class="modal-close" onclick="closeModal('modal-pwd')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Nueva contraseña</label>
+      <input type="password" id="pwd-nueva" autocomplete="new-password" placeholder="Mínimo 6 caracteres">
+    </div>
+    <div class="form-group">
+      <label>Confirmar contraseña</label>
+      <input type="password" id="pwd-confirma" autocomplete="new-password" placeholder="Repite la contraseña">
+    </div>
+    <button class="btn" id="pwd-guardar-btn" onclick="guardarNuevaPwd()" style="width:100%">Guardar contraseña</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <!-- FAB — Reportar novedad rápida -->
 <button id="fab-novedad" onclick="loadView('novedad-form')" title="Reportar novedad"
@@ -392,6 +414,7 @@ const EDIFICIOS = {
   },
   'kubik': {
     nombre: 'Kubik Living 8i8',
+    logo: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4ODAgMzQ1Ij48dGV4dCB4PSIwIiB5PSIxNTAiIGZvbnQtZmFtaWx5PSJBcmlhbCBCbGFjaywgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI5MDAiIGZvbnQtc2l6ZT0iMTUwIiBsZXR0ZXItc3BhY2luZz0iMiIgZmlsbD0iI2ZmZmZmZiIgdHJhbnNmb3JtPSJzY2FsZSgxLjA2LDEpIj5LVUJJSzwvdGV4dD48cGF0aCBmaWxsPSIjZmZmZmZmIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik02OTAsMjIgTDc4MiwyMiBRODEyLDIyIDgxMiw1MiBMODEyLDE3NCBMNjYwLDE3NCBMNjYwLDUyIFE2NjAsMjIgNjkwLDIyIFogTTcyOCwyMiBMNzQ0LDIyIEw3NDQsNTggTDcyOCw1OCBaIE02NjAsODYgTDgxMiw4NiBMODEyLDEwNCBMNjYwLDEwNCBaIE03MjgsMTA0IEw3NDQsMTA0IEw3NDQsMTc0IEw3MjgsMTc0IFoiLz48dGV4dCB4PSIyIiB5PSIzMTIiIGZvbnQtZmFtaWx5PSJBcmlhbCwgSGVsdmV0aWNhLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iNTAwIiBmb250LXNpemU9IjExOCIgbGV0dGVyLXNwYWNpbmc9IjE0IiBmaWxsPSIjZmZmZmZmIiB0cmFuc2Zvcm09InNjYWxlKDEuMDIsMSkiPkxJVklORyA4aTg8L3RleHQ+PC9zdmc+',
     nit: '902026873-8',
     aptosBase: ['201','202','203','204','204A','301','302','303','304','304A','401','402','403','404','404A','501','502','503','504','504A','601','602','603','604','604A','701','702','703','704','704A','801','802','803','804','804A','901','902','903','904','904A','PH1','PH2'],
     habitacionesA: [],
@@ -528,7 +551,7 @@ function initApp() {
   renderSelectorEdificio();
   buildSidebar();
   // Mostrar FAB de novedad rápida para roles operativos
-  const rolOp = ['administrador','recepcion','gerencia_operativa','gerente_general'];
+  const rolOp = ['administrador','recepcion','gerencia_operativa','gerente_general','asesora'];
   if (rolOp.includes(currentProfile?.rol)) {
     document.getElementById('fab-novedad').style.display = 'block';
   }
@@ -1033,7 +1056,7 @@ async function loadView(view) {
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'personal-list': {
-      const _vs = currentProfile?.rol === 'gerente_general';
+      const _vs = (currentProfile?.rol === 'gerente_general' || currentProfile?.rol === 'asesora');
       await renderList('personal','👤 Personal / RRHH','personal-form',
         _vs ? ['nombre','cargo','area','salario','fecha_ingreso','tipo_contrato','estado'] : ['nombre','cargo','area','fecha_ingreso','tipo_contrato','estado'],
         _vs ? ['Nombre','Cargo','Área','Salario','Ingreso','Contrato','Estado'] : ['Nombre','Cargo','Área','Ingreso','Contrato','Estado']);
@@ -1414,7 +1437,7 @@ async function renderRack() {
   }, 900000); // 15 minutos
 
   const rol = currentProfile?.rol;
-  const canEdit = ['gerente_general','gerencia_operativa','administrador','recepcion'].includes(rol);
+  const canEdit = ['gerente_general','gerencia_operativa','administrador','recepcion','asesora'].includes(rol);
   const now = new Date();
   const year = window._rackYear;
   const month = window._rackMes;
@@ -4120,7 +4143,7 @@ async function renderCuadroExtras(){
   });
 
   // Los valores en $ (salario y pago) SOLO los ve el gerente general
-  const _verSal = currentProfile?.rol === 'gerente_general';
+  const _verSal = (currentProfile?.rol === 'gerente_general' || currentProfile?.rol === 'asesora');
   let totalPagar = 0;
   const hm = m => (m/60).toFixed(2).replace('.',',')+'h';
   const filas = Object.values(acc).map(e => {
@@ -5602,6 +5625,30 @@ function showToast(msg, type='') {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = 'toast show ' + type;
   setTimeout(() => t.className = 'toast', 3500);
+}
+
+// ═══════════════════════════════════════════════════════════
+// CAMBIAR CONTRASEÑA (in-app, para el usuario logueado)
+// ═══════════════════════════════════════════════════════════
+function abrirCambiarPwd() {
+  const n = document.getElementById('pwd-nueva');
+  const c = document.getElementById('pwd-confirma');
+  if (n) n.value = '';
+  if (c) c.value = '';
+  document.getElementById('modal-pwd').classList.add('open');
+}
+async function guardarNuevaPwd() {
+  const p1 = document.getElementById('pwd-nueva').value;
+  const p2 = document.getElementById('pwd-confirma').value;
+  if (!p1 || p1.length < 6) { showToast('La contraseña debe tener al menos 6 caracteres', 'error'); return; }
+  if (p1 !== p2) { showToast('Las contraseñas no coinciden', 'error'); return; }
+  const btn = document.getElementById('pwd-guardar-btn');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  const { error } = await sb.auth.updateUser({ password: p1 });
+  btn.disabled = false; btn.textContent = 'Guardar contraseña';
+  if (error) { showToast('No se pudo cambiar: ' + error.message, 'error'); return; }
+  closeModal('modal-pwd');
+  showToast('Contraseña actualizada con éxito', 'success');
 }
 
 // ═══════════════════════════════════════════════════════════
