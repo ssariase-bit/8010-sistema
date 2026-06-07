@@ -3911,6 +3911,25 @@ function _btnsEdit(tabla, id){
   return `<button onclick="abrirEditarGen('${tabla}','${id}')" title="Editar" style="border:none;background:none;cursor:pointer;font-size:15px;padding:2px">✏️</button><button onclick="eliminarGen('${tabla}','${id}')" title="Eliminar" style="border:none;background:none;cursor:pointer;font-size:15px;padding:2px">🗑️</button>`;
 }
 
+function _informeTextoDOM(){
+  const mc=document.getElementById('main-content'); if(!mc) return '';
+  const titulo=(mc.querySelector('.page-title')?.textContent||'Informe').trim();
+  const tabla=mc.querySelector('table');
+  const lineas=[titulo, new Date().toLocaleDateString('es-CO'), ''];
+  if(tabla){
+    const heads=[...tabla.querySelectorAll('thead th')].map(th=>th.textContent.trim());
+    tabla.querySelectorAll('tbody tr').forEach(tr=>{
+      const tds=[...tr.querySelectorAll('td')]; const parts=[];
+      tds.forEach((td,idx)=>{ const h=heads[idx]||''; if(!h) return; const v=td.textContent.trim(); if(v) parts.push(h+': '+v); });
+      if(parts.length) lineas.push('• '+parts.join(' | '));
+    });
+  }
+  return lineas.join('\n');
+}
+function _tituloInforme(){ const mc=document.getElementById('main-content'); return (mc&&mc.querySelector('.page-title')?.textContent||'Informe').trim(); }
+function compartirWA(){ window.open('https://wa.me/?text='+encodeURIComponent(_informeTextoDOM()),'_blank'); }
+function compartirMail(){ window.location.href='mailto:?subject='+encodeURIComponent(_tituloInforme())+'&body='+encodeURIComponent(_informeTextoDOM()); }
+function barraCompartir(){ return '<button class="btn btn-outline btn-sm" onclick="compartirWA()" title="Compartir por WhatsApp">📱 WhatsApp</button><button class="btn btn-outline btn-sm" onclick="compartirMail()" title="Compartir por correo">✉️ Correo</button>'; }
 async function renderSeguimientosTurno(){
   const { data } = await sb.from('seguimientos_turno').select('*').eq('edificio', EDIFICIO_ACTIVO).order('fecha',{ascending:false}).order('created_at',{ascending:false});
   const rows = data || [];
@@ -3929,7 +3948,7 @@ async function renderSeguimientosTurno(){
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div class="page-title" style="margin-bottom:0">📌 Seguimientos por Turno</div>
-      <button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('seguimientos-form')">+ Nuevo Seguimiento</button>
+      ${barraCompartir()}<button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('seguimientos-form')">+ Nuevo Seguimiento</button>
     </div>
     <div class="card">
       <table class="tabla"><thead><tr><th>Fecha</th><th>Turno</th><th>Categoría</th><th>Apto</th><th>Detalle</th><th>Responsable</th><th>Estado</th><th></th></tr></thead>
@@ -3963,7 +3982,7 @@ async function renderTareasFDS(){
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div class="page-title" style="margin-bottom:0">🧹 Tareas de Fin de Semana</div>
-      <button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('tareas-fds-form')">+ Nueva Tarea</button>
+      ${barraCompartir()}<button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('tareas-fds-form')">+ Nueva Tarea</button>
     </div>
     <div class="card">
       <table class="tabla"><thead><tr><th>Fecha</th><th>Día</th><th>Área</th><th>Tarea</th><th>Responsable</th><th>Observación</th><th>Estado</th><th></th></tr></thead>
@@ -4012,7 +4031,7 @@ async function renderList(tabla, titulo, formView, cols, headers) {
         <div class="card-title">${rows.length} registros</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar..." style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
-          <button class="btn btn-success btn-sm" onclick="loadView('${formView}')">+ Nuevo registro</button>
+          ${barraCompartir()}<button class="btn btn-success btn-sm" onclick="loadView('${formView}')">+ Nuevo registro</button>
         </div>
       </div>
       ${rows.length === 0
@@ -4328,7 +4347,7 @@ async function renderCuadroExtras(){
       <button onclick="window._ceMes=(${month}+11)%12;window._ceYear=${month===0?year-1:year};loadView('cuadro-extras')" class="btn btn-outline btn-sm">◀</button>
       <strong>${monthNames[month]} ${year}</strong>
       <button onclick="window._ceMes=(${month}+1)%12;window._ceYear=${month===11?year+1:year};loadView('cuadro-extras')" class="btn btn-outline btn-sm">▶</button>
-      <button onclick="window.print()" class="btn btn-outline btn-sm">🖨️ Imprimir</button>
+      <button onclick="window.print()" class="btn btn-outline btn-sm">🖨️ Imprimir</button>${barraCompartir()}
     </div>
     ${_verSal?`<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Valor hora = salario ÷ 240. Extra diurna 25%, nocturna (desde 7pm) 75%, festivo/dominical +${ini>='2026-07-01'?'90':'80'}%. Verifica salarios en Personal y los festivos.</div>`:''}
     <div class="card">
