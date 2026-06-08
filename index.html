@@ -3944,9 +3944,75 @@ function _informeTextoDOM(){
   return out.join('\n');
 }
 function _tituloInforme(){ const mc=document.getElementById('main-content'); return (mc&&mc.querySelector('.page-title')?.textContent||'Informe').trim(); }
+const _DEST_INFORME = {
+  '8010':  { to:['sa@8010ul.com'],     cc:['fabio.malaver@8010urbanliving.com'] },
+  'kubik': { to:['sariase@8i8op.com'], cc:['operativo@8i8op.com'] }
+};
+function _ediActual(){ return (typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO==='kubik') ? 'kubik' : '8010'; }
+function _informeHTML(titulo, texto){
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const bold = s => esc(s).replace(/\*([^*]+)\*/g,'<strong style="color:#211D1E">$1</strong>');
+  const nombre = (typeof EB==='function') ? EB().nombre : '8010 Urban Living';
+  const edi = _ediActual();
+  const fecha = new Date().toLocaleDateString('es-CO',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  const hora = new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+  const logo = edi==='kubik'
+    ? '<span style="display:inline-block;color:#FEFDFB;font-size:22px;letter-spacing:3px;">KUBIK<span style="color:#BCB8B7;"> living</span></span><div style="color:#BCB8B7;font-size:10px;letter-spacing:5px;margin-top:5px;font-family:Helvetica,Arial,sans-serif;">8i8 OPERADORA</div>'
+    : '<span style="display:inline-block;color:#FEFDFB;font-size:23px;letter-spacing:5px;">80<span style="color:#BCB8B7;">|</span>10</span><div style="color:#BCB8B7;font-size:10px;letter-spacing:5px;margin-top:5px;font-family:Helvetica,Arial,sans-serif;">URBAN LIVING</div>';
+  const lineas = String(texto||'').split('\n');
+  let filas='';
+  lineas.forEach(l=>{
+    const t=l.trim();
+    if(!t) return;
+    if(/^[─-╿=_-]+$/.test(t)) return;
+    if(t===nombre) return;
+    if(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(t)) return;
+    if(/^\*[^*]+\*$/.test(t)){
+      filas += '<tr><td style="padding:14px 16px 4px;font-size:11px;font-weight:bold;color:#211D1E;text-transform:uppercase;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;">'+esc(t.replace(/\*/g,''))+'</td></tr>';
+    } else {
+      const cont = t.replace(/^[•\-]\s*/,'');
+      filas += '<tr><td style="padding:9px 16px;border-bottom:1px solid #ECE9E4;font-size:13px;color:#4A463F;line-height:1.5;font-family:Helvetica,Arial,sans-serif;">'+bold(cont)+'</td></tr>';
+    }
+  });
+  if(!filas) filas='<tr><td style="padding:16px;font-size:13px;color:#9A938B;font-family:Helvetica,Arial,sans-serif;">Sin registros para este informe.</td></tr>';
+  return ''
+   +'<body style="margin:0;padding:0;background:#E7E3E0;">'
+   +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E7E3E0;"><tr><td align="center" style="padding:28px 12px;">'
+   +'<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#FFFFFF;border:1px solid #DAD6D1;border-radius:10px;overflow:hidden;">'
+   +'<tr><td style="background:#211D1E;padding:22px 28px;">'+logo+'</td></tr>'
+   +'<tr><td style="height:2px;background:#BCB8B7;font-size:0;line-height:0;">&nbsp;</td></tr>'
+   +'<tr><td style="padding:24px 28px 6px;font-family:Georgia,serif;"><div style="font-size:20px;color:#211D1E;">'+esc(titulo)+'</div>'
+   +'<div style="font-size:12px;color:#7F7F7F;margin-top:5px;font-family:Helvetica,Arial,sans-serif;letter-spacing:.3px;">'+esc(nombre)+' &middot; '+esc(fecha)+'</div></td></tr>'
+   +'<tr><td style="padding:12px 28px 6px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">'+filas+'</table></td></tr>'
+   +'<tr><td style="padding:20px 28px 24px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E7E3E0;font-family:Helvetica,Arial,sans-serif;"><tr>'
+   +'<td style="padding-top:14px;font-size:10.5px;color:#9A938B;">Generado automaticamente &middot; Sistema '+esc(nombre)+'<br>'+esc(fecha)+' '+esc(hora)+'</td>'
+   +'<td align="right" style="padding-top:14px;font-size:10.5px;color:#9A938B;">'+esc(nombre)+'<br>Gerencia de operaciones</td>'
+   +'</tr></table></td></tr>'
+   +'</table></td></tr></table></body>';
+}
+async function enviarInformeCorreo(titulo, texto, btn){
+  const edi = _ediActual();
+  const d = _DEST_INFORME[edi];
+  const subject = ((typeof EB==='function')?EB().nombre:'8010 Urban Living') + ' — ' + titulo;
+  const html = _informeHTML(titulo, texto);
+  let prev=null;
+  if(btn){ prev=btn.innerHTML; btn.disabled=true; btn.innerHTML='⏳ Enviando…'; }
+  try{
+    const { data, error } = await sb.functions.invoke('enviar-informe', { body:{ to:d.to, cc:d.cc, subject, html, edificio:edi } });
+    if(error) throw error;
+    if(!data || !data.ok) throw new Error((data&&data.error)||'No se pudo enviar');
+    showToast('✅ Informe enviado a '+d.to.join(', '),'success');
+    return true;
+  }catch(e){
+    showToast('❌ No se pudo enviar: '+(e&&e.message?e.message:e),'error');
+    return false;
+  }finally{
+    if(btn){ btn.disabled=false; btn.innerHTML=prev; }
+  }
+}
 function compartirWA(){ window.open('https://wa.me/?text='+encodeURIComponent(_informeTextoDOM()),'_blank'); }
-function compartirMail(){ window.location.href='mailto:?subject='+encodeURIComponent(_tituloInforme())+'&body='+encodeURIComponent(_informeTextoDOM()); }
-function barraCompartir(){ return '<button class="btn btn-outline btn-sm" onclick="compartirWA()" title="Compartir por WhatsApp">📱 WhatsApp</button><button class="btn btn-outline btn-sm" onclick="compartirMail()" title="Compartir por correo">✉️ Correo</button>'; }
+function compartirMail(){ return enviarInformeCorreo(_tituloInforme(), _informeTextoDOM()); }
+function barraCompartir(){ return '<button class="btn btn-outline btn-sm" onclick="compartirWA()" title="Compartir por WhatsApp">📱 WhatsApp</button><button class="btn btn-outline btn-sm" onclick="enviarInformeCorreo(_tituloInforme(), _informeTextoDOM(), this)" title="Enviar por correo">✉️ Correo</button>'; }
 async function renderSeguimientosTurno(){
   const { data } = await sb.from('seguimientos_turno').select('*').eq('edificio', EDIFICIO_ACTIVO).order('fecha',{ascending:false}).order('created_at',{ascending:false});
   const rows = data || [];
@@ -4206,7 +4272,7 @@ function fmtNum(n) { return Math.round(n||0).toLocaleString('es-CO'); }
 // COMPARTIR INFORMES — Email y WhatsApp
 // ═══════════════════════════════════════════════════════════
 function compartirInforme(titulo, texto, emailDest) {
-  window._txtCompartir = texto; // para el botón "Copiar texto"
+  window._txtCompartir = texto; window._tituloCompartir = titulo; // para enviar/copiar
   const dest = emailDest || 'gerencia@8010urbanliving.com';
   const asunto = encodeURIComponent(EB().nombre + ' — ' + titulo);
   const cuerpo = encodeURIComponent(texto);
@@ -4222,11 +4288,10 @@ function compartirInforme(titulo, texto, emailDest) {
       <div style="background:#F2F3F5;border-radius:8px;padding:12px;font-size:11px;color:#374151;max-height:200px;overflow-y:auto;white-space:pre-wrap;margin-bottom:20px;font-family:monospace">${texto.substring(0,500)}${texto.length>500?'\n...':''}
       </div>
       <div style="display:flex;flex-direction:column;gap:10px">
-        <a href="mailto:${dest}?subject=${asunto}&body=${cuerpo}"
-           style="display:flex;align-items:center;gap:10px;background:#1D3461;color:white;padding:12px 16px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px"
-           onclick="document.body.removeChild(this.closest('[style*=fixed]'))">
-          📧 Enviar por Email
-        </a>
+        <button onclick="(function(b){ enviarInformeCorreo(window._tituloCompartir, window._txtCompartir, b).then(function(ok){ if(ok){ var m=b.closest('[style*=fixed]'); if(m) m.remove(); } }); })(this)"
+           style="display:flex;align-items:center;justify-content:center;gap:10px;background:#1D3461;color:white;padding:12px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:600;font-size:13px;width:100%">
+          📧 Enviar por correo
+        </button>
         <button onclick="navigator.clipboard.writeText(window._txtCompartir||'').then(()=>{this.innerHTML='✅ Copiado al portapapeles';setTimeout(()=>{this.innerHTML='📋 Copiar texto'},2000)}).catch(()=>{this.innerHTML='❌ No se pudo copiar'})"
            style="display:flex;align-items:center;gap:10px;background:#6B7280;color:white;border:none;padding:12px 16px;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px;width:100%">
           📋 Copiar texto
