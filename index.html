@@ -1355,10 +1355,10 @@ async function renderDashboard() {
       <div class="kpi k-azul">
         <div class="kpi-lbl">Ocupación del mes</div>
         <div class="kpi-val">${ocuMesPct}%</div>
-        <div class="kpi-sub">${ocuMesN} de ${dispMes} noches${EB().aptosFull.length!==EB().aptosBase.length ? ` · habitaciones ${ocuMesHabPct}%` : ''}</div>
+        <div class="kpi-sub">${ocuMesN} de ${dispMes} noches${EB().aptosFull.length!==EB().aptosBase.length ? ` · apts. y hab. ${ocuMesHabPct}%` : ''}</div>
       </div>
       <div class="kpi k-verde">
-        <div class="kpi-lbl">Ventas del mes</div>
+        <div class="kpi-lbl">Ventas totales del mes</div>
         <div class="kpi-val" style="font-size:20px">$${fmtNum(ventasMes)}</div>
         <div class="kpi-sub">ingresos del mes</div>
       </div>
@@ -1568,6 +1568,7 @@ async function renderRack() {
     'Check-out hoy': _rkHoy.filter(r=>r.estado==='Check-out hoy').map(r=>({apto:r.apto, huesped:r.huesped})),
   };
   const ocuPct   = indMes ? Math.round(indMes.ocu * 100) : Math.round(ocupHoy / (aptos.length||1) * 100);
+  const ventasMesRk = allRack.filter(r=> r.edificio===EDIFICIO_ACTIVO && ["Ocupado","Check-in hoy","Check-out hoy","Completo","Sale de viaje"].includes(r.estado) && Number(r.tarifa)>0).reduce((s,r)=>s+Number(r.tarifa),0);
 
   const CELL_W = 36; // ancho celda en px (más grande)
   const APTO_W = 70;
@@ -1670,7 +1671,7 @@ async function renderRack() {
         <div class="kpi-sub">${_kr.b21.ocu} ocupados de ${_kr.b21.disp} disponibles${EB().aptosBase.length > _kr.b21.disp ? ` · ${EB().aptosBase.length - _kr.b21.disp} fuera de servicio` : ''}</div>
       </div>
       ${EB().aptosFull.length !== EB().aptosBase.length ? `<div class="kpi k-verde">
-        <div class="kpi-lbl">Ocupación hoy · habitaciones</div>
+        <div class="kpi-lbl">Ocupación hoy · apartamentos y habitaciones</div>
         <div class="kpi-val">${_kr.pct33}%</div>
         <div class="kpi-sub">${_kr.b33.ocu} ocupados de ${_kr.b33.disp} disponibles${EB().aptosFull.length > _kr.b33.disp ? ` · ${EB().aptosFull.length - _kr.b33.disp} fuera de servicio` : ''}</div>
       </div>` : ''}
@@ -1686,6 +1687,7 @@ async function renderRack() {
       </div>
       <div class="kpi k-azul" onclick="mostrarListaCK('Check-in hoy')" style="cursor:pointer" title="Clic para ver quiénes llegan hoy"><div class="kpi-lbl">Check-in hoy</div><div class="kpi-val">${ckiHoy}</div><div class="kpi-sub">clic para ver</div></div>
       <div class="kpi k-naran" onclick="mostrarListaCK('Check-out hoy')" style="cursor:pointer" title="Clic para ver quiénes salen hoy"><div class="kpi-lbl">Check-out hoy</div><div class="kpi-val">${ckoHoy}</div><div class="kpi-sub">clic para ver</div></div>
+      <div class="kpi k-verde"><div class="kpi-lbl">Ventas totales del mes</div><div class="kpi-val" style="font-size:20px">$${fmtNum(ventasMesRk)}</div><div class="kpi-sub">ingresos del mes (sin $0)</div></div>
       ${indMes ? `<div class="kpi k-azul"><div class="kpi-lbl">Ocupación del mes</div><div class="kpi-val">${ocuPct}%</div><div class="kpi-sub">${indMes.noches+' de '+indMes.disp+' noches'}</div></div>
       <div class="kpi k-verde"><div class="kpi-lbl">ADR del mes</div><div class="kpi-val" style="font-size:22px">$${Number(indMes.adr).toLocaleString('es-CO')}</div></div>` : ''}
     </div>
