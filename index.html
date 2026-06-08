@@ -961,11 +961,11 @@ async function loadView(view) {
       {id:'entregado_por',label:'Entregado por',type:'text',req:true},
       {id:'recibido_por',label:'Recibido por',type:'text',req:true},
       ...(EDIFICIO_ACTIVO==='kubik'
-        ? [{id:'total_efectivo',label:'Caja 8i8 ($)',type:'number',default:'0'}]
-        : [{id:'caja_ltm3',label:'Caja LTM3 ($)',type:'number',default:'0'},
-           {id:'caja_ot',label:'Caja OT ($)',type:'number',default:'0'},
-           {id:'caja_ph',label:'Caja PH ($)',type:'number',default:'0'},
-           {id:'total_efectivo',label:'Total efectivo ($) — se calcula automático',type:'number',default:'0'}]),
+        ? [{id:'total_efectivo',label:'Caja 8i8 ($)',type:'money',default:''}]
+        : [{id:'caja_ltm3',label:'Caja LTM3 ($)',type:'money',default:''},
+           {id:'caja_ot',label:'Caja OT ($)',type:'money',default:''},
+           {id:'caja_ph',label:'Caja PH ($)',type:'money',default:''},
+           {id:'total_efectivo',label:'Total efectivo ($) — se calcula automático',type:'money',default:''}]),
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'turno-form':      renderTurnoForm(); break;
@@ -3663,6 +3663,8 @@ function renderGenForm(tabla, titulo, campos) {
       input = `<select id="gf-${f.id}">${(f.opts||[]).map(o=>`<option value="${o}">${o}</option>`).join('')}</select>`;
     } else if (f.type === 'textarea') {
       input = `<textarea id="gf-${f.id}" placeholder="${f.label}..."></textarea>`;
+    } else if (f.type === 'money') {
+      input = `<input type="text" inputmode="numeric" data-money="1" id="gf-${f.id}" value="${val}" oninput="fmtMoneyInput(this)" placeholder="${f.label}">`;
     } else {
       input = `<input type="${f.type}" id="gf-${f.id}" value="${val}" placeholder="${f.label}${f.req?'*':''}">`;
     }
@@ -3819,7 +3821,7 @@ async function submitGenForm(tabla, ids, reqs) {
     const el = document.getElementById('gf-' + id);
     if (el) {
       const v = el.value.trim();
-      obj[id] = v === '' ? null : (el.type === 'number' ? Number(v) || null : v);
+      obj[id] = v === '' ? null : ((el.dataset && el.dataset.money) ? (parseInt(v.replace(/\D/g,''),10) || null) : (el.type === 'number' ? Number(v) || null : v));
     }
   });
 
@@ -5717,12 +5719,13 @@ function calcCajaTurno() {
   if (el) el.value = total;
 }
 
+function fmtMoneyInput(el){ const d=(el.value||'').replace(/\D/g,''); el.value = d ? Number(d).toLocaleString('es-CO') : ''; }
+
 function calcEntregaEfectivos() {
-  const ltm3 = Number(document.getElementById('gf-caja_ltm3')?.value) || 0;
-  const ot   = Number(document.getElementById('gf-caja_ot')?.value) || 0;
-  const ph   = Number(document.getElementById('gf-caja_ph')?.value) || 0;
+  const pm = id => parseInt((document.getElementById(id)?.value||'').replace(/\D/g,''),10) || 0;
+  const total = pm('gf-caja_ltm3') + pm('gf-caja_ot') + pm('gf-caja_ph');
   const el = document.getElementById('gf-total_efectivo');
-  if (el) { el.value = ltm3 + ot + ph; el.style.fontWeight = '700'; el.style.color = 'var(--verde)'; }
+  if (el) { el.value = total.toLocaleString('es-CO'); el.style.fontWeight = '700'; el.style.color = 'var(--verde)'; }
 }
 
 async function entregarPaquete(id) {
