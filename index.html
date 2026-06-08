@@ -1659,14 +1659,14 @@ async function renderRack() {
     </div>` : ''}
     <div class="kpi-grid" style="margin-bottom:14px">
       <div class="kpi k-verde" style="border-left-width:5px">
-        <div class="kpi-lbl">Ocupación hoy · ${EB().aptosBase.length} aptos</div>
+        <div class="kpi-lbl">Ocupación hoy · apartamentos</div>
         <div class="kpi-val">${_kr.pct21}%</div>
-        <div class="kpi-sub">${_kr.b21.ocu} de ${_kr.b21.disp} unidades</div>
+        <div class="kpi-sub">${_kr.b21.ocu} ocupados de ${_kr.b21.disp} disponibles${EB().aptosBase.length > _kr.b21.disp ? ` · ${EB().aptosBase.length - _kr.b21.disp} fuera de servicio` : ''}</div>
       </div>
       ${EB().aptosFull.length !== EB().aptosBase.length ? `<div class="kpi k-verde">
-        <div class="kpi-lbl">Ocupación hoy · ${EB().aptosFull.length} hab.</div>
+        <div class="kpi-lbl">Ocupación hoy · habitaciones</div>
         <div class="kpi-val">${_kr.pct33}%</div>
-        <div class="kpi-sub">${_kr.b33.ocu} de ${_kr.b33.disp} habitaciones</div>
+        <div class="kpi-sub">${_kr.b33.ocu} ocupados de ${_kr.b33.disp} disponibles${EB().aptosFull.length > _kr.b33.disp ? ` · ${EB().aptosFull.length - _kr.b33.disp} fuera de servicio` : ''}</div>
       </div>` : ''}
       <div class="kpi k-azul">
         <div class="kpi-lbl">ADR del día</div>
