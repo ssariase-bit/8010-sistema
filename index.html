@@ -1241,7 +1241,7 @@ async function renderDashboard() {
   // Cargar todo en paralelo
   const [rHoy, rMes, novRes, mantRes, turnosHoy, turnosUlt] = await Promise.all([
     sb.from('rack').select('*').eq('fecha', TODAY).eq('edificio', EDIFICIO_ACTIVO).order('estado', { ascending: true }),
-    sb.from('rack').select('estado,tarifa').eq('edificio', EDIFICIO_ACTIVO).gte('fecha', monthStart).lte('fecha', monthEnd),
+    sb.from('rack').select('apto,estado,tarifa').eq('edificio', EDIFICIO_ACTIVO).gte('fecha', monthStart).lte('fecha', monthEnd),
     sb.from('novedades').select('*').in('estado',['Abierto','En proceso','Escalado']).order('created_at',{ascending:false}),
     sb.from('mantenimiento').select('*').in('estado',['Pendiente','En proceso']).gte('fecha', new Date(Date.now()-90*24*60*60*1000).toISOString().split('T')[0]).order('created_at',{ascending:false}),
     sb.from('turnos').select('*').eq('fecha', TODAY).order('created_at',{ascending:false}),
@@ -1274,8 +1274,10 @@ async function renderDashboard() {
   // ── KPIs DEL MES ─────────────────────────────────────────
   const OCU_MES = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
   const FUERA_MES = ['Bloqueado','Mantenimiento'];
-  const dispMes = rackMesAll.filter(r=>!FUERA_MES.includes(r.estado)).length;
-  const ocuMesN = rackMesAll.filter(r=>OCU_MES.includes(r.estado)).length;
+  const _baseSet = new Set(EB().aptosBase);
+  const _fueraBaseN = rackMesAll.filter(r=>_baseSet.has(r.apto) && FUERA_MES.includes(r.estado)).length;
+  const dispMes = Math.max(1, TOTAL_APTOS*daysInMonth - _fueraBaseN); // noches disponibles reales del mes (aptos x dias - fuera de servicio)
+  const ocuMesN = rackMesAll.filter(r=>_baseSet.has(r.apto) && OCU_MES.includes(r.estado)).length;
   const conTarifaMes = rackMesAll.filter(r=>OCU_MES.includes(r.estado)&&r.tarifa&&Number(r.tarifa)>0);
   const ventasMes = conTarifaMes.reduce((s,r)=>s+Number(r.tarifa),0);
   const adrMes = conTarifaMes.length>0 ? Math.round(ventasMes/conTarifaMes.length) : 0;
@@ -1610,12 +1612,10 @@ async function renderRack() {
         <div style="font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:${CELL_W-2}px;font-weight:600">${apellido}</div>
       </td>`;
     }).join('');
-    // Huésped de hoy: buscar último estado no-Libre hacia atrás si hoy no tiene
+    // Estado y huésped de HOY (fecha actual), no el último movimiento registrado
     let estHoy = 'Libre', huesHoy = '';
-    for(let d2 = todayDay; d2 >= 1; d2--) {
-      const r = rack[apto]?.[d2];
-      if(r && r.estado !== 'Libre') { estHoy = r.estado; huesHoy = r.huesped || ''; break; }
-    }
+    const _rHoy = rack[apto]?.[todayDay];
+    if (_rHoy && _rHoy.estado) { estHoy = _rHoy.estado; huesHoy = _rHoy.huesped || ''; }
     let cmFila = colorMap[estHoy] || colorMap['Libre'];
     const _hl = window._rkResaltar && estHoy === window._rkResaltar; // resaltar CKI/CKO al espichar la tarjeta
     const tarHoy = rack[apto]?.[todayDay]?.tarifa;
