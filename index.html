@@ -1283,6 +1283,12 @@ async function renderDashboard() {
   const adrMes = conTarifaMes.length>0 ? Math.round(ventasMes/conTarifaMes.length) : 0;
   const ocuMesPct = dispMes>0 ? Math.round(ocuMesN/dispMes*100) : 0;
   const revpar = dispMes>0 ? Math.round(ventasMes/dispMes) : 0;
+  // Variante por habitaciones (incluye A) — aptosFull
+  const _fullSet = new Set(EB().aptosFull);
+  const _fueraHabN = rackMesAll.filter(r=>_fullSet.has(r.apto) && FUERA_MES.includes(r.estado)).length;
+  const dispMesHab = Math.max(1, EB().aptosFull.length*daysInMonth - _fueraHabN);
+  const ocuMesHabN = rackMesAll.filter(r=>_fullSet.has(r.apto) && OCU_MES.includes(r.estado)).length;
+  const ocuMesHabPct = dispMesHab>0 ? Math.round(ocuMesHabN/dispMesHab*100) : 0;
 
   // ── NOVEDADES ─────────────────────────────────────────────
   const novAltas = novs.filter(n=>n.prioridad==='Alta').length;
@@ -1349,7 +1355,7 @@ async function renderDashboard() {
       <div class="kpi k-azul">
         <div class="kpi-lbl">Ocupación del mes</div>
         <div class="kpi-val">${ocuMesPct}%</div>
-        <div class="kpi-sub">${ocuMesN} de ${dispMes} noches</div>
+        <div class="kpi-sub">${ocuMesN} de ${dispMes} noches${EB().aptosFull.length!==EB().aptosBase.length ? ` · habitaciones ${ocuMesHabPct}%` : ''}</div>
       </div>
       <div class="kpi k-verde">
         <div class="kpi-lbl">Ventas del mes</div>
