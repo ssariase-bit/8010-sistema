@@ -2003,7 +2003,7 @@ function renderTurnoForm() {
             </select>
           </div>
           <div class="form-group"><label>Edificio</label>
-            <input type="text" id="t-edificio" value="${currentProfile?.edificio || '8010 Principal'}">
+            <input type="text" id="t-edificio" value="${EDIFICIO_ACTIVO==='kubik' ? 'Kubik Living 8i8' : (currentProfile?.edificio || '8010 Principal')}">
           </div>
         </div>
         <div class="form-row">
@@ -2025,9 +2025,11 @@ function renderTurnoForm() {
         </div>
         <div class="form-row">
           <div class="form-group"><label>Check-outs del día</label><input type="number" id="t-checkouts" min="0" placeholder="0"></div>
-          <div class="form-group"><label>Caja LTM3 ($)</label><input type="number" id="t-caja-ltm3" min="0" placeholder="0" onchange="calcCajaTurno()"></div>
+          ${EDIFICIO_ACTIVO==='kubik'
+            ? `<div class="form-group"><label>Caja 8i8 ($)</label><input type="number" id="t-caja-ltm3" min="0" placeholder="0" onchange="calcCajaTurno()"></div>`
+            : `<div class="form-group"><label>Caja LTM3 ($)</label><input type="number" id="t-caja-ltm3" min="0" placeholder="0" onchange="calcCajaTurno()"></div>
           <div class="form-group"><label>Caja OT ($)</label><input type="number" id="t-caja-ot" min="0" placeholder="0" onchange="calcCajaTurno()"></div>
-          <div class="form-group"><label>Caja PH ($)</label><input type="number" id="t-caja-ph" min="0" placeholder="0" onchange="calcCajaTurno()"></div>
+          <div class="form-group"><label>Caja PH ($)</label><input type="number" id="t-caja-ph" min="0" placeholder="0" onchange="calcCajaTurno()"></div>`}
           <div class="form-group"><label>Total Caja al cierre ($)</label><input type="number" id="t-caja" min="0" placeholder="0" readonly style="background:#E2EFDA;font-weight:bold"></div>
         </div>
       </div>
@@ -2172,7 +2174,7 @@ async function enviarTurno() {
   const waPhone = document.getElementById('t-waphone')?.value.trim().replace(/\D/g,'') || '';
   if (waPhone) localStorage.setItem('wa_phone', waPhone);
 
-  const msgWA = `🏢 *8010 Urban Living — Cierre de Turno*
+  const msgWA = `🏢 *${EDIFICIO_ACTIVO==='kubik'?'Kubik Living 8i8':'8010 Urban Living'} — Cierre de Turno*
 📅 Fecha: ${d}/${m}/${y}
 🕐 Turno: ${turno}
 👤 Entrega: ${entrega}
@@ -2181,7 +2183,7 @@ async function enviarTurno() {
 *OCUPACIÓN:*
 ▪️ Aptos ocupados: ${ocup} | Disponibles: ${disp}
 ▪️ Check-ins: ${cki} | Check-outs: ${cko}
-▪️ Caja LTM3: $${cajaLTM3} | OT: $${cajaOT} | PH: $${cajaPH}
+${EDIFICIO_ACTIVO==='kubik' ? `▪️ Caja 8i8: $${cajaLTM3}` : `▪️ Caja LTM3: $${cajaLTM3} | OT: $${cajaOT} | PH: $${cajaPH}`}
 ▪️ Total caja: $${caja}
 
 *NOVEDADES:*
@@ -2194,7 +2196,7 @@ ${notas ? '\n*OBSERVACIONES:*\n' + notas : ''}`;
   const waEncoded = encodeURIComponent(msgWA);
   const waLink = waPhone ? `https://wa.me/${waPhone}?text=${waEncoded}` : `https://wa.me/?text=${waEncoded}`;
 
-  const emailSubj = encodeURIComponent(`Informe Turno ${turno.split(' ')[0]} | ${d}/${m}/${y} | 8010 Principal`);
+  const emailSubj = encodeURIComponent(`Informe Turno ${turno.split(' ')[0]} | ${d}/${m}/${y} | ${EDIFICIO_ACTIVO==='kubik'?'Kubik Living 8i8':'8010 Principal'}`);
   const emailBody = encodeURIComponent(`Buenos días/tardes Santiago,\n\nResumen del turno ${turno} del ${d}/${m}/${y}:\n\nOcupación: ${ocup} aptos ocupados\nNovedades: ${novsToInsert.length}\nCaja al cierre: $${caja}\nTurno recibido por: ${recibe}\n\n---\n${msgWA}`);
 
   document.getElementById('main-content').innerHTML = `
@@ -2798,7 +2800,7 @@ async function renderMantList(filtroApto='') {
               <td><strong style="color:var(--azul)">${o.area_apto}</strong></td>
               <td style="max-width:260px">${o.descripcion}</td>
               <td>${o.solicitado_por||'-'}</td>
-              <td>${o.tecnico||'-'}</td>
+              <td>${o.tecnico||'Por definir'}</td>
               <td><span class="badge b-${o.prioridad==='Urgente'?'alta':o.prioridad==='Normal'?'media':'baja'}">${o.prioridad||'Normal'}</span></td>
               <td>
                 <select onchange="actualizarEstadoOT('${o.id}',this.value)" style="padding:4px 8px;border:1px solid var(--gris-b);border-radius:6px;font-size:11px;cursor:pointer;background:${o.estado==='Pendiente'?'var(--rojo-c)':o.estado==='En proceso'?'var(--naran-c)':'var(--verde-c)'}">
