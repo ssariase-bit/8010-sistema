@@ -1569,6 +1569,18 @@ async function renderRack() {
   };
   const ocuPct   = indMes ? Math.round(indMes.ocu * 100) : Math.round(ocupHoy / (aptos.length||1) * 100);
   const ventasMesRk = allRack.filter(r=> r.edificio===EDIFICIO_ACTIVO && ["Ocupado","Check-in hoy","Check-out hoy","Completo","Sale de viaje"].includes(r.estado) && Number(r.tarifa)>0).reduce((s,r)=>s+Number(r.tarifa),0);
+  const _OCURK=["Ocupado","Check-in hoy","Check-out hoy","Completo","Sale de viaje"];
+  const _FURK=["Bloqueado","Mantenimiento"];
+  const _mr=allRack.filter(r=> r.edificio===EDIFICIO_ACTIVO);
+  const _s21=new Set(EB().aptosBase), _s33=new Set(EB().aptosFull);
+  const _disp21m=Math.max(1, EB().aptosBase.length*daysInMonth - _mr.filter(r=>_s21.has(r.apto)&&_FURK.includes(r.estado)).length);
+  const _disp33m=Math.max(1, EB().aptosFull.length*daysInMonth - _mr.filter(r=>_s33.has(r.apto)&&_FURK.includes(r.estado)).length);
+  const _ocu21m=_mr.filter(r=>_s21.has(r.apto)&&_OCURK.includes(r.estado)).length;
+  const _ocu33m=_mr.filter(r=>_s33.has(r.apto)&&_OCURK.includes(r.estado)).length;
+  const _pct21m=Math.round(_ocu21m/_disp21m*100), _pct33m=Math.round(_ocu33m/_disp33m*100);
+  const _conTarM=_mr.filter(r=>_OCURK.includes(r.estado)&&Number(r.tarifa)>0);
+  const _adrMes=_conTarM.length?Math.round(ventasMesRk/_conTarM.length):0;
+  const _revparMes=Math.round(ventasMesRk/_disp21m);
 
   const CELL_W = 36; // ancho celda en px (más grande)
   const APTO_W = 70;
@@ -1687,9 +1699,11 @@ async function renderRack() {
       </div>
       <div class="kpi k-azul" onclick="mostrarListaCK('Check-in hoy')" style="cursor:pointer" title="Clic para ver quiénes llegan hoy"><div class="kpi-lbl">Check-in hoy</div><div class="kpi-val">${ckiHoy}</div><div class="kpi-sub">clic para ver</div></div>
       <div class="kpi k-naran" onclick="mostrarListaCK('Check-out hoy')" style="cursor:pointer" title="Clic para ver quiénes salen hoy"><div class="kpi-lbl">Check-out hoy</div><div class="kpi-val">${ckoHoy}</div><div class="kpi-sub">clic para ver</div></div>
+      <div class="kpi k-azul"><div class="kpi-lbl">Ocupación del mes · apartamentos</div><div class="kpi-val">${_pct21m}%</div><div class="kpi-sub">${_ocu21m} de ${_disp21m} noches</div></div>
+      ${EB().aptosFull.length!==EB().aptosBase.length ? `<div class="kpi k-azul"><div class="kpi-lbl">Ocupación del mes · apartamentos y habitaciones</div><div class="kpi-val">${_pct33m}%</div><div class="kpi-sub">${_ocu33m} de ${_disp33m} noches</div></div>` : ''}
       <div class="kpi k-verde"><div class="kpi-lbl">Ventas totales del mes</div><div class="kpi-val" style="font-size:20px">$${fmtNum(ventasMesRk)}</div><div class="kpi-sub">ingresos del mes (sin $0)</div></div>
-      ${indMes ? `<div class="kpi k-azul"><div class="kpi-lbl">Ocupación del mes</div><div class="kpi-val">${ocuPct}%</div><div class="kpi-sub">${indMes.noches+' de '+indMes.disp+' noches'}</div></div>
-      <div class="kpi k-verde"><div class="kpi-lbl">ADR del mes</div><div class="kpi-val" style="font-size:22px">$${Number(indMes.adr).toLocaleString('es-CO')}</div></div>` : ''}
+      <div class="kpi k-azul"><div class="kpi-lbl">ADR del mes</div><div class="kpi-val" style="font-size:20px">$${fmtNum(_adrMes)}</div><div class="kpi-sub">tarifa promedio/noche</div></div>
+      <div class="kpi k-azul"><div class="kpi-lbl">RevPAR del mes</div><div class="kpi-val" style="font-size:20px">$${fmtNum(_revparMes)}</div><div class="kpi-sub">por apto disponible</div></div>
     </div>
     <div class="card" style="padding:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
