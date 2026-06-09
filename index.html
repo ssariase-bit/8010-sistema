@@ -394,7 +394,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-0230';
+const APP_VERSION = '2026-06-09-0245';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -437,10 +437,10 @@ const EDIFICIOS = {
     nombre: 'Kubik Living 8i8',
     logo: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4ODAgMzQ1Ij48dGV4dCB4PSIwIiB5PSIxNTAiIGZvbnQtZmFtaWx5PSJBcmlhbCBCbGFjaywgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI5MDAiIGZvbnQtc2l6ZT0iMTUwIiBsZXR0ZXItc3BhY2luZz0iMiIgZmlsbD0iI2ZmZmZmZiIgdHJhbnNmb3JtPSJzY2FsZSgxLjA2LDEpIj5LVUJJSzwvdGV4dD48cGF0aCBmaWxsPSIjZmZmZmZmIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik02OTAsMjIgTDc4MiwyMiBRODEyLDIyIDgxMiw1MiBMODEyLDE3NCBMNjYwLDE3NCBMNjYwLDUyIFE2NjAsMjIgNjkwLDIyIFogTTcyOCwyMiBMNzQ0LDIyIEw3NDQsNTggTDcyOCw1OCBaIE02NjAsODYgTDgxMiw4NiBMODEyLDEwNCBMNjYwLDEwNCBaIE03MjgsMTA0IEw3NDQsMTA0IEw3NDQsMTc0IEw3MjgsMTc0IFoiLz48dGV4dCB4PSIyIiB5PSIzMTIiIGZvbnQtZmFtaWx5PSJBcmlhbCwgSGVsdmV0aWNhLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iNTAwIiBmb250LXNpemU9IjExOCIgbGV0dGVyLXNwYWNpbmc9IjE0IiBmaWxsPSIjZmZmZmZmIiB0cmFuc2Zvcm09InNjYWxlKDEuMDIsMSkiPkxJVklORyA4aTg8L3RleHQ+PC9zdmc+',
     nit: '902026873-8',
-    aptosBase: ['301','302','303','304','401','402','403','404','501','502','503','504','601','602','603','604','701','702','703','704','801','802','803','804','901','902','903','904','PH1','PH2'],
-    habitacionesA: ['304A','404A','504A','604A','704A','804A','904A'],
+    aptosBase: ['301','302','303','304','304A','401','402','403','404','404A','501','502','503','504','504A','601','602','603','604','604A','701','702','703','704','704A','801','802','803','804','804A','901','902','903','904','904A','PH1','PH2'],
+    habitacionesA: [],
     aptosFull: ['301','302','303','304','304A','401','402','403','404','404A','501','502','503','504','504A','601','602','603','604','604A','701','702','703','704','704A','801','802','803','804','804A','901','902','903','904','904A','PH1','PH2'],
-    mapaAptoA: {'304':'304A','404':'404A','504':'504A','604':'604A','704':'704A','804':'804A','904':'904A'},
+    mapaAptoA: {},
     combinables: [['201','202','203'],['204','204A'],['301','302','303'],['304','304A'],['401','402','403'],['404','404A'],['501','502','503'],['504','504A'],['601','602','603'],['604','604A'],['701','702','703'],['704','704A'],['801','802','803'],['804','804A'],['901','902','903'],['904','904A']],
     noEntregados: ['201','202','203','204','204A'],
     metrajes: {'201':100,'202':29,'203':56,'204':42,'204A':37,'301':100,'302':29,'303':56,'304':42,'304A':37,'401':100,'402':29,'403':56,'404':42,'404A':37,'501':100,'502':29,'503':56,'504':42,'504A':37,'601':100,'602':29,'603':56,'604':42,'604A':37,'701':100,'702':29,'703':56,'704':42,'704A':37,'801':100,'802':29,'803':56,'804':42,'804A':37,'901':100,'902':29,'903':56,'904':42,'904A':37,'PH1':130,'PH2':113},
