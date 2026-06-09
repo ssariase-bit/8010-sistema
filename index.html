@@ -394,7 +394,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-0010';
+const APP_VERSION = '2026-06-09-0035';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2169,10 +2169,19 @@ async function enviarTurno() {
       estado: 'Abierto',
       reportado_por: entrega,
       area: area,
+      edificio: EDIFICIO_ACTIVO,
       user_id: currentUser.id,
     });
   });
   if (novsToInsert.length > 0) await sb.from('novedades').insert(novsToInsert);
+  // Arrastrar al informe lo NO cerrado del edificio
+  const _ediT = EDIFICIO_ACTIVO;
+  const [_novAbRes, _segPenRes] = await Promise.all([
+    sb.from('novedades').select('*').eq('edificio', _ediT).in('estado',['Abierto','En proceso','Escalado']).order('fecha',{ascending:false}),
+    sb.from('seguimientos_turno').select('*').eq('edificio', _ediT).in('estado',['Pendiente','En seguimiento']).order('fecha',{ascending:false})
+  ]);
+  const _novAbiertas = _novAbRes.data || [];
+  const _segPend = _segPenRes.data || [];
 
   // Guardar turno
   const { error } = await sb.from('turnos').insert({
@@ -2209,9 +2218,12 @@ async function enviarTurno() {
   const notas  = document.getElementById('t-notas').value.trim();
   const [y,m,d] = fecha.split('-');
 
-  const novResumen = novsToInsert.length > 0
-    ? novsToInsert.map(n => `▪️ [${n.prioridad}] ${n.area !== 'General' ? n.area+': ' : ''}${n.descripcion}`).join('\n')
-    : '▪️ Sin novedades ✓';
+  const _fmtFT = f => { try{ const p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]; }catch(_){ return ''; } };
+  const novResumen = _novAbiertas.length > 0
+    ? _novAbiertas.map(n => `▪️ [${n.prioridad||'-'}] ${n.apto?('Apto '+n.apto+' · '):''}${n.area && n.area!=='General' ? n.area+': ' : ''}${n.descripcion} (${_fmtFT(n.fecha)}) — ${n.estado}`).join('\n')
+    : '▪️ Sin novedades abiertas ✓';
+  const _segTxt = _segPend.map(sg => `▪️ ${sg.apto?('Apto '+sg.apto+' · '):''}${sg.categoria?sg.categoria+': ':''}${sg.detalle}${sg.responsable?(' — Resp: '+sg.responsable):''} (${_fmtFT(sg.fecha)}) — ${sg.estado}`).join('\n');
+  const _pendResumen = [document.getElementById('t-pendientes').value.trim(), _segTxt].filter(x=>x && x.trim()).join('\n') || '▪️ Sin pendientes ✓';
 
   // Guardar número WhatsApp para próxima vez
   const waPhone = document.getElementById('t-waphone')?.value.trim().replace(/\D/g,'') || '';
@@ -2229,18 +2241,18 @@ async function enviarTurno() {
 ${EDIFICIO_ACTIVO==='kubik' ? `▪️ Caja 8i8: $${cajaLTM3}` : `▪️ Caja LTM3: $${cajaLTM3} | OT: $${cajaOT} | PH: $${cajaPH}`}
 ▪️ Total caja: $${caja}
 
-*NOVEDADES:*
+*NOVEDADES (no cerradas):*
 ${novResumen}
 
 *PENDIENTES SIGUIENTE TURNO:*
-${pend || '▪️ Sin pendientes ✓'}
+${_pendResumen}
 ${notas ? '\n*OBSERVACIONES:*\n' + notas : ''}`;
 
   const waEncoded = encodeURIComponent(msgWA);
   const waLink = waPhone ? `https://wa.me/${waPhone}?text=${waEncoded}` : `https://wa.me/?text=${waEncoded}`;
 
   const emailSubj = encodeURIComponent(`Informe Turno ${turno.split(' ')[0]} | ${d}/${m}/${y} | ${EDIFICIO_ACTIVO==='kubik'?'Kubik Living 8i8':'8010 Principal'}`);
-  const emailBody = encodeURIComponent(`Buenos días/tardes Santiago,\n\nResumen del turno ${turno} del ${d}/${m}/${y}:\n\nOcupación: ${ocup} aptos ocupados\nNovedades: ${novsToInsert.length}\nCaja al cierre: $${caja}\nTurno recibido por: ${recibe}\n\n---\n${msgWA}`);
+  const emailBody = encodeURIComponent(`Buenos días/tardes Santiago,\n\nResumen del turno ${turno} del ${d}/${m}/${y}:\n\nOcupación: ${ocup} aptos ocupados\nNovedades abiertas: ${_novAbiertas.length}\nCaja al cierre: $${caja}\nTurno recibido por: ${recibe}\n\n---\n${msgWA}`);
 
   document.getElementById('main-content').innerHTML = `
     <div class="page-title">✅ Informe guardado</div>
