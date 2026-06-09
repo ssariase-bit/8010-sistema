@@ -394,7 +394,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-0115';
+const APP_VERSION = '2026-06-09-0130';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1317,7 +1317,7 @@ async function renderDashboard() {
 
   // Turno más reciente
   const ultTurno = ultTurnos[0];
-  const horaActual = now.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+  const horaActual = now.toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true});
 
   // ── AUTO-REFRESH cada 3 minutos ───────────────────────────
   clearTimeout(window._dashTimer);
@@ -2444,7 +2444,7 @@ async function enviarNovedad() {
     const quien = document.getElementById('n-quien').value;
     const area  = document.getElementById('n-area').value;
     const apto  = document.getElementById('n-apto').value;
-    const now2  = new Date().toLocaleString('es-CO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const now2  = fmtFH12();
     const msgAlta = `🚨 *NOVEDAD ALTA — 8010 Urban Living*
 📅 ${now2}
 👤 Reporta: ${quien}
@@ -2755,7 +2755,7 @@ async function actualizarNovedad(id) {
   const seg = document.getElementById('nov-seguimiento').value.trim();
   const updates = { estado };
   if (estado === 'Resuelto') updates.fecha_cierre = TODAY;
-  if (seg) updates.descripcion = (await sb.from('novedades').select('descripcion').eq('id',id).single()).data?.descripcion + '\n\n📋 ' + new Date().toLocaleString('es-CO') + ' — ' + seg;
+  if (seg) updates.descripcion = (await sb.from('novedades').select('descripcion').eq('id',id).single()).data?.descripcion + '\n\n📋 ' + fmtFH12() + ' — ' + seg;
   const { error } = await sb.from('novedades').update(updates).eq('id', id);
   if (error) { showToast('Error al actualizar', 'error'); return; }
   showToast(estado==='Resuelto' ? '✅ Novedad cerrada' : '✅ Estado actualizado', 'success');
@@ -4039,7 +4039,7 @@ function _informeHTML(titulo, texto){
   const nombre = (typeof EB==='function') ? EB().nombre : '8010 Urban Living';
   const edi = _ediActual();
   const fecha = new Date().toLocaleDateString('es-CO',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
-  const hora = new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+  const hora = new Date().toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true});
   const logo = edi==='kubik'
     ? '<span style="display:inline-block;color:#FEFDFB;font-size:22px;letter-spacing:3px;">KUBIK<span style="color:#BCB8B7;"> living</span></span><div style="color:#BCB8B7;font-size:10px;letter-spacing:5px;margin-top:5px;font-family:Helvetica,Arial,sans-serif;">8i8 OPERADORA</div>'
     : '<span style="display:inline-block;color:#FEFDFB;font-size:23px;letter-spacing:5px;">80<span style="color:#BCB8B7;">|</span>10</span><div style="color:#BCB8B7;font-size:10px;letter-spacing:5px;margin-top:5px;font-family:Helvetica,Arial,sans-serif;">URBAN LIVING</div>';
@@ -4351,6 +4351,8 @@ async function doImportRack() {
 // UTILS
 // ═══════════════════════════════════════════════════════════
 function fmtNum(n) { return Math.round(n||0).toLocaleString('es-CO'); }
+function fmtHora12(d){ d=d?new Date(d):new Date(); return d.toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true}); }
+function fmtFH12(d){ d=d?new Date(d):new Date(); return d.toLocaleDateString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric'})+' '+fmtHora12(d); }
 
 // ═══════════════════════════════════════════════════════════
 // COMPARTIR INFORMES — Email y WhatsApp
@@ -4698,7 +4700,7 @@ async function tablaControlPersonal(fechaSel) {
     </thead>
     <tbody>${cuerpo}</tbody>
   </table>
-  <p style="font-size:11px;color:#666;margin-top:10px">Generado desde Sistema ${esc(EB().nombre)} · ${new Date().toLocaleString('es-CO')}</p></body></html>`);
+  <p style="font-size:11px;color:#666;margin-top:10px">Generado desde Sistema ${esc(EB().nombre)} · ${fmtFH12()}</p></body></html>`);
   w.document.close();
 }
 
@@ -4981,7 +4983,7 @@ async function compartirNovedadesDiarias() {
 
 ${abiertas.length>0?'*⚠️ ABIERTAS:*\n'+abiertas.map(n=>`▪️ [${n.prioridad}] ${n.area||'-'}: ${n.descripcion?.substring(0,80)} (${n.estado})`).join('\n'):'✅ Sin novedades abiertas'}
 
-_Reporte: ${new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})} — Sistema 8010_`;
+_Reporte: ${new Date().toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true})} — Sistema 8010_`;
   compartirInforme('Novedades Diarias — ' + fmtDate(TODAY), txt);
 }
 
@@ -5368,7 +5370,7 @@ function generarMsgCKI() {
     ? (fv ? ` se genera ${fv}, ${cond}` : `, ${cond}`)
     : (fv ? ` se genera ${fv} en ${pago}` : ` pago en ${pago}`);
 
-  const _fh = new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+  const _fh = fmtFH12();
   const msg = `${new Date().getHours()<12?'Buenos días':'Buenas tardes'}, ${_fh}
 Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}, ${equipaje}, ${acta}, se relaciona check list, se envía book de servicios y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
@@ -5481,7 +5483,7 @@ function generarMsgCKO() {
   const actaStr = ', ' + acta.charAt(0).toLowerCase() + acta.slice(1);
   const maletasStr = maletas === 'Sin maletas' || maletas === 'Se lleva todo' ? '' : `. ${maletas.replace('Deja','Deja')} las cuales vendrán a recogerlas`;
 
-  const _fh = new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+  const _fh = fmtFH12();
   const msg = `${h<12?'Buenos días':'Buenas tardes'}, ${_fh}
 Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${consumosStr}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}
 R/${quien}`;
@@ -5546,7 +5548,7 @@ async function marcarAptoCKOLibre(apto) {
   const { data: hoyD } = await sb.from('rack').select('huesped,tarifa,canal').eq('fecha', TODAY).eq('apto', apto).limit(1);
   const hoy = (hoyD && hoyD[0]) || null;
   const huesped = (hoy && hoy.huesped) || hForm || null;
-  const _hrCKO = new Date().toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'2-digit',minute:'2-digit',hour12:true});
+  const _hrCKO = fmtHora12();
   const { error } = await sb.from('rack').upsert([{ fecha: TODAY, apto, estado: 'Sucio', huesped: null, tarifa: null, canal: null, observaciones: `CKO ${_hrCKO}${huesped ? ' — ' + huesped : ''} · pendiente limpieza`, edificio: ed, updated_by: currentUser.id }], { onConflict: 'fecha,apto,edificio' });
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
   // 2) Liberar los días FUTUROS de la misma estadía (mismo huésped, mismo apto, solo este edificio)
@@ -5977,7 +5979,7 @@ async function registrarSalidaVisita(id) {
   loadView('visitantes-list');
 }
 function fmtDate(d) { if (!d) return '-'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; }
-function fmtHour(ts) { if (!ts) return '-'; return new Date(ts).toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'}); }
+function fmtHour(ts) { if (!ts) return '-'; return new Date(ts).toLocaleTimeString('en-US', {timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true}); }
 
 // Vista en TABLA imprimible de novedades (formato similar al Excel del equipo).
 // Incluye las del día + las abiertas de días anteriores (seguimiento).
@@ -6016,7 +6018,7 @@ async function tablaNovedades(fechaSel) {
   <div class="sub">${(delDia.data||[]).length} del día${(seguim.data||[]).length?` · ${(seguim.data||[]).length} en seguimiento (filas resaltadas)`:''}</div>
   <table><thead><tr><th>Hora</th><th>Seguim.</th><th>Área / Apto</th><th>Descripción</th><th>Causa</th><th>Fuente</th><th>Tratamiento / Realiza</th><th>Prioridad</th><th>Estado</th><th>Registra</th></tr></thead>
   <tbody>${tr||'<tr><td colspan="10">Sin novedades</td></tr>'}</tbody></table>
-  <p class="sub">Generado desde Sistema ${EB().nombre} · ${new Date().toLocaleString('es-CO')}</p></body></html>`);
+  <p class="sub">Generado desde Sistema ${EB().nombre} · ${fmtFH12()}</p></body></html>`);
   w.document.close();
 }
 
@@ -6048,7 +6050,7 @@ async function tablaEstadoHuespedes() {
   <h2>${EB().nombre} — Estado de Huéspedes</h2><div class="sub">${fmtDate(TODAY)}</div>
   <table><thead><tr><th>Apto</th><th>Titular</th><th>Acompañantes / Observaciones</th><th>Estadía</th><th>Estado</th></tr></thead>
   <tbody>${tr||'<tr><td colspan="5">Sin huéspedes</td></tr>'}</tbody></table>
-  <p class="sub">Generado desde Sistema ${EB().nombre} · ${new Date().toLocaleString('es-CO')}</p></body></html>`);
+  <p class="sub">Generado desde Sistema ${EB().nombre} · ${fmtFH12()}</p></body></html>`);
   w.document.close();
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
