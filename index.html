@@ -403,7 +403,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-1230';
+const APP_VERSION = '2026-06-09-1330';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4153,7 +4153,30 @@ function _destInforme(edi, titulo){
   return _DEST_INFORME[edi];
 }
 function _ediActual(){ return (typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO==='kubik') ? 'kubik' : '8010'; }
+function _accentInforme(titulo){
+  const t=String(titulo||'').toLowerCase();
+  const map=[
+    [/novedad/,'#9A4A40','Novedades'],
+    [/rack/,'#2F5597','Rack'],
+    [/camareras/,'#6B21A8','Camareras'],
+    [/ingreso.*personal|control de personal|personal/,'#0F766E','Personal'],
+    [/fin de semana|tareas/,'#2D6A4F','Fin de Semana'],
+    [/saldos/,'#B7791F','Saldos'],
+    [/carpeta/,'#7C4A03','Carpetas'],
+    [/semana en curso|informaci/,'#3730A3','Semana'],
+    [/check.?in/,'#15803D','Check-In'],
+    [/check.?out/,'#C2410C','Check-Out'],
+    [/puntos fijos/,'#0E7490','Puntos Fijos'],
+    [/housekeeping|limpieza/,'#7C3AED','Housekeeping'],
+    [/cotizaci|comercial|lead/,'#BE185D','Comercial'],
+    [/estado de hu|huesped/,'#0369A1','Huespedes'],
+    [/turno|seguimiento/,'#475569','Turno'],
+  ];
+  for(var i=0;i<map.length;i++){ if(map[i][0].test(t)) return {color:map[i][1],label:map[i][2]}; }
+  return {color:'#211D1E',label:'Informe'};
+}
 function _informeHTML(titulo, texto){
+  const ac = _accentInforme(titulo);
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const bold = s => esc(s).replace(/\*([^*]+)\*/g,'<strong style="color:#211D1E">$1</strong>');
   const nombre = (typeof EB==='function') ? EB().nombre : '8010 Urban Living';
@@ -4172,21 +4195,21 @@ function _informeHTML(titulo, texto){
     if(t===nombre) return;
     if(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(t)) return;
     if(/^\*[^*]+\*$/.test(t)){
-      filas += '<tr><td style="padding:14px 16px 4px;font-size:11px;font-weight:bold;color:#211D1E;text-transform:uppercase;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;">'+esc(t.replace(/\*/g,''))+'</td></tr>';
+      filas += '<tr><td style="padding:15px 16px 4px;font-size:12.5px;font-weight:bold;color:#211D1E;text-transform:uppercase;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;">'+esc(t.replace(/\*/g,''))+'</td></tr>';
     } else {
       const cont = t.replace(/^[•\-]\s*/,'');
-      filas += '<tr><td style="padding:9px 16px;border-bottom:1px solid #ECE9E4;font-size:13px;color:#4A463F;line-height:1.5;font-family:Helvetica,Arial,sans-serif;">'+bold(cont)+'</td></tr>';
+      filas += '<tr><td style="padding:9px 16px;border-bottom:1px solid #ECE9E4;font-size:15px;color:#4A463F;line-height:1.55;font-family:Helvetica,Arial,sans-serif;">'+bold(cont)+'</td></tr>';
     }
   });
-  if(!filas) filas='<tr><td style="padding:16px;font-size:13px;color:#9A938B;font-family:Helvetica,Arial,sans-serif;">Sin registros para este informe.</td></tr>';
+  if(!filas) filas='<tr><td style="padding:16px;font-size:15px;color:#9A938B;font-family:Helvetica,Arial,sans-serif;">Sin registros para este informe.</td></tr>';
   return ''
    +'<body style="margin:0;padding:0;background:#E7E3E0;">'
    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E7E3E0;"><tr><td align="center" style="padding:28px 12px;">'
    +'<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#FFFFFF;border:1px solid #DAD6D1;border-radius:10px;overflow:hidden;">'
    +'<tr><td style="background:#211D1E;padding:22px 28px;">'+logo+'</td></tr>'
-   +'<tr><td style="height:2px;background:#BCB8B7;font-size:0;line-height:0;">&nbsp;</td></tr>'
-   +'<tr><td style="padding:24px 28px 6px;font-family:Georgia,serif;"><div style="font-size:20px;color:#211D1E;">'+esc(titulo)+'</div>'
-   +'<div style="font-size:12px;color:#7F7F7F;margin-top:5px;font-family:Helvetica,Arial,sans-serif;letter-spacing:.3px;">'+esc(nombre)+' &middot; '+esc(fecha)+'</div></td></tr>'
+   +'<tr><td style="height:4px;background:'+ac.color+';font-size:0;line-height:0;">&nbsp;</td></tr>'
+   +'<tr><td style="padding:22px 28px 6px;font-family:Georgia,serif;"><div style="margin-bottom:8px;"><span style="display:inline-block;background:'+ac.color+';color:#FFFFFF;font-size:11px;font-weight:bold;letter-spacing:1.5px;padding:4px 11px;border-radius:5px;font-family:Helvetica,Arial,sans-serif;text-transform:uppercase;">'+esc(ac.label)+'</span></div><div style="font-size:23px;color:#211D1E;">'+esc(titulo)+'</div>'
+   +'<div style="font-size:13px;color:#7F7F7F;margin-top:5px;font-family:Helvetica,Arial,sans-serif;letter-spacing:.3px;">'+esc(nombre)+' &middot; '+esc(fecha)+'</div></td></tr>'
    +'<tr><td style="padding:12px 28px 6px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">'+filas+'</table></td></tr>'
    +'<tr><td style="padding:20px 28px 24px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E7E3E0;font-family:Helvetica,Arial,sans-serif;"><tr>'
    +'<td style="padding-top:14px;font-size:10.5px;color:#9A938B;">Generado automaticamente &middot; Sistema '+esc(nombre)+'<br>'+esc(fecha)+' '+esc(hora)+'</td>'
