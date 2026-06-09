@@ -403,7 +403,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-0530';
+const APP_VERSION = '2026-06-09-0700';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3304,6 +3304,16 @@ function renderNuevaReserva() {
             <input type="text" id="res-total" readonly style="background:#E2EFDA;font-weight:bold;color:var(--verde)">
           </div>
         </div>
+        <div class="form-group" style="margin-top:6px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+            <input type="checkbox" id="res-pornoche-toggle" onchange="togglePorNoche()" style="width:18px;height:18px">
+            Tarifa por noche (cortesía / noches mixtas)
+          </label>
+          <div id="res-pornoche-box" style="display:none;margin-top:8px;border:1px solid #E7E3E0;border-radius:8px;padding:12px;background:#FAFAF8">
+            <div style="font-size:12px;color:#7F7F7F;margin-bottom:8px">Pon <strong>$0</strong> en las noches de cortesía. El Total estadía y el IVA se recalculan solos.</div>
+            <div id="res-pornoche-list"></div>
+          </div>
+        </div>
       </div>
 
       <div class="form-section">
@@ -3434,7 +3444,10 @@ function calcReserva() {
   if (ci && co) {
     const noches = Math.max(0, Math.round((new Date(co) - new Date(ci)) / 86400000));
     document.getElementById('res-noches').value = noches;
-    const total = noches * tarifa;
+    const porNoche = document.getElementById('res-pornoche-toggle')?.checked;
+    if (porNoche) renderNochesTarifa();
+    let total = noches * tarifa;
+    if (porNoche) { total = 0; document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(inp=>{ total += Number(inp.value)||0; }); }
     document.getElementById('res-total').value = moneda === 'USD'
       ? `USD ${total.toLocaleString('es-CO')}`
       : `$ ${total.toLocaleString('es-CO')}`;
@@ -3445,9 +3458,40 @@ function calcReserva() {
       resumen.classList.remove('hidden');
       const fmtD = d => { const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; };
       document.getElementById('res-resumen-texto').innerHTML =
-        `Apto <strong>${apto}</strong> · ${noches} noche${noches>1?'s':''} · ${fmtD(ci)} → ${fmtD(co)} · Tarifa: $${tarifa.toLocaleString('es-CO')}/noche · <strong>Total: $${(noches*tarifa).toLocaleString('es-CO')}</strong>`;
+        `Apto <strong>${apto}</strong> · ${noches} noche${noches>1?'s':''} · ${fmtD(ci)} → ${fmtD(co)} · ${porNoche ? 'Tarifa mixta' : 'Tarifa: $'+tarifa.toLocaleString('es-CO')+'/noche'} · <strong>Total: $${total.toLocaleString('es-CO')}</strong>`;
     }
   }
+}
+
+function togglePorNoche(){
+  const on = document.getElementById('res-pornoche-toggle')?.checked;
+  const box = document.getElementById('res-pornoche-box');
+  if (box) box.style.display = on ? 'block' : 'none';
+  if (on) renderNochesTarifa();
+  calcReserva();
+}
+
+function renderNochesTarifa(){
+  const ci = document.getElementById('res-checkin').value;
+  const co = document.getElementById('res-checkout').value;
+  const base = Number(document.getElementById('res-tarifa').value) || 0;
+  const list = document.getElementById('res-pornoche-list');
+  if (!ci || !co || !list) return;
+  const noches = Math.max(0, Math.round((new Date(co) - new Date(ci)) / 86400000));
+  const prev = {};
+  list.querySelectorAll('input[data-fecha]').forEach(inp=>{ prev[inp.getAttribute('data-fecha')] = inp.value; });
+  const fmtD = d => { const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; };
+  let html = '';
+  for (let i=0;i<noches;i++){
+    const dd = new Date(ci); dd.setDate(dd.getDate()+i);
+    const ff = dd.toISOString().split('T')[0];
+    const val = prev[ff] !== undefined ? prev[ff] : base;
+    html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">`
+      + `<span style="width:150px;font-size:13px;color:#4A463F">Noche ${i+1} · ${fmtD(ff)}</span>`
+      + `<input type="number" data-fecha="${ff}" value="${val}" onchange="calcReserva()" style="flex:1;max-width:170px" placeholder="0">`
+      + `<span style="font-size:12px;color:#9A938B">$0 = cortesía</span></div>`;
+  }
+  list.innerHTML = html;
 }
 
 async function guardarReserva() {
@@ -3459,6 +3503,9 @@ async function guardarReserva() {
   const noches  = Number(document.getElementById('res-noches').value) || 0;
   const canal   = document.getElementById('res-canal').value;
   const iva     = document.getElementById('res-iva')?.value || 'incluido';
+  const porNoche = document.getElementById('res-pornoche-toggle')?.checked;
+  const tarifasNoche = {};
+  if (porNoche) document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(inp=>{ tarifasNoche[inp.getAttribute('data-fecha')] = Number(inp.value)||0; });
 
   if (!apto || !ci || !co || !nombre) {
     showToast('Completa: Apartamento, fechas y nombre del huésped', 'error'); return;
@@ -3474,12 +3521,13 @@ async function guardarReserva() {
     const d = new Date(ci);
     d.setDate(d.getDate() + i);
     const fecha = d.toISOString().split('T')[0];
-    const estado = i === 0 ? 'Check-in hoy' : (i === noches-1 ? 'Check-out hoy' : 'Ocupado');
-    rows.push({ fecha, apto, estado, huesped: nombre, tarifa: tarifa || null, canal, iva, updated_by: currentUser.id });
+    const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
+    const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
+    rows.push({ fecha, apto, estado, huesped: nombre, tarifa: tNoche || null, canal, iva, updated_by: currentUser.id });
   }
   // Día de check-out
   const dco = new Date(co);
-  rows.push({ fecha: co, apto, estado: 'Check-out hoy', huesped: nombre, tarifa: tarifa || null, canal, iva, updated_by: currentUser.id });
+  rows.push({ fecha: co, apto, estado: 'Check-out hoy', huesped: nombre, tarifa: null, canal, iva, updated_by: currentUser.id });
 
   // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
   await sb.from('rack').delete().eq('apto', apto).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
