@@ -394,7 +394,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-0300';
+const APP_VERSION = '2026-06-09-0315';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1636,8 +1636,8 @@ async function renderRack() {
       const border = isHoy ? '2px solid #1F3864' : '1px solid #ddd';
       const estTxt = est === 'Completo' ? 'Apto completo' : est;
       const _fcT = String(d).padStart(2,'0')+'/'+String(month+1).padStart(2,'0');
-      const _ocuT = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'].includes(est);
-      const _tarT = (rec && rec.tarifa && Number(rec.tarifa)>0) ? '$'+Number(rec.tarifa).toLocaleString('es-CO')+'/noche' : (_ocuT ? 'Cortesía ($0)' : '');
+      const _ocuT = ['Ocupado','Check-in hoy','Completo','Sale de viaje'].includes(est);
+      const _tarT = !_ocuT ? '' : ((rec && rec.tarifa && Number(rec.tarifa)>0) ? '$'+Number(rec.tarifa).toLocaleString('es-CO')+'/noche' : 'Cortesía ($0)');
       const title = rec?.huesped ? `Apto ${apto} · ${_fcT} · ${rec.huesped} · ${estTxt}${_tarT?' · '+_tarT:''}` : `Apto ${apto} · ${_fcT} · ${estTxt}`;
       const onclick = canEdit && rec?.id ? `openAptoModal('${rec.id}','${apto}')` : (canEdit ? `crearDiaRack('${apto}','${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}')` : '');
       // Consulta de disponibilidad: resaltar libres / atenuar ocupados dentro del rango
