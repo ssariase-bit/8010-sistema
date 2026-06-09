@@ -394,7 +394,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-0145';
+const APP_VERSION = '2026-06-09-0200';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4009,7 +4009,8 @@ function _btnsEdit(tabla, id){
 
 function _informeTextoDOM(){
   const mc=document.getElementById('main-content'); if(!mc) return '';
-  const titulo=(mc.querySelector('.page-title')?.textContent||'Informe').trim();
+  const _stripEmo = s => String(s||'').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}️‍]/gu,'').replace(/\s+/g,' ').trim();
+  const titulo=_stripEmo(mc.querySelector('.page-title')?.textContent||'Informe');
   const edi=(typeof EDIFICIO_ACTIVO!=='undefined')?(EDIFICIO_ACTIVO==='kubik'?'Kubik Living 8i8':'8010 Urban Living'):'';
   const tabla=mc.querySelector('table');
   const clean=v=>v.replace(/✅\s*Sí/gi,'✅').replace(/⬜\s*No/gi,'❌').replace(/\s+/g,' ').trim();
@@ -4017,7 +4018,7 @@ function _informeTextoDOM(){
   if(edi) out.push(edi);
   out.push(new Date().toLocaleDateString('es-CO'),'━━━━━━━━━━','');
   if(tabla){
-    const heads=[...tabla.querySelectorAll('thead th')].map(th=>th.textContent.trim());
+    const heads=[...tabla.querySelectorAll('thead th')].map(th=>_stripEmo(th.textContent));
     tabla.querySelectorAll('tbody tr').forEach(tr=>{
       const tds=[...tr.querySelectorAll('td')];
       let head='', partes=[];
