@@ -403,7 +403,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-1130';
+const APP_VERSION = '2026-06-09-1230';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -934,7 +934,10 @@ async function loadView(view) {
       {id:'interes',label:'Interés (apto / fechas / estadía)',type:'text'},
       {id:'canal',label:'Canal de contacto',type:'select',opts:['Llamada','WhatsApp','Correo','Referido','Página web','Instagram','Booking','Visita directa','Otro']},
       {id:'estado',label:'Estado del seguimiento',type:'select',opts:['Nuevo','Contactado','Cotizado','En negociación','Ganada','Perdida']},
-      {id:'valor_cotizado',label:'Valor cotizado ($)',type:'number',default:'0'},
+      {id:'moneda',label:'Moneda',type:'select',opts:['USD','COP']},
+      {id:'periodicidad',label:'Periodicidad',type:'select',opts:['Por noche','Mensual','Total estadía']},
+      {id:'tarifa_inicial',label:'Tarifa inicial (antes de negociar)',type:'number'},
+      {id:'valor_cotizado',label:'Valor cotizado / final',type:'number',default:'0'},
       {id:'proximo_contacto',label:'Próximo contacto',type:'date'},
       {id:'notas',label:'Notas',type:'textarea'},
     ]); break;
@@ -5889,7 +5892,7 @@ function cotRenderTabla() {
         <td style="font-size:12px">${r.telefono?`📱 ${r.telefono}<br>`:''}${r.correo?`✉️ ${r.correo}`:''}</td>
         <td style="font-size:12px">${r.interes||'-'}</td>
         <td>${r.canal||'-'}</td>
-        <td>${Number(r.valor_cotizado)>0?'$'+fmtNum(r.valor_cotizado):'-'}</td>
+        <td>${(function(){var v=Number(r.valor_cotizado)||0; if(v<=0) return '-'; var sim=r.moneda==='USD'?'USD ':'$'; var pm={'Por noche':' /noche','Mensual':' /mes','Total estadía':' total'}; var per=r.periodicidad?(pm[r.periodicidad]||''):''; var ini=Number(r.tarifa_inicial)||0; var neg=(ini>0&&ini!==v)?'<div style="font-size:10px;color:#aaa;text-decoration:line-through">'+sim+fmtNum(ini)+'</div>':''; return neg+'<strong>'+sim+fmtNum(v)+'</strong>'+per;})()}</td>
         <td><select onchange="cotEstado('${r.id}',this.value)" style="background:${c.bg};color:${c.color};font-weight:700;border:none;border-radius:8px;padding:6px 8px;font-size:12px">
           ${COT_ESTADOS.map(e=>`<option value="${e}" ${r.estado===e?'selected':''}>${e}</option>`).join('')}
         </select></td>
