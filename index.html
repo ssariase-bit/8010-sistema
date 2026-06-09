@@ -394,7 +394,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-0130';
+const APP_VERSION = '2026-06-09-0145';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -5631,6 +5631,41 @@ const COT_COLORES = {
   'Perdida':        {bg:'#FEE2E2', color:'#991B1B'},
 };
 
+function cotPasarComercial(id){
+  const r = (window._cotRows||[]).find(x=>x.id===id);
+  if(!r){ showToast('Lead no encontrado','error'); return; }
+  const nombreEdi = (typeof EB==='function')?EB().nombre:'8010 Urban Living';
+  const ultNota = (r.notas||'').split('\n').filter(Boolean).pop() || '';
+  const txt = '🏢 *'+nombreEdi+' — Lead para Comercial*\n'
+    + '👤 Nombre: '+(r.nombre||'-')+'\n'
+    + '📱 Teléfono: '+(r.telefono||'-')+'\n'
+    + '✉️ Correo: '+(r.correo||'-')+'\n'
+    + '🎯 Interés: '+(r.interes||'-')+'\n'
+    + '📅 Solicitud: '+(r.fecha_solicitud?fmtDate(r.fecha_solicitud):'-')+'\n'
+    + '🔗 Canal: '+(r.canal||'-')+'\n'
+    + (Number(r.valor_cotizado)>0 ? '💵 Valor cotizado: $'+fmtNum(r.valor_cotizado)+'\n' : '')
+    + '📌 Estado: '+(r.estado||'-')+'\n'
+    + (ultNota ? '📝 Última nota: '+ultNota+'\n' : '')
+    + '\nFavor contactar / llamar al interesado.';
+  window._txtComercial = txt;
+  const wa = encodeURIComponent(txt);
+  const asunto = encodeURIComponent('Lead comercial — '+(r.nombre||'')+' ('+nombreEdi+')');
+  const cuerpo = encodeURIComponent(txt);
+  const m = document.createElement('div'); m.id='modal-comercial';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  m.innerHTML = `<div style="background:#fff;border-radius:16px;padding:24px;max-width:430px;width:100%">
+    <div style="font-size:17px;font-weight:700;color:#1D3461;margin-bottom:4px">📤 Pasar lead a Comercial</div>
+    <div style="font-size:13px;color:#6B7280;margin-bottom:14px">${(r.nombre||'').replace(/</g,'&lt;')}</div>
+    <div style="background:#F2F3F5;border-radius:8px;padding:12px;font-size:12px;white-space:pre-wrap;max-height:220px;overflow:auto;margin-bottom:16px">${txt.replace(/</g,'&lt;')}</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <a href="https://wa.me/?text=${wa}" target="_blank" onclick="document.getElementById('modal-comercial').remove()" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#25D366;color:#fff;padding:12px;border-radius:10px;text-decoration:none;font-weight:700;font-size:13px">💬 Enviar por WhatsApp</a>
+      <a href="mailto:?subject=${asunto}&body=${cuerpo}" onclick="document.getElementById('modal-comercial').remove()" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#1D3461;color:#fff;padding:12px;border-radius:10px;text-decoration:none;font-weight:700;font-size:13px">📧 Enviar por correo</a>
+      <button onclick="(navigator.clipboard&&navigator.clipboard.writeText(window._txtComercial||''));showToast('✅ Copiado','success')" style="background:#6B7280;color:#fff;border:none;padding:11px;border-radius:10px;cursor:pointer;font-weight:700;font-size:13px">📋 Copiar</button>
+      <button onclick="document.getElementById('modal-comercial').remove()" style="background:transparent;border:none;padding:6px;cursor:pointer;font-size:12px;color:#9CA3AF">Cancelar</button>
+    </div></div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e=>{ if(e.target===m) m.remove(); });
+}
 async function renderComercial() {
   const { data } = await sb.from('cotizaciones').select('*').order('fecha_solicitud',{ascending:false});
   window._cotRows = data || [];
@@ -5685,7 +5720,8 @@ function cotRenderTabla() {
         <td style="${venc?'color:var(--rojo);font-weight:700':''}">${r.proximo_contacto?fmtDate(r.proximo_contacto)+(venc?' ⏰':''):'-'}</td>
         <td style="font-size:12px;max-width:220px">${ultNota?`<span title="${(r.notas||'').replace(/"/g,'&quot;')}">${ultNota.substring(0,60)}${ultNota.length>60?'…':''}</span><br>`:''}
           <a href="javascript:void(0)" onclick="cotNota('${r.id}')" style="font-size:11px">📝 Agregar nota</a> ·
-          <a href="javascript:void(0)" onclick="cotProx('${r.id}')" style="font-size:11px">📅 Próx. contacto</a></td>
+          <a href="javascript:void(0)" onclick="cotProx('${r.id}')" style="font-size:11px">📅 Próx. contacto</a><br>
+          <a href="javascript:void(0)" onclick="cotPasarComercial('${r.id}')" style="font-size:11px;color:#0d9488;font-weight:700">📤 Pasar a comercial</a></td>
       </tr>`;}).join('')}</tbody>
   </table>`;
 }
