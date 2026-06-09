@@ -403,7 +403,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-0700';
+const APP_VERSION = '2026-06-09-0830';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1565,6 +1565,7 @@ async function renderRack() {
   });
   // Para meses sin datos usa la lista de aptos por defecto
   if (aptos.length === 0) aptos = [...APTOS_DEFAULT];
+  window._rackAptos = aptos;
 
   const colorMap = {
     'Ocupado':      {bg:'#B7E1A1',color:'#2D5016',code:'IN'},
@@ -1708,6 +1709,7 @@ async function renderRack() {
       🏠 Rack — ${monthNames[month]} ${year}
       <button onclick="cambiarMesRack(1)" style="background:var(--azul-m);color:white;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:16px;font-weight:bold">▶</button>
       ${month === now.getMonth() && year === now.getFullYear() ? '' : `<button onclick="window._rackMes=new Date().getMonth();window._rackYear=new Date().getFullYear();loadView('rack')" style="background:var(--gris-b);color:var(--azul);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px">Hoy</button>`}
+      <button onclick="enviarRackCorreo(this)" style="margin-left:auto;background:var(--azul-m);color:white;border:none;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600">✉️ Enviar rack por correo</button>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#E0F7FA;border:1px solid #4DD0E1;border-radius:8px;padding:8px 12px;margin-bottom:12px">
       <span style="font-size:12px;font-weight:700;color:#006978">🔎 Consultar disponibilidad</span>
@@ -4116,6 +4118,21 @@ const _DEST_INFORME = {
   '8010':  { to:['sa@8010ul.com'],     cc:['fabio.malaver@8010urbanliving.com'] },
   'kubik': { to:['sariase@8i8op.com'], cc:['operativo@8i8op.com'] }
 };
+// Listas de distribucion por reporte (Kubik). Primero = Para; resto = CC.
+const _DEST_KUBIK_REPORTES = [
+  { match:/novedad/i,           to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com'] },
+  { match:/ingreso.*personal/i, to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','rrhh@8i8op.com'] },
+  { match:/rack/i,              to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com'] },
+  { match:/camareras/i,         to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com'] },
+  { match:/fin de semana/i,     to:['operativo@8i8op.com'], cc:['operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com'] },
+];
+function _destInforme(edi, titulo){
+  if (edi === 'kubik') {
+    const t = String(titulo||'');
+    for (const r of _DEST_KUBIK_REPORTES) { if (r.match.test(t)) return { to:r.to, cc:r.cc }; }
+  }
+  return _DEST_INFORME[edi];
+}
 function _ediActual(){ return (typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO==='kubik') ? 'kubik' : '8010'; }
 function _informeHTML(titulo, texto){
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -4158,11 +4175,11 @@ function _informeHTML(titulo, texto){
    +'</tr></table></td></tr>'
    +'</table></td></tr></table></body>';
 }
-async function enviarInformeCorreo(titulo, texto, btn){
+async function enviarInformeCorreo(titulo, texto, btn, htmlOverride){
   const edi = _ediActual();
-  const d = _DEST_INFORME[edi];
+  const d = _destInforme(edi, titulo);
   const subject = ((typeof EB==='function')?EB().nombre:'8010 Urban Living') + ' — ' + titulo;
-  const html = _informeHTML(titulo, texto);
+  const html = htmlOverride || _informeHTML(titulo, texto);
   let prev=null;
   if(btn){ prev=btn.innerHTML; btn.disabled=true; btn.innerHTML='⏳ Enviando…'; }
   try{
@@ -4177,6 +4194,65 @@ async function enviarInformeCorreo(titulo, texto, btn){
   }finally{
     if(btn){ btn.disabled=false; btn.innerHTML=prev; }
   }
+}
+function _rackEmailHTML(){
+  const rack = window._rackData || {};
+  const aptos = window._rackAptos || [];
+  const year = window._rackYear, month = window._rackMes;
+  const mesNombre = window._rackMesNombre || '';
+  const dim = new Date(year, month+1, 0).getDate();
+  const dayNames = ['D','L','M','Mi','J','V','S'];
+  const cmap = {
+    'Ocupado':{bg:'#B7E1A1',code:'IN'},'Check-in hoy':{bg:'#9EC5F0',code:'CKI'},'Check-out hoy':{bg:'#FBC97D',code:'CKO'},
+    'Sucio':{bg:'#E7C9A9',code:'SUC'},'Libre':{bg:'#F7F7F7',code:''},'Limpieza':{bg:'#E7D4F7',code:'HK'},
+    'Mantenimiento':{bg:'#F4A8A0',code:'MT'},'Bloqueado':{bg:'#CFCFCF',code:'BLQ'},'Completo':{bg:'#7FC97F',code:'COMP'},'Sale de viaje':{bg:'#FDE68A',code:'OUT'}
+  };
+  const edi = _ediActual();
+  const nombre = (typeof EB==='function') ? EB().nombre : '8010 Urban Living';
+  const logo = edi==='kubik'
+    ? '<span style="color:#FEFDFB;font-size:22px;letter-spacing:3px;">KUBIK<span style="color:#BCB8B7;"> living</span></span>'
+    : '<span style="color:#FEFDFB;font-size:23px;letter-spacing:5px;">80<span style="color:#BCB8B7;">|</span>10</span>';
+  let head = '<th style="background:#211D1E;color:#fff;padding:4px 8px;font-size:11px;border:1px solid #999;text-align:left">Apto</th>';
+  for(let d=1; d<=dim; d++){
+    const dow = new Date(year, month, d).getDay();
+    const fin = dow===0||dow===6;
+    head += '<th style="background:'+(fin?'#8EA8C3':'#2F5597')+';color:#fff;font-size:10px;padding:2px 4px;border:1px solid #999;min-width:24px">'+d+'<br><span style="font-size:8px;opacity:.85">'+dayNames[dow]+'</span></th>';
+  }
+  let body='';
+  aptos.forEach(function(apto){
+    let row = '<td style="background:#F5F3EE;font-weight:700;font-size:11px;padding:3px 8px;border:1px solid #ccc;white-space:nowrap">'+apto+'</td>';
+    for(let d=1; d<=dim; d++){
+      const rec = rack[apto] && rack[apto][d];
+      const est = (rec && rec.estado) || 'Libre';
+      const cm = cmap[est] || cmap['Libre'];
+      row += '<td style="background:'+cm.bg+';text-align:center;font-size:9px;font-weight:700;color:#333;padding:2px;border:1px solid #ddd">'+cm.code+'</td>';
+    }
+    body += '<tr>'+row+'</tr>';
+  });
+  const fecha = new Date().toLocaleDateString('es-CO',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  return '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#E7E3E0;font-family:Helvetica,Arial,sans-serif">'
+    + '<div style="background:#211D1E;padding:18px 24px">'+logo+'</div>'
+    + '<div style="padding:18px 24px">'
+    + '<div style="font-size:18px;color:#211D1E;margin-bottom:2px">Rack \u2014 '+mesNombre+' '+year+'</div>'
+    + '<div style="font-size:12px;color:#7F7F7F;margin-bottom:14px">'+nombre+' \u00b7 '+fecha+'</div>'
+    + '<div style="overflow-x:auto"><table style="border-collapse:collapse"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>'
+    + '<div style="margin-top:12px;font-size:11px;color:#555;line-height:2">'
+    + '<strong>Convenciones:&nbsp;</strong>'
+    + '<span style="background:#9EC5F0;padding:2px 6px;border-radius:3px">CKI entra</span> '
+    + '<span style="background:#B7E1A1;padding:2px 6px;border-radius:3px">IN ocupado</span> '
+    + '<span style="background:#FBC97D;padding:2px 6px;border-radius:3px">CKO sale</span> '
+    + '<span style="background:#7FC97F;padding:2px 6px;border-radius:3px">COMP completo</span> '
+    + '<span style="background:#FDE68A;padding:2px 6px;border-radius:3px">OUT de viaje</span> '
+    + '<span style="background:#F4A8A0;padding:2px 6px;border-radius:3px">MT mantenim.</span> '
+    + '<span style="background:#CFCFCF;padding:2px 6px;border-radius:3px">BLQ bloqueado</span>'
+    + '</div></div>'
+    + '<div style="padding:14px 24px;font-size:10px;color:#9A938B">Generado automaticamente \u00b7 Sistema '+nombre+'</div>'
+    + '</body></html>';
+}
+async function enviarRackCorreo(btn){
+  if (!window._rackData) { showToast('Abre el rack primero','error'); return; }
+  const titulo = 'Rack \u2014 ' + (window._rackMesNombre||'') + ' ' + (window._rackYear||'');
+  return enviarInformeCorreo(titulo, '', btn, _rackEmailHTML());
 }
 function compartirWA(){ window.open('https://wa.me/?text='+encodeURIComponent(_informeTextoDOM()),'_blank'); }
 function compartirMail(){ return enviarInformeCorreo(_tituloInforme(), _informeTextoDOM()); }
