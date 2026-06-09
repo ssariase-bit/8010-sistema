@@ -295,6 +295,15 @@ textarea{resize:vertical;min-height:80px}
     </div>
     <div class="form-row">
       <div class="form-group">
+        <label>IVA</label>
+        <select id="m-iva">
+          <option value="incluido">Incluye IVA (19%)</option>
+          <option value="exento">Exento de IVA</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
         <label>Check-in</label>
         <input type="date" id="m-checkin">
       </div>
@@ -394,7 +403,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-0330';
+const APP_VERSION = '2026-06-09-0530';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1637,7 +1646,8 @@ async function renderRack() {
       const estTxt = est === 'Completo' ? 'Apto completo' : est;
       const _fcT = String(d).padStart(2,'0')+'/'+String(month+1).padStart(2,'0');
       const _ocuT = ['Ocupado','Check-in hoy','Completo','Sale de viaje'].includes(est);
-      let _tarT = !_ocuT ? '' : ((rec && rec.tarifa && Number(rec.tarifa)>0) ? '$'+Number(rec.tarifa).toLocaleString('es-CO')+'/noche' : 'Cortesía ($0)');
+      const _ivaSuf = (rec && rec.iva === 'exento') ? ' (exento de IVA)' : ' + IVA';
+      let _tarT = !_ocuT ? '' : ((rec && rec.tarifa && Number(rec.tarifa)>0) ? '$'+Number(rec.tarifa).toLocaleString('es-CO')+'/noche'+_ivaSuf : 'Cortesía ($0)');
       if (est === 'Check-out hoy') {
         let _tot=0; const _hsp=rec && rec.huesped;
         for (let _p=d-1; _p>=1; _p--) {
@@ -1646,7 +1656,7 @@ async function renderRack() {
           if (_hsp && _rp.huesped && _rp.huesped !== _hsp) break;
           _tot += Number(_rp.tarifa)||0;
         }
-        _tarT = 'Total estadía: $'+_tot.toLocaleString('es-CO');
+        _tarT = _tot>0 ? 'Total estadía: $'+_tot.toLocaleString('es-CO')+_ivaSuf : 'Total estadía: $0';
       }
       const title = rec?.huesped ? `Apto ${apto} · ${_fcT} · ${rec.huesped} · ${estTxt}${_tarT?' · '+_tarT:''}` : `Apto ${apto} · ${_fcT} · ${estTxt}`;
       const onclick = canEdit && rec?.id ? `openAptoModal('${rec.id}','${apto}')` : (canEdit ? `crearDiaRack('${apto}','${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}')` : '');
@@ -1957,6 +1967,7 @@ async function openAptoModal(id, num) {
   document.getElementById('m-checkout').value= data?.checkout || '';
   document.getElementById('m-tarifa').value  = data?.tarifa || '';
   document.getElementById('m-obs').value     = data?.observaciones || '';
+  document.getElementById('m-iva').value     = data?.iva || 'incluido';
 
   // Mostrar toggle "Apto Completo" solo si tiene variante A
   const varA = APTO_A_MAP[num];
@@ -1994,6 +2005,7 @@ async function saveApto() {
     checkout: document.getElementById('m-checkout').value || null,
     tarifa: Number(document.getElementById('m-tarifa').value) || null,
     observaciones: document.getElementById('m-obs').value,
+    iva: document.getElementById('m-iva')?.value || 'incluido',
     updated_by: currentUser.id,
     updated_at: new Date().toISOString(),
   };
@@ -2007,7 +2019,7 @@ async function saveApto() {
     for (let i = 0; i < 400; i++) {
       // Estadías: patrón CKI → Ocupado → CKO. Bloqueos/Mantenimiento/etc: el mismo estado en todo el rango.
       const est = ocupacional ? (f === updates.checkin ? 'Check-in hoy' : (f === updates.checkout ? 'Check-out hoy' : 'Ocupado')) : updates.estado;
-      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, observaciones: updates.observaciones, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, observaciones: updates.observaciones, iva: updates.iva, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
       if (f === updates.checkout) break;
       f = addDay(f);
     }
@@ -3274,6 +3286,13 @@ function renderNuevaReserva() {
             </select>
           </div>
           <div class="form-group">
+            <label>IVA</label>
+            <select id="res-iva" style="font-weight:600">
+              <option value="incluido">Incluye IVA (19%)</option>
+              <option value="exento">Exento de IVA</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label>Tarifa por noche *</label>
             <div style="display:flex;gap:6px;align-items:center">
               <span id="res-moneda-sym" style="font-weight:700;color:var(--azul);font-size:13px">$</span>
@@ -3439,6 +3458,7 @@ async function guardarReserva() {
   const tarifa  = Number(document.getElementById('res-tarifa').value) || 0;
   const noches  = Number(document.getElementById('res-noches').value) || 0;
   const canal   = document.getElementById('res-canal').value;
+  const iva     = document.getElementById('res-iva')?.value || 'incluido';
 
   if (!apto || !ci || !co || !nombre) {
     showToast('Completa: Apartamento, fechas y nombre del huésped', 'error'); return;
@@ -3455,11 +3475,11 @@ async function guardarReserva() {
     d.setDate(d.getDate() + i);
     const fecha = d.toISOString().split('T')[0];
     const estado = i === 0 ? 'Check-in hoy' : (i === noches-1 ? 'Check-out hoy' : 'Ocupado');
-    rows.push({ fecha, apto, estado, huesped: nombre, tarifa: tarifa || null, canal, updated_by: currentUser.id });
+    rows.push({ fecha, apto, estado, huesped: nombre, tarifa: tarifa || null, canal, iva, updated_by: currentUser.id });
   }
   // Día de check-out
   const dco = new Date(co);
-  rows.push({ fecha: co, apto, estado: 'Check-out hoy', huesped: nombre, tarifa: tarifa || null, canal, updated_by: currentUser.id });
+  rows.push({ fecha: co, apto, estado: 'Check-out hoy', huesped: nombre, tarifa: tarifa || null, canal, iva, updated_by: currentUser.id });
 
   // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
   await sb.from('rack').delete().eq('apto', apto).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
@@ -3486,7 +3506,7 @@ async function guardarReserva() {
   const resData = {
     nombre, apto, noches, tarifa,
     checkin: ci, checkout: co,
-    canal, empresa: document.getElementById('res-empresa').value.trim(),
+    canal, iva: document.getElementById('res-iva')?.value || 'incluido', empresa: document.getElementById('res-empresa').value.trim(),
     pago: document.getElementById('res-pago').value,
     cxcTipo: document.getElementById('res-cxc-tipo')?.value || 'CxC Full',
     cxcRazon: document.getElementById('res-cxc-razon')?.value || '80|10 S.A.S',
@@ -3519,6 +3539,7 @@ function previsualizarConfirmacion() {
     nombre, apto, noches, tarifa,
     config: document.getElementById('res-config')?.value || 'completo',
     moneda: document.getElementById('res-moneda')?.value || 'COP',
+    iva: document.getElementById('res-iva')?.value || 'incluido',
     checkin: ci, checkout: co,
     canal: document.getElementById('res-canal').value,
     empresa: document.getElementById('res-empresa')?.value.trim() || '',
@@ -3600,9 +3621,10 @@ function generarConfirmacion(r) {
   const esUSD = moneda === 'USD';
   const simb = esUSD ? 'USD $' : '$';
   const monedaLabel = esUSD ? 'USD' : 'COP';
+  const esExento = r.iva === 'exento';
   const ivaPct = 0.19;
-  const iva = esUSD ? 0 : Math.round(r.tarifa * ivaPct);
-  const tarifaConIva = esUSD ? r.tarifa : r.tarifa + iva;
+  const iva = esExento ? 0 : Math.round(r.tarifa * ivaPct);
+  const tarifaConIva = esExento ? r.tarifa : r.tarifa + iva;
   const totalConIva = tarifaConIva * r.noches;
   const tratamiento = r.nombre.split(' ')[0].toLowerCase().endsWith('a') ? 'SRA.' : 'SR.';
 
@@ -3670,11 +3692,11 @@ function generarConfirmacion(r) {
     <tr><td>Total de Días</td><td>N/A</td></tr>
     <tr><td>Tarifa Apartamento por Día</td><td>N/A</td></tr>
     <tr><td>Total de Noches</td><td>${String(r.noches).padStart(2,'0')} noche${r.noches>1?'s':''}</td></tr>
-    <tr><td>Tarifa Apartamento por Noche</td><td>$ ${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${esUSD ? '' : ' (sin IVA)'}</td></tr>
-    ${!esUSD ? `<tr><td>IVA (19%)</td><td>$ ${iva.toLocaleString('es-CO')} COP</td></tr>
-    <tr><td>Tarifa por noche + IVA</td><td><strong>$ ${tarifaConIva.toLocaleString('es-CO')} COP</strong></td></tr>` : ''}
+    <tr><td>Tarifa Apartamento por Noche</td><td>$ ${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${esExento ? ' (exento de IVA)' : ' (sin IVA)'}</td></tr>
+    ${!esExento ? `<tr><td>IVA (19%)</td><td>$ ${iva.toLocaleString('es-CO')} ${monedaLabel}</td></tr>
+    <tr><td>Tarifa por noche + IVA</td><td><strong>$ ${tarifaConIva.toLocaleString('es-CO')} ${monedaLabel}</strong></td></tr>` : ''}
     <tr><td>Tarifa Apartamento por Mes</td><td>N/A</td></tr>
-    <tr><td>Valor Total del Contrato</td><td class="bold-val">$ ${totalConIva.toLocaleString('es-CO')} ${monedaLabel}${esUSD ? '' : ' (IVA incluido)'}</td></tr>
+    <tr><td>Valor Total del Contrato</td><td class="bold-val">$ ${totalConIva.toLocaleString('es-CO')} ${monedaLabel}${esExento ? ' (exento de IVA)' : ' (IVA incluido)'}</td></tr>
     ${esUSD ? `<tr><td>Moneda de cobro</td><td><strong>USD — Dólares americanos</strong></td></tr>` : `<tr><td>TRM</td><td>N/A</td></tr>`}
     <tr><td>Forma de Pago</td><td>${/factur/i.test(r.pago||'') ? `Pago <strong>POR FACTURAR</strong> &mdash; <strong>${r.cxcTipo||'CxC Full'}</strong> a cargo de la empresa.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>` : `Pago <strong>${r.pago.toUpperCase()}</strong> por parte del Cliente a su llegada.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>`}</td></tr>
     <tr>
