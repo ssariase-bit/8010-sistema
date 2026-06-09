@@ -394,7 +394,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-0200';
+const APP_VERSION = '2026-06-09-0215';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2308,10 +2308,10 @@ ${notas ? '\n*OBSERVACIONES:*\n' + notas : ''}`;
           📋 Copiar texto
         </button>
 
-        <a href="mailto:santiago.arias@8010urbanliving.com?subject=${emailSubj}&body=${emailBody}"
-          style="background:var(--azul-m);color:white;border:none;border-radius:8px;padding:13px 18px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
-          📧 Email a Gerencia
-        </a>
+        <button onclick="enviarInformeCorreo('Cierre de Turno — ${d}/${m}/${y}', document.getElementById('wa-msg').textContent, this)"
+          style="background:var(--azul-m);color:white;border:none;border-radius:8px;padding:13px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+          📧 Enviar por correo (HTML)
+        </button>
 
         <button onclick="loadView('dashboard')"
           style="background:transparent;border:1px solid var(--gris-b);border-radius:8px;padding:13px 18px;font-size:13px;cursor:pointer;color:#666">
