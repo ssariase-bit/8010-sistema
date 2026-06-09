@@ -403,7 +403,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-0830';
+const APP_VERSION = '2026-06-09-0930';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -723,6 +723,12 @@ const NAV_ITEMS = {
     { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
     { id: 'contratos-list', icon: '📄', label: 'Contratos' },
     { id: 'contratos-form', icon: '➕', label: 'Nuevo Contrato' },
+    { section: 'Huéspedes' },
+    { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'formato-huespedes', icon: '🏨', label: 'Formato Huéspedes' },
+    { section: 'Comercial' },
+    { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
+    { id: 'comercial-form', icon: '➕', label: 'Nueva Cotización' },
   ],
   financiero: [
     { section: 'Financiero' },
