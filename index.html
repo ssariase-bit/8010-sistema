@@ -880,7 +880,7 @@ async function loadView(view) {
       {id:'empresa',label:'Empresa / Canal',type:'text'},
       {id:'estadia_inicio',label:'Estadía — inicio',type:'date'},
       {id:'estadia_fin',label:'Estadía — fin',type:'date'},
-      {id:'valor',label:'Valor ($)',type:'number',default:'0'},
+      {id:'valor',label:'Valor ($)',type:'money',default:''},
       {id:'factura',label:'No. Factura',type:'text'},
       {id:'nc',label:'Nota Crédito (NC)',type:'text'},
       {id:'factura_nueva',label:'Factura nueva (si hubo NC)',type:'text'},
@@ -1000,7 +1000,7 @@ async function loadView(view) {
       {id:'concepto',label:'Concepto / Descripción',type:'text',req:true},
       {id:'area',label:'Área',type:'select',opts:['Recepción','Mantenimiento','Housekeeping','Administración','General']},
       {id:'empresa',label:'Caja / Razón Social',type:'select',opts:EB().cajas},
-      {id:'valor',label:'Valor ($)',type:'number',req:true},
+      {id:'valor',label:'Valor ($)',type:'money',req:true},
       {id:'recibo_no',label:'No. Recibo',type:'text'},
       {id:'entregado_por',label:'Entregado por',type:'text'},
       {id:'recibido_por',label:'Recibido por',type:'text'},
@@ -1035,7 +1035,7 @@ async function loadView(view) {
       {id:'apto',label:'Apartamento',type:'text',req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'cantidad',label:'Cantidad de desayunos',type:'number',req:true},
-      {id:'valor',label:'Valor ($)',type:'number'},
+      {id:'valor',label:'Valor ($)',type:'money'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'capsulas-list':      await renderList('capsulas','🧴 Cápsulas de Cortesía','capsulas-form',['fecha','apto','arrendatario','capsulas_lavavajillas','capsulas_lavadora','entregado_por'],['Fecha','Apto','Arrendatario','Lavavajillas','Lavadora','Entregó']); break;
@@ -1067,7 +1067,7 @@ async function loadView(view) {
       {id:'persona',label:'Persona',type:'text',req:true},
       {id:'punto_inicio',label:'Punto de inicio',type:'text'},
       {id:'punto_final',label:'Punto final',type:'text'},
-      {id:'valor',label:'Valor ($)',type:'number',req:true},
+      {id:'valor',label:'Valor ($)',type:'money',req:true},
       {id:'empresa',label:'Empresa',type:'select',opts:['LTM3 SAS','8010 SAS','Personal']},
     ]); break;
     case 'requisiciones-list': await renderList('requisiciones','🛒 Requisiciones de Compra','requisiciones-form',['fecha','area','solicitado_por','articulo','cantidad_solicitada','cantidad_recibida','estado'],['Fecha','Área','Solicitó','Artículo','Solicitado','Recibido','Estado']); break;
@@ -1169,7 +1169,7 @@ async function loadView(view) {
       {id:'empresa',label:'Empresa / Proveedor',type:'text',req:true},
       {id:'descripcion',label:'Descripción del gasto',type:'text',req:true},
       {id:'area',label:'Área',type:'select',opts:['Administrativo','Mantenimiento','Housekeeping','Recepción','Cocina','General']},
-      {id:'valor',label:'Valor ($)',type:'number',req:true},
+      {id:'valor',label:'Valor ($)',type:'money',req:true},
       {id:'entregado_por',label:'Entregado por',type:'text'},
       {id:'aprobado_por',label:'Aprobado por',type:'text'},
       {id:'estado',label:'Estado',type:'select',opts:['Pendiente','Aprobado','Rechazado','Pagado']},
@@ -3904,9 +3904,12 @@ async function abrirEditarGen(tabla, id){
   const { data: r } = await sb.from(tabla).select('*').eq('id', id).single();
   if (!r){ showToast('No se encontró el registro', 'error'); return; }
   const ocultar = ['id','user_id','created_at','updated_at','updated_by'];
+  const _MONEY_COLS=['valor','total_efectivo','caja_ltm3','caja_ot','caja_ph','salario'];
   const campos = Object.keys(r).filter(k=>!ocultar.includes(k)).map(k=>{
-    const val = (r[k]==null?'':String(r[k])).replace(/"/g,'&quot;');
-    return `<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--gris-t);display:block;text-transform:capitalize">${k.replace(/_/g,' ')}</label><input id="edt-${k}" value="${val}" style="width:100%;padding:7px 9px;border:1px solid #ccc;border-radius:6px;font-size:13px"></div>`;
+    const isMoney=_MONEY_COLS.includes(k);
+    const val = (isMoney && r[k]!=null && !isNaN(Number(r[k])) ? Math.round(Number(r[k])).toLocaleString('es-CO') : (r[k]==null?'':String(r[k]))).replace(/"/g,'&quot;');
+    const _ex = isMoney ? ' inputmode="numeric" data-money="1" oninput="fmtMoneyInput(this)"' : '';
+    return `<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--gris-t);display:block;text-transform:capitalize">${k.replace(/_/g,' ')}</label><input id="edt-${k}"${_ex} value="${val}" style="width:100%;padding:7px 9px;border:1px solid #ccc;border-radius:6px;font-size:13px"></div>`;
   }).join('');
   let m=document.getElementById('modal-edit-gen'); if(!m){m=document.createElement('div');m.id='modal-edit-gen';document.body.appendChild(m);}
   m.setAttribute('data-tabla',tabla); m.setAttribute('data-id',id);
@@ -3922,7 +3925,8 @@ async function guardarEditarGen(){
   const m=document.getElementById('modal-edit-gen'); if(!m) return;
   const tabla=m.getAttribute('data-tabla'), id=m.getAttribute('data-id');
   const upd={};
-  m.querySelectorAll('[id^="edt-"]').forEach(el=>{ upd[el.id.slice(4)] = el.value===''?null:el.value; });
+  const _MONEY_COLS=['valor','total_efectivo','caja_ltm3','caja_ot','caja_ph','salario'];
+  m.querySelectorAll('[id^="edt-"]').forEach(el=>{ const _c=el.id.slice(4); let _v=el.value; if(_MONEY_COLS.includes(_c)){ _v=_v===''?null:parseInt(String(_v).replace(/\D/g,''),10); if(_v!==null&&isNaN(_v))_v=null; } else { _v=_v===''?null:_v; } upd[_c]=_v; });
   const { error } = await sb.from(tabla).update(upd).eq('id', id);
   if(error){ showToast('Error: '+error.message,'error'); return; }
   m.remove(); showToast('✅ Registro actualizado','success');
