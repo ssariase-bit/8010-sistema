@@ -393,6 +393,27 @@ const SUPABASE_URL = 'https://ikvcillgdzlymvlrgjai.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrdmNpbGxnZHpseW12bHJnamFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxNjUxNDAsImV4cCI6MjA5NTc0MTE0MH0.jxB9i8HBI_uRxhImTLFs0KdqRkQy9PmtJRLIr-sdvrM';
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+// ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
+const APP_VERSION = '2026-06-09-0010';
+async function checkAppVersion(){
+  try{
+    const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
+    if(!r.ok) return;
+    const t = await r.text();
+    const m = t.match(/const APP_VERSION = '([^']+)'/);
+    if(!m) return;
+    const sv = m[1];
+    if(sv && sv !== APP_VERSION){
+      if(sessionStorage.getItem('_vreload') === sv) return;
+      sessionStorage.setItem('_vreload', sv);
+      try{ if(typeof showToast==='function') showToast('🔄 Nueva versión — actualizando...','success'); }catch(_){ }
+      setTimeout(function(){ location.replace(location.pathname + '?v=' + encodeURIComponent(sv)); }, 900);
+    }
+  }catch(_){ }
+}
+setTimeout(checkAppVersion, 2500);
+setInterval(checkAppVersion, 600000);
+window.addEventListener('focus', function(){ checkAppVersion(); });
 
 /* ===== PARAMETRIZACIÓN MULTI-EDIFICIO · Fase 1 (santiago) ===== */
 const EDIFICIO_ACTIVO = (function(){ try{ var e=localStorage.getItem('edificio_activo'); return (e && ['8010','kubik'].indexOf(e)>=0) ? e : '8010'; }catch(_){ return '8010'; } })(); // Fase 2.1: edificio activo (default 8010)
