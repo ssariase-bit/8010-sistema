@@ -4355,7 +4355,7 @@ async function renderSeguimientosTurno(){
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div class="page-title" style="margin-bottom:0">📌 Seguimientos por Turno</div>
-      ${barraCompartir()}<button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('seguimientos-form')">+ Nuevo Seguimiento</button>
+      ${barraCompartir()}<button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('seguimientos-form')">+ Nuevo Seguimiento</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=tr.querySelector('.b-resuelto')?'none':''})">Solo pendientes</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=''})">Todos</button>
     </div>
     <div class="card">
       <table class="tabla"><thead><tr><th>Fecha</th><th>Turno</th><th>Categoría</th><th>Apto</th><th>Detalle</th><th>Responsable</th><th>Estado</th><th></th></tr></thead>
