@@ -403,7 +403,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-1330';
+const APP_VERSION = '2026-06-09-1430';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -454,7 +454,7 @@ const EDIFICIOS = {
     noEntregados: ['201','202','203','204','204A'],
     metrajes: {'201':100,'202':29,'203':56,'204':42,'204A':37,'301':100,'302':29,'303':56,'304':42,'304A':37,'401':100,'402':29,'403':56,'404':42,'404A':37,'501':100,'502':29,'503':56,'504':42,'504A':37,'601':100,'602':29,'603':56,'604':42,'604A':37,'701':100,'702':29,'703':56,'704':42,'704A':37,'801':100,'802':29,'803':56,'804':42,'804A':37,'901':100,'902':29,'903':56,'904':42,'904A':37,'PH1':130,'PH2':113},
     cajas: ['8I8 (8i8 Operadora SAS)'],
-    camareras: ['Yolimar Manzano','Luz Dary Rodríguez','Ángela Díaz'],
+    camareras: ['Yolimar Marzanillo','Luz Dary Rodríguez','Ángela Díaz'],
     jornadas: { 'Administrador':540, 'Camarera':500, 'Mantenimiento':540, 'Otro':540 },
     indicadoresMes: {}
   }
