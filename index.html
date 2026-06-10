@@ -1973,7 +1973,7 @@ async function openAptoModal(id, num) {
   const { data } = await sb.from('rack').select('*').eq('id', id).single();
   _aptoData = data || {};
   currentAptoId = id;
-  document.getElementById('modal-apto-num').textContent = num + (data?.fecha ? ' · '+fmtDate(data.fecha) : '');
+  document.getElementById('modal-apto-num').textContent = String(num).split(' · ')[0].trim();
   document.getElementById('m-estado').value  = data?.estado || 'Libre';
   document.getElementById('m-huesped').value = data?.huesped || '';
   document.getElementById('m-tipo').value    = data?.tipo || '';
