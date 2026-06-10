@@ -3419,7 +3419,7 @@ function renderNuevaReserva() {
           </div>
           <div class="form-group">
             <label>N° de personas (pax)</label>
-            <input type="text" id="res-personas" value="1 adulto" placeholder="Ej: 2 adultos, 1 niño">
+            <input type="text" id="res-personas" value="1 adulto" placeholder="Ej: 2 adultos, 1 niño"></div><div class="form-group"><label>N° de PAX</label><input type="number" id="res-pax" min="1" step="1" value="1" placeholder="Ej: 2">
           </div>
         </div>
         <div class="form-row" id="res-cxc-bloque">
@@ -3605,7 +3605,7 @@ async function guardarReserva() {
     numReserva: document.getElementById('res-num-reserva')?.value.trim() || '',
     cxcTipo: document.getElementById('res-cxc-tipo')?.value || 'CxC Full',
     cxcRazon: document.getElementById('res-cxc-razon')?.value || '80|10 S.A.S',
-    personas: document.getElementById('res-personas')?.value || '1 adulto',
+    personas: document.getElementById('res-personas')?.value || '1 adulto', pax: document.getElementById('res-pax')?.value || '1',
     obs: document.getElementById('res-obs').value,
     firmante: document.getElementById('res-firmante').value || currentProfile?.nombre || 'Fabio Malaver',
     cargo: document.getElementById('res-cargo').value || 'Jefe de Administradores',
@@ -3643,7 +3643,7 @@ function previsualizarConfirmacion() {
     numReserva: document.getElementById('res-num-reserva')?.value.trim() || '',
     cxcTipo: document.getElementById('res-cxc-tipo')?.value || 'CxC Full',
     cxcRazon: document.getElementById('res-cxc-razon')?.value || '80|10 S.A.S',
-    personas: document.getElementById('res-personas')?.value || '1 adulto',
+    personas: document.getElementById('res-personas')?.value || '1 adulto', pax: document.getElementById('res-pax')?.value || '1',
     obs: document.getElementById('res-obs').value,
     email: document.getElementById('res-email').value.trim(),
     numero: Math.floor(Math.random()*500)+400,
@@ -3783,7 +3783,7 @@ function generarConfirmacion(r) {
     <tr><td>Confirmación de la Reserva</td><td>${r.numReserva ? r.numReserva : r.numero+'/'+new Date().getFullYear().toString().slice(-2)}</td></tr>
     <tr><td>Tipo de Apartamento</td><td>${tipo}</td></tr>
     <tr><td>Descripción del Apartamento</td><td>${desc}</td></tr>
-    <tr><td>Número de personas</td><td>${r.personas || '1 adulto'}</td></tr>
+    <tr><td>Número de personas</td><td>${r.personas || '1 adulto'}</td></tr><tr><td>PAX</td><td>${r.pax || '1'}</td></tr>
     <tr><td>Fecha de Entrada</td><td>${fmtFechaLarga(r.checkin)}</td></tr>
     <tr><td>Fecha de Salida</td><td>${fmtFechaLarga(r.checkout)}</td></tr>
     <tr><td>Total de Días</td><td>N/A</td></tr>
