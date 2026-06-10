@@ -403,7 +403,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-1530';
+const APP_VERSION = '2026-06-09-1630';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2730,12 +2730,21 @@ async function renderNovedadesList(filtro='', fechaSel='') {
               <td>
                 <button class="btn btn-outline btn-sm" onclick="verNovedad('${n.id}')" style="margin-right:4px">Ver</button>
                 ${n.estado!=='Resuelto' ? `<button class="btn btn-success btn-sm" onclick="cambiarEstadoNov('${n.id}','Resuelto')">✓ Cerrar</button>` : ''}
+                ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-sm" onclick="borrarNovedad('${n.id}')" style="background:#9A4A40;color:#fff;margin-left:4px">🗑 Borrar</button>` : ''}
               </td>
             </tr>`).join('')}</tbody>
            </table></div>`}
     </div>`;
 }
 
+async function borrarNovedad(id){
+  if(!confirm('¿Borrar esta novedad de forma permanente? Esta acción no se puede deshacer.')) return;
+  const { data, error } = await sb.from('novedades').delete().eq('id', id).select();
+  if(error){ showToast('Error al borrar: '+(error.message||error),'error'); return; }
+  if(!data || !data.length){ showToast('No se borró (sin permiso o ya no existe)','error'); return; }
+  showToast('✅ Novedad borrada','success');
+  loadView('novedades-list');
+}
 async function verNovedad(id) {
   const { data: n } = await sb.from('novedades').select('*').eq('id', id).single();
   if (!n) return;
