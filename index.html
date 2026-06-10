@@ -407,7 +407,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-2130';
+const APP_VERSION = '2026-06-09-2230';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2742,9 +2742,11 @@ async function renderNovedadesList(filtro='', fechaSel='') {
               <td>${badgeEst(n.estado)}</td>
               <td>${n.reportado_por||'-'}</td>
               <td>
-                <button class="btn btn-outline btn-xs" onclick="verNovedad('${n.id}')" style="margin-right:4px">Ver</button>
-                ${n.estado!=='Resuelto' ? `<button class="btn btn-success btn-xs" onclick="cambiarEstadoNov('${n.id}','Resuelto')">✓ Cerrar</button>` : ''}
-                ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-outline btn-xs" onclick="borrarNovedad('${n.id}')" style="color:#9A4A40;border-color:#E0C0BA;margin-left:4px">🗑 Borrar</button>` : ''}
+                <div style="display:inline-grid;gap:4px;width:104px">
+                  <button class="btn btn-outline btn-xs" onclick="verNovedad('${n.id}')">Ver</button>
+                  ${n.estado!=='Resuelto' ? `<button class="btn btn-success btn-xs" onclick="cambiarEstadoNov('${n.id}','Resuelto')">✓ Cerrar</button>` : ''}
+                  ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-outline btn-xs" onclick="borrarNovedad('${n.id}')" style="color:#9A4A40;border-color:#E0C0BA">🗑 Borrar</button>` : ''}
+                </div>
               </td>
             </tr>`).join('')}</tbody>
            </table></div>`}
