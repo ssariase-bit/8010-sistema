@@ -403,7 +403,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-1730';
+const APP_VERSION = '2026-06-09-1830';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3392,10 +3392,14 @@ function renderNuevaReserva() {
           <div class="form-group">
             <label>Estado de pago</label>
             <select id="res-estadopago">
-              <option>Pagado</option>
               <option>Pendiente</option>
+              <option>Pagado</option>
               <option>50% adelanto</option>
             </select>
+          </div>
+          <div class="form-group">
+            <label>N° de reserva (NewHotel)</label>
+            <input type="text" id="res-num-reserva" placeholder="Ej: 424/2026">
           </div>
         </div>
         <div class="form-row" id="res-cxc-bloque">
@@ -3577,6 +3581,8 @@ async function guardarReserva() {
     checkin: ci, checkout: co,
     canal, iva: document.getElementById('res-iva')?.value || 'incluido', empresa: document.getElementById('res-empresa').value.trim(),
     pago: document.getElementById('res-pago').value,
+    estadoPago: document.getElementById('res-estadopago')?.value || 'Pendiente',
+    numReserva: document.getElementById('res-num-reserva')?.value.trim() || '',
     cxcTipo: document.getElementById('res-cxc-tipo')?.value || 'CxC Full',
     cxcRazon: document.getElementById('res-cxc-razon')?.value || '80|10 S.A.S',
     personas: document.getElementById('res-personas')?.value || '1 adulto',
@@ -3613,6 +3619,8 @@ function previsualizarConfirmacion() {
     canal: document.getElementById('res-canal').value,
     empresa: document.getElementById('res-empresa')?.value.trim() || '',
     pago: document.getElementById('res-pago').value,
+    estadoPago: document.getElementById('res-estadopago')?.value || 'Pendiente',
+    numReserva: document.getElementById('res-num-reserva')?.value.trim() || '',
     cxcTipo: document.getElementById('res-cxc-tipo')?.value || 'CxC Full',
     cxcRazon: document.getElementById('res-cxc-razon')?.value || '80|10 S.A.S',
     personas: document.getElementById('res-personas')?.value || '1 adulto',
@@ -3752,7 +3760,7 @@ function generarConfirmacion(r) {
 
   <table class="datos">
     <tr><td>Nombre del Huésped</td><td class="bold-val">${tratamiento} ${r.nombre.toUpperCase()}</td></tr>
-    <tr><td>Confirmación de la Reserva</td><td>${r.numero}/${new Date().getFullYear().toString().slice(-2)}</td></tr>
+    <tr><td>Confirmación de la Reserva</td><td>${r.numReserva ? r.numReserva : r.numero+'/'+new Date().getFullYear().toString().slice(-2)}</td></tr>
     <tr><td>Tipo de Apartamento</td><td>${tipo}</td></tr>
     <tr><td>Descripción del Apartamento</td><td>${desc}</td></tr>
     <tr><td>Número de personas</td><td>${r.personas || '1 adulto'}</td></tr>
@@ -3766,8 +3774,8 @@ function generarConfirmacion(r) {
     <tr><td>Tarifa por noche + IVA</td><td><strong>$ ${tarifaConIva.toLocaleString('es-CO')} ${monedaLabel}</strong></td></tr>` : ''}
     <tr><td>Tarifa Apartamento por Mes</td><td>N/A</td></tr>
     <tr><td>Valor Total del Contrato</td><td class="bold-val">$ ${totalConIva.toLocaleString('es-CO')} ${monedaLabel}${esExento ? ' (exento de IVA)' : ' (IVA incluido)'}</td></tr>
-    ${esUSD ? `<tr><td>Moneda de cobro</td><td><strong>USD — Dólares americanos</strong></td></tr>` : `<tr><td>TRM</td><td>N/A</td></tr>`}
-    <tr><td>Forma de Pago</td><td>${/factur/i.test(r.pago||'') ? `Pago <strong>POR FACTURAR</strong> &mdash; <strong>${r.cxcTipo||'CxC Full'}</strong> a cargo de la empresa.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>` : `Pago <strong>${r.pago.toUpperCase()}</strong> por parte del Cliente a su llegada.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>`}</td></tr>
+    ${esUSD ? `<tr><td>Moneda de cobro</td><td><strong>USD — Dólares americanos</strong></td></tr><tr><td>TRM</td><td>Del día en que se efectúe el pago</td></tr>` : `<tr><td>TRM</td><td>N/A</td></tr>`}
+    <tr><td>Forma de Pago</td><td>${/factur/i.test(r.pago||'') ? `Pago <strong>POR FACTURAR</strong> &mdash; <strong>${r.cxcTipo||'CxC Full'}</strong> a cargo de la empresa.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>` : `Pago <strong>${r.pago.toUpperCase()}</strong> ${r.estadoPago==='Pagado' ? '&mdash; <strong>YA PAGADA</strong>' : (r.estadoPago==='50% adelanto' ? '&mdash; <strong>50% de adelanto recibido</strong>, saldo a su llegada' : 'por parte del Cliente <strong>a su llegada</strong>')}.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>`}</td></tr>
     <tr>
       <td>Incluidos en la Tarifa</td>
       <td>
