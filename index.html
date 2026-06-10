@@ -403,7 +403,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-1630';
+const APP_VERSION = '2026-06-09-1730';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2790,6 +2790,7 @@ async function verNovedad(id) {
           <button class="btn btn-outline btn-sm" onclick="loadView('novedades-list')">← Volver</button>
           <button class="btn btn-success btn-sm" onclick="actualizarNovedad('${id}')">💾 Guardar cambios</button>
           ${n.estado!=='Escalado' ? `<button class="btn btn-danger btn-sm" onclick="cambiarEstadoNov('${id}','Escalado')" style="min-width:120px">🚨 Escalar a Gerencia</button>` : ''}
+          ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-sm" onclick="borrarNovedad('${id}')" style="background:#9A4A40;color:#fff">🗑 Borrar</button>` : ''}
         </div>
       </div>
     </div>`;
