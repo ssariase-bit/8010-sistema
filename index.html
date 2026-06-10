@@ -149,7 +149,7 @@ body{background:var(--gris);min-height:100vh}
 .form-section{background:var(--gris);border-radius:8px;padding:16px;margin-bottom:16px}
 .form-section-title{font-size:11px;font-weight:700;color:var(--azul-m);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:6px}
 textarea{resize:vertical;min-height:80px}
-.form-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px;padding-top:16px;border-top:1px solid var(--gris-b)}
+.form-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:24px;padding-top:16px;border-top:1px solid var(--gris-b)}
 
 /* ── MODALES ──────────────────────────────────────────── */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px}
@@ -407,7 +407,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-2230';
+const APP_VERSION = '2026-06-09-2330';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3417,6 +3417,10 @@ function renderNuevaReserva() {
             <label>N° de reserva (NewHotel)</label>
             <input type="text" id="res-num-reserva" placeholder="Ej: 424/2026">
           </div>
+          <div class="form-group">
+            <label>N° de personas (pax)</label>
+            <input type="text" id="res-personas" value="1 adulto" placeholder="Ej: 2 adultos, 1 niño">
+          </div>
         </div>
         <div class="form-row" id="res-cxc-bloque">
           <div class="form-group">
@@ -3661,12 +3665,12 @@ const TIPOS_APTO = {
   '1101':'Apartamento de 120 m²','1102':'Apartamento de 120 m²'
 };
 const DESC_APTO = {
-  '301':'Apartamento de 96 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
-  '302':'Apartamento de 90 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
+  '301':'Apartamento de 96 m² con 1 habitación:<br>01 cama King.',
+  '302':'Apartamento de 90 m² con 1 habitación:<br>01 cama King.',
   '303':'Apartamento de 60 m² con 1 habitación:<br>01 cama King.',
   '304':'Apartamento de 70 m² con 1 habitación:<br>01 cama King.',
-  '401':'Apartamento de 96 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
-  '402':'Apartamento de 90 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
+  '401':'Apartamento de 96 m² con 1 habitación:<br>01 cama King.',
+  '402':'Apartamento de 90 m² con 1 habitación:<br>01 cama King.',
   '403':'Apartamento de 60 m² con 1 habitación:<br>01 cama King.',
   '501':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
   '502':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
