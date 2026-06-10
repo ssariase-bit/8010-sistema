@@ -52,6 +52,7 @@ body{background:var(--gris);min-height:100vh}
 .btn-success:hover{background:#2d4a1e;transform:translateY(-1px)}
 .btn-danger{background:var(--rojo);color:var(--blanco)}
 .btn-sm{width:auto;padding:6px 14px;font-size:12px}
+.btn-xs{width:auto;padding:3px 9px;font-size:11px;font-weight:600;border-radius:6px;letter-spacing:0}
 .btn-outline{background:transparent;border:1.5px solid var(--azul-m);color:var(--azul-m)}
 .btn-outline:hover{background:var(--azul-m);color:var(--blanco)}
 .error-msg{color:var(--rojo);font-size:12px;margin-top:8px;text-align:center}
@@ -406,7 +407,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-2030';
+const APP_VERSION = '2026-06-09-2130';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2741,9 +2742,9 @@ async function renderNovedadesList(filtro='', fechaSel='') {
               <td>${badgeEst(n.estado)}</td>
               <td>${n.reportado_por||'-'}</td>
               <td>
-                <button class="btn btn-outline btn-sm" onclick="verNovedad('${n.id}')" style="margin-right:4px">Ver</button>
-                ${n.estado!=='Resuelto' ? `<button class="btn btn-success btn-sm" onclick="cambiarEstadoNov('${n.id}','Resuelto')">✓ Cerrar</button>` : ''}
-                ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-outline btn-sm" onclick="borrarNovedad('${n.id}')" style="color:#9A4A40;border-color:#E0C0BA;margin-left:4px">🗑 Borrar</button>` : ''}
+                <button class="btn btn-outline btn-xs" onclick="verNovedad('${n.id}')" style="margin-right:4px">Ver</button>
+                ${n.estado!=='Resuelto' ? `<button class="btn btn-success btn-xs" onclick="cambiarEstadoNov('${n.id}','Resuelto')">✓ Cerrar</button>` : ''}
+                ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-outline btn-xs" onclick="borrarNovedad('${n.id}')" style="color:#9A4A40;border-color:#E0C0BA;margin-left:4px">🗑 Borrar</button>` : ''}
               </td>
             </tr>`).join('')}</tbody>
            </table></div>`}
