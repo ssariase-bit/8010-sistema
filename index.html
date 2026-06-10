@@ -270,7 +270,7 @@ textarea{resize:vertical;min-height:80px}
       <label>Estado</label>
       <select id="m-estado">
         <option>Libre</option><option value="Ocupado">Ocupado / En casa (IN)</option><option>Check-in hoy</option>
-        <option>Check-out hoy</option><option>Sucio</option><option>Sale de viaje</option><option>Limpieza</option><option>Mantenimiento</option><option>Bloqueado</option>
+        <option>Check-out hoy</option><option>No Show</option><option>Sucio</option><option>Sale de viaje</option><option>Limpieza</option><option>Mantenimiento</option><option>Bloqueado</option>
       </select>
     </div>
     <div class="form-group">
@@ -1234,7 +1234,7 @@ const RACK_AS = EB().habitacionesA;
 // getRec(apto) devuelve el registro de rack de ese apto para el día evaluado (o undefined).
 function calcKpisDia(registrosHoy){
   // Resolver duplicados (mismo apto/fecha) con criterio único: estado más relevante; en empate, el más reciente
-  const PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1,'Sale de viaje':5 };
+  const PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'No Show':4,'Libre':1,'Sale de viaje':5 };
   const byApto = {};
   (registrosHoy||[]).forEach(r=>{
     const cur = byApto[r.apto];
@@ -1556,7 +1556,7 @@ async function renderRack() {
   }
 
   // Construir mapa: {apto: {dia: {estado, huesped, id}}}
-  const _PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1,'Sale de viaje':5 };
+  const _PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'No Show':4,'Libre':1,'Sale de viaje':5 };
   const rack = {};
   allRack.forEach(r => {
     const dia = parseInt(r.fecha.split('-')[2]);
@@ -1585,7 +1585,7 @@ async function renderRack() {
     'Check-in hoy': {bg:'#9EC5F0',color:'#0C447C',code:'CKI'},
     'Check-out hoy':{bg:'#FBC97D',color:'#854F0B',code:'CKO'},
     'Sucio':        {bg:'#E7C9A9',color:'#6B3F19',code:'SUC'},
-    'Libre':        {bg:'#F7F7F7',color:'#999',code:''},
+    'Libre':        {bg:'#F7F7F7',color:'#999',code:''}, 'No Show':{bg:'#D8C7F0',color:'#4A148C',code:'N.S'},
     'Limpieza':     {bg:'#E7D4F7',color:'#5B2A86',code:'HK'},
     'Mantenimiento':{bg:'#F4A8A0',color:'#8B1A1A',code:'MT'},
     'Bloqueado':    {bg:'#CFCFCF',color:'#444',code:'BLQ'},
