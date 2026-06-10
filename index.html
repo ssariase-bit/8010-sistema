@@ -357,6 +357,9 @@ textarea{resize:vertical;min-height:80px}
       <button class="btn btn-outline btn-sm" onclick="liberarRangoApto()" style="color:#92400E;border-color:#92400E" title="Anula el bloqueo o la estadía: pone Libre todas las fechas del rango Check-in/Check-out de este apto">
         🗑 Liberar rango
       </button>
+      <button class="btn btn-sm" onclick="borrarDiaRack()" style="background:#9A4A40;color:#fff" title="Borra por completo este día/celda del rack (para limpiar duplicados o entradas erradas)">
+        🗑 Borrar celda
+      </button>
       <button class="btn btn-primary btn-sm" onclick="saveApto()">💾 Guardar cambios</button>
     </div>
   </div>
@@ -403,7 +406,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-1830';
+const APP_VERSION = '2026-06-09-1930';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2001,6 +2004,16 @@ async function openAptoModal(id, num) {
   document.getElementById('modal-apto').classList.add('open');
 }
 
+async function borrarDiaRack(){
+  if(!currentAptoId){ showToast('No hay una celda seleccionada para borrar','error'); return; }
+  if(!confirm('¿Borrar por completo este día del rack? Solo se borra esta celda. Esta acción no se puede deshacer.')) return;
+  const { data, error } = await sb.from('rack').delete().eq('id', currentAptoId).select();
+  if(error){ showToast('Error al borrar: '+(error.message||error),'error'); return; }
+  if(!data || !data.length){ showToast('No se borró (sin permiso o ya no existía)','error'); return; }
+  showToast('✅ Celda borrada del rack','success');
+  closeModal('modal-apto');
+  renderRack();
+}
 async function saveApto() {
   const aNum = document.getElementById('modal-apto-num').textContent;
   const fecha = _aptoData?.fecha || TODAY;
