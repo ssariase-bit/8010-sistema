@@ -406,7 +406,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-09-1930';
+const APP_VERSION = '2026-06-09-2030';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2743,7 +2743,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
               <td>
                 <button class="btn btn-outline btn-sm" onclick="verNovedad('${n.id}')" style="margin-right:4px">Ver</button>
                 ${n.estado!=='Resuelto' ? `<button class="btn btn-success btn-sm" onclick="cambiarEstadoNov('${n.id}','Resuelto')">✓ Cerrar</button>` : ''}
-                ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-sm" onclick="borrarNovedad('${n.id}')" style="background:#9A4A40;color:#fff;margin-left:4px">🗑 Borrar</button>` : ''}
+                ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-outline btn-sm" onclick="borrarNovedad('${n.id}')" style="color:#9A4A40;border-color:#E0C0BA;margin-left:4px">🗑 Borrar</button>` : ''}
               </td>
             </tr>`).join('')}</tbody>
            </table></div>`}
@@ -2803,7 +2803,7 @@ async function verNovedad(id) {
           <button class="btn btn-outline btn-sm" onclick="loadView('novedades-list')">← Volver</button>
           <button class="btn btn-success btn-sm" onclick="actualizarNovedad('${id}')">💾 Guardar cambios</button>
           ${n.estado!=='Escalado' ? `<button class="btn btn-danger btn-sm" onclick="cambiarEstadoNov('${id}','Escalado')" style="min-width:120px">🚨 Escalar a Gerencia</button>` : ''}
-          ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-sm" onclick="borrarNovedad('${id}')" style="background:#9A4A40;color:#fff">🗑 Borrar</button>` : ''}
+          ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-outline btn-sm" onclick="borrarNovedad('${id}')" style="color:#9A4A40;border-color:#E0C0BA">🗑 Borrar</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -5532,6 +5532,12 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
             <option>No firma acta inicial</option>
           </select>
         </div>
+        <div class="form-group"><label>Book de servicios</label>
+          <select id="cki-book">
+            <option>Envía book de servicios</option>
+            <option>No aplica (Kubik)</option>
+          </select>
+        </div>
         <div class="form-group"><label>Quien reporta</label><input type="text" id="cki-quien" value="${nombre}" placeholder="Tu nombre"></div>
       </div>
       <div class="form-group"><label>Observaciones adicionales</label><textarea id="cki-obs" placeholder="Detalles adicionales..." style="min-height:60px"></textarea></div>
@@ -5588,6 +5594,7 @@ function generarMsgCKI() {
   const pago = document.getElementById('cki-pago').value;
   const equipaje = document.getElementById('cki-equipaje').value;
   const acta = document.getElementById('cki-acta').value;
+  const _book = (document.getElementById('cki-book')?.value||'').startsWith('Env');
   const quien = document.getElementById('cki-quien').value.trim();
   const obs = document.getElementById('cki-obs').value.trim();
 
@@ -5604,8 +5611,8 @@ function generarMsgCKI() {
     : (fv ? ` se genera ${fv} en ${pago}` : ` pago en ${pago}`);
 
   const _fh = fmtFH12();
-  const msg = `${new Date().getHours()<12?'Buenos días':'Buenas tardes'}, ${_fh}
-Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}, ${equipaje}, ${acta}, se relaciona check list, se envía book de servicios y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
+  const msg = `${(function(_h){return _h<12?'Buenos días':_h<18?'Buenas tardes':'Buenas noches';})(new Date().getHours())}, ${_fh}
+Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
   // Comunicar la estadía al RACK: una fila por noche (Check-in hoy → Ocupado → Check-out hoy)
@@ -5717,7 +5724,7 @@ function generarMsgCKO() {
   const maletasStr = maletas === 'Sin maletas' || maletas === 'Se lleva todo' ? '' : `. ${maletas.replace('Deja','Deja')} las cuales vendrán a recogerlas`;
 
   const _fh = fmtFH12();
-  const msg = `${h<12?'Buenos días':'Buenas tardes'}, ${_fh}
+  const msg = `${h<12?'Buenos días':h<18?'Buenas tardes':'Buenas noches'}, ${_fh}
 Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${consumosStr}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}
 R/${quien}`;
 
