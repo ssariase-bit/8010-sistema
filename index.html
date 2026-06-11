@@ -3872,7 +3872,7 @@ function generarConfirmacion(r) {
 // ═══════════════════════════════════════════════════════════
 // FORMULARIO Y LISTA GENÉRICOS
 // ═══════════════════════════════════════════════════════════
-function renderGenForm(tabla, titulo, campos) {
+function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window._genEditId=null;
   const nombre = currentProfile?.nombre || '';
   const fieldsHTML = campos.filter(f => !f.hidden).map(f => {
     let input = '';
@@ -4043,7 +4043,7 @@ async function submitGenForm(tabla, ids, reqs) {
     }
   });
 
-  let { error } = await sb.from(tabla).insert(obj);
+  let { error } = window._genEditId ? await sb.from(tabla).update(obj).eq('id',window._genEditId) : await sb.from(tabla).insert(obj);
   // Compatibilidad: si la BD aún no tiene obs_ingreso/obs_salida, se combinan en 'observaciones' con "|"
   if (error && /obs_ingreso|obs_salida/.test(error.message||'')) {
     const o2 = { ...obj };
@@ -4057,7 +4057,7 @@ async function submitGenForm(tabla, ids, reqs) {
     btn.innerHTML = '📤 Guardar registro'; btn.disabled = false;
     return;
   }
-  showToast('✅ Registro guardado correctamente', 'success');
+  showToast('✅ Registro '+(window._genEditId?'actualizado':'guardado')+' correctamente', 'success'); window._genEditId=null;
   const listaView = {
     'prestamos_tec': 'prestamos-list',
     'desayunos': 'desayunos-list',
@@ -5970,14 +5970,16 @@ async function renderComercialReporte(){const{data}=await sb.from('cotizaciones'
         </select></td>
         <td style="${venc?'color:var(--rojo);font-weight:700':''}">${r.proximo_contacto?fmtDate(r.proximo_contacto)+(venc?' ⏰':''):'-'}</td>
         <td style="font-size:12px;max-width:220px">${ultNota?`<span title="${(r.notas||'').replace(/"/g,'&quot;')}">${ultNota.substring(0,60)}${ultNota.length>60?'…':''}</span><br>`:''}
-          <a href="javascript:void(0)" onclick="cotNota('${r.id}')" style="font-size:11px">📝 Agregar nota</a> ·
+          <a href="javascript:void(0)" onclick="editarCotizacion('${r.id}')" style="font-size:11px;color:#1D3461;font-weight:700">✏️ Editar</a> · <a href="javascript:void(0)" onclick="cotNota('${r.id}')" style="font-size:11px">📝 Agregar nota</a> ·
           <a href="javascript:void(0)" onclick="cotProx('${r.id}')" style="font-size:11px">📅 Próx. contacto</a><br>
           <a href="javascript:void(0)" onclick="cotPasarComercial('${r.id}')" style="font-size:11px;color:#0d9488;font-weight:700">📤 Pasar a comercial</a></td>
       </tr>`;}).join('')}</tbody>
   </table>`;
 }
 
-async function cotEstado(id, estado) {
+async function editarCotizacion(id){ var r=(window._cotRows||[]).find(function(x){return String(x.id)===String(id);}); if(!r){ try{ var rr=await sb.from('cotizaciones').select('*').eq('id',id).single(); r=rr.data; }catch(e){} } if(!r){ showToast('No se pudo cargar la cotización','error'); return; } window._genEditId=id; window._genEditData=r; loadView('comercial-form'); setTimeout(function(){ var d=window._genEditData||{}; ['fecha_solicitud','nombre','telefono','correo','interes','canal','estado','moneda','periodicidad','tarifa_inicial','valor_cotizado','proximo_contacto','notas'].forEach(function(k){ var el=document.getElementById('gf-'+k); if(el && d[k]!=null){ el.value=d[k]; try{ el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); }catch(e){} } }); var btn=document.querySelector('.btn-success'); if(btn) btn.textContent='💾 Actualizar'; window._genEditData=null; }, 400); }
+
+    async function cotEstado(id, estado) {
   const { error } = await sb.from('cotizaciones').update({ estado }).eq('id', id).eq('edificio', EDIFICIO_ACTIVO);
   if (error) { showToast('Error: '+error.message,'error'); return; }
   const r = (window._cotRows||[]).find(x=>x.id===id); if (r) r.estado = estado;
