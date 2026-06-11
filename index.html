@@ -936,6 +936,7 @@ async function loadView(view) {
       {id:'telefono',label:'Teléfono',type:'text'},
       {id:'correo',label:'Correo electrónico',type:'text'},
       {id:'interes',label:'Interés (apto / fechas / estadía)',type:'text'},
+      {id:'tipos_apto',label:'Tipos de apto (marca los que apliquen)',type:'tipos'},
       {id:'canal',label:'Canal de contacto',type:'select',opts:['Llamada','WhatsApp','Correo','Referido','Página web','Instagram','Booking','Visita directa','Otro']},
       {id:'estado',label:'Estado del seguimiento',type:'select',opts:['Nuevo','Contactado','Cotizado','En negociación','Ganada','Perdida']},
       {id:'moneda',label:'Moneda',type:'select',opts:['USD','COP']},
@@ -3881,7 +3882,7 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
       input = `<select id="gf-${f.id}">${(f.opts||[]).map(o=>`<option value="${o}">${o}</option>`).join('')}</select>`;
     } else if (f.type === 'textarea') {
       input = `<textarea id="gf-${f.id}" placeholder="${f.label}..."></textarea>`;
-    } else if (f.type === 'money') {
+    } else if (f.type === 'tipos') { var _to=['1 habitación','2 habitaciones','Studio / Loft','General / Varios']; input = '<input type="hidden" id="gf-'+f.id+'"><div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:4px">'+_to.map(function(o){return '<label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="'+o+'" onchange="cotTiposSync(this)"> '+o+'</label>';}).join('')+'</div>'; } else if (f.type === 'money') {
       input = `<input type="text" inputmode="numeric" data-money="1" id="gf-${f.id}" value="${val}" oninput="fmtMoneyInput(this)" placeholder="${f.label}">`;
     } else {
       input = `<input type="${f.type}" id="gf-${f.id}" value="${val}" placeholder="${f.label}${f.req?'*':''}">`;
@@ -5962,7 +5963,7 @@ async function renderComercialReporte(){const{data}=await sb.from('cotizaciones'
         <td>${fmtDate(r.fecha_solicitud)}</td>
         <td><strong>${r.nombre||'-'}</strong></td>
         <td style="font-size:12px">${r.telefono?`📱 ${r.telefono}<br>`:''}${r.correo?`✉️ ${r.correo}`:''}</td>
-        <td style="font-size:12px">${r.interes||'-'}</td>
+        <td style="font-size:12px">${r.interes||'-'}${r.tipos_apto?'<br><span style="color:#1D3461;font-weight:600;font-size:11px">🏢 '+r.tipos_apto+'</span>':''}</td>
         <td>${r.canal||'-'}</td>
         <td>${(function(){var v=Number(r.valor_cotizado)||0; if(v<=0) return '-'; var sim=r.moneda==='USD'?'USD ':'$'; var pm={'Por noche':' /noche','Mensual':' /mes','Total estadía':' total'}; var per=r.periodicidad?(pm[r.periodicidad]||''):''; var ini=Number(r.tarifa_inicial)||0; var neg=(ini>0&&ini!==v)?'<div style="font-size:10px;color:#aaa;text-decoration:line-through">'+sim+fmtNum(ini)+'</div>':''; return neg+'<strong>'+sim+fmtNum(v)+'</strong>'+per;})()}</td>
         <td><select onchange="cotEstado('${r.id}',this.value)" style="background:${c.bg};color:${c.color};font-weight:700;border:none;border-radius:8px;padding:6px 8px;font-size:12px">
@@ -5977,7 +5978,9 @@ async function renderComercialReporte(){const{data}=await sb.from('cotizaciones'
   </table>`;
 }
 
-async function editarCotizacion(id){ var r=(window._cotRows||[]).find(function(x){return String(x.id)===String(id);}); if(!r){ try{ var rr=await sb.from('cotizaciones').select('*').eq('id',id).single(); r=rr.data; }catch(e){} } if(!r){ showToast('No se pudo cargar la cotización','error'); return; } window._genEditId=id; window._genEditData=r; loadView('comercial-form'); setTimeout(function(){ var d=window._genEditData||{}; ['fecha_solicitud','nombre','telefono','correo','interes','canal','estado','moneda','periodicidad','tarifa_inicial','valor_cotizado','proximo_contacto','notas'].forEach(function(k){ var el=document.getElementById('gf-'+k); if(el && d[k]!=null){ el.value=d[k]; try{ el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); }catch(e){} } }); var btn=document.querySelector('.btn-success'); if(btn) btn.textContent='💾 Actualizar'; window._genEditData=null; }, 400); }
+function cotTiposSync(cb){ var fg=cb.closest('.form-group'); if(!fg) return; var hid=fg.querySelector('input[type=hidden]'); var vals=[]; fg.querySelectorAll('input[type=checkbox]').forEach(function(c){ if(c.checked) vals.push(c.value); }); if(hid) hid.value=vals.join(', '); }
+
+    async function editarCotizacion(id){ var r=(window._cotRows||[]).find(function(x){return String(x.id)===String(id);}); if(!r){ try{ var rr=await sb.from('cotizaciones').select('*').eq('id',id).single(); r=rr.data; }catch(e){} } if(!r){ showToast('No se pudo cargar la cotización','error'); return; } window._genEditId=id; window._genEditData=r; loadView('comercial-form'); setTimeout(function(){ var d=window._genEditData||{}; ['fecha_solicitud','nombre','telefono','correo','interes','canal','estado','moneda','periodicidad','tarifa_inicial','valor_cotizado','proximo_contacto','notas'].forEach(function(k){ var el=document.getElementById('gf-'+k); if(el && d[k]!=null){ el.value=d[k]; try{ el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); }catch(e){} } }); var _ti=document.getElementById('gf-tipos_apto'); if(_ti && d.tipos_apto){ _ti.value=d.tipos_apto; var _fg=_ti.closest('.form-group'); if(_fg){ var _sel=String(d.tipos_apto).split(',').map(function(s){return s.trim();}); _fg.querySelectorAll('input[type=checkbox]').forEach(function(c){ c.checked=_sel.indexOf(c.value)>-1; }); } } var btn=document.querySelector('.btn-success'); if(btn) btn.textContent='💾 Actualizar'; window._genEditData=null; }, 400); }
 
     async function cotEstado(id, estado) {
   const { error } = await sb.from('cotizaciones').update({ estado }).eq('id', id).eq('edificio', EDIFICIO_ACTIVO);
