@@ -4597,7 +4597,7 @@ function fmtFH12(d){ d=d?new Date(d):new Date(); return d.toLocaleDateString('es
 // ═══════════════════════════════════════════════════════════
 // COMPARTIR INFORMES — Email y WhatsApp
 // ═══════════════════════════════════════════════════════════
-function compartirInforme(titulo, texto, emailDest) {
+function compartirInforme(titulo, texto, emailDest, htmlOverride) { window._htmlCompartir = htmlOverride || null;
   window._txtCompartir = texto; window._tituloCompartir = titulo; // para enviar/copiar
   const dest = emailDest || 'gerencia@8010urbanliving.com';
   const asunto = encodeURIComponent(EB().nombre + ' — ' + titulo);
@@ -4614,7 +4614,7 @@ function compartirInforme(titulo, texto, emailDest) {
       <div style="background:#F2F3F5;border-radius:8px;padding:12px;font-size:11px;color:#374151;max-height:200px;overflow-y:auto;white-space:pre-wrap;margin-bottom:20px;font-family:monospace">${texto.substring(0,500)}${texto.length>500?'\n...':''}
       </div>
       <div style="display:flex;flex-direction:column;gap:10px">
-        <button onclick="(function(b){ enviarInformeCorreo(window._tituloCompartir, window._txtCompartir, b).then(function(ok){ if(ok){ var m=b.closest('[style*=fixed]'); if(m) m.remove(); } }); })(this)"
+        <button onclick="(function(b){ enviarInformeCorreo(window._tituloCompartir, window._txtCompartir, b, window._htmlCompartir).then(function(ok){ if(ok){ var m=b.closest('[style*=fixed]'); if(m) m.remove(); } }); })(this)"
            style="display:flex;align-items:center;justify-content:center;gap:10px;background:#1D3461;color:white;padding:12px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:600;font-size:13px;width:100%">
           📧 Enviar por correo
         </button>
@@ -4864,10 +4864,12 @@ async function compartirControlPersonal(fechaSel) {
 ${bloques}
 
 _Sistema ${EB().nombre}_`;
-  compartirInforme('Control de Personal — ' + fmtDate(fecha), txt);
+  compartirInforme('Control de Personal — ' + fmtDate(fecha), txt, null, _personalEmailHTML(dia, fmtDate(fecha)));
 }
 
-// Tabla imprimible del control de personal — réplica del cuadro que usan los administradores
+function _personalEmailHTML(dia, fechaTxt){ var hhmm=function(h){ return (h||'').slice(0,5)||'--:--'; }; var h2=function(m){ m=Number(m)||0; if(!m) return '—'; var hh=Math.floor(m/60), mm=m%60; return (hh?hh+'h ':'')+(mm?mm+'m':(hh?'':'0m')); }; var nb=(typeof EB==='function'&&EB()&&EB().nombre)||''; var th='style="border:1px solid #bbb;padding:6px 8px;background:#1f3b57;color:#ffffff;text-align:center;font-size:13px"'; var filas=''; (dia||[]).forEach(function(r,i){ var ret=Number(r.tiempo_retraso)||0, adi=Number(r.tiempo_adicional)||0; var bg=i%2?'background:#f4f6f8;':''; var base='border:1px solid #bbb;padding:6px 8px;font-size:13px;'; filas+='<tr>'+'<td style="'+base+'text-align:center;'+bg+'">'+(i+1)+'</td>'+'<td style="'+base+bg+'">'+(r.nombre||'')+'</td>'+'<td style="'+base+bg+'">'+(r.cargo||'—')+'</td>'+'<td style="'+base+'text-align:center;'+bg+'">'+hhmm(r.marcacion_ingreso)+'</td>'+'<td style="'+base+'text-align:center;'+bg+'">'+(r.marcacion_salida?hhmm(r.marcacion_salida):'en turno')+'</td>'+'<td style="'+base+'text-align:center;color:'+(ret?'#C00000':'#333')+';'+bg+'">'+(ret?h2(ret):'—')+'</td>'+'<td style="'+base+'text-align:center;color:'+(adi?'#0a7d2c':'#333')+';'+bg+'">'+(adi?h2(adi):'—')+'</td>'+'</tr>'; }); if(!filas) filas='<tr><td colspan="7" style="border:1px solid #bbb;padding:20px;text-align:center;color:#999">Sin registros</td></tr>'; var n=(dia?dia.length:0); return '<div style="font-family:Arial,Helvetica,sans-serif;color:#222">'+'<h2 style="margin:0 0 2px;font-size:18px">'+nb+' — Control de Ingreso y Salida de Personal</h2>'+'<div style="color:#666;font-size:13px;margin-bottom:12px">'+fechaTxt+' · '+n+' registro'+(n===1?'':'s')+'</div>'+'<table style="border-collapse:collapse;border:1px solid #bbb"><thead><tr>'+'<th '+th+'>#</th><th '+th+'>Nombre</th><th '+th+'>Cargo</th><th '+th+'>Ingreso</th><th '+th+'>Salida</th><th '+th+'>Retraso</th><th '+th+'>H. adicionales</th>'+'</tr></thead><tbody>'+filas+'</tbody></table></div>'; }
+
+    // Tabla imprimible del control de personal — réplica del cuadro que usan los administradores
 async function tablaControlPersonal(fechaSel) {
   const { data } = await sb.from('control_personal').select('*').order('fecha',{ascending:false}).limit(120);
   const rows = data || [];
