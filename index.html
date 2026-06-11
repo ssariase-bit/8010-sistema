@@ -1661,7 +1661,7 @@ async function renderRack() {
       const estTxt = est === 'Completo' ? 'Apto completo' : est;
       const _fcT = String(d).padStart(2,'0')+'/'+String(month+1).padStart(2,'0');
       const _ocuT = ['Ocupado','Check-in hoy','Completo','Sale de viaje'].includes(est);
-      const _ivaSuf = (rec && rec.iva === 'exento') ? ' (exento de IVA)' : ' + IVA';
+      const _ivaSuf = (rec && rec.iva === 'exento') ? ' + IVA' : ' + IVA';
       let _tarT = !_ocuT ? '' : ((rec && rec.tarifa && Number(rec.tarifa)>0) ? '$'+Number(rec.tarifa).toLocaleString('es-CO')+'/noche'+_ivaSuf : 'Cortesía ($0)');
       if (est === 'Check-out hoy') {
         let _tot=0; const _hsp=rec && rec.huesped;
@@ -3726,6 +3726,7 @@ function generarConfirmacion(r) {
   const totalConIva = tarifaConIva * r.noches;
   const tratamiento = r.nombre.split(' ')[0].toLowerCase().endsWith('a') ? 'SRA.' : 'SR.';
     const _accent = (((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
+    const _es8010c=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1); const _larga=(Number(r.noches)||0)>30; const _razon=_es8010c?(_larga?'LTM3 SAS':'8010 SAS'):'8i8 Operadora SAS'; const _nit=_es8010c?(_larga?'900.361.992-4':'900.683.855-5'):'902.026.873-8';
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -3778,7 +3779,7 @@ function generarConfirmacion(r) {
   <p class="nombre-empresa">${r.nombre.toUpperCase()}</p>
   <p class="nombre-empresa">${r.empresa ? r.empresa.toUpperCase()+'.' : 'PARTICULAR.'}</p>
 
-  <p class="intro">Gracias por escoger 80|10 Urban Living como su opción de alojamiento para su próxima visita a Bogotá.</p>
+  <p class="intro">Gracias por escoger ${EB().nombre} como su opción de alojamiento para su próxima visita a Bogotá.</p>
   <p class="intro">Por favor verifique con atención la siguiente información de su reserva.</p>
 
   <table class="datos">
@@ -3792,11 +3793,11 @@ function generarConfirmacion(r) {
     <tr><td>Total de Días</td><td>N/A</td></tr>
     <tr><td>Tarifa Apartamento por Día</td><td>N/A</td></tr>
     <tr><td>Total de Noches</td><td>${String(r.noches).padStart(2,'0')} noche${r.noches>1?'s':''}</td></tr>
-    <tr><td>Tarifa Apartamento por Noche</td><td>$ ${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${esExento ? ' (exento de IVA)' : ' (sin IVA)'}</td></tr>
+    <tr><td>Tarifa Apartamento por Noche</td><td>$ ${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${esExento ? ' + IVA' : ' (sin IVA)'}</td></tr>
     ${!esExento ? `<tr><td>IVA (19%)</td><td>$ ${iva.toLocaleString('es-CO')} ${monedaLabel}</td></tr>
     <tr><td>Tarifa por noche + IVA</td><td><strong>$ ${tarifaConIva.toLocaleString('es-CO')} ${monedaLabel}</strong></td></tr>` : ''}
     <tr><td>Tarifa Apartamento por Mes</td><td>N/A</td></tr>
-    <tr><td>Valor Total del Contrato</td><td class="bold-val">$ ${totalConIva.toLocaleString('es-CO')} ${monedaLabel}${esExento ? ' (exento de IVA)' : ' (IVA incluido)'}</td></tr>
+    <tr><td>Valor Total del Contrato</td><td class="bold-val">$ ${totalConIva.toLocaleString('es-CO')} ${monedaLabel}${esExento ? ' + IVA' : ' (IVA incluido)'}</td></tr>
     ${esUSD ? `<tr><td>Moneda de cobro</td><td><strong>USD — Dólares americanos</strong></td></tr><tr><td>TRM</td><td>Del día en que se efectúe el pago</td></tr>` : `<tr><td>TRM</td><td>N/A</td></tr>`}
     <tr><td>Forma de Pago</td><td>${/factur/i.test(r.pago||'') ? `Pago <strong>POR FACTURAR</strong> &mdash; <strong>${r.cxcTipo||'CxC Full'}</strong> a cargo de la empresa.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>` : `Pago <strong>${r.pago.toUpperCase()}</strong> ${r.estadoPago==='Pagado' ? '&mdash; <strong>YA PAGADA</strong>' : (r.estadoPago==='50% adelanto' ? '&mdash; <strong>50% de adelanto recibido</strong>, saldo a su llegada' : 'por parte del Cliente <strong>a su llegada</strong>')}.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>`}</td></tr>
     <tr>
@@ -3839,10 +3840,10 @@ function generarConfirmacion(r) {
   </div>
 
   <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:30px">
-    <p class="codigo">Código: FO-GM-09 &nbsp; Versión: 02</p>
+    <p class="codigo">${_razon} &nbsp;·&nbsp; NIT ${_nit}</p>
     <div class="logo-footer">
-      <div class="logo80">80<span style="font-weight:300">|</span>10</div>
-      <div class="sub">OCHENTA DIEZ<br>URBAN LIVING</div>
+      
+      
     </div>
   </div>
 </div>
