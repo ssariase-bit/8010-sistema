@@ -3725,6 +3725,7 @@ function generarConfirmacion(r) {
   const tarifaConIva = esExento ? r.tarifa : r.tarifa + iva;
   const totalConIva = tarifaConIva * r.noches;
   const tratamiento = r.nombre.split(' ')[0].toLowerCase().endsWith('a') ? 'SRA.' : 'SR.';
+    const _accent = (((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1)?'#B8963E':'#1A5C2E';
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -3769,6 +3770,7 @@ function generarConfirmacion(r) {
 <body>
 <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
 <div class="page">
+    <div style="border-bottom:3px solid ${_accent};padding-bottom:12px;margin-bottom:22px;text-align:center"><img src="${EB().logo}" alt="" style="height:48px"></div>
   <h1>CONFIRMACIÓN DE RESERVA</h1>
 
   <p class="fecha">Bogotá D.C., ${fechaDoc}</p>
