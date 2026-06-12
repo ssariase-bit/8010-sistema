@@ -5838,6 +5838,7 @@ async function marcarAptoCKOLibre(apto) {
       if (!r2.error) liberados = ids.length;
     }
   }
+  if (!window._ckoPair) { const _pm=/^([3-9])0([23])$/.exec(apto); if(_pm){ const _part=_pm[1]+'0'+(_pm[2]==='2'?'3':'2'); const _chk=await sb.from('rack').select('id').eq('apto',_part).eq('tipo','Two Residence').eq('edificio',ed).limit(1); if(_chk.data&&_chk.data.length){ window._ckoPair=true; try{ await marcarAptoCKOLibre(_part); }finally{ window._ckoPair=false; } } } }
   // Cerrar modal
   const m = document.querySelector('[style*="position:fixed"][style*="inset:0"]');
   if (m) document.body.removeChild(m);
