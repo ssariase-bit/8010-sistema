@@ -936,12 +936,11 @@ async function loadView(view) {
       {id:'telefono',label:'Teléfono',type:'text'},
       {id:'correo',label:'Correo electrónico',type:'text'},
       {id:'interes',label:'Interés (apto / fechas / estadía)',type:'text'},
-      {id:'tipos_apto',label:'Tipos de apto (marca los que apliquen)',type:'tipos'},
+      {id:'aptos_tarifas',label:'Aptos cotizados — tarifa inicial y valor negociado',type:'aptotar'},
       {id:'canal',label:'Canal de contacto',type:'select',opts:['Llamada','WhatsApp','Correo','Referido','Página web','Instagram','Booking','Visita directa','Otro']},
       {id:'estado',label:'Estado del seguimiento',type:'select',opts:['Nuevo','Contactado','Cotizado','En negociación','Ganada','Perdida']},
       {id:'moneda',label:'Moneda',type:'select',opts:['USD','COP']},
       {id:'periodicidad',label:'Periodicidad',type:'select',opts:['Por noche','Mensual','Total estadía']},
-      {id:'tarifa_inicial',label:'Tarifa inicial (antes de negociar)',type:'number'},
       {id:'valor_cotizado',label:'Valor cotizado / final',type:'number',default:'0'},
       {id:'proximo_contacto',label:'Próximo contacto',type:'date'},
       {id:'notas',label:'Notas',type:'textarea'},
@@ -3905,7 +3904,7 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
       input = `<select id="gf-${f.id}">${(f.opts||[]).map(o=>`<option value="${o}">${o}</option>`).join('')}</select>`;
     } else if (f.type === 'textarea') {
       input = `<textarea id="gf-${f.id}" placeholder="${f.label}..."></textarea>`;
-    } else if (f.type === 'tipos') { var _to=['1 habitación','2 habitaciones','Studio / Loft','General / Varios']; input = '<input type="hidden" id="gf-'+f.id+'"><div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:4px">'+_to.map(function(o){return '<label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="'+o+'" onchange="cotTiposSync(this)"> '+o+'</label>';}).join('')+'</div>'; } else if (f.type === 'money') {
+    } else if (f.type === 'aptotar') { var _ms=(typeof EB==='function'&&(((EB().nombre)||'').indexOf('8010')>-1))?[60,70,90,96,120,126,132]:[29,42,56,79,85,100,113,130]; var _rw=_ms.map(function(m){return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><span style="width:64px;font-size:12px;font-weight:600">'+m+' m²</span><input type="number" class="at-ini" data-m="'+m+'" placeholder="Tarifa ini" oninput="aptoTarSync()" style="width:120px;padding:6px"><input type="number" class="at-neg" data-m="'+m+'" placeholder="Negociado" oninput="aptoTarSync()" style="width:120px;padding:6px"></div>';}).join(''); input='<input type="hidden" id="gf-aptos_tarifas"><div id="gf-aptotar-box" style="padding-top:4px">'+_rw+'</div>'; } else if (f.type === 'tipos') { var _to=['1 habitación','2 habitaciones','Studio / Loft','General / Varios']; input = '<input type="hidden" id="gf-'+f.id+'"><div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:4px">'+_to.map(function(o){return '<label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="'+o+'" onchange="cotTiposSync(this)"> '+o+'</label>';}).join('')+'</div>'; } else if (f.type === 'money') {
       input = `<input type="text" inputmode="numeric" data-money="1" id="gf-${f.id}" value="${val}" oninput="fmtMoneyInput(this)" placeholder="${f.label}">`;
     } else {
       input = `<input type="${f.type}" id="gf-${f.id}" value="${val}" placeholder="${f.label}${f.req?'*':''}">`;
@@ -6004,6 +6003,7 @@ async function renderComercialReporte(){const{data}=await sb.from('cotizaciones'
   </table>`;
 }
 
+function aptoTarSync(){ var box=document.getElementById('gf-aptotar-box'); if(!box) return; var arr=[], total=0; box.querySelectorAll('.at-ini').forEach(function(ini){ var m=ini.getAttribute('data-m'); var neg=box.querySelector('.at-neg[data-m="'+m+'"]'); var vi=parseFloat(ini.value)||0, vn=parseFloat(neg?neg.value:0)||0; if(vi||vn){ arr.push({m:Number(m),ini:vi,neg:vn}); total+=(vn||vi); } }); var h=document.getElementById('gf-aptos_tarifas'); if(h) h.value=JSON.stringify(arr); var vc=document.getElementById('gf-valor_cotizado'); if(vc) vc.value=total; }
 function cotTiposSync(cb){ var fg=cb.closest('.form-group'); if(!fg) return; var hid=fg.querySelector('input[type=hidden]'); var vals=[]; fg.querySelectorAll('input[type=checkbox]').forEach(function(c){ if(c.checked) vals.push(c.value); }); if(hid) hid.value=vals.join(', '); }
 
     async function editarCotizacion(id){ var r=(window._cotRows||[]).find(function(x){return String(x.id)===String(id);}); if(!r){ try{ var rr=await sb.from('cotizaciones').select('*').eq('id',id).single(); r=rr.data; }catch(e){} } if(!r){ showToast('No se pudo cargar la cotización','error'); return; } window._genEditId=id; window._genEditData=r; loadView('comercial-form'); setTimeout(function(){ var d=window._genEditData||{}; ['fecha_solicitud','nombre','telefono','correo','interes','canal','estado','moneda','periodicidad','tarifa_inicial','valor_cotizado','proximo_contacto','notas'].forEach(function(k){ var el=document.getElementById('gf-'+k); if(el && d[k]!=null){ el.value=d[k]; try{ el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); }catch(e){} } }); var _ti=document.getElementById('gf-tipos_apto'); if(_ti && d.tipos_apto){ _ti.value=d.tipos_apto; var _fg=_ti.closest('.form-group'); if(_fg){ var _sel=String(d.tipos_apto).split(',').map(function(s){return s.trim();}); _fg.querySelectorAll('input[type=checkbox]').forEach(function(c){ c.checked=_sel.indexOf(c.value)>-1; }); } } var btn=document.querySelector('.btn-success'); if(btn) btn.textContent='💾 Actualizar'; window._genEditData=null; }, 400); }
