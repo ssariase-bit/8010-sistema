@@ -407,7 +407,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-12-1815';
+const APP_VERSION = '2026-06-12-1900';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -472,7 +472,7 @@ function EB(){ return EDIFICIOS[EDIFICIO_ACTIVO]; } // atajo al edificio activo
 const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitantes',
   'mantenimiento','control_personal','turnos','personal','contratos','transportes',
   'reembolsos','prestamos_tec','maletas','entrega_efectivos','capsulas','caja',
-  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes']);
+  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes','consumos']);
 (function(){
   const _from = sb.from.bind(sb);
   sb.from = function(tabla){
@@ -620,6 +620,7 @@ const NAV_ITEMS = {
     { id: 'capsulas-list', icon: '🧴', label: 'Cápsulas Cortesía' },
     { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tec.' },
     { section: 'Financiero / Admin' },
+    { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
     { id: 'caja-list', icon: '💰', label: 'Caja' },
     { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
     { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
@@ -833,6 +834,7 @@ const MENU_COMPLETO = [
   { id: 'prestamos-form', icon: '💻', label: 'Préstamo Tecnología' },
   { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tec.' },
   { section: 'Financiero / Admin' },
+  { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
   { id: 'requisiciones-form', icon: '➕', label: 'Nueva Requisición' },
   { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
   { id: 'personal-form', icon: '➕', label: 'Nuevo Personal' },
@@ -1197,6 +1199,7 @@ async function loadView(view) {
     ]); break;
 
     case 'estado-huespedes': await renderEstadoHuespedes(); break;
+    case 'ingresos': await renderIngresos(); break;
     case 'novedades-diarias':  await renderNovedadesDiarias(); break;
     case 'semana-resumen':     await renderSemanaResumen(); break;
     case 'formato-huespedes':  await renderFormatoHuespedes(); break;
@@ -5153,6 +5156,108 @@ async function renderEstadoHuespedes() {
   window._ehRows = rows;
 }
 
+async function renderIngresos(){
+  const _rolOK = currentProfile?.rol === 'gerente_general' || currentProfile?.rol === 'asesora';
+  if(!_rolOK){ document.getElementById('main-content').innerHTML = '<div class="page-title">📈 Ingresos del Mes</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Esta vista está disponible solo para gerencia.</p></div>'; return; }
+  const mesSel = window._ingresosMes || TODAY.slice(0,7);
+  window._ingresosMes = mesSel;
+  const [Y,M] = mesSel.split('-').map(Number);
+  const dim = new Date(Y, M, 0).getDate();
+  const ini = mesSel + '-01', fin = mesSel + '-' + String(dim).padStart(2,'0');
+  const esMesActual = TODAY.slice(0,7) === mesSel;
+  const corte = esMesActual ? Number(TODAY.slice(8,10)) : dim;
+  const _mesesN = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const [rkR, csR] = await Promise.all([
+    sb.from('rack').select('fecha,apto,estado,tarifa,canal,tipo,updated_at,created_at').gte('fecha',ini).lte('fecha',fin),
+    sb.from('consumos').select('fecha,apto,huesped,valor,pago').gte('fecha',ini).lte('fecha',fin)
+  ]);
+  const rk = rkR.data || [], cs = csR.data || [];
+  const _PRI = {'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1};
+  const map = {};
+  rk.forEach(r => { const k = r.apto + '|' + r.fecha; const c = map[k];
+    if(!c){ map[k] = r; return; }
+    const pr = _PRI[r.estado]||0, pc = _PRI[c.estado]||0;
+    if(pr > pc) map[k] = r;
+    else if(pr === pc){ const tr = r.updated_at||r.created_at||'', tc = c.updated_at||c.created_at||''; if(tr > tc) map[k] = r; }
+  });
+  const dias = {}; for(let d=1; d<=dim; d++) dias[d] = { noches:0, aloja:0, cons:0 };
+  let totAloja=0, nochesVendMes=0, alojaCorte=0, nochesVendCorte=0, nochesFisCorte=0, totConsumos=0;
+  const canales = {};
+  Object.values(map).forEach(r => {
+    const e = r.estado; const oc = (e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje');
+    if(!oc) return;
+    const d = Number(r.fecha.slice(8,10));
+    const esParTR = (r.tipo==='Two Residence' && /03$/.test(String(r.apto)));
+    const t = esParTR ? 0 : (Number(r.tarifa)||0);
+    dias[d].noches++; if(d<=corte) nochesFisCorte++;
+    if(!esParTR){
+      dias[d].aloja += t; totAloja += t; nochesVendMes++;
+      if(d<=corte){ alojaCorte += t; nochesVendCorte++; }
+      const cn = r.canal || 'Particular';
+      if(!canales[cn]) canales[cn] = { noches:0, ventas:0 };
+      canales[cn].noches++; canales[cn].ventas += t;
+    }
+  });
+  cs.forEach(c => { const d = Number(String(c.fecha).slice(8,10)); const v = Number(c.valor)||0; if(dias[d]) dias[d].cons += v; totConsumos += v; });
+  const totalAptos = (EB().aptosFull||[]).length || 1;
+  const pctMes = Math.round(nochesFisCorte/(totalAptos*corte)*100);
+  const tProm = nochesVendCorte ? Math.round(alojaCorte/nochesVendCorte) : 0;
+  const f$ = n => '$' + Number(n||0).toLocaleString('es-CO');
+  const _k = (lbl,val,sub,col) => `<div style="flex:1;min-width:150px;background:#fff;border:1px solid var(--gris-b);border-radius:10px;padding:14px 16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">${lbl}</div><div style="font-size:21px;font-weight:800;color:${col||'var(--azul)'};margin:3px 0;white-space:nowrap">${val}</div>${sub?`<div style="font-size:11px;color:var(--gris-t)">${sub}</div>`:''}</div>`;
+  const hoyDia = esMesActual ? Number(TODAY.slice(8,10)) : -1;
+  let filas = '';
+  for(let d=1; d<=dim; d++){
+    const o = dias[d];
+    const fechaD = new Date(Y, M-1, d);
+    const dn = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][fechaD.getDay()];
+    const futuro = esMesActual && d > corte;
+    const tot = o.aloja + o.cons;
+    filas += `<tr style="${d===hoyDia?'background:var(--azul-c);font-weight:700':''}${futuro?'color:#9CA3AF':''}">
+      <td>${String(d).padStart(2,'0')} ${dn}${d===hoyDia?' · HOY':''}</td>
+      <td style="text-align:center">${o.noches}</td>
+      <td style="text-align:center">${Math.round(o.noches/totalAptos*100)}%</td>
+      <td style="text-align:right">${o.aloja?f$(o.aloja):'-'}</td>
+      <td style="text-align:right">${o.cons?f$(o.cons):'-'}</td>
+      <td style="text-align:right;font-weight:600">${tot?f$(tot):'-'}</td>
+    </tr>`;
+  }
+  const canRows = Object.entries(canales).sort((a,b)=>b[1].ventas-a[1].ventas).map(([cn,v]) =>
+    `<tr><td><strong>${cn}</strong></td><td style="text-align:center">${v.noches}</td><td style="text-align:right">${f$(v.ventas)}</td><td style="text-align:center">${totAloja?Math.round(v.ventas/totAloja*100):0}%</td></tr>`).join('');
+  document.getElementById('main-content').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <div class="page-title" style="margin-bottom:0">📈 Ingresos — ${_mesesN[M-1].charAt(0).toUpperCase()+_mesesN[M-1].slice(1)} ${Y}</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="month" value="${mesSel}" onchange="window._ingresosMes=this.value;renderIngresos()" style="padding:8px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px">
+        ${barraCompartir()}
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+      ${_k('Alojamiento al corte', f$(alojaCorte), nochesVendCorte + ' noches vendidas · al ' + corte + ' de ' + _mesesN[M-1])}
+      ${_k('Consumos', f$(totConsumos), 'registrados en CKO', '#B8963E')}
+      ${_k('Total ingresos', f$(alojaCorte + totConsumos), 'alojamiento + consumos', 'var(--verde)')}
+      ${_k('Ocupación', pctMes + '%', 'promedio del mes al corte')}
+      ${_k('Tarifa promedio', f$(tProm), 'por noche vendida')}
+      ${esMesActual ? _k('Proyección alojamiento', f$(totAloja), nochesVendMes + ' noches con reservas futuras', '#7C3AED') : ''}
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-weight:700;color:var(--azul);margin-bottom:8px">Detalle día a día</div>
+      <div style="overflow-x:auto"><table class="tabla">
+        <thead><tr><th>Día</th><th>Aptos ocup.</th><th>% Ocup.</th><th>Alojamiento</th><th>Consumos</th><th>Total</th></tr></thead>
+        <tbody>${filas}
+        <tr style="background:var(--azul-c);font-weight:800">
+          <td colspan="3" style="color:var(--azul)">TOTAL MES${esMesActual?' (con reservas futuras)':''}</td>
+          <td style="text-align:right">${f$(totAloja)}</td>
+          <td style="text-align:right">${f$(totConsumos)}</td>
+          <td style="text-align:right;color:var(--verde)">${f$(totAloja + totConsumos)}</td>
+        </tr></tbody>
+      </table></div>
+    </div>
+    <div class="card" style="max-width:560px">
+      <div style="font-weight:700;color:var(--azul);margin-bottom:8px">Ventas de alojamiento por canal</div>
+      <table class="tabla"><thead><tr><th>Canal</th><th>Noches</th><th>Ventas</th><th>%</th></tr></thead><tbody>${canRows || '<tr><td colspan="4" style="text-align:center;color:#999">Sin datos</td></tr>'}</tbody></table>
+    </div>`;
+}
+
 async function declinarLimpiezaHK() {
   const aptos = EB().aptosBase;
   const aptoOpts = aptos.map(a => `<option value="${a}">${a}</option>`).join('');
@@ -5858,6 +5963,7 @@ R/${quien}`;
 
   // Mostrar modal de compartir + botón para actualizar el rack
   window._ckoHuesped = huesped; // para que el rack registre el CKO aunque hoy no tenga fila
+  if (consumos > 0) { sb.from('consumos').insert({ fecha: TODAY, apto, huesped, valor: consumos, pago, factura: fv || null, user_id: currentUser.id }).then(function(r){ if (r.error) console.error('consumos:', r.error); else showToast('💵 Consumo de $' + consumos.toLocaleString('es-CO') + ' registrado en Ingresos', 'success'); }); }
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
   const waText = encodeURIComponent('*' + EB().nombre + ' — CKO — ' + huesped + ' Apto ' + apto + '*\n\n' + msg);
