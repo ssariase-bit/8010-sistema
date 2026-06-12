@@ -407,7 +407,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-12-1730';
+const APP_VERSION = '2026-06-12-1800';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4338,11 +4338,42 @@ function _rackEmailHTML(){
     body += '<tr>'+row+'</tr>';
   });
   const fecha = new Date().toLocaleDateString('es-CO',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  // ── Resumen ejecutivo: ocupación y ventas calculadas del propio rack ──
+  const hoyD = new Date();
+  const esMesActual = (hoyD.getFullYear()===year && hoyD.getMonth()===month);
+  const corte = esMesActual ? hoyD.getDate() : dim;
+  let ocupHoy=0, ckiHoy=0, ckoHoy=0, nochesOcup=0, ventasCorte=0, nochesMes=0, ventasMes=0;
+  aptos.forEach(function(a){
+    for(let d=1; d<=dim; d++){
+      const rec = rack[a] && rack[a][d]; if(!rec) continue;
+      const e = rec.estado;
+      const oc = (e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje');
+      // Two Residence: la pareja X02+X03 comparte tarifa — contar la venta una sola vez
+      const esParTR = (rec.tipo==='Two Residence' && /03$/.test(String(a)));
+      const t = esParTR ? 0 : (Number(rec.tarifa)||0);
+      if(oc){ if(!esParTR){ nochesMes++; ventasMes+=t; } if(d<=corte && !esParTR){ nochesOcup++; ventasCorte+=t; } }
+      if(esMesActual && d===corte){ if(oc) ocupHoy++; if(e==='Check-in hoy') ckiHoy++; if(e==='Check-out hoy') ckoHoy++; }
+    }
+  });
+  const totalAptos = aptos.length || 1;
+  const pctHoy = Math.round(ocupHoy/totalAptos*100);
+  const pctMes = Math.round(nochesOcup/(totalAptos*corte)*100);
+  const tProm = nochesOcup ? Math.round(ventasCorte/nochesOcup) : 0;
+  const f$ = function(n){ return '$'+Number(n||0).toLocaleString('es-CO'); };
+  const _kpi = function(lbl,val,sub){ return '<td style="background:#FFFFFF;border:1px solid #DDD8D2;border-radius:8px;padding:10px 14px;text-align:center;vertical-align:top"><div style="font-size:10px;color:#7F7F7F;text-transform:uppercase;letter-spacing:1px;white-space:nowrap">'+lbl+'</div><div style="font-size:19px;font-weight:700;color:#211D1E;margin:3px 0;white-space:nowrap">'+val+'</div>'+(sub?'<div style="font-size:10px;color:#9A938B;white-space:nowrap">'+sub+'</div>':'')+'</td>'; };
+  let resumen = '<table style="border-collapse:separate;border-spacing:6px;margin:0 -6px 14px"><tr>';
+  if (esMesActual) resumen += _kpi('Ocupaci\u00f3n hoy', pctHoy+'%', ocupHoy+' de '+totalAptos+' aptos') + _kpi('Entradas hoy', ckiHoy, 'CKI') + _kpi('Salidas hoy', ckoHoy, 'CKO');
+  resumen += _kpi('Ocupaci\u00f3n del mes', pctMes+'%', 'al '+corte+' de '+mesNombre.toLowerCase())
+    + _kpi('Ventas del mes', f$(ventasCorte), nochesOcup+' noches al corte')
+    + _kpi('Tarifa promedio', f$(tProm), 'por noche')
+    + _kpi('Proyecci\u00f3n del mes', f$(ventasMes), nochesMes+' noches con reservas');
+  resumen += '</tr></table>';
   return '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#E7E3E0;font-family:Helvetica,Arial,sans-serif">'
     + '<div style="background:#211D1E;padding:18px 24px">'+logo+'</div>'
     + '<div style="padding:18px 24px">'
     + '<div style="font-size:18px;color:#211D1E;margin-bottom:2px">Rack \u2014 '+mesNombre+' '+year+'</div>'
-    + '<div style="font-size:12px;color:#7F7F7F;margin-bottom:14px">'+nombre+' \u00b7 '+fecha+'</div>'
+    + '<div style="font-size:12px;color:#7F7F7F;margin-bottom:14px">'+nombre+' \u00b7 Corte: '+fecha+'</div>'
+    + resumen
     + '<div style="overflow-x:auto"><table style="border-collapse:collapse"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>'
     + '<div style="margin-top:12px;font-size:11px;color:#555;line-height:2">'
     + '<strong>Convenciones:&nbsp;</strong>'
