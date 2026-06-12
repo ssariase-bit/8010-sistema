@@ -3722,15 +3722,15 @@ function generarConfirmacion(r) {
     const _bb=_ap.replace(/A$/,'');
     const _ln=_bb.slice(-2);
     const _cfg=r.config;
-    let _mk=null,_ttl='Apartamento',_hb='';
-    if(_bb==='PH1'){_mk=_M['PH1'];_ttl='Penthouse';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas dobles';}
-    else if(_bb==='PH2'){_mk=_M['PH2'];_ttl='Penthouse';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas sencillas';}
-    else if(_cfg==='deluxe'||_isA){const _md=_M[_bb+'A'];if(_md!=null){tipo='Habitación Deluxe';desc='Habitación Deluxe de '+_md+' m²:<br>02 camas dobles (1.40).';}}
-    else if(_ln==='01'){_mk=_M[_bb];_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas dobles (1.40)';}
-    else if(_ln==='02'){_mk=_M[_bb];_ttl='Studio/Loft';_hb='__studio__';}
-    else if(_ln==='03'){_mk=_M[_bb];_hb='1 habitación: 01 cama Queen';}
-    else if(_ln==='04'){if(_cfg==='dividido'){_mk=_M[_bb];_hb='1 habitación: 01 cama King';}else{_mk=(typeof _M[_bb+'A']==='number')?(_M[_bb]+_M[_bb+'A']):_M[_bb];_hb='2 habitaciones: habitación principal con 01 cama King y habitación adicional con 02 camas dobles (1.40)';}}
-    if(_mk!=null){if(_hb==='__studio__'){tipo='Studio/Loft de '+_mk+' m²';desc='Studio/Loft de '+_mk+' m²:<br>01 cama Queen.';}else{tipo=_ttl+' de '+_mk+' m²';desc=_ttl+' de '+_mk+' m² con '+_hb+'.';}}
+    let _mk=null,_nm='Apartamento',_hb='';
+    if(_bb==='PH1'){_mk=_M['PH1'];_nm='Penthouse';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas dobles';}
+    else if(_bb==='PH2'){_mk=_M['PH2'];_nm='Penthouse';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas sencillas';}
+    else if(_cfg==='deluxe'||_isA){_mk=_M[_bb+'A'];_nm='Deluxe';_hb='02 camas dobles (1.40)';}
+    else if(_ln==='01'){_mk=_M[_bb];_nm='Grand Residence';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas dobles (1.40)';}
+    else if(_ln==='02'){_mk=_M[_bb];_nm='Smart';_hb='01 cama Queen';}
+    else if(_ln==='03'){_mk=_M[_bb];_nm='One Residence';_hb='1 habitación: 01 cama Queen';}
+    else if(_ln==='04'){if(_cfg==='dividido'){_mk=_M[_bb];_nm='Suit home';_hb='1 habitación: 01 cama King';}else{_mk=(typeof _M[_bb+'A']==='number')?(_M[_bb]+_M[_bb+'A']):_M[_bb];_nm='Suit Deluxe';_hb='2 habitaciones: habitación principal con 01 cama King y habitación adicional con 02 camas dobles (1.40)';}}
+    if(_mk!=null){tipo=_ap+' - '+_nm+' '+_mk+' m²';desc=_hb+'.';}
   }
   const moneda = r.moneda || 'COP';
   const esUSD = moneda === 'USD';
