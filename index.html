@@ -5047,6 +5047,7 @@ async function registrarSalidaPersonal(id) {
 // ═══════════════════════════════════════════════════════════
 // ESTADO DE HUÉSPEDES (vista imprimible del rack del día)
 // ═══════════════════════════════════════════════════════════
+function waAnuncio(nombreId){ var el=document.getElementById(nombreId); var nombre=el?(el.dataset.nombre||''):''; var body=(document.getElementById('anuncio-body')||{}).value||''; if(!body.trim()){ alert('Escribe el mensaje del anuncio primero.'); return; } var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var msg=saludo+', '+(nombre||'')+'.\n\n'+body; window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'); }
 function waBienvenida(codeId){ var el=document.getElementById(codeId); var nombre=el?(el.dataset.nombre||''):''; var code=(el&&el.value)?el.value:'XXXX#'; var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var ed=(typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'; var msg=saludo+', '+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.\n'+'🔑 Código puerta: '+code; window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'); }
 async function renderEstadoHuespedes() {
   const _esKL=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')===-1);
@@ -5058,7 +5059,7 @@ async function renderEstadoHuespedes() {
 
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-      <div class="page-title" style="margin-bottom:0">🏠 Estado de Huéspedes — ${fmtDate(today)}</div>
+      <div class="page-title" style="margin-bottom:0">🏠 Estado de Huéspedes — ${fmtDate(today)}</div>${_esKL?`<div style="flex:0 0 100%;background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px;margin-top:8px"><div style="font-weight:600;margin-bottom:6px">📢 Anuncio a huéspedes en casa</div><textarea id="anuncio-body" placeholder="Escribe el mensaje (el sistema le pone el saludo y el nombre a cada huésped). Luego usa el botón 📢 de cada uno." style="width:100%;min-height:64px;padding:8px;font-size:13px;border:1px solid #ccc;border-radius:6px"></textarea></div>`:''}
       <div style="display:flex;gap:6px">
         <button onclick="tablaEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">🖨️ Ver tabla / Imprimir</button>
         <button onclick="compartirEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
@@ -5082,7 +5083,7 @@ async function renderEstadoHuespedes() {
               <td>${r.checkout ? fmtDate(r.checkout) : '-'}</td>
               <td>${r.tarifa ? '$'+fmtNum(r.tarifa) : '-'}</td>
               <td style="max-width:140px;font-size:11px">${r.observaciones||'-'}</td>
-              <td>${_esKL?`<input id="dc-${r.id}" data-nombre="${String(r.huesped||'').replace(/"/g,'')}" placeholder="Cód. puerta" style="width:84px;padding:4px;font-size:11px"> <button onclick="waBienvenida('dc-${r.id}')" class="btn btn-sm" style="background:#25D366;color:#fff">💬 Bienvenida</button> `:''}<button onclick="openAptoModal('${r.id}','${r.apto}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
+              <td>${_esKL?`<input id="dc-${r.id}" data-nombre="${String(r.huesped||'').replace(/"/g,'')}" placeholder="Cód. puerta" style="width:84px;padding:4px;font-size:11px"> <button onclick="waBienvenida('dc-${r.id}')" class="btn btn-sm" style="background:#25D366;color:#fff">💬 Bienvenida</button> <button onclick="waAnuncio('dc-${r.id}')" class="btn btn-sm" style="background:#1D3461;color:#fff">📢</button> `:''}<button onclick="openAptoModal('${r.id}','${r.apto}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
             </tr>`).join('')}
             <tr style="background:var(--azul-c);font-weight:700">
               <td colspan="2" style="color:var(--azul)">TOTAL: ${rows.length} aptos</td>
