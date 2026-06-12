@@ -5049,6 +5049,7 @@ async function registrarSalidaPersonal(id) {
 // ═══════════════════════════════════════════════════════════
 function waBienvenida(codeId){ var el=document.getElementById(codeId); var nombre=el?(el.dataset.nombre||''):''; var code=(el&&el.value)?el.value:'XXXX#'; var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var ed=(typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'; var msg=saludo+', '+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.\n'+'🔑 Código puerta: '+code; window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'); }
 async function renderEstadoHuespedes() {
+  const _esKL=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')===-1);
   const today = TODAY;
   const { data: rawData } = await sb.from('rack').select('*').eq('fecha', today);
   const _aptoOrder = EB().aptosFull;
@@ -5081,7 +5082,7 @@ async function renderEstadoHuespedes() {
               <td>${r.checkout ? fmtDate(r.checkout) : '-'}</td>
               <td>${r.tarifa ? '$'+fmtNum(r.tarifa) : '-'}</td>
               <td style="max-width:140px;font-size:11px">${r.observaciones||'-'}</td>
-              <td><input id="dc-${r.id}" data-nombre="${String(r.huesped||'').replace(/"/g,'')}" placeholder="Cód. puerta" style="width:84px;padding:4px;font-size:11px"> <button onclick="waBienvenida('dc-${r.id}')" class="btn btn-sm" style="background:#25D366;color:#fff">💬 Bienvenida</button> <button onclick="openAptoModal('${r.id}','${r.apto}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
+              <td>${_esKL?`<input id="dc-${r.id}" data-nombre="${String(r.huesped||'').replace(/"/g,'')}" placeholder="Cód. puerta" style="width:84px;padding:4px;font-size:11px"> <button onclick="waBienvenida('dc-${r.id}')" class="btn btn-sm" style="background:#25D366;color:#fff">💬 Bienvenida</button> `:''}<button onclick="openAptoModal('${r.id}','${r.apto}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
             </tr>`).join('')}
             <tr style="background:var(--azul-c);font-weight:700">
               <td colspan="2" style="color:var(--azul)">TOTAL: ${rows.length} aptos</td>
