@@ -5988,7 +5988,7 @@ async function renderComercialReporte(){const{data}=await sb.from('cotizaciones'
         <td>${fmtDate(r.fecha_solicitud)}</td>
         <td><strong>${r.nombre||'-'}</strong></td>
         <td style="font-size:12px">${r.telefono?`📱 ${r.telefono}<br>`:''}${r.correo?`✉️ ${r.correo}`:''}</td>
-        <td style="font-size:12px">${r.interes||'-'}${r.tipos_apto?'<br><span style="color:#1D3461;font-weight:600;font-size:11px">🏢 '+r.tipos_apto+'</span>':''}</td>
+        <td style="font-size:12px">${r.interes||'-'}${(function(){try{var a=r.aptos_tarifas; if(!a)return ''; var arr=(typeof a==='string')?JSON.parse(a):a; if(!Array.isArray(arr)||!arr.length)return ''; return '<br><span style="color:#1D3461;font-weight:600;font-size:11px">'+arr.map(function(it){return it.m+' m² · '+(it.neg||it.ini||0);}).join('  |  ')+'</span>';}catch(e){return '';}})()}${r.tipos_apto?'<br><span style="color:#1D3461;font-weight:600;font-size:11px">🏢 '+r.tipos_apto+'</span>':''}</td>
         <td>${r.canal||'-'}</td>
         <td>${(function(){var v=Number(r.valor_cotizado)||0; if(v<=0) return '-'; var sim=r.moneda==='USD'?'USD ':'$'; var pm={'Por noche':' /noche','Mensual':' /mes','Total estadía':' total'}; var per=r.periodicidad?(pm[r.periodicidad]||''):''; var ini=Number(r.tarifa_inicial)||0; var neg=(ini>0&&ini!==v)?'<div style="font-size:10px;color:#aaa;text-decoration:line-through">'+sim+fmtNum(ini)+'</div>':''; return neg+'<strong>'+sim+fmtNum(v)+'</strong>'+per;})()}</td>
         <td><select onchange="cotEstado('${r.id}',this.value)" style="background:${c.bg};color:${c.color};font-weight:700;border:none;border-radius:8px;padding:6px 8px;font-size:12px">
