@@ -3571,11 +3571,11 @@ async function guardarReserva() {
     const fecha = d.toISOString().split('T')[0];
     const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
-    for (const _a of _aptosW) rows.push({ fecha, apto:_a, estado, huesped: nombre, tarifa: tNoche || null, canal, iva, updated_by: currentUser.id });
+    for (const _a of _aptosW) rows.push({ fecha, apto:_a, estado, huesped: nombre, tarifa: tNoche || null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : null });
   }
   // Día de check-out
   const dco = new Date(co);
-  for (const _a of _aptosW) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, tarifa: null, canal, iva, updated_by: currentUser.id });
+  for (const _a of _aptosW) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : null });
 
   // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
   await sb.from('rack').delete().in('apto', _aptosW).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
@@ -5809,6 +5809,8 @@ async function liberarRangoApto() {
   const { error } = await sb.from('rack')
     .update({ estado: 'Libre', huesped: null, tarifa: null, canal: null, observaciones: null, checkin: null, checkout: null, updated_by: currentUser.id })
     .eq('apto', apto).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
+  const _pm = /^([3-9])0([23])$/.exec(apto);
+  if (_pm) { const _part = _pm[1]+'0'+(_pm[2]==='2'?'3':'2'); await sb.from('rack').update({ estado: 'Libre', huesped: null, tarifa: null, canal: null, observaciones: null, checkin: null, checkout: null, updated_by: currentUser.id }).eq('apto', _part).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO).eq('tipo', 'Two Residence'); }
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
   closeModal('modal-apto');
   showToast(`🗑 Apto ${apto} liberado del ${fmtDate(ci)} al ${fmtDate(co)}`, 'success');
