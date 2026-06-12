@@ -407,7 +407,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-12-2030';
+const APP_VERSION = '2026-06-12-2130';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -472,7 +472,7 @@ function EB(){ return EDIFICIOS[EDIFICIO_ACTIVO]; } // atajo al edificio activo
 const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitantes',
   'mantenimiento','control_personal','turnos','personal','contratos','transportes',
   'reembolsos','prestamos_tec','maletas','entrega_efectivos','capsulas','caja',
-  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes','consumos']);
+  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes','consumos','semana_seguimiento','checklist_turnos']);
 (function(){
   const _from = sb.from.bind(sb);
   sb.from = function(tabla){
@@ -621,6 +621,7 @@ const NAV_ITEMS = {
     { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tec.' },
     { section: 'Financiero / Admin' },
     { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
+    { id: 'nomina', icon: '💼', label: 'Nómina 8i8' },
     { id: 'caja-list', icon: '💰', label: 'Caja' },
     { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
     { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
@@ -661,6 +662,8 @@ const NAV_ITEMS = {
     { id: 'control-personal-form', icon: '➕', label: 'Registrar Ingreso Personal' },
     { section: 'Huéspedes' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
+    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
     { id: 'visitantes-form', icon: '➕', label: 'Registrar Visitante' },
     { id: 'maletas-list', icon: '🧳', label: 'Maletas en Bodega' },
@@ -700,6 +703,8 @@ const NAV_ITEMS = {
     { id: 'caja-form', icon: '💰', label: 'Movimiento Caja' },
     { section: 'Huéspedes' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
+    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'visitantes-form', icon: '👥', label: 'Registrar Visitante' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
     { id: 'maletas-form', icon: '🧳', label: 'Maleta en Bodega' },
@@ -730,6 +735,8 @@ const NAV_ITEMS = {
     { id: 'contratos-form', icon: '➕', label: 'Nuevo Contrato' },
     { section: 'Huéspedes' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
+    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'formato-huespedes', icon: '🏨', label: 'Formato Huéspedes' },
     { section: 'Comercial' },
     { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
@@ -752,6 +759,8 @@ const NAV_ITEMS = {
     { id: 'transportes-form', icon: '➕', label: 'Registrar Transporte' },
     { section: 'Auditoría' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
+    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
   ],
@@ -771,6 +780,8 @@ rrhh: [
     { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
     { section: 'Auditoría' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
+    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
   ],
@@ -786,6 +797,8 @@ rrhh: [
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'novedades-list', icon: '📋', label: 'Novedades abiertas' }, { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
+    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
     { section: 'Auditoría' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
@@ -819,6 +832,8 @@ const MENU_COMPLETO = [
   { id: 'caja-list', icon: '💰', label: 'Caja' },
   { section: 'Huéspedes' },
   { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+  { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
+  { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
   { id: 'formato-huespedes', icon: '📅', label: 'Calendario Huéspedes' },
   { id: 'contratos-form', icon: '➕', label: 'Nuevo Contrato' },
   { id: 'contratos-list', icon: '📄', label: 'Contratos' },
@@ -1202,6 +1217,9 @@ async function loadView(view) {
 
     case 'estado-huespedes': await renderEstadoHuespedes(); break;
     case 'ingresos': await renderIngresos(); break;
+    case 'nomina': await renderNomina(); break;
+    case 'semana-info': await renderSemanaInfo(); break;
+    case 'checklist-turnos': await renderChecklistTurnos(); break;
     case 'novedades-diarias':  await renderNovedadesDiarias(); break;
     case 'semana-resumen':     await renderSemanaResumen(); break;
     case 'formato-huespedes':  await renderFormatoHuespedes(); break;
@@ -5272,6 +5290,295 @@ async function renderIngresos(){
       <div style="font-weight:700;color:var(--azul);margin-bottom:8px">Ventas de alojamiento por canal</div>
       <table class="tabla"><thead><tr><th>Canal</th><th>Noches</th><th>Ventas</th><th>%</th></tr></thead><tbody>${canRows || '<tr><td colspan="4" style="text-align:center;color:#999">Sin datos</td></tr>'}</tbody></table>
     </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// INFORMACIÓN DE LA SEMANA (CKI / CKO) — ambos edificios
+// ═══════════════════════════════════════════════════════════
+async function renderSemanaInfo(){
+  const base = window._semInfoFecha ? new Date(window._semInfoFecha+'T00:00:00') : new Date(TODAY+'T00:00:00');
+  const dow = base.getDay(); const offL = dow===0?-6:1-dow;
+  const lun = new Date(base); lun.setDate(base.getDate()+offL);
+  const dom = new Date(lun); dom.setDate(lun.getDate()+6);
+  const fS = d=>d.toISOString().split('T')[0];
+  const ini=fS(lun), fin=fS(dom);
+  // 1) Derivar CKI/CKO de la semana desde el rack (no pisa lo ya editado)
+  const { data: rk } = await sb.from('rack').select('fecha,apto,estado,huesped,canal').gte('fecha',ini).lte('fecha',fin).in('estado',['Check-in hoy','Check-out hoy']);
+  const vistos = {};
+  const derivados = (rk||[]).filter(r=>(r.huesped||'').trim()).filter(r=>{ const k=r.fecha+'|'+r.apto+'|'+r.estado; if(vistos[k]) return false; vistos[k]=1; return true; })
+    .map(r=>({ fecha:r.fecha, apto:r.apto, tipo: r.estado==='Check-in hoy'?'CKI':'CKO', huesped:r.huesped, pago:'80|10', observaciones: r.canal?('Reserva de '+r.canal+'.'):'', estado:'Pendiente', user_id:currentUser.id }));
+  if(derivados.length){ const rr = await sb.from('semana_seguimiento').upsert(derivados, { onConflict:'fecha,apto,tipo,edificio', ignoreDuplicates:true }); if(rr.error) console.error('semana upsert:', rr.error); }
+  // 2) Cargar y pintar
+  const { data } = await sb.from('semana_seguimiento').select('*').gte('fecha',ini).lte('fecha',fin).order('fecha').order('apto');
+  const rows = data||[];
+  window._semRows = rows; window._semIni = ini; window._semFin = fin;
+  const cki = rows.filter(r=>r.tipo==='CKI'), cko = rows.filter(r=>r.tipo==='CKO');
+  const ESTADOS_SEM = ['Pendiente','Confirmado','Realizado','Cancelado','Reprogramado','No Show'];
+  const fila = r => `<tr>
+    <td style="white-space:nowrap"><strong>${r.huesped||''}</strong><br><span style="font-size:11px;color:var(--gris-t)">Apto. ${r.apto}</span></td>
+    <td style="white-space:nowrap">${fmtDate(r.fecha)}</td>
+    <td><input value="${String(r.pago||'').replace(/"/g,'&quot;')}" style="width:64px;padding:4px;font-size:11px" onchange="updSemana('${r.id}','pago',this.value)"></td>
+    <td><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Observaciones..." style="width:100%;min-width:260px;padding:4px;font-size:12px" onchange="updSemana('${r.id}','observaciones',this.value)"></td>
+    <td><select style="padding:4px;font-size:11px" onchange="updSemana('${r.id}','estado',this.value)">${ESTADOS_SEM.map(o=>`<option ${r.estado===o?'selected':''}>${o}</option>`).join('')}</select></td>
+    <td><button onclick="delSemana('${r.id}')" title="Eliminar" style="border:none;background:none;cursor:pointer;font-size:14px">🗑️</button></td>
+  </tr>`;
+  const tablaSem = (titulo, arr, color) => `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-weight:800;color:${color};margin-bottom:8px;font-size:15px">${titulo}: ${String(arr.length).padStart(2,'0')}</div>
+      ${arr.length===0?'<div style="color:#999;font-size:13px;padding:8px">Sin registros esta semana</div>':
+      `<div style="overflow-x:auto"><table class="tabla">
+        <thead><tr><th>Nombre</th><th>Fecha</th><th>Pago</th><th>Observaciones</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${arr.map(fila).join('')}</tbody></table></div>`}
+    </div>`;
+  document.getElementById('main-content').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+      <div class="page-title" style="margin-bottom:0">📅 Información de la Semana</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="date" value="${ini}" onchange="window._semInfoFecha=this.value;renderSemanaInfo()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:12px">
+        <button class="btn btn-outline btn-sm" onclick="addSemanaFila('CKI')">+ CKI manual</button>
+        <button class="btn btn-outline btn-sm" onclick="addSemanaFila('CKO')">+ CKO manual</button>
+        <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="compartirSemanaInfo()">📤 Compartir</button>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--gris-t);margin-bottom:14px">Semana del <strong>${fmtDate(ini)}</strong> al <strong>${fmtDate(fin)}</strong> — se arma sola desde el rack; observaciones, pago y estado se guardan al editar.</div>
+    ${tablaSem('CKI DE LA SEMANA', cki, '#0C447C')}
+    ${tablaSem('CKO DE LA SEMANA', cko, '#C2410C')}`;
+}
+function updSemana(id, campo, val){ const o={}; o[campo]=val; sb.from('semana_seguimiento').update(o).eq('id',id).then(r=>{ if(r.error) showToast('Error: '+r.error.message,'error'); else showToast('✓ Guardado','success'); }); }
+async function delSemana(id){ if(!confirm('¿Eliminar esta fila del informe semanal?')) return; await sb.from('semana_seguimiento').delete().eq('id',id); renderSemanaInfo(); }
+async function addSemanaFila(tipo){
+  const huesped = prompt('Nombre del huésped ('+tipo+'):'); if(!huesped) return;
+  const apto = prompt('Apartamento:'); if(!apto) return;
+  const fecha = prompt('Fecha (AAAA-MM-DD):', TODAY); if(!fecha) return;
+  const { error } = await sb.from('semana_seguimiento').insert({ fecha, apto, tipo, huesped, pago:'80|10', observaciones:'', estado:'Pendiente', user_id:currentUser.id });
+  if(error) showToast('Error: '+error.message,'error'); else renderSemanaInfo();
+}
+function compartirSemanaInfo(){
+  const rows = window._semRows||[];
+  const cki = rows.filter(r=>r.tipo==='CKI'), cko = rows.filter(r=>r.tipo==='CKO');
+  const lin = r => `▪️ *${r.huesped}*, Apto. ${r.apto} · ${fmtDate(r.fecha)} · Pago: ${r.pago||'-'}\n${r.observaciones||'Sin observaciones'} — _${r.estado||'Pendiente'}_`;
+  const txt = `📅 *${EB().nombre} — SEMANA DEL ${fmtDate(window._semIni)} al ${fmtDate(window._semFin)}*
+
+*CKI DE LA SEMANA: ${String(cki.length).padStart(2,'0')}*
+${cki.map(lin).join('\n\n')||'— Sin CKI esta semana'}
+
+*CKO DE LA SEMANA: ${String(cko.length).padStart(2,'0')}*
+${cko.map(lin).join('\n\n')||'— Sin CKO esta semana'}
+
+_Sistema ${EB().nombre}_`;
+  compartirInforme('Información de la semana — '+fmtDate(window._semIni), txt);
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHECK LIST DE TURNOS — Kubik Living
+// ═══════════════════════════════════════════════════════════
+const CHECKLIST_KL = {
+ 'Turno 1': [
+  ['1','Recibir turno al Auditor del día anterior.'],
+  ['1.1','Entrega de novedades abiertas.'],['1.2','Entrega de novedades internas.'],['1.3','Entrega del estado de apartamentos.'],['1.4','Conteo de llaves.'],['1.5','Arqueo de Caja.'],['1.6','Enviar cierre de turno por el S.O.'],
+  ['2','Diligenciar ingreso de personal y enviarlo desde el S.O.'],
+  ['3','Entregar novedades a camareras.'],
+  ['3.1','Informar qué arrendatarios han salido para realizar limpiezas.'],['3.2','Informar si existe algún requerimiento de arrendatarios.'],['3.3','CKO que se tengan para el día.'],['3.4','CKI del día y del siguiente para su alistamiento.'],
+  ['4','Mantenimiento.'],
+  ['4.1','Entregar novedades a mantenimiento.'],['4.2','Dar seguimiento a novedades de mantenimiento y cerrarlas.'],
+  ['5','Verificar que las camareras estén realizando áreas públicas.'],
+  ['6','Actas.'],
+  ['6.1','Revisión final de los Aptos que tengan CKO el día siguiente.'],['6.2','Revisión inicial N° 1 del acta de entrega para los CKI del día siguiente.'],
+  ['7','Estar pendientes de los CKO del día.']
+ ],
+ 'Turno 2': [
+  ['1','Recibir turno al Turno 1.'],
+  ['1.1','Entrega de novedades abiertas.'],['1.2','Entrega de novedades internas.'],['1.3','Entrega del estado de apartamentos.'],['1.4','Conteo de llaves.'],['1.5','Arqueo de Caja.'],['1.6','Enviar cierre de turno por el S.O.'],
+  ['2','Diligenciar tiempos de limpiezas de camareras y enviar por el S.O.'],
+  ['3','Firmar estados de cuentas de consumos de Bagatelle del día.'],
+  ['4','Todos los miércoles 6 pm, enviar reporte de apartamentos a Don Santiago.'],
+  ['5','Viernes, sábados, domingos y festivos a las 6 pm, enviar reporte de novedades a Don Santiago.'],
+  ['6','Actas.'],
+  ['6.1','Revisión inicial N° 2 del acta de entrega para los CKI del día siguiente.'],['6.2','Estar pendientes de los CKI del día.']
+ ],
+ 'Turno 3': [
+  ['1','Recibir turno al Turno 2.'],
+  ['1.1','Entrega de novedades abiertas.'],['1.2','Entrega de novedades internas.'],['1.3','Entrega del estado de apartamentos.'],['1.4','Conteo de llaves.'],['1.5','Arqueo de Caja.'],['1.6','Enviar cierre de turno por el S.O.'],
+  ['2','Realizar revisión del SIRE.'],
+  ['2.1','Envíos de los registros de CKO.'],['2.2','Envíos de los registros de CKI.'],
+  ['3','Realizar revisión de las facturas.'],
+  ['3.1','New Hotel.'],['3.2','Bythewave.'],
+  ['4','Enviar archivo Seguimiento de cotizaciones a Cristina.'],
+  ['5','Cerrar datáfonos.'],
+  ['6','Verificar y archivar todo lo del folder de Auditoría.'],
+  ['7','Verificar que todos los correos o mensajes tengan respuesta.'],
+  ['8','Revisión de luces en Aptos vacíos para apagarlas.'],
+  ['9','Actas.'],
+  ['9.1','Alistar actas para revisión final de Aptos con salida el día siguiente.'],['9.2','Alistar actas de entrega inicial para los CKI del día siguiente.'],
+  ['10','Carpetas.'],
+  ['10.1','Generar documentación completa para los CKI.'],['10.2','Alistar comentario de cobro según la confirmación de reserva, para los CKI del día.'],
+  ['11','De domingo para lunes o de lunes para martes (si es festivo):'],
+  ['11.1','Enviar reporte de saldos de los Aptos por el S.O.'],['11.2','Enviar Check List de los Aptos por el S.O.'],['11.3','Enviar información de la semana por el S.O.'],
+  ['12','Generar listado de Aptos para seguridad y Front.'],
+  ['13','Cargar dispositivos electrónicos y tecnológicos.'],
+  ['14','Cerrar Auditoría en New Hotel.'],
+  ['15','Verificar que los préstamos se diligenciaron en acta y sistema.']
+ ]
+};
+async function renderChecklistTurnos(){
+  if(EDIFICIO_ACTIVO!=='kubik'){ document.getElementById('main-content').innerHTML = '<div class="page-title">☑️ Check List de Turno</div><div class="card" style="max-width:520px"><p style="font-size:14px">Por ahora el check list está definido para <strong>Kubik Living</strong>. Cambia de edificio para usarlo, o pídele a gerencia cargar las tareas de 8010.</p></div>'; return; }
+  const fecha = window._clFecha || TODAY; window._clFecha = fecha;
+  const turno = window._clTurno || 'Turno 1'; window._clTurno = turno;
+  const { data } = await sb.from('checklist_turnos').select('*').eq('fecha',fecha).eq('turno',turno);
+  const done = {}; (data||[]).forEach(r=>{ done[r.tarea]=r; });
+  const tareas = CHECKLIST_KL[turno]||[];
+  const hechas = tareas.filter(t=>done[t[0]]&&done[t[0]].hecho).length;
+  const pct = tareas.length?Math.round(hechas/tareas.length*100):0;
+  const filas = tareas.map(t=>{
+    const sub = t[0].includes('.');
+    const d = done[t[0]];
+    const ck = d && d.hecho;
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 10px;${sub?'margin-left:26px;':''}border-bottom:1px solid #F0EEEB;${ck?'background:#F2FAF2;':''}">
+      <input type="checkbox" ${ck?'checked':''} onchange="marcarTarea('${t[0]}', this.checked)" style="width:17px;height:17px;margin-top:2px;cursor:pointer">
+      <div style="flex:1">
+        <span style="font-size:13px;${ck?'color:#6B7280;text-decoration:line-through;':''}"><strong>${t[0]}.</strong> ${t[1]}</span>
+        ${ck&&d.hecho_por?`<div style="font-size:10px;color:#0a7d2c">✓ ${d.hecho_por}${d.hora?' · '+d.hora:''}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('main-content').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <div class="page-title" style="margin-bottom:0">☑️ Check List de Turno</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="date" value="${fecha}" onchange="window._clFecha=this.value;renderChecklistTurnos()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:12px">
+        <button class="btn btn-outline btn-sm" onclick="compartirChecklist()">📤 Compartir</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      ${Object.keys(CHECKLIST_KL).map(t=>`<button onclick="window._clTurno='${t}';renderChecklistTurnos()" class="btn btn-sm ${t===turno?'':'btn-outline'}" style="${t===turno?'background:var(--azul);color:#fff':''}">${t}</button>`).join('')}
+    </div>
+    <div class="card" style="max-width:760px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-weight:700;color:var(--azul)">${turno} — ${fmtDate(fecha)}</div>
+        <div style="font-weight:800;color:${pct===100?'#0a7d2c':'var(--azul)'}">${hechas}/${tareas.length} ${pct===100?'✅ Turno completo':''}</div>
+      </div>
+      <div style="height:8px;background:#EEE;border-radius:4px;margin-bottom:14px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct===100?'#0a7d2c':'var(--azul-m, var(--azul))'};transition:width .3s"></div></div>
+      ${filas}
+    </div>`;
+}
+async function marcarTarea(codigo, ck){
+  const fecha = window._clFecha||TODAY, turno = window._clTurno||'Turno 1';
+  const { error } = await sb.from('checklist_turnos').upsert([{ fecha, turno, tarea: codigo, hecho: ck, hecho_por: ck?(currentProfile?.nombre||''):null, hora: ck?fmtHora12():null, user_id: currentUser.id }], { onConflict:'fecha,turno,tarea,edificio' });
+  if(error){ showToast('Error: '+error.message,'error'); return; }
+  renderChecklistTurnos();
+}
+function compartirChecklist(){
+  const fecha = window._clFecha||TODAY, turno = window._clTurno||'Turno 1';
+  sb.from('checklist_turnos').select('*').eq('fecha',fecha).eq('turno',turno).then(({data})=>{
+    const done={}; (data||[]).forEach(r=>{ done[r.tarea]=r; });
+    const tareas = CHECKLIST_KL[turno]||[];
+    const lineas = tareas.map(t=>{ const d=done[t[0]]; return `${d&&d.hecho?'✅':'⬜'} ${t[0]}. ${t[1]}${d&&d.hecho&&d.hecho_por?' _('+d.hecho_por+')_':''}`; });
+    const hechas = tareas.filter(t=>done[t[0]]&&done[t[0]].hecho).length;
+    const txt = `☑️ *${EB().nombre} — Check List ${turno}*\n📅 ${fmtDate(fecha)} · ${hechas}/${tareas.length} completadas\n\n${lineas.join('\n')}`;
+    compartirInforme('Check List '+turno+' — '+fmtDate(fecha), txt);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// NÓMINA 8i8 OPERADORA — solo gerencia
+// ═══════════════════════════════════════════════════════════
+const NOMINA_BASE_8I8 = [
+ ['Cédula de Ciudadanía','79.946.865','Arias Echeverry Santiago','Gerente General',11000000,0],
+ ['Cédula de Extranjería','481.927','Cerviño Fernandez Cristina','Director Mercadeo y Ventas',5000000,0],
+ ['Cédula de Ciudadanía','52.457.082','Diaz Diaz Angela Patricia','Camarera',1751000,124548],
+ ['Cédula de Ciudadanía','79.959.751','Jimenez Gonzalez Carlos A.','Administrador',2100000,124548],
+ ['Permiso por Protección Temporal','5.999.107','Manzanillo Castillo Yolimar','Camarera',1751000,124548],
+ ['Cédula de Ciudadanía','1.053.724.270','Medina Pabon Nancy Yurani','Administrador',2100000,124548],
+ ['Cédula de Ciudadanía','1.013.037.214','Noguera Pinto Juana Milena','Administrador',2100000,124548],
+ ['Cédula de Ciudadanía','80.066.298','Reyes Fierro Luis Alfonso','Jefe de Mantenimiento',2400000,124548],
+ ['Cédula de Ciudadanía','1.033.680.662','Rodriguez Peña Luz Dary','Camarera',1751000,124548],
+ ['Cédula de Ciudadanía','80.224.038','Vallejo Fernandez Ricardo','Administrador',2500000,124548]
+];
+async function renderNomina(){
+  const ok = currentProfile?.rol==='gerente_general' || currentProfile?.rol==='asesora';
+  if(!ok){ document.getElementById('main-content').innerHTML = '<div class="page-title">💼 Nómina 8i8</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Esta vista está disponible solo para gerencia.</p></div>'; return; }
+  const per = window._nomPeriodo || (TODAY.slice(0,8) + (Number(TODAY.slice(8,10))<=15?'15':'30'));
+  window._nomPeriodo = per;
+  const { data } = await sb.from('nomina').select('*').eq('periodo', per).order('nombre');
+  const rows = data||[];
+  const f$ = n=>'$'+Math.round(Number(n)||0).toLocaleString('es-CO');
+  const calc = r => { const sp = Math.round((Number(r.sueldo_base)||0)*(Number(r.dias)||0)/30); const dev = sp + (Number(r.aux_transporte)||0) + (Number(r.valor_extras)||0); return { sp, dev, neto: dev - (Number(r.deducciones)||0) }; };
+  let tSp=0,tAux=0,tEx=0,tDev=0,tDed=0,tNeto=0;
+  const filas = rows.map(r=>{ const c=calc(r); tSp+=c.sp; tAux+=Number(r.aux_transporte)||0; tEx+=Number(r.valor_extras)||0; tDev+=c.dev; tDed+=Number(r.deducciones)||0; tNeto+=c.neto;
+    const inp=(campo,val,w)=>`<input value="${val}" style="width:${w}px;padding:3px;font-size:11px;text-align:right" onchange="updNomina('${r.id}','${campo}',this.value)">`;
+    return `<tr>
+      <td style="white-space:nowrap"><strong>${r.nombre}</strong><br><span style="font-size:10px;color:var(--gris-t)">${r.cargo||''} · ${r.documento||''}</span></td>
+      <td>${inp('dias', r.dias??15, 42)}</td>
+      <td style="text-align:right">${f$(r.sueldo_base)}</td>
+      <td style="text-align:right;color:var(--azul);font-weight:600">${f$(c.sp)}</td>
+      <td>${inp('aux_transporte', r.aux_transporte??0, 72)}</td>
+      <td>${inp('valor_extras', r.valor_extras??0, 72)}</td>
+      <td style="text-align:right">${f$(c.dev)}</td>
+      <td>${inp('deducciones', r.deducciones??0, 72)}</td>
+      <td style="text-align:right;font-weight:800;color:var(--verde)">${f$(c.neto)}</td>
+      <td><button onclick="delNomina('${r.id}')" style="border:none;background:none;cursor:pointer">🗑️</button></td>
+    </tr>`; }).join('');
+  document.getElementById('main-content').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <div class="page-title" style="margin-bottom:0">💼 Nómina 8i8 Operadora</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="month" value="${per.slice(0,7)}" onchange="window._nomPeriodo=this.value+'-'+((window._nomPeriodo||'').slice(8,10)||'15');renderNomina()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:12px">
+        <select onchange="window._nomPeriodo=per0_set(this.value);renderNomina()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:12px">
+          <option value="15" ${per.endsWith('15')?'selected':''}>Quincena 15</option>
+          <option value="30" ${per.endsWith('30')?'selected':''}>Quincena 30</option>
+        </select>
+        ${rows.length===0?`<button class="btn btn-sm btn-success" onclick="cargarNominaBase()">📋 Cargar plantilla base</button><button class="btn btn-outline btn-sm" onclick="copiarNominaAnterior()">⏮ Copiar período anterior</button>`:''}
+        <button class="btn btn-outline btn-sm" onclick="addEmpleadoNomina()">➕ Empleado</button>
+        <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="compartirNomina()">📤 Compartir</button>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--gris-t);margin-bottom:12px">Período <strong>${per}</strong> · Sueldo del período se calcula solo (base × días / 30). Aux. transporte, extras y deducciones se editan en la tabla.</div>
+    <div class="card">
+      ${rows.length===0?'<div class="empty"><div class="empty-icon">💼</div><p>Sin nómina para este período — carga la plantilla base o copia el período anterior</p></div>':
+      `<div style="overflow-x:auto"><table class="tabla">
+        <thead><tr><th>Empleado</th><th>Días</th><th>Sueldo base</th><th>Sueldo período</th><th>Aux. transp.</th><th>Extras ($)</th><th>Devengos</th><th>Deducciones</th><th>Neto a pagar</th><th></th></tr></thead>
+        <tbody>${filas}
+        <tr style="background:var(--azul-c);font-weight:800">
+          <td colspan="3">TOTAL · ${rows.length} empleados</td>
+          <td style="text-align:right">${f$(tSp)}</td><td style="text-align:right">${f$(tAux)}</td><td style="text-align:right">${f$(tEx)}</td>
+          <td style="text-align:right">${f$(tDev)}</td><td style="text-align:right">${f$(tDed)}</td>
+          <td style="text-align:right;color:var(--verde)">${f$(tNeto)}</td><td></td>
+        </tr></tbody></table></div>`}
+    </div>`;
+}
+function per0_set(q){ const per = window._nomPeriodo||TODAY.slice(0,7)+'-15'; return per.slice(0,7)+'-'+q; }
+function updNomina(id, campo, val){ const o={}; o[campo]=Number(String(val).replace(/[^\d.-]/g,''))||0; sb.from('nomina').update(o).eq('id',id).then(r=>{ if(r.error) showToast('Error: '+r.error.message,'error'); else renderNomina(); }); }
+async function delNomina(id){ if(!confirm('¿Quitar este empleado del período?')) return; await sb.from('nomina').delete().eq('id',id); renderNomina(); }
+async function cargarNominaBase(){
+  const per = window._nomPeriodo;
+  const rows = NOMINA_BASE_8I8.map(e=>({ periodo:per, tipo_doc:e[0], documento:e[1], nombre:e[2], cargo:e[3], sueldo_base:e[4], aux_transporte:e[5], dias:15, valor_extras:0, deducciones:0, edificio:'kubik', user_id:currentUser.id }));
+  const { error } = await sb.from('nomina').insert(rows);
+  if(error) showToast('Error: '+error.message,'error'); else { showToast('✅ Plantilla base cargada — ajusta días y novedades','success'); renderNomina(); }
+}
+async function copiarNominaAnterior(){
+  const per = window._nomPeriodo;
+  const { data } = await sb.from('nomina').select('*').lt('periodo', per).order('periodo',{ascending:false}).limit(60);
+  if(!data||!data.length){ showToast('No hay períodos anteriores — usa la plantilla base','error'); return; }
+  const ant = data[0].periodo;
+  const rows = data.filter(r=>r.periodo===ant).map(r=>({ periodo:per, tipo_doc:r.tipo_doc, documento:r.documento, nombre:r.nombre, cargo:r.cargo, sueldo_base:r.sueldo_base, aux_transporte:r.aux_transporte, dias:15, valor_extras:0, deducciones:0, edificio:'kubik', user_id:currentUser.id }));
+  const { error } = await sb.from('nomina').insert(rows);
+  if(error) showToast('Error: '+error.message,'error'); else { showToast('✅ Copiado del período '+ant,'success'); renderNomina(); }
+}
+async function addEmpleadoNomina(){
+  const nombre = prompt('Nombre completo:'); if(!nombre) return;
+  const cargo = prompt('Cargo:')||''; const doc = prompt('Documento:')||'';
+  const base = Number(String(prompt('Sueldo base mensual ($):')||'0').replace(/[^\d]/g,''))||0;
+  const { error } = await sb.from('nomina').insert({ periodo:window._nomPeriodo, tipo_doc:'Cédula de Ciudadanía', documento:doc, nombre, cargo, sueldo_base:base, aux_transporte: base<=3502000?124548:0, dias:15, valor_extras:0, deducciones:0, edificio:'kubik', user_id:currentUser.id });
+  if(error) showToast('Error: '+error.message,'error'); else renderNomina();
+}
+function compartirNomina(){
+  sb.from('nomina').select('*').eq('periodo', window._nomPeriodo).order('nombre').then(({data})=>{
+    const rows=data||[]; const f$=n=>'$'+Math.round(Number(n)||0).toLocaleString('es-CO');
+    let tot=0;
+    const lineas = rows.map(r=>{ const sp=Math.round((Number(r.sueldo_base)||0)*(Number(r.dias)||0)/30); const neto=sp+(Number(r.aux_transporte)||0)+(Number(r.valor_extras)||0)-(Number(r.deducciones)||0); tot+=neto; return `▪️ ${r.nombre} (${r.cargo||'-'}) · ${r.dias} días · Neto: ${f$(neto)}`; });
+    const txt = `💼 *8i8 Operadora SAS — Nómina ${window._nomPeriodo}*\n${rows.length} empleados\n\n${lineas.join('\n')}\n\n*TOTAL NETO: ${f$(tot)}*`;
+    compartirInforme('Nómina 8i8 — '+window._nomPeriodo, txt);
+  });
 }
 
 async function declinarLimpiezaHK() {
