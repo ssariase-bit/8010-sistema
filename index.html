@@ -3430,7 +3430,7 @@ function renderNuevaReserva() {
           </div>
           <div class="form-group">
             <label>A cargo de (razón social)</label>
-            <select id="res-cxc-razon"><option>80|10 S.A.S</option><option>LTM3 S.A.S</option></select>
+            <select id="res-cxc-razon">${(((EB&&EB().nombre)||'').indexOf('8010')===-1)?'<option>8i8 Operadora SAS</option>':'<option>80|10 S.A.S</option><option>LTM3 S.A.S</option>'}</select>
           </div>
         </div>
         <div class="form-group">
@@ -3746,7 +3746,7 @@ function generarConfirmacion(r) {
   const totalConIva = tarifaConIva * r.noches;
   const tratamiento = r.nombre.split(' ')[0].toLowerCase().endsWith('a') ? 'SRA.' : 'SR.';
     const _accent = (((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
-    const _es8010c=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1); const _larga=(Number(r.noches)||0)>30; const _razon=_es8010c?(_larga?'LTM3 SAS':'8010 SAS'):'8i8 Operadora SAS'; const _nit=_es8010c?(_larga?'900.361.992-4':'900.683.855-5'):'902.026.873-8';
+    const _es8010c=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1); const _larga=(Number(r.noches)||0)>30; const _razon=_es8010c?(_larga?'LTM3 SAS':'8010 SAS'):'8i8 Operadora SAS'; const _nit=_es8010c?(_larga?'900.361.992-4':'900.683.855-5'):'902.026.873-8'; const _email=_es8010c?'recepcion@8010urbanliving.com':'recepcion@8i8op.com';
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -3819,7 +3819,7 @@ function generarConfirmacion(r) {
     <tr><td>Tarifa Apartamento por Mes</td><td>N/A</td></tr>
     <tr><td>Valor Total del Contrato</td><td class="bold-val">$ ${totalConIva.toLocaleString('es-CO')} ${monedaLabel}${esExento ? ' + IVA' : ' (IVA incluido)'}</td></tr>
     ${esUSD ? `<tr><td>Moneda de cobro</td><td><strong>USD — Dólares americanos</strong></td></tr><tr><td>TRM</td><td>Del día en que se efectúe el pago</td></tr>` : `<tr><td>TRM</td><td>N/A</td></tr>`}
-    <tr><td>Forma de Pago</td><td>${/factur/i.test(r.pago||'') ? `Pago <strong>POR FACTURAR</strong> &mdash; <strong>${r.cxcTipo||'CxC Full'}</strong> a cargo de la empresa.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>` : `Pago <strong>${r.pago.toUpperCase()}</strong> ${r.estadoPago==='Pagado' ? '&mdash; <strong>YA PAGADA</strong>' : (r.estadoPago==='50% adelanto' ? '&mdash; <strong>50% de adelanto recibido</strong>, saldo a su llegada' : 'por parte del Cliente <strong>a su llegada</strong>')}.<br>Facturar por <strong>${r.cxcRazon||'80|10 S.A.S'}</strong>`}</td></tr>
+    <tr><td>Forma de Pago</td><td>${/factur/i.test(r.pago||'') ? `Pago <strong>POR FACTURAR</strong> &mdash; <strong>${r.cxcTipo||'CxC Full'}</strong> a cargo de la empresa.<br>Facturar por <strong>${r.cxcRazon||_razon}</strong>` : `Pago <strong>${r.pago.toUpperCase()}</strong> ${r.estadoPago==='Pagado' ? '&mdash; <strong>YA PAGADA</strong>' : (r.estadoPago==='50% adelanto' ? '&mdash; <strong>50% de adelanto recibido</strong>, saldo a su llegada' : 'por parte del Cliente <strong>a su llegada</strong>')}.<br>Facturar por <strong>${r.cxcRazon||_razon}</strong>`}</td></tr>
     <tr>
       <td>Incluidos en la Tarifa</td>
       <td>
@@ -3856,7 +3856,7 @@ function generarConfirmacion(r) {
   <div class="firma" style="margin-top:20px">
     <p class="nombre-firma">${r.firmante || 'Fabio Malaver'}</p>
     <p class="nombre-firma">${r.cargo || 'Jefe de Administradores'}</p>
-    <p><a href="mailto:recepcion@8010urbanliving.com" style="color:#333">recepcion@8010urbanliving.com</a></p>
+    <p><a href="mailto:${_email}" style="color:#333">${_email}</a></p>
   </div>
 
   <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:30px">
