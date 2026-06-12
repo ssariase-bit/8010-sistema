@@ -3289,7 +3289,7 @@ function renderNuevaReserva() {
             <label>Apartamento *</label>
             <select id="res-apto" onchange="calcReserva();actualizarConfigApto()">
               <option value="">— Seleccionar —</option>
-              ${EB().aptosFull.map(a=>`<option value="${a}">${a}</option>`).join('')}
+              ${EB().aptosFull.map(a=>`<option value="${a}">${a}</option>`).join('')}${(((EB&&EB().nombre)||'').indexOf('8010')===-1)?[3,4,5,6,7,8,9].map(_f=>`<option value="TR${_f}">Two Residence Piso ${_f} (${_f}02+${_f}03)</option>`).join(''):''}
             </select>
           </div>
           <div class="form-group">
@@ -3562,6 +3562,8 @@ async function guardarReserva() {
   btn.innerHTML = '<span class="spinner"></span>Registrando...'; btn.disabled = true;
 
   // Crear un registro en rack por cada día de la estadía
+  const _trM = /^TR(\d+)$/.exec(apto);
+  const _aptosW = _trM ? [_trM[1]+'02', _trM[1]+'03'] : [apto];
   const rows = [];
   for (let i = 0; i < noches; i++) {
     const d = new Date(ci);
@@ -3569,14 +3571,14 @@ async function guardarReserva() {
     const fecha = d.toISOString().split('T')[0];
     const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
-    rows.push({ fecha, apto, estado, huesped: nombre, tarifa: tNoche || null, canal, iva, updated_by: currentUser.id });
+    for (const _a of _aptosW) rows.push({ fecha, apto:_a, estado, huesped: nombre, tarifa: tNoche || null, canal, iva, updated_by: currentUser.id });
   }
   // Día de check-out
   const dco = new Date(co);
-  rows.push({ fecha: co, apto, estado: 'Check-out hoy', huesped: nombre, tarifa: null, canal, iva, updated_by: currentUser.id });
+  for (const _a of _aptosW) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, tarifa: null, canal, iva, updated_by: currentUser.id });
 
   // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
-  await sb.from('rack').delete().eq('apto', apto).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
+  await sb.from('rack').delete().in('apto', _aptosW).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
   const { error } = await sb.from('rack').insert(rows);
 
   if (error) {
@@ -3722,15 +3724,16 @@ function generarConfirmacion(r) {
     const _bb=_ap.replace(/A$/,'');
     const _ln=_bb.slice(-2);
     const _cfg=r.config;
-    let _mk=null,_nm='Apartamento',_hb='';
-    if(_bb==='PH1'){_mk=_M['PH1'];_nm='Penthouse';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas dobles';}
+    let _mk=null,_nm='Apartamento',_hb='',_disp=_ap;const _mtr=/^TR(\d+)$/.exec(_ap);
+    if(_mtr){const _f=_mtr[1];_mk=(_M[_f+'02']||0)+(_M[_f+'03']||0);_nm='Two Residence';_hb='2 habitaciones: 01 cama Queen + 01 cama Queen';_disp=_f+'02+'+_f+'03';}
+    else if(_bb==='PH1'){_mk=_M['PH1'];_nm='Penthouse';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas dobles';}
     else if(_bb==='PH2'){_mk=_M['PH2'];_nm='Penthouse';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas sencillas';}
     else if(_cfg==='deluxe'||_isA){_mk=_M[_bb+'A'];_nm='Deluxe';_hb='02 camas dobles (1.40)';}
     else if(_ln==='01'){_mk=_M[_bb];_nm='Grand Residence';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas dobles (1.40)';}
     else if(_ln==='02'){_mk=_M[_bb];_nm='Smart';_hb='01 cama Queen';}
     else if(_ln==='03'){_mk=_M[_bb];_nm='One Residence';_hb='1 habitación: 01 cama Queen';}
     else if(_ln==='04'){if(_cfg==='dividido'){_mk=_M[_bb];_nm='Suit home';_hb='1 habitación: 01 cama King';}else{_mk=(typeof _M[_bb+'A']==='number')?(_M[_bb]+_M[_bb+'A']):_M[_bb];_nm='Suit Deluxe';_hb='2 habitaciones: habitación principal con 01 cama King y habitación adicional con 02 camas dobles (1.40)';}}
-    if(_mk!=null){tipo=_ap+' - '+_nm+' '+_mk+' m²';desc=_hb+'.';}
+    if(_mk!=null){tipo=_disp+' - '+_nm+' '+_mk+' m²';desc=_hb+'.';}
   }
   const moneda = r.moneda || 'COP';
   const esUSD = moneda === 'USD';
