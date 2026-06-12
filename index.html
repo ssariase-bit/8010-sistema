@@ -407,7 +407,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-12-1940';
+const APP_VERSION = '2026-06-12-2030';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1005,12 +1005,14 @@ async function loadView(view) {
       {id:'turno',label:'Turno',type:'select',opts:['Mañana (6am-2pm)','Tarde (2pm-10pm)','Noche (10pm-6am)','Turno 12h Día (6am-6pm)','Turno 12h Noche (6pm-6am)']},
       {id:'entregado_por',label:'Entregado por',type:'text',req:true},
       {id:'recibido_por',label:'Recibido por',type:'text',req:true},
+      {id:'destino',label:'Destino de la entrega',type:'select',opts:['Entregado en persona','Dejado en cajilla de seguridad']},
       ...(EDIFICIO_ACTIVO==='kubik'
         ? [{id:'total_efectivo',label:'Caja 8i8 ($)',type:'money',default:''}]
         : [{id:'caja_ltm3',label:'Caja LTM3 ($)',type:'money',default:''},
            {id:'caja_ot',label:'Caja OT ($)',type:'money',default:''},
            {id:'caja_ph',label:'Caja PH ($)',type:'money',default:''},
            {id:'total_efectivo',label:'Total efectivo ($) — se calcula automático',type:'money',default:''}]),
+      {id:'efectivo_usd',label:'💵 Efectivo USD (US$) — si aplica',type:'money',default:''},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'turno-form':      renderTurnoForm(); break;
@@ -1218,7 +1220,7 @@ async function loadView(view) {
       {id:'valor',label:'Valor ($)',type:'money',req:true},
       {id:'entregado_por',label:'Entregado por',type:'text'},
       {id:'aprobado_por',label:'Aprobado por',type:'text'},
-      {id:'estado',label:'Estado',type:'select',opts:['Pendiente','Aprobado','Rechazado','Pagado']},
+      {id:'estado',label:'Estado',type:'select',opts:['Pendiente','Aprobado','Reembolso recibido completo','Reembolso recibido parcial','Rechazado','Pagado']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
 
@@ -3340,6 +3342,13 @@ function renderNuevaReserva() {
             </div>
           </div>
           <div class="form-group">
+            <label>Modalidad de tarifa</label>
+            <select id="res-tipotarifa">
+              <option value="TxN">TxN — Por noche</option>
+              <option value="TxD">TxD — Por día (se cobra una noche adicional)</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label>Total estadía</label>
             <input type="text" id="res-total" readonly style="background:#E2EFDA;font-weight:bold;color:var(--verde)">
           </div>
@@ -3606,6 +3615,9 @@ async function guardarReserva() {
     nombre, apto, noches, tarifa,
     checkin: ci, checkout: co,
     canal, iva: document.getElementById('res-iva')?.value || 'incluido', empresa: document.getElementById('res-empresa').value.trim(),
+    moneda: document.getElementById('res-moneda')?.value || 'COP',
+    config: document.getElementById('res-config')?.value || 'completo',
+    tipoTarifa: document.getElementById('res-tipotarifa')?.value || 'TxN',
     pago: document.getElementById('res-pago').value,
     estadoPago: document.getElementById('res-estadopago')?.value || 'Pendiente',
     numReserva: document.getElementById('res-num-reserva')?.value.trim() || '',
@@ -3640,6 +3652,7 @@ function previsualizarConfirmacion() {
     nombre, apto, noches, tarifa,
     config: document.getElementById('res-config')?.value || 'completo',
     moneda: document.getElementById('res-moneda')?.value || 'COP',
+    tipoTarifa: document.getElementById('res-tipotarifa')?.value || 'TxN',
     iva: document.getElementById('res-iva')?.value || 'incluido',
     checkin: ci, checkout: co,
     canal: document.getElementById('res-canal').value,
@@ -3795,7 +3808,9 @@ function generarConfirmacion(r) {
 <body>
 <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
 <div class="page">
-    <div style="border-bottom:3px solid ${_accent};padding-bottom:12px;margin-bottom:22px;text-align:center"><img src="${EB().logo}" alt="" style="height:48px"></div>
+    <div style="border-bottom:3px solid ${_accent};padding-bottom:12px;margin-bottom:22px;text-align:center">${_es8010c
+      ? `<span style="font-size:34px;font-weight:900;letter-spacing:-1px;color:#1c1c1c">80<span style="color:#B8963E">|</span>10</span><div style="font-size:9px;letter-spacing:6px;color:#666;margin-top:2px">URBAN LIVING</div>`
+      : `<span style="font-size:28px;font-weight:800;letter-spacing:4px;color:#1c1c1c">KUBIK<span style="font-weight:400;color:#666"> LIVING</span> 8i8</span>`}</div>
   <h1>CONFIRMACIÓN DE RESERVA</h1>
 
   <p class="fecha">Bogotá D.C., ${fechaDoc}</p>
@@ -3811,15 +3826,14 @@ function generarConfirmacion(r) {
     <tr><td>Confirmación de la Reserva</td><td>${r.numReserva ? r.numReserva : r.numero+'/'+new Date().getFullYear().toString().slice(-2)}</td></tr>
     <tr><td>Tipo de Apartamento</td><td>${tipo}</td></tr>
     <tr><td>Descripción del Apartamento</td><td>${desc}</td></tr>
-    <tr><td>Número de personas</td><td>${r.personas || '1 adulto'}</td></tr><tr><td>PAX</td><td>${r.pax || '1'}</td></tr>
+    <tr><td>Número de personas</td><td>${r.personas || '1 adulto'}</td></tr>
+    <tr><td>Modalidad de Tarifa</td><td>${r.tipoTarifa==='TxD' ? '<strong>TxD — Por día</strong> (se cobra una noche adicional)' : 'TxN — Por noche'}</td></tr>
     <tr><td>Fecha de Entrada</td><td>${fmtFechaLarga(r.checkin)}</td></tr>
     <tr><td>Fecha de Salida</td><td>${fmtFechaLarga(r.checkout)}</td></tr>
-    <tr><td>Total de Días</td><td>N/A</td></tr>
-    <tr><td>Tarifa Apartamento por Día</td><td>N/A</td></tr>
-    <tr><td>Total de Noches</td><td>${String(r.noches).padStart(2,'0')} noche${r.noches>1?'s':''}</td></tr>
-    <tr><td>Tarifa Apartamento por Noche</td><td>$ ${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${esExento ? ' + IVA' : ' (sin IVA)'}</td></tr>
-    ${!esExento ? `<tr><td>IVA (19%)</td><td>$ ${iva.toLocaleString('es-CO')} ${monedaLabel}</td></tr>
-    <tr><td>Tarifa por noche + IVA</td><td><strong>$ ${tarifaConIva.toLocaleString('es-CO')} ${monedaLabel}</strong></td></tr>` : ''}
+    <tr><td>Total de Días</td><td>${r.tipoTarifa==='TxD' ? String(r.noches).padStart(2,'0')+' día'+(r.noches>1?'s':'') : 'N/A'}</td></tr>
+    <tr><td>Tarifa Apartamento por Día</td><td>${r.tipoTarifa==='TxD' ? '$ '+r.tarifa.toLocaleString('es-CO')+' '+monedaLabel+(esExento?'':' + IVA') : 'N/A'}</td></tr>
+    <tr><td>Total de Noches</td><td>${r.tipoTarifa==='TxD' ? 'N/A' : String(r.noches).padStart(2,'0')+' noche'+(r.noches>1?'s':'')}</td></tr>
+    <tr><td>Tarifa Apartamento por Noche</td><td>${r.tipoTarifa==='TxD' ? 'N/A' : '$ '+r.tarifa.toLocaleString('es-CO')+' '+monedaLabel+(esExento?'':' + IVA')}</td></tr>
     <tr><td>Tarifa Apartamento por Mes</td><td>N/A</td></tr>
     <tr><td>Valor Total del Contrato</td><td class="bold-val">$ ${totalConIva.toLocaleString('es-CO')} ${monedaLabel}${esExento ? ' + IVA' : ' (IVA incluido)'}</td></tr>
     ${esUSD ? `<tr><td>Moneda de cobro</td><td><strong>USD — Dólares americanos</strong></td></tr><tr><td>TRM</td><td>Del día en que se efectúe el pago</td></tr>` : `<tr><td>TRM</td><td>N/A</td></tr>`}
@@ -3863,6 +3877,7 @@ function generarConfirmacion(r) {
     <p><a href="mailto:${_email}" style="color:#333">${_email}</a></p>
   </div>
 
+  <div style="margin-top:18px;padding:10px 14px;background:#F5F3EE;border-left:3px solid ${_accent};font-size:11px;line-height:1.5"><strong>📋 Guía de Comportamiento:</strong> hace parte integral de esta confirmación de reserva. Consúltela en: <a href="https://ssariase-bit.github.io/8010-sistema/guia.pdf" style="color:#1F3864">ssariase-bit.github.io/8010-sistema/guia.pdf</a></div>
   <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:30px">
     <p class="codigo">${_razon} &nbsp;·&nbsp; NIT ${_nit}</p>
     <div class="logo-footer">
@@ -3884,14 +3899,14 @@ function generarConfirmacion(r) {
   const emailDest = r.email ? encodeURIComponent(r.email) : '';
 
   const botonesHTML = `
-  <div style="position:fixed;top:0;left:0;right:0;background:#1D3461;padding:10px 20px;display:flex;gap:8px;align-items:center;z-index:9999;box-shadow:0 2px 10px rgba(0,0,0,.3);flex-wrap:wrap">
+  <div class="no-print" style="position:fixed;top:0;left:0;right:0;background:#1D3461;padding:10px 20px;display:flex;gap:8px;align-items:center;z-index:9999;box-shadow:0 2px 10px rgba(0,0,0,.3);flex-wrap:wrap">
     <span style="color:white;font-weight:700;font-size:13px;margin-right:8px">📋 Confirmación ${r.numero}</span>
     <button onclick="window.print()" style="background:white;color:#1D3461;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button>
     <a href="mailto:${emailDest}?subject=Confirmaci%C3%B3n%20Reserva%208010%20Urban%20Living&body=${confirmMsg}" style="background:#27AE60;color:white;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;text-decoration:none">📧 Enviar por Email</a>
     <a href="https://wa.me/${_telC}?text=${waMsg}" target="_blank" style="background:#25D366;color:white;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;text-decoration:none">💬 WhatsApp${_telC?' al huésped':''}</a>
     <a href="${guiaUrl}" target="_blank" style="background:#B8963E;color:white;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;text-decoration:none">📖 Guía de Comportamiento</a>
   </div>
-  <div style="height:52px"></div>`;
+  <div class="no-print" style="height:52px"></div>`;
 
   const htmlConBotones = html.replace('<body>', '<body>' + botonesHTML);
 
@@ -5088,6 +5103,7 @@ async function registrarSalidaPersonal(id) {
 // ═══════════════════════════════════════════════════════════
 function normTel(t){ t=String(t==null?'':t).replace(/\D/g,''); if(!t) return ''; if(t.length===10&&t.charAt(0)==='3') t='57'+t; return t; }
 function _telDeFila(refId){ var suf=refId.replace(/^dc-/,'').replace(/^tel-/,''); var tEl=document.getElementById('tel-'+suf); if(tEl&&tEl.value) return normTel(tEl.value); var el=document.getElementById(refId); return normTel(el?(el.dataset.tel||''):''); }
+async function guardarNotaHuesped(id, apto, val){ var r=await sb.from('rack').select('huesped').eq('id', id).single(); var hu=(r.data&&r.data.huesped)||''; var d2=new Date(TODAY+'T00:00:00'); d2.setDate(d2.getDate()+400); var hasta=d2.toISOString().split('T')[0]; var q; if(hu){ q=await sb.from('rack').update({ observaciones: val||null }).eq('apto', apto).eq('edificio', EDIFICIO_ACTIVO).eq('huesped', hu).gte('fecha', TODAY).lte('fecha', hasta); } else { q=await sb.from('rack').update({ observaciones: val||null }).eq('id', id); } if(q.error) showToast('Error guardando nota: '+q.error.message,'error'); else showToast('📝 Nota guardada','success'); }
 async function guardarTelHuesped(id, apto, val){ var tel=normTel(val); var r=await sb.from('rack').select('huesped').eq('id', id).single(); var hu=(r.data&&r.data.huesped)||''; var d1=new Date(TODAY+'T00:00:00'); d1.setDate(d1.getDate()-60); var d2=new Date(TODAY+'T00:00:00'); d2.setDate(d2.getDate()+400); var desde=d1.toISOString().split('T')[0], hasta=d2.toISOString().split('T')[0]; var q; if(hu){ q=await sb.from('rack').update({ telefono: tel||null }).eq('apto', apto).eq('edificio', EDIFICIO_ACTIVO).eq('huesped', hu).gte('fecha', desde).lte('fecha', hasta); } else { q=await sb.from('rack').update({ telefono: tel||null }).eq('id', id); } if(q.error) showToast('Error guardando teléfono: '+q.error.message,'error'); else showToast('📱 WhatsApp guardado para toda la estadía','success'); }
 function anuncioMasivo(){
   var body=(document.getElementById('anuncio-body')||{}).value||'';
@@ -5141,7 +5157,7 @@ async function renderEstadoHuespedes() {
               <td>${r.checkin ? fmtDate(r.checkin) : '-'}</td>
               <td>${r.checkout ? fmtDate(r.checkout) : '-'}</td>
               <td>${r.tarifa ? '$'+fmtNum(r.tarifa) : '-'}</td>
-              <td style="max-width:140px;font-size:11px">${r.observaciones||'-'}</td>
+              <td style="max-width:170px"><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Nota del huésped..." title="Se guarda sola al salir del campo" style="width:160px;padding:4px;font-size:11px" onchange="guardarNotaHuesped('${r.id}','${r.apto}',this.value)"></td>
               <td>${_esKL?`<input id="tel-${r.id}" value="${r.telefono||''}" placeholder="📱 WhatsApp" title="WhatsApp del huésped — se guarda solo al salir del campo" style="width:108px;padding:4px;font-size:11px" onchange="guardarTelHuesped('${r.id}','${r.apto}',this.value)"> <input id="dc-${r.id}" data-nombre="${String(r.huesped||'').replace(/"/g,'')}" data-tel="${r.telefono||''}" placeholder="Cód. puerta" style="width:84px;padding:4px;font-size:11px"> <button onclick="waBienvenida('dc-${r.id}')" class="btn btn-sm" style="background:#25D366;color:#fff">💬 Bienvenida</button> <button onclick="waAnuncio('dc-${r.id}')" class="btn btn-sm" style="background:#1D3461;color:#fff">📢</button> `:''}<button onclick="openAptoModal('${r.id}','${r.apto}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
             </tr>`).join('')}
             <tr style="background:var(--azul-c);font-weight:700">
@@ -5408,14 +5424,17 @@ async function renderNovedadesDiarias() {
 async function compartirNovedadesDiarias() {
   const { data } = await sb.from('novedades').select('*').eq('fecha', TODAY).order('created_at',{ascending:false});
   const rows = data || [];
-  const abiertas = rows.filter(r=>r.estado!=='Resuelto');
-  const txt = `📋 *8010 Urban Living — Novedades ${fmtDate(TODAY)}*
+  const abiertas = rows.filter(r=>r.estado!=='Resuelto' && r.estado!=='Cerrado');
+  const resueltas = rows.filter(r=>r.estado==='Resuelto' || r.estado==='Cerrado');
+  const txt = `📋 *${EB().nombre} — Novedades ${fmtDate(TODAY)}*
 
-*TOTAL:* ${rows.length} | Abiertas: ${abiertas.length} | Resueltas: ${rows.length-abiertas.length}
+*TOTAL:* ${rows.length} | Abiertas: ${abiertas.length} | Resueltas: ${resueltas.length}
 
 ${abiertas.length>0?'*⚠️ ABIERTAS:*\n'+abiertas.map(n=>`▪️ [${n.prioridad}] ${n.area||'-'}: ${n.descripcion?.substring(0,80)} (${n.estado})`).join('\n'):'✅ Sin novedades abiertas'}
 
-_Reporte: ${new Date().toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true})} — Sistema 8010_`;
+${resueltas.length>0?'*✅ RESUELTAS / CERRADAS HOY:*\n'+resueltas.map(n=>`▪️ [${n.prioridad}] ${n.area||'-'}: ${n.descripcion?.substring(0,120)}`).join('\n'):'— Ninguna resuelta hoy'}
+
+_Reporte: ${new Date().toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true})} — Sistema ${EB().nombre}_`;
   compartirInforme('Novedades Diarias — ' + fmtDate(TODAY), txt);
 }
 
@@ -5743,6 +5762,9 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
         </div>
         <div class="form-group"><label>Quien reporta</label><input type="text" id="cki-quien" value="${nombre}" placeholder="Tu nombre"></div>
       </div>
+      <div class="form-group"><label>Migración Colombia</label>
+        <select id="cki-migracion"><option>No aplica</option><option>Sí, se envía reporte de ingreso</option></select>
+      </div>
       <div class="form-group"><label>Observaciones adicionales</label><textarea id="cki-obs" placeholder="Detalles adicionales..." style="min-height:60px"></textarea></div>
       <div class="form-actions">
         <button class="btn btn-outline btn-sm" onclick="loadView(window._currentView||'dashboard')">Cancelar</button>
@@ -5816,8 +5838,9 @@ function generarMsgCKI() {
 
   const _fh = fmtFH12();
   const cobroObs = (document.getElementById('cki-cobro')?.value || '').trim();
+  const migCKI = (document.getElementById('cki-migracion')?.value || '').startsWith('Sí') ? ', se envía reporte de ingreso a Migración Colombia' : '';
   const msg = `${(function(_h){return _h<12?'Buenos días':_h<18?'Buenas tardes':'Buenas noches';})(new Date().getHours())}, ${_fh}
-Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
+Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''}${migCKI} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
   // Comunicar la estadía al RACK: una fila por noche (Check-in hoy → Ocupado → Check-out hoy)
@@ -6078,12 +6101,16 @@ async function renderEntregaEfectivos() {
     <div class="card">
       ${rows.length===0?'<div class="empty"><div class="empty-icon">💵</div><p>Sin entregas registradas</p></div>':
       `<div style="overflow-x:auto"><table class="tabla">
-        <thead><tr><th>Fecha</th><th>Turno</th><th>Entrega</th><th>Recibe</th>${_kbk?'<th>8i8</th>':'<th>LTM3</th><th>OT</th><th>PH</th>'}<th>Total</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Turno</th><th>Entrega</th><th>Recibe</th>${_kbk?'<th>8i8</th>':'<th>LTM3</th><th>OT</th><th>PH</th>'}<th>Total</th><th>USD</th><th>Destino</th><th>Obs.</th><th></th></tr></thead>
         <tbody>${rows.map(r=>`<tr>
           <td>${fmtDate(r.fecha)}</td><td>${r.turno||'-'}</td>
           <td>${r.entregado_por||'-'}</td><td>${r.recibido_por||'-'}</td>
           ${_kbk?`<td>$${fmtNum(r.total_efectivo)}</td>`:`<td>$${fmtNum(r.caja_ltm3)}</td><td>$${fmtNum(r.caja_ot)}</td><td>$${fmtNum(r.caja_ph)}</td>`}
           <td><strong>$${fmtNum(r.total_efectivo)}</strong></td>
+          <td>${r.efectivo_usd?'US$ '+fmtNum(r.efectivo_usd):'-'}</td>
+          <td style="font-size:11px">${r.destino||'-'}</td>
+          <td style="font-size:11px;max-width:130px">${r.observaciones||'-'}</td>
+          <td style="white-space:nowrap">${_btnsEdit('entrega_efectivos', r.id)}</td>
         </tr>`).join('')}</tbody>
       </table></div>`}
     </div>`;
