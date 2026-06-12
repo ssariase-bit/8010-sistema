@@ -407,7 +407,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-12-1900';
+const APP_VERSION = '2026-06-12-1940';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -5726,6 +5726,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
           <select id="cki-equipaje"><option>Declina acompañamiento</option><option>Acepta acompañamiento</option></select>
         </div>
       </div>
+      <div class="form-group"><label>💬 Comentario de cobro (opcional — sale junto al pago en el mensaje)</label><input type="text" id="cki-cobro" placeholder="Ej: paga el 50%, saldo lo cancela al CKO"></div>
       <div class="form-row">
         <div class="form-group"><label>Acta inicial</label>
           <select id="cki-acta">
@@ -5814,8 +5815,9 @@ function generarMsgCKI() {
     : (fv ? ` se genera ${fv} en ${pago}` : ` pago en ${pago}`);
 
   const _fh = fmtFH12();
+  const cobroObs = (document.getElementById('cki-cobro')?.value || '').trim();
   const msg = `${(function(_h){return _h<12?'Buenos días':_h<18?'Buenas tardes':'Buenas noches';})(new Date().getHours())}, ${_fh}
-Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
+Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
   // Comunicar la estadía al RACK: una fila por noche (Check-in hoy → Ocupado → Check-out hoy)
@@ -5844,6 +5846,8 @@ R/${quien}`;
     } catch(e) { console.error('CKI→rack:', e); }
   })();
 
+  // Registrar el informe en Novedades para que quede en el reporte del día
+  try { const _hN=new Date().getHours(); sb.from('novedades').insert({ fecha: TODAY, turno: _hN<14?'Mañana':(_hN<22?'Tarde':'Noche'), area: 'CKI — Apto ' + apto, prioridad: 'Baja', descripcion: msg, reportado_por: quien || currentProfile?.nombre || 'Recepción', estado: 'Resuelto', fecha_cierre: TODAY, user_id: currentUser.id }).then(function(r){ if (r.error) console.error('novedad CKI:', r.error); }); } catch(e) { console.error(e); }
   compartirInforme(`CKI — ${huesped} Apto ${apto}`, msg);
 }
 
@@ -5874,6 +5878,13 @@ function renderInformeCKO(aptoPreload, huesped, canal) {
         <div class="form-group"><label>💰 Total alojamiento estadía ($)</label><input type="number" id="cko-aloja" placeholder="0" value="0"></div>
         <div class="form-group"><label>Noches</label><input type="number" id="cko-noches" placeholder="0" value="0"></div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label>Cobro de alojamiento en este CKO ($)</label><input type="number" id="cko-cobro-aloja" placeholder="0 si ya pagó al CKI" value="0"></div>
+        <div class="form-group"><label>Forma de pago alojamiento</label>
+          <select id="cko-pago-aloja"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label>💬 Comentario de cobro (opcional — sale junto al pago en el mensaje)</label><input type="text" id="cko-cobro" placeholder="Ej: cancela saldo pendiente del alojamiento"></div>
       <div class="form-row">
         <div class="form-group"><label>No. Factura</label><input type="text" id="cko-fv" placeholder="FV UL0000"></div>
         <div class="form-group"><label>Migración Colombia</label>
@@ -5956,11 +5967,17 @@ function generarMsgCKO() {
   const _fh = fmtFH12();
   const aloja = Number(document.getElementById('cko-aloja')?.value) || 0;
   const nochesT = Number(document.getElementById('cko-noches')?.value) || 0;
+  const cobroAloja = Number(document.getElementById('cko-cobro-aloja')?.value) || 0;
+  const pagoAloja = document.getElementById('cko-pago-aloja')?.value || '';
+  const cobroObs = (document.getElementById('cko-cobro')?.value || '').trim();
+  const cobroStr = cobroAloja > 0 ? `, realiza el pago del alojamiento ($${cobroAloja.toLocaleString('es-CO')} ${pagoAloja})` : '';
   const totalStr = (aloja>0||consumos>0) ? `\n💰 Total estadía: $${aloja.toLocaleString('es-CO')} alojamiento${nochesT?` (${nochesT} noche${nochesT===1?'':'s'})`:''}${consumos>0?` + $${consumos.toLocaleString('es-CO')} consumos`:''} = $${(aloja+consumos).toLocaleString('es-CO')}` : '';
   const msg = `${h<12?'Buenos días':h<18?'Buenas tardes':'Buenas noches'}, ${_fh}
-Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${consumosStr}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}${totalStr}
+Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${cobroStr}${consumosStr}${cobroObs?' ('+cobroObs+')':''}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}${totalStr}
 R/${quien}`;
 
+  // Registrar el informe en Novedades para que quede en el reporte del día
+  try { const _hN=new Date().getHours(); sb.from('novedades').insert({ fecha: TODAY, turno: _hN<14?'Mañana':(_hN<22?'Tarde':'Noche'), area: 'CKO — Apto ' + apto, prioridad: 'Baja', descripcion: msg, reportado_por: quien || currentProfile?.nombre || 'Recepción', estado: 'Resuelto', fecha_cierre: TODAY, user_id: currentUser.id }).then(function(r){ if (r.error) console.error('novedad CKO:', r.error); }); } catch(e) { console.error(e); }
   // Mostrar modal de compartir + botón para actualizar el rack
   window._ckoHuesped = huesped; // para que el rack registre el CKO aunque hoy no tenga fila
   if (consumos > 0) { sb.from('consumos').insert({ fecha: TODAY, apto, huesped, valor: consumos, pago, factura: fv || null, user_id: currentUser.id }).then(function(r){ if (r.error) console.error('consumos:', r.error); else showToast('💵 Consumo de $' + consumos.toLocaleString('es-CO') + ' registrado en Ingresos', 'success'); }); }
