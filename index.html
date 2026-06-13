@@ -415,13 +415,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-12-2210';
+const APP_VERSION = '2026-06-12-2220';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
     if(!r.ok) return;
     const t = await r.text();
-    const m = t.match(/const APP_VERSION = '2026-06-12-2210']+)'/);
+    const m = t.match(/const APP_VERSION = '([^']+)'/);
     if(!m) return;
     const sv = m[1];
     if(sv && sv !== APP_VERSION){
