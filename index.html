@@ -415,7 +415,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-12-2230';
+const APP_VERSION = '2026-06-12-2240';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1059,11 +1059,14 @@ async function loadView(view) {
       {id:'apto',label:'Apartamento',type:'text',req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'tipo',label:'Tipo',type:'select',opts:['Contrato','Otrosí','Renovación']},
-      {id:'fecha_inicio',label:'Fecha inicio',type:'date'},
-      {id:'fecha_vencimiento',label:'Fecha vencimiento',type:'date',req:true},
-      {id:'otro_si',label:'Otro Sí (renovación)',type:'select',opts:['false','true']},
-      {id:'otro_si_vigencia',label:'Vigencia Otro Sí (nueva fecha fin)',type:'date'},
       {id:'estado',label:'Estado',type:'select',opts:['Activo','Vencido','Por vencer','Cancelado']},
+      {type:'section',label:'Vigencia del Contrato'},
+      {id:'fecha_inicio',label:'Fecha inicio',type:'date'},
+      {id:'fecha_vencimiento',label:'Fecha fin (vencimiento)',type:'date',req:true},
+      {type:'section',label:'Otro Sí — Renovación'},
+      {id:'otro_si',label:'¿Tiene Otro Sí?',type:'select',opts:['No','Sí']},
+      {id:'otro_si_vigencia',label:'Nueva fecha fin (Otro Sí)',type:'date'},
+      {type:'section',label:'Carpeta'},
       {id:'carpeta_completa',label:'¿Carpeta completa?',type:'select',opts:['true','false']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
@@ -3956,6 +3959,7 @@ function generarConfirmacion(r) {
 function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window._genEditId=null;
   const nombre = currentProfile?.nombre || '';
   const fieldsHTML = campos.filter(f => !f.hidden).map(f => {
+    if (f.type === 'section') return {_sec:true, html:`<div style="grid-column:1/-1;margin:14px 0 2px;padding-bottom:5px;border-bottom:2px solid var(--azul);color:var(--azul);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.6px">${f.label}</div>`};
     let input = '';
     const val = f.default || '';
     if (f.type === 'select') {
@@ -3970,14 +3974,14 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     return `<div class="form-group"><label>${f.label}${f.req?' *':''}</label>${input}</div>`;
   });
 
-  // Agrupar en pares
-  let rows = '';
-  for (let i = 0; i < fieldsHTML.length; i += 2) {
-    if (i + 1 < fieldsHTML.length) {
-      rows += `<div class="form-row">${fieldsHTML[i]}${fieldsHTML[i+1]}</div>`;
-    } else {
-      rows += `<div class="form-row col1">${fieldsHTML[i]}</div>`;
-    }
+  // Agrupar en pares; sections siempre full-width
+  let rows = ''; let _fi = 0;
+  while (_fi < fieldsHTML.length) {
+    const _cur = fieldsHTML[_fi];
+    if (_cur?._sec) { rows += `<div class="form-row col1">${_cur.html}</div>`; _fi++; continue; }
+    const _nxt = fieldsHTML[_fi+1];
+    if (_nxt && !_nxt?._sec) { rows += `<div class="form-row">${_cur}${_nxt}</div>`; _fi += 2; }
+    else { rows += `<div class="form-row col1">${_cur}</div>`; _fi++; }
   }
 
   const hiddenHTML = campos.filter(f => f.hidden).map(f => `<input type="${f.type}" id="gf-${f.id}" value="${f.default||''}" style="display:none">`).join('');
