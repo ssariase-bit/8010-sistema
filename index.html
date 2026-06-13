@@ -415,7 +415,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-12-2220';
+const APP_VERSION = '2026-06-12-2230';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1054,13 +1054,15 @@ async function loadView(view) {
     case 'mantenimiento-list': await renderMantList(); break;
     case 'turnos-list':        await renderTurnosList(); break;
     case 'hk-list':            await renderHKList(); break;
-    case 'contratos-list':     await renderList('contratos','📄 Contratos','contratos-form',['apto','arrendatario','tipo','fecha_vencimiento','estado','carpeta_completa'],['Apto','Arrendatario','Tipo','Vencimiento','Estado','Carpeta']); break;
+    case 'contratos-list':     await renderList('contratos','📄 Contratos','contratos-form',['apto','arrendatario','tipo','otro_si','otro_si_vigencia','fecha_vencimiento','estado','carpeta_completa'],['Apto','Arrendatario','Tipo','Otro Sí','Vigencia Otro Sí','Vencimiento','Estado','Carpeta']); break;
     case 'contratos-form':     renderGenForm('contratos','📄 Nuevo Contrato / Otrosí',[
       {id:'apto',label:'Apartamento',type:'text',req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'tipo',label:'Tipo',type:'select',opts:['Contrato','Otrosí','Renovación']},
       {id:'fecha_inicio',label:'Fecha inicio',type:'date'},
       {id:'fecha_vencimiento',label:'Fecha vencimiento',type:'date',req:true},
+      {id:'otro_si',label:'Otro Sí (renovación)',type:'select',opts:['false','true']},
+      {id:'otro_si_vigencia',label:'Vigencia Otro Sí (nueva fecha fin)',type:'date'},
       {id:'estado',label:'Estado',type:'select',opts:['Activo','Vencido','Por vencer','Cancelado']},
       {id:'carpeta_completa',label:'¿Carpeta completa?',type:'select',opts:['true','false']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
