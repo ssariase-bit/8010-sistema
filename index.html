@@ -294,6 +294,10 @@ textarea{resize:vertical;min-height:80px}
         </select>
       </div>
     </div>
+    <div class="form-group">
+      <label>Empresa / Razón social</label>
+      <input type="text" id="m-empresa" placeholder="Ej: EY Colombia — dejar vacío si es particular">
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label>IVA</label>
@@ -407,13 +411,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-12-2130';
+const APP_VERSION = '2026-06-12-2200';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
     if(!r.ok) return;
     const t = await r.text();
-    const m = t.match(/const APP_VERSION = '([^']+)'/);
+    const m = t.match(/const APP_VERSION = '2026-06-12-2200']+)'/);
     if(!m) return;
     const sv = m[1];
     if(sv && sv !== APP_VERSION){
@@ -1697,7 +1701,8 @@ async function renderRack() {
         }
         _tarT = _tot>0 ? 'Total estadía: $'+_tot.toLocaleString('es-CO')+_ivaSuf : 'Total estadía: $0';
       }
-      const title = rec?.huesped ? `Apto ${apto} · ${_fcT} · ${rec.huesped} · ${estTxt}${_tarT?' · '+_tarT:''}` : `Apto ${apto} · ${_fcT} · ${estTxt}`;
+      const _empT = rec?.empresa || (rec?.canal && rec.canal !== 'Particular' ? rec.canal : 'Particular');
+      const title = rec?.huesped ? `Apto ${apto} · ${_fcT} · ${rec.huesped} · ${_empT} · ${estTxt}${_tarT?' · '+_tarT:''}` : `Apto ${apto} · ${_fcT} · ${estTxt}`;
       const onclick = canEdit && rec?.id ? `openAptoModal('${rec.id}','${apto}')` : (canEdit ? `crearDiaRack('${apto}','${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}')` : '');
       // Consulta de disponibilidad: resaltar libres / atenuar ocupados dentro del rango
       const _cons = window._rackConsulta;
@@ -2008,6 +2013,7 @@ async function openAptoModal(id, num) {
   document.getElementById('m-tarifa').value  = data?.tarifa || '';
   document.getElementById('m-obs').value     = data?.observaciones || '';
   document.getElementById('m-iva').value     = data?.iva || 'incluido';
+  document.getElementById('m-empresa').value = data?.empresa || '';
 
   // Mostrar toggle "Apto Completo" solo si tiene variante A
   const varA = APTO_A_MAP[num];
@@ -2056,6 +2062,7 @@ async function saveApto() {
     tarifa: Number(document.getElementById('m-tarifa').value) || null,
     observaciones: document.getElementById('m-obs').value,
     iva: document.getElementById('m-iva')?.value || 'incluido',
+    empresa: document.getElementById('m-empresa')?.value.trim() || null,
     updated_by: currentUser.id,
     updated_at: new Date().toISOString(),
   };
@@ -5996,7 +6003,7 @@ async function renderFormatoHuespedes(yArg, mArg) {
 // ═══════════════════════════════════════════════════════════
 // INFORME CKI — CHECK IN
 // ═══════════════════════════════════════════════════════════
-function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
+function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa) {
   const h = new Date().getHours();
   const saludo = h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches';
   const nombre = currentProfile?.nombre || '';
@@ -6021,6 +6028,9 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa) {
             <option ${canal==='Corporativo'?'selected':''}>Corporativo</option>
           </select>
         </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Empresa / Razón social</label><input type="text" id="cki-empresa" value="${empresa||''}" placeholder="Dejar vacío si es particular"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>📱 WhatsApp del huésped</label><input type="tel" id="cki-tel" placeholder="+57 300 000 0000"></div>
@@ -6157,16 +6167,18 @@ R/${quien}`;
     try {
       if (!fi) return;
       const addDay = s => { const [y,m,d] = s.split('-').map(Number); return new Date(Date.UTC(y, m-1, d+1)).toISOString().split('T')[0]; };
+      // Si fi===ff (ej: 1 noche con misma fecha) o ff vacío, CKO va en fi+1
+      const ff_rack = (!ff || ff === fi) ? addDay(fi) : ff;
       const rows = [];
       let f = fi;
       for (let i = 0; i < 400; i++) {
-        const estado = f === fi ? 'Check-in hoy' : (f === ff ? 'Check-out hoy' : 'Ocupado');
-        rows.push({ fecha: f, apto, estado, huesped, telefono: normTel(document.getElementById('cki-tel')?.value) || null, tarifa: tarifa || null, canal, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
-        if (!ff || f === ff) break;
+        const estado = f === fi ? 'Check-in hoy' : (f === ff_rack ? 'Check-out hoy' : 'Ocupado');
+        rows.push({ fecha: f, apto, estado, huesped, telefono: normTel(document.getElementById('cki-tel')?.value) || null, tarifa: tarifa || null, canal, empresa: (document.getElementById('cki-empresa')?.value.trim() || null), edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+        if (f === ff_rack) break;
         f = addDay(f);
       }
       // GUARDIA: si en esas fechas ya hay OTRO huésped, pedir confirmación (evita pisar estadías por elegir mal el apto)
-      const { data: exist } = await sb.from('rack').select('fecha,huesped,estado').eq('apto', apto).gte('fecha', fi).lte('fecha', ff || fi).neq('estado','Libre');
+      const { data: exist } = await sb.from('rack').select('fecha,huesped,estado').eq('apto', apto).gte('fecha', fi).lte('fecha', ff_rack).neq('estado','Libre');
       const otros = [...new Set((exist||[]).map(r=>(r.huesped||'').trim()).filter(h=>h && h.toLowerCase()!==huesped.trim().toLowerCase()))];
       if (otros.length) {
         const ok = confirm(`⚠️ ATENCIÓN: el Apto ${apto} ya tiene a ${otros.join(', ')} en esas fechas.\n\n¿Seguro que el CKI es del Apto ${apto}? Si continúas, se SOBREESCRIBE la estadía existente.`);
@@ -6719,8 +6731,9 @@ function abrirInformeCKI() {
   const huesped = _aptoData?.huesped || '';
   const canal = _aptoData?.canal || '';
   const tarifa = _aptoData?.tarifa || '';
+  const empresa = _aptoData?.empresa || '';
   closeModal('modal-apto');
-  renderInformeCKI(apto, huesped, canal, tarifa);
+  renderInformeCKI(apto, huesped, canal, tarifa, empresa);
 }
 
 async function getNextNumeroConfirmacion() {
