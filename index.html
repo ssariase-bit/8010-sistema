@@ -415,7 +415,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-12-2240';
+const APP_VERSION = '2026-06-13-1758';
 async function checkAppVersion(){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1054,14 +1054,14 @@ async function loadView(view) {
     case 'mantenimiento-list': await renderMantList(); break;
     case 'turnos-list':        await renderTurnosList(); break;
     case 'hk-list':            await renderHKList(); break;
-    case 'contratos-list':     await renderList('contratos','📄 Contratos','contratos-form',['apto','arrendatario','tipo','otro_si','otro_si_vigencia','fecha_vencimiento','estado','carpeta_completa'],['Apto','Arrendatario','Tipo','Otro Sí','Vigencia Otro Sí','Vencimiento','Estado','Carpeta']); break;
+    case 'contratos-list':     await renderContratos(); break;
     case 'contratos-form':     renderGenForm('contratos','📄 Nuevo Contrato / Otrosí',[
       {id:'apto',label:'Apartamento',type:'text',req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'tipo',label:'Tipo',type:'select',opts:['Contrato','Otrosí','Renovación']},
       {id:'estado',label:'Estado',type:'select',opts:['Activo','Vencido','Por vencer','Cancelado']},
       {type:'section',label:'Vigencia del Contrato'},
-      {id:'fecha_inicio',label:'Fecha inicio',type:'date'},
+      {id:'fecha_inicio',label:'Fecha inicio',type:'date',req:true},
       {id:'fecha_vencimiento',label:'Fecha fin (vencimiento)',type:'date',req:true},
       {type:'section',label:'Otro Sí — Renovación'},
       {id:'otro_si',label:'¿Tiene Otro Sí?',type:'select',opts:['No','Sí']},
@@ -4114,6 +4114,7 @@ async function submitGenForm(tabla, ids, reqs) {
     showToast('⚠️ Falta completar: ' + faltantes.join(', '), 'error');
     return;
   }
+  if (typeof window._ctValidarContrato==='function'){ var _vc=window._ctValidarContrato(tabla); if(_vc){ showToast(_vc,'error'); return; } }
 
   const btn = document.querySelector('.btn-success');
   if (!btn) { console.error('No se encontró el botón de guardar'); return; }
@@ -4588,6 +4589,82 @@ async function toggleTareaFDS(id, estado){
   showToast(estado==='Realizado'?'✅ Realizada':'⬜ Pendiente','success');
   renderTareasFDS();
 }
+window._norm = function(s){ return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); };
+window._fmtD = function(iso){ if(!iso) return '—'; var p=String(iso).split('T')[0].split('-'); if(p.length<3) return iso; return p[2]+'/'+p[1]+'/'+p[0].slice(2); };
+window._esExt = function(t){ var n=window._norm(t); return n.indexOf('otros')===0 || n.indexOf('otro si')===0 || n.indexOf('renovac')===0; };
+window._compania = function(e){ return window._norm(e)==='kubik' ? 'Kubik' : '8010'; };
+window._escH = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+window._escA = function(s){ return String(s==null?'':s).replace(/'/g,'').replace(/"/g,''); };
+window._ctValidarContrato = function(tabla){
+  if(tabla!=='contratos') return null;
+  var g=function(id){ var e=document.getElementById('gf-'+id); return e?(e.value||''):''; };
+  var fi=g('fecha_inicio'), fv=g('fecha_vencimiento'), os=g('otro_si'), ov=g('otro_si_vigencia');
+  if(fi&&fv&&fv<fi) return 'La fecha fin debe ser posterior a la fecha inicio';
+  if(window._norm(os)==='si'){
+    if(!ov) return 'Marcaste Otro Si: indica la nueva fecha fin (vigencia Otro Si)';
+    if(fv&&ov<=fv) return 'La vigencia del Otro Si debe ser posterior al vencimiento del contrato';
+  }
+  return null;
+};
+window.nuevoOtroSi = function(edif, apto, arr){
+  loadView('contratos-form');
+  setTimeout(function(){
+    var set=function(id,v){ var el=document.getElementById('gf-'+id); if(el){ el.value=v; } };
+    set('apto', apto); set('arrendatario', arr);
+    var t=document.getElementById('gf-tipo'); if(t){ for(var i=0;i<t.options.length;i++){ if(window._norm(t.options[i].value).indexOf('otros')===0){ t.selectedIndex=i; break; } } }
+    if(typeof showToast==='function') showToast('Nuevo Otro Si para apto '+apto+' - '+arr+'. Completa las fechas del periodo.', 'success');
+  }, 350);
+};
+window.renderContratos = async function(filtroEdif){
+  filtroEdif = filtroEdif || '';
+  window._contratoFiltro = filtroEdif;
+  var res = await sb.from('contratos').select('*').limit(2000);
+  var rows = res.data || [];
+  var groups = {};
+  rows.forEach(function(r){
+    var key = window._norm(r.edificio)+'|'+window._norm(r.apto)+'|'+window._norm(r.arrendatario);
+    (groups[key] = groups[key] || []).push(r);
+  });
+  var cmp = function(a,b){ var ai=a.fecha_inicio||'9999', bi=b.fecha_inicio||'9999'; if(ai<bi) return -1; if(ai>bi) return 1; return String(a.created_at||'').localeCompare(String(b.created_at||'')); };
+  var items = Object.keys(groups).map(function(k){
+    var recs = groups[k].slice().sort(cmp);
+    var base = recs.filter(function(r){ return !window._esExt(r.tipo); }).sort(cmp)[0] || recs[0];
+    var exts = recs.filter(function(r){ return r.id!==base.id; }).sort(cmp);
+    return { base:base, exts:exts, edif:base.edificio };
+  });
+  if(filtroEdif) items = items.filter(function(it){ return window._norm(it.edif)===window._norm(filtroEdif); });
+  items.sort(function(a,b){ return window._norm(a.base.apto).localeCompare(window._norm(b.base.apto), undefined, {numeric:true}); });
+  var totalExt = items.reduce(function(s,it){ return s+it.exts.length; },0);
+  var mkBtn = function(val,lab){ var on = window._norm(filtroEdif)===window._norm(val); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderContratos(\''+val+'\')">'+lab+'</button>'; };
+  var body = items.map(function(it){
+    var b = it.base;
+    var contrato = window._fmtD(b.fecha_inicio)+' → '+window._fmtD(b.fecha_vencimiento);
+    var otro = '<span style="color:#9a9a9a">–</span>';
+    if(it.exts.length){
+      var lis = it.exts.map(function(e,idx){
+        var tlab = window._esExt(e.tipo)?'Otro Sí':window._escH(e.tipo);
+        return '<div style="font-size:11.5px;color:#555;line-height:1.6">'+(idx+1)+' · '+window._fmtD(e.fecha_inicio)+' → '+window._fmtD(e.fecha_vencimiento)+' <span style="color:#999">'+tlab+'</span> <span title="Editar" style="cursor:pointer" onclick="abrirEditarGen(\'contratos\',\''+e.id+'\')">✏️</span></div>';
+      }).join('');
+      otro = '<span style="background:#d7f0e3;color:#0f6e56;padding:1px 8px;border-radius:8px;font-size:11px;display:inline-block;margin-bottom:3px">'+it.exts.length+' '+(it.exts.length===1?'extensión':'extensiones')+'</span>'+lis;
+    }
+    var obs = b.observaciones ? window._escH(b.observaciones) : '<span style="color:#bbb">—</span>';
+    var acc = '<span title="Editar contrato" style="cursor:pointer" onclick="abrirEditarGen(\'contratos\',\''+b.id+'\')">✏️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarGen(\'contratos\',\''+b.id+'\')">🗑️</span><br><button class="btn btn-outline btn-sm" style="margin-top:4px;font-size:11px" onclick="nuevoOtroSi(\''+window._escA(b.edificio)+'\',\''+window._escA(b.apto)+'\',\''+window._escA(b.arrendatario)+'\')">+ Otro Sí</button>';
+    return '<tr style="vertical-align:top"><td>'+window._escH(b.apto)+'</td><td>'+window._escH(b.arrendatario)+'</td><td>'+window._compania(b.edificio)+'</td><td style="white-space:nowrap">'+contrato+'</td><td>'+otro+'</td><td style="font-size:12px;color:#555">'+obs+'</td><td style="white-space:nowrap">'+acc+'</td></tr>';
+  }).join('');
+  document.getElementById('main-content').innerHTML =
+    '<div class="page-title">📄 Contratos — Trazabilidad</div>'+
+    '<div class="card"><div class="card-header">'+
+    '<div class="card-title">'+items.length+' contratos · '+totalExt+' Otro Sí</div>'+
+    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+
+    mkBtn('','Todos')+mkBtn('8010','8010')+mkBtn('kubik','Kubik')+
+    '<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar..." style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">'+
+    (typeof barraCompartir==='function'?barraCompartir():'')+
+    '<button class="btn btn-success btn-sm" onclick="loadView(\'contratos-form\')">+ Nuevo registro</button>'+
+    '</div></div>'+
+    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Apto</th><th>Arrendatario</th><th>Compañía</th><th>Contrato</th><th>Otro Sí</th><th>Observaciones</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  return { ok:true };
+};
+
 async function renderList(tabla, titulo, formView, cols, headers) {
   const { data } = await sb.from(tabla).select('*').order('created_at', { ascending: false }).limit(100);
   const rows = data || [];
