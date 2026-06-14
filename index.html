@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-14-0644';
+const APP_VERSION = '2026-06-14-0701';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3852,7 +3852,7 @@ function generarConfirmacion(r) {
 <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
 <div class="page">
     <div style="border-bottom:3px solid ${_accent};padding-bottom:12px;margin-bottom:22px;text-align:center">${_es8010c
-      ? `<span style="font-size:34px;font-weight:900;letter-spacing:-1px;color:#1c1c1c">80<span style="color:#B8963E">|</span>10</span><div style="font-size:9px;letter-spacing:6px;color:#666;margin-top:2px">URBAN LIVING</div>`
+      ? `<img src="${LOGO_DARK}" alt="80|10 Urban Living" style="max-height:64px;display:inline-block">`
       : `<span style="font-size:28px;font-weight:800;letter-spacing:4px;color:#1c1c1c">KUBIK<span style="font-weight:400;color:#666"> LIVING</span> 8i8</span>`}</div>
   <h1>CONFIRMACIÓN DE RESERVA</h1>
 
