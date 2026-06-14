@@ -415,7 +415,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-13-1848';
+const APP_VERSION = '2026-06-13-1922';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1688,10 +1688,9 @@ async function renderRack() {
       const d = i+1;
       const rec = rack[apto]?.[d];
       let est = rec?.estado || 'Libre';
-      // Día "apto completo": la A incluida, o el padre cuya A está completa ese día
       const aIncluida = _esVarA && (rec?.observaciones||'').includes('Apto completo');
       const padreConA = _varAdeApto && (rack[_varAdeApto]?.[d]?.observaciones||'').includes('Apto completo');
-      if (aIncluida || padreConA) est = 'Completo';
+      if (aIncluida || padreConA) { if (aIncluida) { var _pEst = (rack[apto.slice(0,-1)] && rack[apto.slice(0,-1)][d] && rack[apto.slice(0,-1)][d].estado) || ''; est = (_pEst === 'Sale de viaje') ? 'Sale de viaje' : 'Completo'; } else if (est !== 'Sale de viaje') { est = 'Completo'; } }
       const cm = colorMap[est] || colorMap['Libre'];
       const isHoy = esMesActual && d === todayDay;
       const apellido = rec?.huesped ? rec.huesped.split(' ').slice(-1)[0].substring(0,5) : '';
