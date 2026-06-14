@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-13-2051';
+const APP_VERSION = '2026-06-13-2059';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3412,7 +3412,7 @@ function renderNuevaReserva() {
         <div class="form-row">
           <div class="form-group">
             <label>Nombre completo *</label>
-            <input type="text" id="res-nombre" placeholder="Nombre y apellidos">
+            <input type="hidden" id="res-nombre"><div style="display:flex;gap:6px"><input type="text" id="res-nf" placeholder="Nombre(s)" oninput="combinarNombreReserva()" style="flex:1"><input type="text" id="res-ap1" placeholder="1er apellido" oninput="combinarNombreReserva()" style="flex:1"><input type="text" id="res-ap2" placeholder="2do apellido" oninput="combinarNombreReserva()" style="flex:1"></div>
           </div>
           <div class="form-group">
             <label>Documento de identidad</label>
@@ -4716,6 +4716,12 @@ window.guardarPaxHuesped = async function(id, apto, val){
     else { await sb.from('rack').update({ pax: n }).eq('id', id); }
     if(typeof showToast==='function') showToast('PAX actualizado','success');
   }catch(e){ if(typeof showToast==='function') showToast('No se pudo guardar PAX','error'); }
+};
+
+window.combinarNombreReserva = function(){
+  var g=function(id){ var e=document.getElementById(id); return e?(e.value||''):''; };
+  var full=[g('res-nf'),g('res-ap1'),g('res-ap2')].map(function(x){return (x||'').trim();}).filter(Boolean).join(' ');
+  var h=document.getElementById('res-nombre'); if(h) h.value=full;
 };
 
 async function renderList(tabla, titulo, formView, cols, headers) {
