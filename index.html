@@ -307,7 +307,7 @@ textarea{resize:vertical;min-height:80px}
         <label>IVA</label>
         <select id="m-iva">
           <option value="incluido">Incluye IVA (19%)</option>
-          <option value="exento">Exento de IVA</option>
+          <option value="encima">IVA 19% (se suma)</option><option value="exento">Exento de IVA</option><option value="no_aplica">No aplica (N/A)</option>
         </select>
       </div>
     </div>
@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-13-2059';
+const APP_VERSION = '2026-06-13-2110';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3373,7 +3373,7 @@ function renderNuevaReserva() {
             <label>IVA</label>
             <select id="res-iva" style="font-weight:600">
               <option value="incluido">Incluye IVA (19%)</option>
-              <option value="exento">Exento de IVA</option>
+              <option value="encima">IVA 19% (se suma)</option><option value="exento">Exento de IVA</option><option value="no_aplica">No aplica (N/A)</option>
             </select>
           </div>
           <div class="form-group">
@@ -3385,9 +3385,9 @@ function renderNuevaReserva() {
           </div>
           <div class="form-group">
             <label>Modalidad de tarifa</label>
-            <select id="res-tipotarifa">
+            <select id="res-tipotarifa" onchange="onModalidadReserva()">
               <option value="TxN">TxN — Por noche</option>
-              <option value="TxD">TxD — Por día (se cobra una noche adicional)</option>
+              <option value="TxD">TxD — Por día (se cobra una noche adicional)</option><option value="COMP">Complementary (cortesía)</option>
             </select>
           </div>
           <div class="form-group">
@@ -4722,6 +4722,15 @@ window.combinarNombreReserva = function(){
   var g=function(id){ var e=document.getElementById(id); return e?(e.value||''):''; };
   var full=[g('res-nf'),g('res-ap1'),g('res-ap2')].map(function(x){return (x||'').trim();}).filter(Boolean).join(' ');
   var h=document.getElementById('res-nombre'); if(h) h.value=full;
+};
+
+window.onModalidadReserva = function(){
+  var sel=document.getElementById('res-tipotarifa');
+  if(sel && sel.value==='COMP'){
+    var iva=document.getElementById('res-iva'); if(iva){ iva.value='no_aplica'; }
+    var tar=document.getElementById('res-tarifa'); if(tar){ tar.value='0'; }
+    if(typeof calcReserva==='function') calcReserva();
+  }
 };
 
 async function renderList(tabla, titulo, formView, cols, headers) {
