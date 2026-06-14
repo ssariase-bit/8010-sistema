@@ -2689,6 +2689,7 @@ async function renderHKForm() {
       <div class="form-row">
         <div class="form-group"><label>Hora ingreso</label><input type="time" id="hk-in"></div>
         <div class="form-group"><label>Hora salida</label><input type="time" id="hk-out"></div>
+        <div class="form-group"><label>Pausa (min)</label><input type="number" id="hk-pausa" min="0" placeholder="0" title="Minutos de pausa (almuerzo u otra tarea). Se descuentan del tiempo; detalla la pausa en Observaciones."></div>
       </div>
       <div class="form-group"><label>Observaciones</label>
         <textarea id="hk-obs" placeholder="Daños encontrados, faltantes, solicitudes del huésped..."></textarea>
@@ -2732,6 +2733,7 @@ async function enviarHK() {
     hora_ingreso: document.getElementById('hk-in').value || null,
     hora_salida: document.getElementById('hk-out').value || null,
     observaciones: document.getElementById('hk-obs').value,
+    pausa_min: parseInt(document.getElementById('hk-pausa') && document.getElementById('hk-pausa').value) || 0,
     user_id: currentUser.id,
   });
   if (error) { showToast('Error al registrar', 'error'); btn.innerHTML = '📤 Registrar limpieza'; btn.disabled = false; return; }
@@ -3076,6 +3078,8 @@ async function renderHKList() {
     const diff = (hs * 60 + ms) - (hi * 60 + mi);
     return diff > 0 ? diff : null;
   }
+  // Tiempo neto = bruto menos pausa (min). Registros sin pausa = bruto.
+  function netMin(h){ const m = calcMin(h.hora_ingreso, h.hora_salida); return m==null?null:Math.max(0, m-(Number(h.pausa_min)||0)); }
   function fmtMin(m) {
     if (!m) return '-';
     return m >= 60 ? `${Math.floor(m/60)}h ${m%60}min` : `${m} min`;
@@ -3119,7 +3123,7 @@ async function renderHKList() {
   rows.forEach(h => {
     if (_fPer === 'hoy' && h.fecha !== TODAY) return;
     if (!_matchCam(h.camarera)) return;
-    const m = calcMin(h.hora_ingreso, h.hora_salida);
+    const m = netMin(h);
     if (m && h.camarera) {
       const nomC = _canonNom(h.camarera);
       const k = _normNom(nomC);
@@ -3185,7 +3189,7 @@ async function renderHKList() {
           const dia = porFecha[fecha].filter(h => _matchCam(h.camarera));  // respeta filtro de camarera
           if (!dia.length) return '';
           // Promedio del día
-          const minsDelDia = dia.map(h => calcMin(h.hora_ingreso, h.hora_salida)).filter(Boolean);
+          const minsDelDia = dia.map(h => netMin(h)).filter(Boolean);
           const promDia = minsDelDia.length > 0 ? Math.round(minsDelDia.reduce((a,b)=>a+b,0)/minsDelDia.length) : null;
           // Ordenar según el criterio elegido (apto / camarera / estado)
           const _ord = window._hkOrden || 'apto';
@@ -3211,7 +3215,7 @@ async function renderHKList() {
                 <th onclick="window._hkOrden='estado';renderHKList()" style="cursor:pointer" title="Ordenar por estado">Estado ${_ord==='estado'?'▾':''}</th>
                 <th>Observaciones</th><th></th></tr></thead>
               <tbody>${_diaOrd.map(h => {
-                const mins = calcMin(h.hora_ingreso, h.hora_salida);
+                const mins = netMin(h);
                 const durColor = !mins ? '#999' : mins <= 30 ? 'var(--verde)' : mins <= 45 ? 'var(--naran)' : 'var(--rojo)';
                 return `<tr>
                   <td><strong style="color:var(--azul)">${h.apto}</strong></td>
@@ -3221,7 +3225,7 @@ async function renderHKList() {
                     ? `<strong>${h.hora_salida}</strong>`
                     : `<button onclick="registrarSalidaHK('${h.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Registrar salida</button>`
                   }</td>
-                  <td style="font-weight:700;color:${durColor}">${fmtMin(mins)}</td>
+                  <td style="font-weight:700;color:${durColor}">${fmtMin(mins)}${(Number(h.pausa_min)||0)>0?` <span style="color:#7A5C00;font-weight:400;font-size:10px">(−${h.pausa_min}m pausa)</span>`:''}</td>
                   <td><span class="badge b-${h.estado==='Limpio'?'resuelto':h.estado==='Declina limpieza'?'alta':'proceso'}">${h.estado||'-'}</span></td>
                   <td style="max-width:140px;font-size:11px">${h.observaciones||'-'}</td>
                   <td style="white-space:nowrap">${_btnsEdit('housekeeping', h.id)}</td>
@@ -7119,11 +7123,12 @@ async function compartirHK() {
   const rows = data || [];
   const completadas = rows.filter(r=>r.estado==='Limpio').length;
   function calcMin(i,s){if(!i||!s)return null;const[hi,mi]=i.split(':').map(Number);const[hs,ms]=s.split(':').map(Number);const d=(hs*60+ms)-(hi*60+mi);return d>0?d:null;}
-  const tiempos = rows.map(r=>calcMin(r.hora_ingreso,r.hora_salida)).filter(Boolean);
+  const netMin=r=>{const m=calcMin(r.hora_ingreso,r.hora_salida);return m==null?null:Math.max(0,m-(Number(r.pausa_min)||0));};
+  const tiempos = rows.map(r=>netMin(r)).filter(Boolean);
   const prom = tiempos.length>0?Math.round(tiempos.reduce((a,b)=>a+b,0)/tiempos.length):0;
   const hhmm = h => (h && h !== '00:00:00') ? h.slice(0,5) : '--:--';
   const porCam = {}; const pend = [];
-  rows.forEach(r=>{ const m = calcMin(r.hora_ingreso, r.hora_salida);
+  rows.forEach(r=>{ const m = netMin(r);
     if (r.estado === 'Limpio' && m) { const c = r.camarera || 'Sin asignar'; (porCam[c] = porCam[c] || []).push({apto:r.apto, i:hhmm(r.hora_ingreso), s:hhmm(r.hora_salida), m}); }
     else pend.push(`${r.apto} — ${r.camarera||'sin asignar'}${r.estado && r.estado!=='Limpio' ? ' (' + r.estado + ')' : ''}`);
   });
