@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-13-1935';
+const APP_VERSION = '2026-06-13-1956';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4584,7 +4584,7 @@ async function renderTareasFDS(){
       ${barraCompartir()}<button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('tareas-fds-form')">+ Nueva Tarea</button>
     </div>
     <div class="card">
-      <table class="tabla"><thead><tr><th>Fecha</th><th>Día</th><th>Área</th><th>Tarea</th><th>Responsable</th><th>Observación</th><th>Estado</th><th></th></tr></thead>
+      <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar por fecha, área, responsable, estado..." style="margin-bottom:12px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;width:100%;max-width:440px;display:block"><table class="tabla"><thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Fecha ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Día ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Área ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Tarea ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Responsable ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Observación ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Estado ⇅</th><th></th></tr></thead>
       <tbody>${filas || '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px">Sin tareas. Crea una con “+ Nueva Tarea”.</td></tr>'}</tbody></table>
     </div>`;
 }
@@ -4961,7 +4961,7 @@ function calcExtraMin(cargo, horarioStr, ingreso, salida, baseOverride){
   } else if (h && h.fin!=null){
     // Turnos normales: extra = lo que se quedó DESPUÉS de su hora de salida pactada
     const salMin = _timeToMin(salida);
-    if (salMin!=null){ let d = salMin - h.fin; if (d < -720) d += 1440; extra = Math.max(0, d); }
+    if (salMin!=null){ let d = salMin - h.fin; if (d < -720) d += 1440; var _ingM = _timeToMin(ingreso); var _early = 0; if(_ingM!=null && h.inicio!=null){ _early = h.inicio - _ingM; if(_early < -720) _early += 1440; } extra = Math.max(0, d) + Math.max(0, _early); }
   } else if (total!=null){
     // Sin horario válido: respaldo total menos base
     const base = (Number(baseOverride)>0) ? Number(baseOverride) : (JORNADA_BASE[cargo] || 540);
