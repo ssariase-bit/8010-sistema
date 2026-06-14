@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-14-0957';
+const APP_VERSION = '2026-06-14-1009';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2845,6 +2845,7 @@ async function verNovedad(id) {
       </div>
       ${n.fecha_cierre ? `<p><strong>Fecha cierre:</strong> ${fmtDate(n.fecha_cierre)}</p>` : ''}
 
+      ${window._renderComentariosNov(n)}
       <div class="form-section" style="margin-top:16px">
         <div class="form-section-title">Actualizar estado</div>
         <div class="form-row">
@@ -4864,6 +4865,31 @@ window._aptoConNombre = function(apto){ var a=(apto==null||apto==='')?'-':apto; 
 window._anexarArrendatario = async function(arr){
   await window._cargarAptoNombres();
   (arr||[]).forEach(function(r){ if(!r||r._arrAnexado) return; var _a=(typeof areaApto==='function'?areaApto(r).apto:(r&&r.apto)); var _n=(window._nombreApto?window._nombreApto(_a):''); if(_n){ r.descripcion=(r.descripcion||'')+'\n• Arrendatario: '+_n; r._arrAnexado=true; } });
+};
+
+window._renderComentariosNov = function(n){
+  var arr=[]; try{ var c=n.comentarios; arr=Array.isArray(c)?c:(c?JSON.parse(c):[]); }catch(e){ arr=[]; }
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var items=arr.map(function(c){
+    var dir=c.dirigido_a?('<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 7px;border-radius:8px;margin-left:6px">→ '+esc(c.dirigido_a)+'</span>'):'';
+    return '<div style="border-left:3px solid #1F3864;padding:6px 10px;margin:8px 0;background:#f8f9fa;border-radius:0 6px 6px 0"><div style="font-size:11px;color:#666"><strong>'+esc(c.autor||'-')+'</strong> · '+esc(c.fecha||'')+dir+'</div><div style="margin-top:3px;white-space:pre-wrap">'+esc(c.texto||'')+'</div></div>';
+  }).join('') || '<div style="color:#999;font-size:12px;margin:6px 0">Sin comentarios todavía.</div>';
+  return '<div class="form-section" style="margin-top:16px"><div class="form-section-title">💬 Comentarios de gerencia</div>'+items+
+    '<div style="margin-top:10px"><textarea id="nov-com-texto" style="width:100%;min-height:54px" placeholder="Escribe tu comentario o pregunta..."></textarea>'+
+    '<div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap"><input type="text" id="nov-com-dir" placeholder="Dirigido a (ej: Administradores, Fabio) — opcional" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #ddd;border-radius:8px">'+
+    '<button class="btn btn-success btn-sm" onclick="agregarComentarioNovedad(\''+n.id+'\')">Agregar comentario</button></div></div></div>';
+};
+window.agregarComentarioNovedad = async function(id){
+  var texto=(document.getElementById('nov-com-texto')||{}).value||'';
+  var dir=(document.getElementById('nov-com-dir')||{}).value||'';
+  if(!texto.trim()){ if(typeof showToast==='function') showToast('Escribe el comentario','error'); return; }
+  var r=await sb.from('novedades').select('comentarios').eq('id',id).single();
+  var arr=[]; try{ var c=r.data&&r.data.comentarios; arr=Array.isArray(c)?c:(c?JSON.parse(c):[]); }catch(e){ arr=[]; }
+  arr.push({ autor:(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'—', fecha:new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}), texto:texto.trim(), dirigido_a:dir.trim()||null });
+  var u=await sb.from('novedades').update({ comentarios:arr }).eq('id',id);
+  if(u.error){ if(typeof showToast==='function') showToast('Error: '+u.error.message,'error'); return; }
+  if(typeof showToast==='function') showToast('Comentario agregado','success');
+  if(typeof verNovedad==='function') verNovedad(id);
 };
 
 async function renderList(tabla, titulo, formView, cols, headers) {
