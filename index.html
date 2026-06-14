@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-14-0805';
+const APP_VERSION = '2026-06-14-0859';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -615,6 +615,7 @@ const NAV_ITEMS = {
     { section: 'Operación' },
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
+    { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
@@ -665,6 +666,7 @@ const NAV_ITEMS = {
     { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
+    { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { section: 'Operación' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
@@ -702,6 +704,7 @@ const NAV_ITEMS = {
     { section: 'Mi turno' },
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
+    { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
     { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
     { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
@@ -806,6 +809,7 @@ rrhh: [
     { section: 'Mi turno' },
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
+    { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
     { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
     { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
@@ -830,6 +834,7 @@ const MENU_COMPLETO = [
   { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
   { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
+    { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
   { section: 'Operación' },
   { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
   { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
@@ -942,6 +947,7 @@ async function loadView(view) {
     case 'rack':            await renderRack(); break;
     case 'nueva-reserva':   renderNuevaReserva(); break;
     case 'reservas':        await renderReservas(); break;
+    case 'solicitudes':     await renderSolicitudes(); break;
     case 'informe-cki':     renderInformeCKI(); break;
     case 'informe-cko':     renderInformeCKO(); break;
     case 'entrega-efectivos': await renderEntregaEfectivos(); break;
@@ -4793,6 +4799,58 @@ window.renderReservas = async function(filtro){
     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar por huésped, apto, canal..." style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">'+
     '<button class="btn btn-success btn-sm" onclick="loadView(\'nueva-reserva\')">+ Nueva Reserva</button></div></div>'+
     '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Apto ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Huésped ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Check-in ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Check-out ⇅</th><th>Noches</th><th>Tarifa</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Canal ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">A cargo de ⇅</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+};
+
+window._solImg = null;
+window._solImgSet = function(dataUrl){ window._solImg=dataUrl||null; var p=document.getElementById('sol-img-preview'); if(p){ p.innerHTML=dataUrl?('<img src="'+dataUrl+'" style="max-height:80px;border:1px solid #ddd;border-radius:6px;vertical-align:middle"> <span style="cursor:pointer;color:#9A4A40" onclick="_solImgSet(null)">✕ quitar</span>'):''; } };
+window._solHandleFile = function(file){ if(!file) return; var fr=new FileReader(); fr.onload=function(){ window._solImgSet(fr.result); }; fr.readAsDataURL(file); };
+window.guardarSolicitud = async function(){
+  var sol=(document.getElementById('sol-solicitante')||{}).value||'';
+  var desc=(document.getElementById('sol-desc')||{}).value||'';
+  var pri=(document.getElementById('sol-prioridad')||{}).value||'Media';
+  if(!desc.trim()){ if(typeof showToast==='function') showToast('Escribe la solicitud','error'); return; }
+  var row={ edificio:EDIFICIO_ACTIVO, solicitante:sol.trim()||null, descripcion:desc.trim(), prioridad:pri, estado:'Pendiente', imagen:window._solImg||null, tiene_imagen:!!window._solImg, user_id:currentUser.id };
+  var r=await sb.from('solicitudes').insert(row);
+  if(r.error){ if(typeof showToast==='function') showToast('Error: '+r.error.message,'error'); return; }
+  window._solImg=null;
+  if(typeof showToast==='function') showToast('Solicitud enviada','success');
+  renderSolicitudes();
+};
+window.verImagenSolicitud = async function(id){
+  var r=await sb.from('solicitudes').select('imagen').eq('id',id).single();
+  if(r.error||!r.data||!r.data.imagen){ if(typeof showToast==='function') showToast('Sin imagen','error'); return; }
+  var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px'; ov.onclick=function(){ov.remove();};
+  ov.innerHTML='<img src="'+r.data.imagen+'" style="max-width:95%;max-height:95%;border-radius:8px">';
+  document.body.appendChild(ov);
+};
+window.cambiarEstadoSolicitud = async function(id,estado){ var upd={estado:estado}; if(estado==='Hecho') upd.resuelto_at=new Date().toISOString(); await sb.from('solicitudes').update(upd).eq('id',id); if(typeof showToast==='function') showToast('Estado: '+estado,'success'); };
+window.responderSolicitud = async function(id){ var t=prompt('¿Qué se hizo? (respuesta para Santiago)'); if(t===null) return; await sb.from('solicitudes').update({respuesta:t, estado:'Hecho', resuelto_at:new Date().toISOString()}).eq('id',id); if(typeof showToast==='function') showToast('Respuesta guardada','success'); renderSolicitudes(); };
+window.eliminarSolicitud = async function(id){ if(!confirm('¿Eliminar esta solicitud?')) return; await sb.from('solicitudes').delete().eq('id',id); if(typeof showToast==='function') showToast('Eliminada','success'); renderSolicitudes(); };
+window.renderSolicitudes = async function(filtro){
+  filtro=(filtro===undefined?(window._solFiltro||''):filtro); window._solFiltro=filtro;
+  var res=await sb.from('solicitudes').select('id,created_at,edificio,solicitante,descripcion,prioridad,estado,tiene_imagen,respuesta,resuelto_at').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(2000);
+  var rows=(res.data||[]).filter(function(r){ return !filtro || r.estado===filtro; });
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var fmtD=function(iso){ if(!iso) return '-'; var d=new Date(iso); return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); };
+  var priColor=function(p){ return p==='Alta'?'#fee2e2;color:#991b1b':(p==='Baja'?'#e0e7ff;color:#3730a3':'#fef3c7;color:#92400e'); };
+  var body=rows.map(function(r){
+    var estSel='<select onchange="cambiarEstadoSolicitud(\''+r.id+'\',this.value)" style="padding:3px 6px;border-radius:6px;font-size:12px">'+['Pendiente','En proceso','Hecho'].map(function(e){return '<option'+(r.estado===e?' selected':'')+'>'+e+'</option>';}).join('')+'</select>';
+    var img=r.tiene_imagen?'<span style="cursor:pointer;color:#1e40af" onclick="verImagenSolicitud(\''+r.id+'\')">📷 ver</span>':'<span style="color:#bbb">—</span>';
+    var resp=r.respuesta?('<span style="color:#166534">'+esc(r.respuesta)+'</span>'):'<span style="color:#bbb">—</span>';
+    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+fmtD(r.created_at)+'</td><td>'+esc(r.solicitante||'-')+'</td><td style="max-width:240px">'+esc(r.descripcion||'')+'</td><td><span style="background:'+priColor(r.prioridad)+';padding:1px 8px;border-radius:8px;font-size:11px">'+esc(r.prioridad||'')+'</span></td><td>'+img+'</td><td>'+estSel+'</td><td style="max-width:200px;font-size:12px">'+resp+'</td><td style="white-space:nowrap"><span title="Responder / qué se hizo" style="cursor:pointer" onclick="responderSolicitud(\''+r.id+'\')">✍️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarSolicitud(\''+r.id+'\')">🗑️</span></td></tr>';
+  }).join('');
+  var fbtn=function(v,l){ var on=(window._solFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderSolicitudes(\''+v+'\')">'+l+'</button>'; };
+  document.getElementById('main-content').innerHTML=
+    '<div class="page-title">📨 Solicitudes</div>'+
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">Nueva solicitud</div></div>'+
+    '<div class="form-row"><div class="form-group"><label>Quién la pide</label><input type="text" id="sol-solicitante" placeholder="Recepción / admin / nombre"></div>'+
+    '<div class="form-group"><label>Prioridad</label><select id="sol-prioridad"><option>Alta</option><option selected>Media</option><option>Baja</option></select></div></div>'+
+    '<div class="form-group"><label>Solicitud</label><textarea id="sol-desc" placeholder="Describe la solicitud... (puedes pegar una imagen con Ctrl+V)" style="min-height:70px"></textarea></div>'+
+    '<div class="form-group"><label>Imagen (pantallazo) — opcional</label><input type="file" accept="image/*" id="sol-img-file" onchange="_solHandleFile(this.files[0])"><div id="sol-img-preview" style="margin-top:6px"></div></div>'+
+    '<button class="btn btn-success" onclick="guardarSolicitud()">📨 Enviar solicitud</button></div>'+
+    '<div class="card"><div class="card-header"><div class="card-title">'+rows.length+' solicitudes</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todas')+fbtn('Pendiente','Pendientes')+fbtn('En proceso','En proceso')+fbtn('Hecho','Hechas')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar..." style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
+    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Quién</th><th>Solicitud</th><th>Prioridad</th><th>Imagen</th><th>Estado</th><th>Respuesta</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  setTimeout(function(){ var ta=document.getElementById('sol-desc'); if(ta&&!ta._ph){ ta._ph=true; ta.addEventListener('paste',function(e){ var items=(e.clipboardData||{}).items||[]; for(var i=0;i<items.length;i++){ if(items[i].type.indexOf('image')===0){ window._solHandleFile(items[i].getAsFile()); e.preventDefault(); break; } } }); } var pv=document.getElementById('sol-img-preview'); if(pv&&!window._solImg) pv.innerHTML=''; },100);
 };
 
 async function renderList(tabla, titulo, formView, cols, headers) {
