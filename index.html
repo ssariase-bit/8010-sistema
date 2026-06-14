@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-13-1956';
+const APP_VERSION = '2026-06-13-2006';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4214,6 +4214,7 @@ async function guardarEditarGen(){
   const upd={};
   const _MONEY_COLS=['valor','total_efectivo','caja_ltm3','caja_ot','caja_ph','salario'];
   m.querySelectorAll('[id^="edt-"]').forEach(el=>{ const _c=el.id.slice(4); let _v=el.value; if(_MONEY_COLS.includes(_c)){ _v=_v===''?null:parseInt(String(_v).replace(/\D/g,''),10); if(_v!==null&&isNaN(_v))_v=null; } else { _v=_v===''?null:_v; } upd[_c]=_v; });
+  if (tabla === 'control_personal') { try { var _car=upd.cargo, _hor=upd.horario, _ing=upd.marcacion_ingreso, _sal=upd.marcacion_salida, _base=upd.jornada_base; if (_sal && typeof calcExtraMin==='function') { upd.tiempo_adicional = calcExtraMin(_car, _hor, _ing, _sal, _base).extra; } var _hh=(typeof parseHorario==='function')?parseHorario(_hor):null; var _im=(typeof _timeToMin==='function')?_timeToMin(_ing):null; if (_hh && _hh.inicio!=null && _im!=null) { var _rr=_im-_hh.inicio; upd.tiempo_retraso = _rr>0?_rr:0; } } catch(e){} }
   const { error } = await sb.from(tabla).update(upd).eq('id', id);
   if(error){ showToast('Error: '+error.message,'error'); return; }
   m.remove(); showToast('✅ Registro actualizado','success');
