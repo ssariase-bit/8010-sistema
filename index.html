@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-14-0951';
+const APP_VERSION = '2026-06-14-0957';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4861,6 +4861,11 @@ window._cargarAptoNombres = async function(){
 window._nombreApto = function(apto){ var m=window._aptoNombreCache||{}; return m[apto]||''; };
 window._aptoConNombre = function(apto){ var a=(apto==null||apto==='')?'-':apto; var nm=(window._nombreApto?window._nombreApto(apto):'')||''; nm=String(nm).replace(/&/g,'&amp;').replace(/</g,'&lt;'); return '<strong>'+a+'</strong>'+(nm?'<br><span style="font-weight:400;font-size:11px;color:#666">'+nm+'</span>':''); };
 
+window._anexarArrendatario = async function(arr){
+  await window._cargarAptoNombres();
+  (arr||[]).forEach(function(r){ if(!r||r._arrAnexado) return; var _a=(typeof areaApto==='function'?areaApto(r).apto:(r&&r.apto)); var _n=(window._nombreApto?window._nombreApto(_a):''); if(_n){ r.descripcion=(r.descripcion||'')+'\n• Arrendatario: '+_n; r._arrAnexado=true; } });
+};
+
 async function renderList(tabla, titulo, formView, cols, headers) {
   const { data } = await sb.from(tabla).select('*').order('created_at', { ascending: false }).limit(100);
   const rows = data || [];
@@ -6025,6 +6030,7 @@ async function renderNovedadesDiarias() {
 async function compartirNovedadesDiarias() {
   const { data } = await sb.from('novedades').select('*').eq('fecha', TODAY).order('created_at',{ascending:false});
   const rows = data || [];
+  await window._anexarArrendatario(rows);
   const abiertas = rows.filter(r=>r.estado!=='Resuelto' && r.estado!=='Cerrado');
   const resueltas = rows.filter(r=>r.estado==='Resuelto' || r.estado==='Cerrado');
   const txt = `📋 *${EB().nombre} — Novedades ${fmtDate(TODAY)}*
@@ -6987,7 +6993,9 @@ async function compartirNovedades() {
       sb.from('novedades').select('*').lt('fecha', f).in('estado',['Abierto','En proceso','Escalado']).order('fecha',{ascending:false})
     ]);
     const rows = delDia.data || [];
+    await window._anexarArrendatario(rows);
     const previas = seguim.data || [];
+    await window._anexarArrendatario(previas);
     const txt = `🚨 *${EB().nombre} — Novedades del ${fmtDate(f)}*
 ${rows.length} del día${previas.length?` · ${previas.length} en seguimiento`:''}
 
@@ -7003,7 +7011,9 @@ _Sistema ${EB().nombre}_`;
     sb.from('novedades').select('*').eq('fecha', TODAY).in('estado',['Resuelto','Cerrado']).order('created_at',{ascending:true})
   ]);
   const abiertas = ab.data || [];
+    await window._anexarArrendatario(abiertas);
   const cerradas = ce.data || [];
+    await window._anexarArrendatario(cerradas);
   const linea = r => `🕐 ${_horaNov(r)} · *[${r.prioridad||'-'}] ${r.area||'General'}*${r.fecha && r.fecha!==TODAY ? ' · desde '+fmtDate(r.fecha) : ''}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}`;
   const txt = `🚨 *${EB().nombre} — Novedades*
 📅 ${fmtDate(TODAY)}
