@@ -3458,6 +3458,16 @@ function renderNuevaReserva() {
             <input type="text" id="res-empresa" placeholder="Nombre empresa o particular">
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Acompañantes</label>
+            <input type="text" id="res-acompanantes" placeholder="Nombres de acompañantes (señala quién viaja) — opcional">
+          </div>
+          <div class="form-group">
+            <label>Confirmado con / Ejecutiva</label>
+            <input type="text" id="res-ejecutiva" placeholder="Ejecutiva/contacto que confirma; nota modificaciones — opcional">
+          </div>
+        </div>
       </div>
 
       <div class="form-section">
@@ -3695,13 +3705,15 @@ async function guardarReserva() {
     cxcRazon: document.getElementById('res-cxc-razon')?.value || '80|10 S.A.S',
     personas: document.getElementById('res-personas')?.value || '1 adulto', pax: document.getElementById('res-pax')?.value || '1',
     obs: document.getElementById('res-obs').value,
+    acompanantes: document.getElementById('res-acompanantes')?.value.trim() || '',
+    ejecutiva: document.getElementById('res-ejecutiva')?.value.trim() || '',
     firmante: document.getElementById('res-firmante').value || currentProfile?.nombre || 'Fabio Malaver',
     cargo: document.getElementById('res-cargo').value || 'Jefe de Administradores',
     email: document.getElementById('res-email').value.trim(),
     tel: document.getElementById('res-tel').value.trim(),
     numero: await getNextNumeroConfirmacion()
   };
-  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, apto: resData.apto, config: resData.config, moneda: resData.moneda, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, numero: resData.numero, empresa: resData.empresa, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, user_id: currentUser.id }; if (window._reservaEditId) { await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); window._reservaEditId = null; } else { await sb.from('reservas').insert(_rvRow); } } catch(_e){}
+  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, apto: resData.apto, config: resData.config, moneda: resData.moneda, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, numero: resData.numero, empresa: resData.empresa, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, acompanantes: resData.acompanantes, ejecutiva: resData.ejecutiva, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, user_id: currentUser.id }; if (window._reservaEditId) { await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); window._reservaEditId = null; } else { await sb.from('reservas').insert(_rvRow); } } catch(_e){}
   setTimeout(() => {
     if(confirm('¿Deseas generar la Confirmación de Reserva ahora?')) {
       generarConfirmacion(resData);
@@ -3923,6 +3935,9 @@ function generarConfirmacion(r) {
         </ul>
       </td>
     </tr>
+    ${r.empresa ? `<tr><td>Empresa</td><td>${r.empresa}</td></tr>` : ''}
+    ${r.acompanantes ? `<tr><td>Acompañantes</td><td>${r.acompanantes}</td></tr>` : ''}
+    ${r.ejecutiva ? `<tr><td>Confirmado con / Ejecutiva</td><td>${r.ejecutiva}</td></tr>` : ''}
     ${r.obs ? `<tr><td>Observaciones</td><td>${r.obs}</td></tr>` : ''}
   </table>
 
@@ -5535,6 +5550,9 @@ async function renderEstadoHuespedes() {
   const _aptoOrder = EB().aptosFull;
   const data = (rawData||[]).sort((a,b) => _aptoOrder.indexOf(a.apto) - _aptoOrder.indexOf(b.apto));
   const rows = (data||[]).filter(r => r.estado !== 'Libre');
+  // Empresa/acompañantes de la reserva activa hoy (para reflejar en Estado de Huéspedes)
+  let _resMap = {};
+  try { const _rv = await sb.from('reservas').select('apto,empresa,acompanantes').eq('edificio', EDIFICIO_ACTIVO).lte('checkin', today).gte('checkout', today); (_rv.data||[]).forEach(x=>{ if(x.apto && !_resMap[x.apto]) _resMap[x.apto]=x; }); } catch(e){}
 
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
@@ -5556,7 +5574,7 @@ async function renderEstadoHuespedes() {
             <tbody>${rows.map(r => `<tr>
               <td><strong style="color:var(--azul);font-size:15px">${r.apto}</strong></td>
               <td><span class="badge b-${r.estado==='Ocupado'?'proceso':r.estado==='Check-in hoy'?'abierto':'alta'}">${r.estado}</span>${(typeof _ivaTag==='function'?_ivaTag(r.iva):'')}</td>
-              <td><strong>${r.huesped||'-'}</strong></td>
+              <td><strong>${r.huesped||'-'}</strong>${(_resMap[r.apto]&&(_resMap[r.apto].empresa||_resMap[r.apto].acompanantes))?`<div style="font-size:10px;color:#666;margin-top:2px">${_resMap[r.apto].empresa?('🏢 '+String(_resMap[r.apto].empresa).replace(/</g,'&lt;')):''}${(_resMap[r.apto].empresa&&_resMap[r.apto].acompanantes)?' · ':''}${_resMap[r.apto].acompanantes?('👥 '+String(_resMap[r.apto].acompanantes).replace(/</g,'&lt;')):''}</div>`:''}</td>
               <td>${r.canal||'-'}</td>
               <td>${r.checkin ? fmtDate(r.checkin) : '-'}</td>
               <td>${r.checkout ? fmtDate(r.checkout) : '-'}</td>
