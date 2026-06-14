@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-13-2127';
+const APP_VERSION = '2026-06-14-0644';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3803,6 +3803,7 @@ function generarConfirmacion(r) {
   const iva = esExento ? 0 : Math.round(r.tarifa * ivaPct);
   const tarifaConIva = esExento ? r.tarifa : r.tarifa + iva;
   const totalConIva = tarifaConIva * r.noches;
+  const conIVA = !/LTM3/i.test(r.cxcRazon||'') && r.iva !== 'exento' && r.iva !== 'no_aplica';
   const tratamiento = r.nombre.split(' ')[0].toLowerCase().endsWith('a') ? 'SRA.' : 'SR.';
     const _accent = (((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
     const _es8010c=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1); const _larga=(Number(r.noches)||0)>30; const _razon=_es8010c?(_larga?'LTM3 SAS':'8010 SAS'):'8i8 Operadora SAS'; const _nit=_es8010c?(_larga?'900.361.992-4':'900.683.855-5'):'902.026.873-8'; const _email=_es8010c?'recepcion@8010urbanliving.com':'recepcion@8i8op.com';
@@ -3873,11 +3874,11 @@ function generarConfirmacion(r) {
     <tr><td>Fecha de Entrada</td><td>${fmtFechaLarga(r.checkin)}</td></tr>
     <tr><td>Fecha de Salida</td><td>${fmtFechaLarga(r.checkout)}</td></tr>
     <tr><td>Total de Días</td><td>${r.tipoTarifa==='TxD' ? String(r.noches).padStart(2,'0')+' día'+(r.noches>1?'s':'') : 'N/A'}</td></tr>
-    <tr><td>Tarifa Apartamento por Día</td><td>${r.tipoTarifa==='TxD' ? '$ '+r.tarifa.toLocaleString('es-CO')+' '+monedaLabel+(esExento?'':' + IVA') : 'N/A'}</td></tr>
+    <tr><td>Tarifa Apartamento por Día</td><td>${r.tipoTarifa==='TxD' ? '$ '+r.tarifa.toLocaleString('es-CO')+' '+monedaLabel+(conIVA?' + IVA':'') : 'N/A'}</td></tr>
     <tr><td>Total de Noches</td><td>${r.tipoTarifa==='TxD' ? 'N/A' : String(r.noches).padStart(2,'0')+' noche'+(r.noches>1?'s':'')}</td></tr>
-    <tr><td>Tarifa Apartamento por Noche</td><td>${r.tipoTarifa==='TxD' ? 'N/A' : '$ '+r.tarifa.toLocaleString('es-CO')+' '+monedaLabel+(esExento?'':' + IVA')}</td></tr>
+    <tr><td>Tarifa Apartamento por Noche</td><td>${r.tipoTarifa==='TxD' ? 'N/A' : '$ '+r.tarifa.toLocaleString('es-CO')+' '+monedaLabel+(conIVA?' + IVA':'')}</td></tr>
     <tr><td>Tarifa Apartamento por Mes</td><td>N/A</td></tr>
-    <tr><td>Valor Total del Contrato</td><td class="bold-val">$ ${totalConIva.toLocaleString('es-CO')} ${monedaLabel}${esExento ? ' + IVA' : ' (IVA incluido)'}</td></tr>
+    <tr><td>Valor Total del Contrato</td><td class="bold-val">$ ${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}</td></tr>
     ${esUSD ? `<tr><td>Moneda de cobro</td><td><strong>USD — Dólares americanos</strong></td></tr><tr><td>TRM</td><td>Del día en que se efectúe el pago</td></tr>` : `<tr><td>TRM</td><td>N/A</td></tr>`}
     <tr><td>Forma de Pago</td><td>${/factur/i.test(r.pago||'') ? `Pago <strong>POR FACTURAR</strong> &mdash; <strong>${r.cxcTipo||'CxC Full'}</strong> a cargo de la empresa.<br>Facturar por <strong>${r.cxcRazon||_razon}</strong>` : `Pago <strong>${r.pago.toUpperCase()}</strong> ${r.estadoPago==='Pagado' ? '&mdash; <strong>YA PAGADA</strong>' : (r.estadoPago==='50% adelanto' ? '&mdash; <strong>50% de adelanto recibido</strong>, saldo a su llegada' : 'por parte del Cliente <strong>a su llegada</strong>')}.<br>Facturar por <strong>${r.cxcRazon||_razon}</strong>`}</td></tr>
     <tr>
