@@ -4871,7 +4871,7 @@ window.renderSolicitudes = async function(filtro){
 
 window._aptoNombreCache = null;
 window._cargarAptoNombres = async function(){
-  try{ var r=await sb.from('rack').select('apto,huesped,fecha').eq('edificio',EDIFICIO_ACTIVO).not('huesped','is',null).order('fecha',{ascending:false}).limit(3000); var m={}; (r.data||[]).forEach(function(x){ if(x.apto&&x.huesped&&!m[x.apto]) m[x.apto]=x.huesped; }); window._aptoNombreCache=m; }catch(e){ window._aptoNombreCache=window._aptoNombreCache||{}; } return window._aptoNombreCache;
+  try{ var _OCU=['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje']; var r=await sb.from('rack').select('apto,huesped,fecha,estado').eq('edificio',EDIFICIO_ACTIVO).eq('fecha',TODAY).not('huesped','is',null).limit(3000); var m={}; (r.data||[]).forEach(function(x){ if(x.apto&&x.huesped&&_OCU.indexOf(x.estado)>=0&&!m[x.apto]) m[x.apto]=x.huesped; }); window._aptoNombreCache=m; }catch(e){ window._aptoNombreCache=window._aptoNombreCache||{}; } return window._aptoNombreCache;
 };
 window._nombreApto = function(apto){ var m=window._aptoNombreCache||{}; return m[apto]||''; };
 window._aptoConNombre = function(apto){ var a=(apto==null||apto==='')?'-':apto; var nm=(window._nombreApto?window._nombreApto(apto):'')||''; nm=String(nm).replace(/&/g,'&amp;').replace(/</g,'&lt;'); return '<strong>'+a+'</strong>'+(nm?'<br><span style="font-weight:400;font-size:11px;color:#666">'+nm+'</span>':''); };
