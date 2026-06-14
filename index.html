@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-13-2006';
+const APP_VERSION = '2026-06-13-2051';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3351,9 +3351,9 @@ function renderNuevaReserva() {
           <div class="form-group">
             <label>Configuración del apto (si tiene habitación A)</label>
             <select id="res-config">
-              <option value="completo">Completo — 126/132 m² · 2 habitaciones (King + doble)</option>
-              <option value="dividido">Dividido — 90/96 m² · 1 habitación (King)</option>
-              <option value="deluxe">Habitación Deluxe — 22/25 m² · 1 habitación (King)</option>
+              <option value="completo">Completo — apto + habitación A</option>
+              <option value="dividido">Dividido — solo apto principal</option>
+              <option value="deluxe">Habitación Deluxe — 1 habitación (King)</option>
             </select>
           </div>
         </div>
