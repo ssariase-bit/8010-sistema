@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-13-2119';
+const APP_VERSION = '2026-06-13-2127';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3840,7 +3840,7 @@ function generarConfirmacion(r) {
   @media print {
     body { background: white; }
     .no-print { display: none !important; }
-    .page { padding: 1.5cm 2cm; }
+    @page { size: A4; margin: 1cm; } .page { padding: 0.4cm 1.5cm; } .seccion, .firma { break-inside: avoid; }
   }
   .btn-print { position: fixed; top: 20px; right: 20px; background: #1F3864; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; z-index: 100; }
   .btn-print:hover { background: #2F5597; }
