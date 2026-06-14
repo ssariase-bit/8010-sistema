@@ -290,7 +290,7 @@ textarea{resize:vertical;min-height:80px}
         <select id="m-canal">
           <option value="">— Seleccionar —</option>
           <option>Directo</option><option>Airbnb</option><option>Booking</option>
-          <option>Expedia</option><option>Referido</option><option>Corporativo</option>
+          <option>Expedia</option><option>Mirai</option><option>Hotelbeds</option><option>HyperGuest</option><option>Referido</option><option>Corporativo</option>
         </select>
       </div>
     </div>
@@ -3466,6 +3466,9 @@ function renderNuevaReserva() {
               <option>Airbnb</option>
               <option>Booking</option>
               <option>Expedia</option>
+              <option>Mirai</option>
+              <option>Hotelbeds</option>
+              <option>HyperGuest</option>
               <option>Referido</option>
               <option>Corporativo</option>
             </select>
@@ -6476,6 +6479,8 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
             <option ${canal==='Expedia'?'selected':''}>Expedia</option>
             <option ${canal==='Airbnb'?'selected':''}>Airbnb</option>
             <option ${canal==='Mirai'?'selected':''}>Mirai</option>
+            <option ${canal==='Hotelbeds'?'selected':''}>Hotelbeds</option>
+            <option ${canal==='HyperGuest'?'selected':''}>HyperGuest</option>
             <option ${canal==='Corporativo'?'selected':''}>Corporativo</option>
           </select>
         </div>
