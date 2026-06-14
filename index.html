@@ -6072,6 +6072,7 @@ async function renderNovedadesDiarias() {
       <div class="page-title" style="margin-bottom:0">📋 Novedades del Día — ${fmtDate(TODAY)}</div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-success btn-sm" onclick="loadView('novedad-form')">+ Nueva</button>
+        <button onclick="reporteNovedades()" class="btn btn-outline btn-sm" style="color:var(--azul-m);border-color:var(--azul-m)">📋 Reporte de Novedades</button>
         <button onclick="compartirNovedadesDiarias()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
       </div>
     </div>
@@ -6123,6 +6124,85 @@ ${resueltas.length>0?'*✅ RESUELTAS / CERRADAS HOY:*\n'+resueltas.map(n=>`▪�
 
 _Reporte: ${new Date().toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true})} — Sistema ${EB().nombre}_`;
   compartirInforme('Novedades Diarias — ' + fmtDate(TODAY), txt);
+}
+
+// Reporte de Novedades (formato gerencial: CKO/CKI/Novedades/Actas/Ocupacion). Editable antes de enviar.
+async function reporteNovedades(){
+  const f = TODAY;
+  const nombreEd = (typeof EB==='function') ? EB().nombre : '8010 Urban Living';
+  let rk = [], nv = [];
+  try {
+    const [a,b] = await Promise.all([
+      sb.from('rack').select('*').eq('fecha', f).eq('edificio', EDIFICIO_ACTIVO),
+      sb.from('novedades').select('*').eq('fecha', f).eq('edificio', EDIFICIO_ACTIVO).order('created_at',{ascending:true})
+    ]);
+    rk = a.data || []; nv = b.data || [];
+  } catch(e){ showToast('Error cargando datos del reporte','error'); return; }
+  const PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Sucio':1,'Pendiente repaso':1,'Libre':1 };
+  const byApto = {};
+  rk.forEach(r=>{ const c=byApto[r.apto]; if(!c){ byApto[r.apto]=r; return; } const pr=PRIO[r.estado]||0, pc=PRIO[c.estado]||0; if(pr>pc) byApto[r.apto]=r; else if(pr===pc && (r.updated_at||r.created_at||'')>(c.updated_at||c.created_at||'')) byApto[r.apto]=r; });
+  const recs = Object.values(byApto);
+  const pago = r => r.canal ? (' · Pago: '+r.canal) : '';
+  const obs = r => (r.observaciones && String(r.observaciones).trim()) ? (' · '+String(r.observaciones).trim()) : '';
+  const lin = r => (r.huesped||'Sin nombre')+', Apto. '+r.apto+pago(r)+obs(r);
+  const num = arr => arr.length ? arr.map((x,i)=>(i+1)+'. '+x).join('\n') : '';
+  const cko = recs.filter(r=>r.estado==='Check-out hoy').map(lin);
+  const cki = recs.filter(r=>r.estado==='Check-in hoy').map(lin);
+  const esActa = n => /acta/i.test(((n.area||'')+' '+(n.descripcion||'')));
+  const actas = nv.filter(esActa).map(n=>(n.descripcion||'').trim());
+  const generales = nv.filter(n=>!esActa(n)).map(n=>(n.descripcion||'').trim()+(n.gestionado_por?(' ('+n.gestionado_por+')'):''));
+  const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
+  const ENCASA = ['Ocupado','Check-in hoy','Completo'];
+  const FUERA = ['Bloqueado','Mantenimiento'];
+  const base = (EB().aptosBase) || [];
+  let ocup=0, disp=0, encasa=0, viaje=0; const tar=[];
+  base.forEach(a=>{ const r=byApto[a]; const e=(r&&r.estado)||'Libre'; const comp=((r&&r.observaciones)||'').includes('Apto completo'); if(FUERA.includes(e)||comp) return; disp++; if(OCU.includes(e)){ ocup++; if(r&&Number(r.tarifa)>0) tar.push(Number(r.tarifa)); } if(ENCASA.includes(e)) encasa++; if(e==='Sale de viaje') viaje++; });
+  const pct = disp ? (ocup/disp*100) : 0;
+  const adr = tar.length ? Math.round(tar.reduce((s,x)=>s+x,0)/tar.length) : 0;
+  const money = n => '$ '+Number(n||0).toLocaleString('es-CO')+' COP';
+  const hh = Number((new Date().toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',hour12:false})||'').replace(/\D/g,''))||0;
+  const saludo = hh<12 ? 'buenos días' : (hh<19 ? 'buenas tardes' : 'buenas noches');
+  const admin = (currentProfile && currentProfile.nombre) || (currentUser && currentUser.email) || '';
+  const txt =
+'Sr. Arias, '+saludo+'\n\n'+
+'*REPORTE DE NOVEDADES — '+fmtDate(f)+'*\n\n'+
+'*CKO ('+cko.length+')*\n'+(cko.length?num(cko):'N/A')+'\n\n'+
+'*CKI ('+cki.length+')*\n'+(cki.length?num(cki):'N/A')+'\n\n'+
+'*NOVEDADES GENERALES*\n'+(generales.length?num(generales):'Sin novedades generales.')+'\n\n'+
+'*ACTAS*\n'+(actas.length?num(actas):'Sin actas registradas.')+'\n\n'+
+'*OCUPACIÓN*\n'+
+'Ocupados: '+ocup+'\n'+
+'Disponibles: '+disp+'\n'+
+'En casa: '+encasa+'\n'+
+'Viaje: '+viaje+'\n'+
+'Ocupación: '+pct.toFixed(2).replace('.',',')+'%\n'+
+'Tarifa P. Diaria: '+money(adr)+'\n\n'+
+'R/ '+admin;
+  const titulo = 'Reporte de Novedades — '+fmtDate(f);
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  const boxEl = document.createElement('div');
+  boxEl.style.cssText = 'background:#fff;border-radius:16px;padding:22px 24px;max-width:560px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:90vh;overflow:auto';
+  boxEl.innerHTML = '<div style="font-size:17px;font-weight:700;color:#1D3461;margin-bottom:4px">📋 Reporte de Novedades</div><div style="font-size:12px;color:#6B7280;margin-bottom:12px">'+fmtDate(f)+' · '+nombreEd+' · puedes editar antes de enviar</div>';
+  const ta = document.createElement('textarea');
+  ta.value = txt;
+  ta.style.cssText = 'width:100%;min-height:320px;font-family:monospace;font-size:12px;line-height:1.5;border:1px solid #E2E4E8;border-radius:8px;padding:12px;color:#1F2937;resize:vertical;box-sizing:border-box';
+  boxEl.appendChild(ta);
+  const rowEl = document.createElement('div');
+  rowEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:14px';
+  const mkBtn = (label,bg,fn)=>{ const b=document.createElement('button'); b.innerHTML=label; b.style.cssText='flex:1;min-width:130px;background:'+bg+';color:#fff;border:none;border-radius:10px;padding:11px 14px;font-weight:600;font-size:13px;cursor:pointer'; b.onclick=fn; return b; };
+  rowEl.appendChild(mkBtn('📧 Enviar por correo','#1D3461', function(){ enviarInformeCorreo(titulo, ta.value, this); }));
+  rowEl.appendChild(mkBtn('💬 WhatsApp','#25D366', function(){ window.open('https://wa.me/?text='+encodeURIComponent(ta.value),'_blank'); }));
+  rowEl.appendChild(mkBtn('📋 Copiar','#6B7280', function(){ if(navigator.clipboard) navigator.clipboard.writeText(ta.value); showToast('✅ Copiado','success'); }));
+  boxEl.appendChild(rowEl);
+  const cerrar = document.createElement('button');
+  cerrar.textContent = 'Cerrar';
+  cerrar.style.cssText = 'width:100%;margin-top:8px;background:transparent;border:none;color:#9CA3AF;font-size:12px;cursor:pointer;padding:6px';
+  cerrar.onclick = ()=>modal.remove();
+  boxEl.appendChild(cerrar);
+  modal.appendChild(boxEl);
+  modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
 }
 
 // ═══════════════════════════════════════════════════════════
