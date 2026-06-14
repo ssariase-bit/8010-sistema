@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-13-2110';
+const APP_VERSION = '2026-06-13-2119';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4733,6 +4733,9 @@ window.onModalidadReserva = function(){
   }
 };
 
+window._ivaCalc = function(aloja, modo){ aloja=Number(aloja)||0; var f=function(n){return '$'+Math.round(n).toLocaleString('es-CO');}; if(modo==='exento') return {tag:'Exento', msg:'Exento de IVA'}; if(modo==='no_aplica') return {tag:'Cortesía', msg:'Cortesía - IVA no aplica'}; if(modo==='encima'){ var iva=Math.round(aloja*0.19); return {tag:'+IVA 19%', msg:'Base '+f(aloja)+' + IVA 19% '+f(iva)+' = '+f(aloja+iva)+' (con IVA)'}; } var base=Math.round(aloja/1.19); var ivaI=aloja-base; return {tag:'IVA incl.', msg:'IVA 19% incluido - base '+f(base)+' + IVA '+f(ivaI)+' = '+f(aloja)}; };
+window._ivaTag = function(modo){ var c={ 'exento':['#e0e7ff','#3730a3'], 'no_aplica':['#f3f4f6','#6b7280'], 'encima':['#fef3c7','#92400e'], 'incluido':['#dcfce7','#166534'] }; var t=(window._ivaCalc?window._ivaCalc(0,modo||'incluido').tag:''); var col=c[modo||'incluido']||c['incluido']; return ' <span style="background:'+col[0]+';color:'+col[1]+';font-size:10px;padding:1px 6px;border-radius:6px;white-space:nowrap">'+t+'</span>'; };
+
 async function renderList(tabla, titulo, formView, cols, headers) {
   const { data } = await sb.from(tabla).select('*').order('created_at', { ascending: false }).limit(100);
   const rows = data || [];
@@ -5335,7 +5338,7 @@ async function renderEstadoHuespedes() {
             </tr></thead>
             <tbody>${rows.map(r => `<tr>
               <td><strong style="color:var(--azul);font-size:15px">${r.apto}</strong></td>
-              <td><span class="badge b-${r.estado==='Ocupado'?'proceso':r.estado==='Check-in hoy'?'abierto':'alta'}">${r.estado}</span></td>
+              <td><span class="badge b-${r.estado==='Ocupado'?'proceso':r.estado==='Check-in hoy'?'abierto':'alta'}">${r.estado}</span>${(typeof _ivaTag==='function'?_ivaTag(r.iva):'')}</td>
               <td><strong>${r.huesped||'-'}</strong></td>
               <td>${r.canal||'-'}</td>
               <td>${r.checkin ? fmtDate(r.checkin) : '-'}</td>
@@ -6391,7 +6394,7 @@ function renderInformeCKO(aptoPreload, huesped, canal) {
       </div>
       <div class="form-row">
         <div class="form-group"><label>💰 Total alojamiento estadía ($)</label><input type="number" id="cko-aloja" placeholder="0" value="0"></div>
-        <div class="form-group"><label>Noches</label><input type="number" id="cko-noches" placeholder="0" value="0"></div>
+        <div class="form-group"><label>Noches</label><input type="number" id="cko-noches" placeholder="0" value="0"></div><div class="form-group"><label>IVA</label><select id="cko-iva"><option value="incluido">Incluye IVA (19%)</option><option value="encima">IVA 19% (se suma)</option><option value="exento">Exento de IVA</option><option value="no_aplica">No aplica (N/A)</option></select></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Cobro de alojamiento en este CKO ($)</label><input type="number" id="cko-cobro-aloja" placeholder="0 si ya pagó al CKI" value="0"></div>
@@ -6487,8 +6490,9 @@ function generarMsgCKO() {
   const cobroObs = (document.getElementById('cko-cobro')?.value || '').trim();
   const cobroStr = cobroAloja > 0 ? `, realiza el pago del alojamiento ($${cobroAloja.toLocaleString('es-CO')} ${pagoAloja})` : '';
   const totalStr = (aloja>0||consumos>0) ? `\n💰 Total estadía: $${aloja.toLocaleString('es-CO')} alojamiento${nochesT?` (${nochesT} noche${nochesT===1?'':'s'})`:''}${consumos>0?` + $${consumos.toLocaleString('es-CO')} consumos`:''} = $${(aloja+consumos).toLocaleString('es-CO')}` : '';
+  const _ivaModoCKO = (document.getElementById('cko-iva')||{}).value || 'incluido'; const _ivaLineaCKO = (aloja>0 && typeof _ivaCalc==='function') ? ('\n\ud83e\uddfe IVA: '+_ivaCalc(aloja, _ivaModoCKO).msg) : '';
   const msg = `${h<12?'Buenos días':h<18?'Buenas tardes':'Buenas noches'}, ${_fh}
-Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${cobroStr}${consumosStr}${cobroObs?' ('+cobroObs+')':''}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}${totalStr}
+Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${cobroStr}${consumosStr}${cobroObs?' ('+cobroObs+')':''}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}${totalStr}${_ivaLineaCKO}
 R/${quien}`;
 
   // Registrar el informe en Novedades para que quede en el reporte del día
