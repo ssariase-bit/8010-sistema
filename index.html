@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-14-1031';
+const APP_VERSION = '2026-06-14-1048';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4926,6 +4926,24 @@ window.renderComentariosGerencia = async function(filtro){
     '<div class="card"><div class="card-header"><div class="card-title">'+all.length+' comentarios</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todos')+fbtn('dirigidos','Dirigidos')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (dirigido a, texto, apto...)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
     '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Apto</th><th>Comentario</th><th>Dirigido a</th><th>Autor</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 };
+
+window._alarmaShown = false;
+window._alarmaComentarios = async function(conToast){
+  try{
+    if(typeof sb==='undefined'||typeof EDIFICIO_ACTIVO==='undefined') return 0;
+    var link=[...document.querySelectorAll('[onclick]')].find(function(e){ return /loadView\('comentarios'\)/.test(e.getAttribute('onclick')||''); });
+    if(!link) return 0;
+    var res=await sb.from('novedades').select('comentarios').eq('edificio',EDIFICIO_ACTIVO).limit(600);
+    var pend=0;
+    (res.data||[]).forEach(function(n){ var arr=Array.isArray(n.comentarios)?n.comentarios:[]; if(arr.length){ var last=arr[arr.length-1]; if(last&&last.dirigido_a) pend++; } });
+    var old=link.querySelector('.com-badge'); if(old) old.remove();
+    if(pend>0){ var b=document.createElement('span'); b.className='com-badge'; b.textContent=pend; b.style.cssText='background:#e24b4a;color:#fff;border-radius:10px;font-size:10px;padding:1px 7px;margin-left:6px;font-weight:700'; link.appendChild(b); }
+    if(conToast&&pend>0&&!window._alarmaShown&&typeof showToast==='function'){ window._alarmaShown=true; showToast('💬 Hay '+pend+' comentario'+(pend>1?'s':'')+' de gerencia pendiente'+(pend>1?'s':'')+' — revisa el buzón','info'); }
+    return pend;
+  }catch(e){ return 0; }
+};
+setTimeout(function(){ if(window._alarmaComentarios) window._alarmaComentarios(true); }, 5000);
+setInterval(function(){ if(window._alarmaComentarios) window._alarmaComentarios(true); }, 45000);
 
 async function renderList(tabla, titulo, formView, cols, headers) {
   const { data } = await sb.from(tabla).select('*').order('created_at', { ascending: false }).limit(100);
