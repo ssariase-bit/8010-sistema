@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-14-1016';
+const APP_VERSION = '2026-06-14-1024';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -616,6 +616,7 @@ const NAV_ITEMS = {
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
+    { id: 'comentarios', icon: '💬', label: 'Comentarios' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
@@ -667,6 +668,7 @@ const NAV_ITEMS = {
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
+    { id: 'comentarios', icon: '💬', label: 'Comentarios' },
     { section: 'Operación' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
@@ -705,6 +707,7 @@ const NAV_ITEMS = {
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
+    { id: 'comentarios', icon: '💬', label: 'Comentarios' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
     { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
     { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
@@ -810,6 +813,7 @@ rrhh: [
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
+    { id: 'comentarios', icon: '💬', label: 'Comentarios' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
     { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
     { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
@@ -835,6 +839,7 @@ const MENU_COMPLETO = [
   { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
+    { id: 'comentarios', icon: '💬', label: 'Comentarios' },
   { section: 'Operación' },
   { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
   { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
@@ -948,6 +953,7 @@ async function loadView(view) {
     case 'nueva-reserva':   renderNuevaReserva(); break;
     case 'reservas':        await renderReservas(); break;
     case 'solicitudes':     await renderSolicitudes(); break;
+    case 'comentarios':     await renderComentariosGerencia(); break;
     case 'informe-cki':     renderInformeCKI(); break;
     case 'informe-cko':     renderInformeCKO(); break;
     case 'entrega-efectivos': await renderEntregaEfectivos(); break;
@@ -4898,6 +4904,26 @@ window.correoComentarioNov = function(idx){
   var subj='Comentario de gerencia — '+(nv.edificio||'')+(nv.apto?(' · Apto '+nv.apto):'')+(c.dirigido_a?(' · '+c.dirigido_a):'');
   var bdy='Dirigido a: '+(c.dirigido_a||'-')+'\n\n'+(c.texto||'')+'\n\nNovedad relacionada: '+((nv.descripcion||'').split('\n')[0])+'\n\n— Comentario de '+(c.autor||'')+' · '+(c.fecha||'')+'\n(Enviado desde el Sistema Operativo)';
   window.location.href='mailto:?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(bdy);
+};
+
+window._comFiltro = '';
+window.renderComentariosGerencia = async function(filtro){
+  filtro=(filtro===undefined?(window._comFiltro||''):filtro); window._comFiltro=filtro;
+  var res=await sb.from('novedades').select('id,fecha,area,apto,descripcion,comentarios,estado').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(600);
+  var all=[];
+  (res.data||[]).forEach(function(n){ var c=n.comentarios; var arr=Array.isArray(c)?c:[]; arr.forEach(function(cm){ all.push({n:n, cm:cm}); }); });
+  if(filtro==='dirigidos') all=all.filter(function(x){ return x.cm.dirigido_a; });
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var body=all.map(function(x){
+    var apto=(typeof areaApto==='function'?areaApto(x.n).apto:x.n.apto)||'-';
+    var dir=x.cm.dirigido_a?('<span style="background:#fef3c7;color:#92400e;font-size:11px;padding:1px 8px;border-radius:8px">→ '+esc(x.cm.dirigido_a)+'</span>'):'<span style="color:#bbb">—</span>';
+    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir / Responder</button></td></tr>';
+  }).join('');
+  var fbtn=function(v,l){ var on=(window._comFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComentariosGerencia(\''+v+'\')">'+l+'</button>'; };
+  document.getElementById('main-content').innerHTML=
+    '<div class="page-title">💬 Comentarios de gerencia</div>'+
+    '<div class="card"><div class="card-header"><div class="card-title">'+all.length+' comentarios</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todos')+fbtn('dirigidos','Dirigidos')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (dirigido a, texto, apto...)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
+    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Apto</th><th>Comentario</th><th>Dirigido a</th><th>Autor</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 };
 
 async function renderList(tabla, titulo, formView, cols, headers) {
