@@ -418,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-14-1024';
+const APP_VERSION = '2026-06-14-1031';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4893,7 +4893,7 @@ window.agregarComentarioNovedad = async function(id){
   if(!texto.trim()){ if(typeof showToast==='function') showToast('Escribe el comentario','error'); return; }
   var r=await sb.from('novedades').select('comentarios').eq('id',id).single();
   var arr=[]; try{ var c=r.data&&r.data.comentarios; arr=Array.isArray(c)?c:(c?JSON.parse(c):[]); }catch(e){ arr=[]; }
-  arr.push({ autor:(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'—', fecha:new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}), texto:texto.trim(), dirigido_a:dir.trim()||null });
+  arr.push({ autor:(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'—', fecha:new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}), texto:texto.trim(), dirigido_a:dir.trim()||null, ts:Date.now() });
   var u=await sb.from('novedades').update({ comentarios:arr }).eq('id',id);
   if(u.error){ if(typeof showToast==='function') showToast('Error: '+u.error.message,'error'); return; }
   if(typeof showToast==='function') showToast('Comentario agregado','success');
@@ -4912,6 +4912,7 @@ window.renderComentariosGerencia = async function(filtro){
   var res=await sb.from('novedades').select('id,fecha,area,apto,descripcion,comentarios,estado').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(600);
   var all=[];
   (res.data||[]).forEach(function(n){ var c=n.comentarios; var arr=Array.isArray(c)?c:[]; arr.forEach(function(cm){ all.push({n:n, cm:cm}); }); });
+  all.sort(function(a,b){ return (b.cm.ts||0)-(a.cm.ts||0); });
   if(filtro==='dirigidos') all=all.filter(function(x){ return x.cm.dirigido_a; });
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   var body=all.map(function(x){
