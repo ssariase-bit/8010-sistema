@@ -323,7 +323,10 @@ textarea{resize:vertical;min-height:80px}
     </div>
     <div class="form-group">
       <label>Tarifa por noche ($)</label>
-      <input type="number" id="m-tarifa" placeholder="0">
+      <input type="number" id="m-tarifa" placeholder="0"></div>
+    <div class="form-group">
+      <label>PAX en casa (# personas)</label>
+      <input type="number" id="m-pax" placeholder="Ej: 3" min="0">
     </div>
 
     <!-- Toggle Apto Completo — solo para aptos con variante A -->
@@ -415,7 +418,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-13-1922';
+const APP_VERSION = '2026-06-13-1935';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2019,7 +2022,7 @@ async function openAptoModal(id, num) {
   document.getElementById('m-canal').value   = data?.canal || '';
   document.getElementById('m-checkin').value = data?.checkin || '';
   document.getElementById('m-checkout').value= data?.checkout || '';
-  document.getElementById('m-tarifa').value  = data?.tarifa || '';
+  document.getElementById('m-tarifa').value  = data?.tarifa || ''; if(document.getElementById('m-pax')) document.getElementById('m-pax').value = (data&&data.pax!=null)?data.pax:'';
   document.getElementById('m-obs').value     = data?.observaciones || '';
   document.getElementById('m-iva').value     = data?.iva || 'incluido';
   document.getElementById('m-empresa').value = data?.empresa || '';
@@ -2070,6 +2073,7 @@ async function saveApto() {
     checkin: document.getElementById('m-checkin').value || null,
     checkout: document.getElementById('m-checkout').value || null,
     tarifa: Number(document.getElementById('m-tarifa').value) || null,
+    pax: (document.getElementById('m-pax') && document.getElementById('m-pax').value!=='') ? Number(document.getElementById('m-pax').value) : null,
     observaciones: document.getElementById('m-obs').value,
     iva: document.getElementById('m-iva')?.value || 'incluido',
     empresa: document.getElementById('m-empresa')?.value.trim() || null,
@@ -4701,6 +4705,18 @@ window.enviarCotSeleccion = function(testMode){
 };
 (function(){ if(typeof cotRenderTabla==='function' && !window._cotWrapped){ var _o=cotRenderTabla; window.cotRenderTabla=function(){ _o.apply(this,arguments); try{window._cotEnhance();}catch(e){} }; window._cotWrapped=true; } })();
 
+window.guardarPaxHuesped = async function(id, apto, val){
+  try{
+    var n = (val===''||val==null)?null:parseInt(val,10); if(isNaN(n)) n=null;
+    var r = await sb.from('rack').select('huesped').eq('id', id).single();
+    var hu = (r.data && r.data.huesped) || '';
+    var d2 = new Date(TODAY+'T00:00:00'); d2.setDate(d2.getDate()+400); var hasta = d2.toISOString().split('T')[0];
+    if(hu){ await sb.from('rack').update({ pax: n }).eq('apto', apto).eq('edificio', EDIFICIO_ACTIVO).eq('huesped', hu).gte('fecha', TODAY).lte('fecha', hasta); }
+    else { await sb.from('rack').update({ pax: n }).eq('id', id); }
+    if(typeof showToast==='function') showToast('PAX actualizado','success');
+  }catch(e){ if(typeof showToast==='function') showToast('No se pudo guardar PAX','error'); }
+};
+
 async function renderList(tabla, titulo, formView, cols, headers) {
   const { data } = await sb.from(tabla).select('*').order('created_at', { ascending: false }).limit(100);
   const rows = data || [];
@@ -5299,7 +5315,7 @@ async function renderEstadoHuespedes() {
         : `<div style="overflow-x:auto"><table class="tabla">
             <thead><tr>
               <th>Apto</th><th>Estado</th><th>Huésped</th><th>Canal</th>
-              <th>Check-in</th><th>Check-out</th><th>Tarifa/Noche</th><th>Obs.</th><th></th>
+              <th>Check-in</th><th>Check-out</th><th>Tarifa/Noche</th><th>PAX</th><th>Obs.</th><th></th>
             </tr></thead>
             <tbody>${rows.map(r => `<tr>
               <td><strong style="color:var(--azul);font-size:15px">${r.apto}</strong></td>
@@ -5308,7 +5324,7 @@ async function renderEstadoHuespedes() {
               <td>${r.canal||'-'}</td>
               <td>${r.checkin ? fmtDate(r.checkin) : '-'}</td>
               <td>${r.checkout ? fmtDate(r.checkout) : '-'}</td>
-              <td>${r.tarifa ? '$'+fmtNum(r.tarifa) : '-'}</td>
+              <td>${r.tarifa ? '$'+fmtNum(r.tarifa) : '-'}</td><td style="text-align:center"><input type="number" min="0" value="${r.pax!=null?r.pax:''}" onchange="guardarPaxHuesped('${r.id}','${r.apto}',this.value)" placeholder="-" title="PAX en casa" style="width:55px;padding:4px;font-size:13px;text-align:center"></td>
               <td style="max-width:170px"><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Nota del huésped..." title="Se guarda sola al salir del campo" style="width:160px;padding:4px;font-size:11px" onchange="guardarNotaHuesped('${r.id}','${r.apto}',this.value)"></td>
               <td>${_esKL?`<input id="tel-${r.id}" value="${r.telefono||''}" placeholder="📱 WhatsApp" title="WhatsApp del huésped — se guarda solo al salir del campo" style="width:108px;padding:4px;font-size:11px" onchange="guardarTelHuesped('${r.id}','${r.apto}',this.value)"> <input id="dc-${r.id}" data-nombre="${String(r.huesped||'').replace(/"/g,'')}" data-tratamiento="${r.tratamiento||''}" data-tel="${r.telefono||''}" placeholder="Cód. puerta" style="width:84px;padding:4px;font-size:11px"> <button onclick="waBienvenida('dc-${r.id}')" class="btn btn-sm" style="background:#25D366;color:#fff">💬 Bienvenida</button> <button onclick="waAnuncio('dc-${r.id}')" class="btn btn-sm" style="background:#1D3461;color:#fff">📢</button> `:''}<button onclick="openAptoModal('${r.id}','${r.apto}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
             </tr>`).join('')}
