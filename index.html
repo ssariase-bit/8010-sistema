@@ -3966,8 +3966,8 @@ function generarConfirmacion(r) {
   const _edN = (window.EB && EB().nombre) || '8010 Urban Living';
   const _esKLc = _edN.indexOf('8010') === -1;
   const _telC = normTel(r.tel);
-  const confirmMsg = `Estimado/a ${r.nombre},%0A%0AConfirmamos su reserva en ${_edN}:%0A%0AApartamento: ${r.apto}%0ACheck-in: ${r.checkin}%0ACheck-out: ${r.checkout}%0ANoches: ${r.noches}%0ATarifa: $${r.tarifa.toLocaleString('es-CO')}${_esKLc?'':'%0A%0APor favor revise la Guía de Comportamiento adjunta.'}%0A%0A${_edN}`;
-  const waMsg = encodeURIComponent(`🏢 *${_edN} — Confirmación de Reserva*\n\nEstimado/a ${r.nombre},\n\nSu reserva está confirmada:\n▪️ Apto: ${r.apto}\n▪️ Check-in: ${r.checkin}\n▪️ Check-out: ${r.checkout}\n▪️ Noches: ${r.noches}\n▪️ Tarifa: $${r.tarifa.toLocaleString('es-CO')} COP${_esKLc?'':`\n\n📋 Guía de Comportamiento: ${guiaUrl}`}\n\n_${_edN}_`);
+  const confirmMsg = `Estimado/a ${r.nombre},%0A%0AConfirmamos su reserva en ${_edN}:%0A%0AApartamento: ${r.apto}%0ACheck-in: ${r.checkin}%0ACheck-out: ${r.checkout}%0ANoches: ${r.noches}%0ATarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}%0ATotal: $${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':'%0A%0APor favor revise la Guía de Comportamiento adjunta.'}%0A%0A${_edN}`;
+  const waMsg = encodeURIComponent(`🏢 *${_edN} — Confirmación de Reserva*\n\nEstimado/a ${r.nombre},\n\nSu reserva está confirmada:\n▪️ Apto: ${r.apto}\n▪️ Check-in: ${r.checkin}\n▪️ Check-out: ${r.checkout}\n▪️ Noches: ${r.noches}\n▪️ Tarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n▪️ Total: $${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':`\n\n📋 Guía de Comportamiento: ${guiaUrl}`}\n\n_${_edN}_`);
   const emailDest = r.email ? encodeURIComponent(r.email) : '';
 
   const botonesHTML = `
