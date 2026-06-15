@@ -658,6 +658,7 @@ const NAV_ITEMS = {
     { section: 'Comercial' },
     { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
     { id: 'comercial-form', icon: '➕', label: 'Nueva Cotización' },
+    { id: 'eventos', icon: '🎪', label: 'Eventos' },
     { section: 'Sistema' },
     { id: 'import-rack', icon: '🔄', label: 'Importar Rack 2026' },
   ],
@@ -698,6 +699,7 @@ const NAV_ITEMS = {
     { section: 'Comercial' },
     { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
     { id: 'comercial-form', icon: '➕', label: 'Nueva Cotización' },
+    { id: 'eventos', icon: '🎪', label: 'Eventos' },
     { section: 'Auditoría' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
@@ -764,6 +766,7 @@ const NAV_ITEMS = {
     { section: 'Comercial' },
     { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
     { id: 'comercial-form', icon: '➕', label: 'Nueva Cotización' },
+    { id: 'eventos', icon: '🎪', label: 'Eventos' },
   ],
   financiero: [
     { section: 'Financiero' },
@@ -979,6 +982,9 @@ async function loadView(view) {
 
     // Módulo Comercial (cotizaciones / leads)
     case 'comercial-list': await renderComercial(); break;
+    case 'eventos': await renderEventos(); break;
+    case 'evento-form': renderEventoForm(); break;
+    case 'eventos-agenda': await renderEventosAgenda(); break;
     case 'comercial-form': renderGenForm('cotizaciones','📞 Nueva Cotización / Lead',[
       {id:'fecha_solicitud',label:'Fecha de solicitud',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del interesado',type:'text',req:true},
@@ -5607,6 +5613,143 @@ async function renderEstadoHuespedes() {
            </table></div>`}
     </div>`;
   window._ehRows = rows;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MÓDULO EVENTOS (8010) — agenda + venta
+// ═══════════════════════════════════════════════════════════
+const _EV_ESTADOS = ['Cotizado','Confirmado','Realizado','Cancelado'];
+window._eventoEdit = null; window._evFiltroEstado=''; window._evFiltroMes=''; window._evAgendaLunes=null;
+function _evNum(id){ var e=document.getElementById(id); var v=e?String(e.value).replace(/[^\d.-]/g,''):''; return v===''?0:(parseFloat(v)||0); }
+function _evMoney(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); }
+function _evSoloKubik(){ return (typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO==='kubik'); }
+function _evRecalc(){ var base=_evNum('ev-val-sala')+_evNum('ev-val-alim')+_evNum('ev-val-consumos')+_evNum('ev-val-personal')+_evNum('ev-val-tasa'); var b=document.getElementById('ev-base-out'); if(b) b.textContent=_evMoney(base); var t=document.getElementById('ev-total-out'); if(t) t.textContent=_evMoney(base+_evNum('ev-iva')); }
+function _evShiftWeek(lunesStr,delta){ var d=new Date(lunesStr+'T00:00:00'); d.setDate(d.getDate()+delta); return d.toISOString().slice(0,10); }
+function renderEventoForm(){
+  if(_evSoloKubik()){ document.getElementById('main-content').innerHTML='<div class="page-title">🎪 Eventos</div><div class="card"><p style="font-size:14px">El módulo de Eventos es solo para 8010. Cambia el edificio arriba.</p></div>'; return; }
+  var ed=window._eventoEdit; var v=function(k,d){ return ed&&ed[k]!=null?ed[k]:(d==null?'':d); }; var esc=function(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); };
+  var opE=_EV_ESTADOS.map(function(x){ return '<option'+(v('estado','Cotizado')===x?' selected':'')+'>'+x+'</option>'; }).join('');
+  document.getElementById('main-content').innerHTML=`
+    <div class="page-title">🎪 ${ed?'Editar evento':'Nuevo evento'}</div>
+    <div class="card" style="max-width:800px">
+      <div class="form-section"><div class="form-section-title">📋 Programación</div>
+        <div class="form-row">
+          <div class="form-group"><label>Empresa / Cliente *</label><input type="text" id="ev-empresa" value="${esc(v('empresa'))}" placeholder="Empresa o cliente"></div>
+          <div class="form-group"><label>Sala / Lugar</label><input type="text" id="ev-lugar" value="${esc(v('sala'))}" placeholder="Sala 5, Piso 12, Terraza..."></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Fecha inicio *</label><input type="date" id="ev-fini" value="${esc(v('fecha_inicio'))}"></div>
+          <div class="form-group"><label>Fecha fin</label><input type="date" id="ev-ffin" value="${esc(v('fecha_fin'))}"></div>
+          <div class="form-group"><label>Hora</label><input type="text" id="ev-hora" value="${esc(v('hora'))}" placeholder="8:00 AM - 6:00 PM"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>N° PAX</label><input type="number" id="ev-pax" min="0" value="${esc(v('pax'))}" placeholder="0"></div>
+          <div class="form-group"><label>Estado</label><select id="ev-estado">${opE}</select></div>
+          <div class="form-group"><label>Vendedor</label><input type="text" id="ev-vendedor" value="${esc(v('vendedor'))}" placeholder="Comercial"></div>
+        </div>
+        <div class="form-group"><label>Equipos técnicos</label><input type="text" id="ev-equipos" value="${esc(v('equipos'))}" placeholder="Sonido, video, proyector..."></div>
+        <div class="form-group"><label>Observaciones</label><textarea id="ev-obs" placeholder="Montaje, requerimientos especiales...">${String(v('observaciones')).replace(/</g,'&lt;')}</textarea></div>
+      </div>
+      <div class="form-section"><div class="form-section-title">💳 Venta (desglose de cargos)</div>
+        <div class="form-row">
+          <div class="form-group"><label>Sala $</label><input type="number" id="ev-val-sala" value="${esc(v('val_sala',0))}" oninput="_evRecalc()"></div>
+          <div class="form-group"><label>Alimentación / Bebidas $</label><input type="number" id="ev-val-alim" value="${esc(v('val_alimentacion',0))}" oninput="_evRecalc()"></div>
+          <div class="form-group"><label>Consumos adicionales $</label><input type="number" id="ev-val-consumos" value="${esc(v('val_consumos',0))}" oninput="_evRecalc()"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Personal de servicio $</label><input type="number" id="ev-val-personal" value="${esc(v('val_personal',0))}" oninput="_evRecalc()"></div>
+          <div class="form-group"><label>Tasa 10% $</label><input type="number" id="ev-val-tasa" value="${esc(v('val_tasa',0))}" oninput="_evRecalc()"></div>
+          <div class="form-group"><label>IVA $</label><input type="number" id="ev-iva" value="${esc(v('iva',0))}" oninput="_evRecalc()"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Costo del evento $</label><input type="number" id="ev-costo" value="${esc(v('costo',0))}"></div>
+          <div class="form-group"><label>N° cotización</label><input type="text" id="ev-numcot" value="${esc(v('num_cotizacion'))}" placeholder="FO-SE-40..."></div>
+        </div>
+        <div style="display:flex;gap:24px;padding:10px 4px;font-size:14px"><div>Base: <strong id="ev-base-out">$ 0</strong></div><div>Total facturado: <strong id="ev-total-out" style="color:var(--verde)">$ 0</strong></div></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-outline btn-sm" onclick="window._eventoEdit=null;loadView('eventos')">Cancelar</button>
+        <button class="btn btn-success" onclick="guardarEvento(this)" style="min-width:180px">💾 Guardar evento</button>
+      </div>
+    </div>`;
+  _evRecalc();
+}
+async function guardarEvento(btn){
+  if(_evSoloKubik()){ showToast('Solo 8010','error'); return; }
+  var empresa=(document.getElementById('ev-empresa').value||'').trim(); var fini=document.getElementById('ev-fini').value;
+  if(!empresa||!fini){ showToast('Empresa y fecha de inicio son obligatorias','error'); return; }
+  if(btn){ btn.disabled=true; btn.innerHTML='Guardando...'; }
+  var base=_evNum('ev-val-sala')+_evNum('ev-val-alim')+_evNum('ev-val-consumos')+_evNum('ev-val-personal')+_evNum('ev-val-tasa');
+  var row={ edificio:EDIFICIO_ACTIVO, empresa:empresa, sala:(document.getElementById('ev-lugar').value||'').trim()||null, fecha_inicio:fini, fecha_fin:document.getElementById('ev-ffin').value||null, hora:(document.getElementById('ev-hora').value||'').trim()||null, pax:parseInt(document.getElementById('ev-pax').value)||null, equipos:(document.getElementById('ev-equipos').value||'').trim()||null, observaciones:(document.getElementById('ev-obs').value||'').trim()||null, estado:document.getElementById('ev-estado').value, val_sala:_evNum('ev-val-sala'), val_alimentacion:_evNum('ev-val-alim'), val_consumos:_evNum('ev-val-consumos'), val_personal:_evNum('ev-val-personal'), val_tasa:_evNum('ev-val-tasa'), iva:_evNum('ev-iva'), total:base+_evNum('ev-iva'), costo:_evNum('ev-costo'), num_cotizacion:(document.getElementById('ev-numcot').value||'').trim()||null, vendedor:(document.getElementById('ev-vendedor').value||'').trim()||null, user_id:currentUser.id };
+  var err;
+  if(window._eventoEdit&&window._eventoEdit.id){ var u=await sb.from('eventos').update(row).eq('id',window._eventoEdit.id); err=u.error; window._eventoEdit=null; }
+  else { var i=await sb.from('eventos').insert(row); err=i.error; }
+  if(err){ showToast('Error: '+err.message,'error'); if(btn){btn.disabled=false;btn.innerHTML='💾 Guardar evento';} return; }
+  showToast('✅ Evento guardado','success'); setTimeout(function(){ loadView('eventos'); },800);
+}
+async function editarEvento(id){ var r=await sb.from('eventos').select('*').eq('id',id).single(); if(r.data){ window._eventoEdit=r.data; loadView('evento-form'); } }
+async function eliminarEvento(id){ if(!confirm('¿Eliminar este evento?')) return; await sb.from('eventos').delete().eq('id',id); showToast('Evento eliminado','success'); renderEventos(); }
+async function renderEventos(){
+  if(_evSoloKubik()){ document.getElementById('main-content').innerHTML='<div class="page-title">🎪 Eventos</div><div class="card"><p style="font-size:14px">El módulo de Eventos es solo para 8010. Cambia el edificio arriba.</p></div>'; return; }
+  var res=await sb.from('eventos').select('*').eq('edificio',EDIFICIO_ACTIVO).order('fecha_inicio',{ascending:false}).limit(2000); var rows=res.data||[];
+  var fe=window._evFiltroEstado, fm=window._evFiltroMes;
+  var filt=rows.filter(function(r){ if(fe&&r.estado!==fe) return false; if(fm&&String(r.fecha_inicio||'').slice(0,7)!==fm) return false; return true; });
+  var esc=function(s){ return String(s==null?'':s).replace(/</g,'&lt;'); };
+  var badge=function(e){ var c=e==='Confirmado'?'abierto':e==='Realizado'?'resuelto':e==='Cancelado'?'alta':'proceso'; return '<span class="badge b-'+c+'">'+esc(e)+'</span>'; };
+  var totFact=filt.reduce(function(s,r){ return s+(Number(r.total)||0); },0);
+  var body=filt.map(function(r){ return '<tr><td style="white-space:nowrap">'+(r.fecha_inicio?fmtDate(r.fecha_inicio):'-')+(r.fecha_fin&&r.fecha_fin!==r.fecha_inicio?(' → '+fmtDate(r.fecha_fin)):'')+'</td><td><strong>'+esc(r.empresa)+'</strong></td><td>'+esc(r.sala||'-')+'</td><td style="text-align:center">'+(r.pax||'-')+'</td><td>'+badge(r.estado)+'</td><td style="white-space:nowrap;font-weight:600">'+_evMoney(r.total)+'</td><td style="white-space:nowrap"><span title="Editar" style="cursor:pointer" onclick="editarEvento(\''+r.id+'\')">✏️</span> <span title="Cotización" style="cursor:pointer" onclick="cotizacionEvento(\''+r.id+'\')">📄</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarEvento(\''+r.id+'\')">🗑️</span></td></tr>'; }).join('') || '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Sin eventos</td></tr>';
+  var meses=[...new Set(rows.map(function(r){ return String(r.fecha_inicio||'').slice(0,7); }).filter(Boolean))].sort().reverse();
+  var optMes='<option value="">Todos los meses</option>'+meses.map(function(m){ return '<option'+(fm===m?' selected':'')+' value="'+m+'">'+m+'</option>'; }).join('');
+  var optEst='<option value="">Todos los estados</option>'+_EV_ESTADOS.map(function(x){ return '<option'+(fe===x?' selected':'')+'>'+x+'</option>'; }).join('');
+  document.getElementById('main-content').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <div class="page-title" style="margin-bottom:0">🎪 Eventos — 8010</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button onclick="loadView('eventos-agenda')" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">📅 Agenda semanal</button>
+        <button class="btn btn-success btn-sm" onclick="window._eventoEdit=null;loadView('evento-form')">+ Nuevo evento</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">${filt.length} eventos · Facturado: ${_evMoney(totFact)}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><select onchange="window._evFiltroMes=this.value;renderEventos()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">${optMes}</select><select onchange="window._evFiltroEstado=this.value;renderEventos()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">${optEst}</select></div>
+      </div>
+      <div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Empresa</th><th>Sala</th><th>PAX</th><th>Estado</th><th>Total</th><th></th></tr></thead><tbody>${body}</tbody></table></div>
+    </div>`;
+}
+async function renderEventosAgenda(){
+  if(_evSoloKubik()){ document.getElementById('main-content').innerHTML='<div class="page-title">🎪 Eventos</div><div class="card"><p style="font-size:14px">Solo 8010.</p></div>'; return; }
+  var baseD=window._evAgendaLunes?new Date(window._evAgendaLunes+'T00:00:00'):new Date();
+  var d=new Date(baseD); var dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); var lunes=d.toISOString().slice(0,10);
+  var finD=new Date(d); finD.setDate(finD.getDate()+6); var dom=finD.toISOString().slice(0,10); window._evAgendaLunes=lunes;
+  var r1=await sb.from('eventos').select('*').eq('edificio',EDIFICIO_ACTIVO).not('fecha_fin','is',null).lte('fecha_inicio',dom).gte('fecha_fin',lunes);
+  var r2=await sb.from('eventos').select('*').eq('edificio',EDIFICIO_ACTIVO).is('fecha_fin',null).gte('fecha_inicio',lunes).lte('fecha_inicio',dom);
+  var all=[...(r1.data||[]),...(r2.data||[])]; var seen={}; all=all.filter(function(e){ if(seen[e.id])return false; seen[e.id]=1; return true; });
+  var dias=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']; var esc=function(s){ return String(s==null?'':s).replace(/</g,'&lt;'); };
+  var cards='';
+  for(var i=0;i<7;i++){ var dd=new Date(d); dd.setDate(dd.getDate()+i); var fstr=dd.toISOString().slice(0,10);
+    var evs=all.filter(function(e){ var fi=e.fecha_inicio, ff=e.fecha_fin||e.fecha_inicio; return fstr>=fi && fstr<=ff; });
+    var inner=evs.length?evs.map(function(e){ return '<div style="border-left:3px solid #1D3461;padding:6px 9px;margin:6px 0;background:#f8f9fa;border-radius:0 6px 6px 0;cursor:pointer" onclick="editarEvento(\''+e.id+'\')"><div style="font-weight:600;font-size:12.5px;color:#211D1E">'+esc(e.empresa)+(e.sala?(' · '+esc(e.sala)):'')+'</div><div style="font-size:11px;color:#666">'+(e.hora?esc(e.hora):'')+(e.pax?(' · '+e.pax+' pax'):'')+'</div>'+(e.observaciones?('<div style="font-size:10.5px;color:#999">'+esc(String(e.observaciones).slice(0,60))+'</div>'):'')+'</div>'; }).join('') : '<div style="color:#bbb;font-size:12px;padding:6px">—</div>';
+    cards+='<div style="border:1px solid #E2E4E8;border-radius:8px;padding:8px 10px;min-height:80px"><div style="font-weight:700;font-size:12px;color:#1D3461;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:4px">'+dias[i]+' '+dd.getDate()+'</div>'+inner+'</div>';
+  }
+  document.getElementById('main-content').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="page-title" style="margin-bottom:0">📅 Agenda de Eventos</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="window._evAgendaLunes='${_evShiftWeek(lunes,-7)}';renderEventosAgenda()">◀</button>
+        <span style="font-size:12px;color:#666">${fmtDate(lunes)} – ${fmtDate(dom)}</span>
+        <button class="btn btn-outline btn-sm" onclick="window._evAgendaLunes='${_evShiftWeek(lunes,7)}';renderEventosAgenda()">▶</button>
+        <button onclick="loadView('eventos')" class="btn btn-outline btn-sm">📋 Lista</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">${cards}</div>`;
+}
+async function cotizacionEvento(id){
+  var r=await sb.from('eventos').select('*').eq('id',id).single(); if(!r.data){ showToast('No encontrado','error'); return; } var e=r.data;
+  var money=function(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); }; var esc=function(s){ return String(s==null?'':s).replace(/</g,'&lt;'); };
+  var base=(Number(e.val_sala)||0)+(Number(e.val_alimentacion)||0)+(Number(e.val_consumos)||0)+(Number(e.val_personal)||0)+(Number(e.val_tasa)||0);
+  var fila=function(lbl,val){ return (val&&Number(val)!==0)?('<tr><td style="padding:6px 12px;border-bottom:1px solid #eee">'+lbl+'</td><td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:right">'+money(val)+'</td></tr>'):''; };
+  var html='<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Cotizacion Evento</title></head><body style="font-family:Helvetica,Arial,sans-serif;margin:0;background:#fff"><div style="max-width:680px;margin:auto;padding:24px"><div style="background:#0A0A0A;padding:18px 22px;border-radius:8px 8px 0 0"><span style="color:#fff;font-size:22px;font-weight:900;font-family:Georgia,serif">80<span style="color:#B8963E">|</span>10</span><div style="color:#B8963E;font-size:10px;letter-spacing:4px;margin-top:4px">URBAN LIVING · EVENTOS</div></div><div style="border:1px solid #DAD6D1;border-top:none;border-radius:0 0 8px 8px;padding:20px 22px"><div style="font-size:19px;font-weight:bold;color:#211D1E;margin-bottom:4px">Cotizacion de evento</div>'+(e.num_cotizacion?('<div style="font-size:12px;color:#6B7280">N&deg; '+esc(e.num_cotizacion)+'</div>'):'')+'<table style="width:100%;margin-top:14px;font-size:13px;border-collapse:collapse"><tr><td style="padding:5px 0;color:#6B7280;width:160px">Empresa / Cliente</td><td style="padding:5px 0;font-weight:600">'+esc(e.empresa)+'</td></tr><tr><td style="padding:5px 0;color:#6B7280">Sala / Lugar</td><td style="padding:5px 0">'+esc(e.sala||'-')+'</td></tr><tr><td style="padding:5px 0;color:#6B7280">Fecha</td><td style="padding:5px 0">'+(e.fecha_inicio?fmtDate(e.fecha_inicio):'-')+(e.fecha_fin&&e.fecha_fin!==e.fecha_inicio?(' al '+fmtDate(e.fecha_fin)):'')+(e.hora?(' &middot; '+esc(e.hora)):'')+'</td></tr><tr><td style="padding:5px 0;color:#6B7280">N&deg; PAX</td><td style="padding:5px 0">'+(e.pax||'-')+'</td></tr>'+(e.equipos?('<tr><td style="padding:5px 0;color:#6B7280">Equipos</td><td style="padding:5px 0">'+esc(e.equipos)+'</td></tr>'):'')+'<tr><td style="padding:5px 0;color:#6B7280">Estado</td><td style="padding:5px 0">'+esc(e.estado)+'</td></tr></table><div style="font-size:13px;font-weight:bold;color:#211D1E;margin:16px 0 6px">Desglose</div><table style="width:100%;font-size:13px;border-collapse:collapse">'+fila('Sala',e.val_sala)+fila('Alimentacion / Bebidas',e.val_alimentacion)+fila('Consumos adicionales',e.val_consumos)+fila('Personal de servicio',e.val_personal)+fila('Tasa 10%',e.val_tasa)+'<tr><td style="padding:6px 12px;text-align:right;color:#6B7280">Base</td><td style="padding:6px 12px;text-align:right">'+money(base)+'</td></tr>'+(Number(e.iva)?('<tr><td style="padding:6px 12px;text-align:right;color:#6B7280">IVA</td><td style="padding:6px 12px;text-align:right">'+money(e.iva)+'</td></tr>'):'')+'<tr><td style="padding:8px 12px;text-align:right;font-weight:700;background:#F5F3EE">TOTAL</td><td style="padding:8px 12px;text-align:right;font-weight:700;background:#F5F3EE;color:#1A5C2E">'+money(e.total)+'</td></tr></table>'+(e.observaciones?('<div style="margin-top:14px;font-size:12px;color:#4A463F"><strong>Observaciones:</strong> '+esc(e.observaciones)+'</div>'):'')+'<div style="margin-top:18px;font-size:10.5px;color:#9A938B;border-top:1px solid #E7E3E0;padding-top:10px">8010 Urban Living &middot; Generado '+new Date().toLocaleDateString('es-CO')+(e.vendedor?(' &middot; '+esc(e.vendedor)):'')+'</div></div></div><div style="max-width:680px;margin:8px auto;text-align:center" class="no-print"><button onclick="window.print()" style="background:#1D3461;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer">Imprimir / PDF</button></div><style>@media print{.no-print{display:none}}</style></body></html>';
+  var w=window.open('','_blank'); if(w){ w.document.write(html); w.document.close(); } else { showToast('Permite ventanas emergentes','error'); }
 }
 
 async function renderIngresos(){
