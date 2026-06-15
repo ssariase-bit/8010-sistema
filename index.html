@@ -4561,7 +4561,17 @@ function compartirWA(){ window.open('https://wa.me/?text='+encodeURIComponent(_i
 function compartirMail(){ return enviarInformeCorreo(_tituloInforme(), _informeTextoDOM()); }
 function barraCompartir(){ return '<button class="btn btn-outline btn-sm" onclick="compartirWA()" title="Compartir por WhatsApp">📱 WhatsApp</button><button class="btn btn-outline btn-sm" onclick="enviarInformeCorreo(_tituloInforme(), _informeTextoDOM(), this)" title="Enviar por correo">✉️ Correo</button>'; }
 async function renderSeguimientosTurno(){
-  const { data } = await sb.from('seguimientos_turno').select('*').eq('edificio', EDIFICIO_ACTIVO).order('fecha',{ascending:false}).order('created_at',{ascending:false});
+  // Semana en curso (lunes a domingo) — mismo cálculo que Información de la Semana
+  const _base = new Date(TODAY+'T00:00:00');
+  const _dow = _base.getDay(); const _offL = _dow===0?-6:1-_dow;
+  const _lun = new Date(_base); _lun.setDate(_base.getDate()+_offL);
+  const _dom = new Date(_lun); _dom.setDate(_lun.getDate()+6);
+  const _fS = d=>d.toISOString().split('T')[0];
+  const _ini=_fS(_lun), _fin=_fS(_dom);
+  const verTodo = !!window._segVerTodo;
+  let q = sb.from('seguimientos_turno').select('*').eq('edificio', EDIFICIO_ACTIVO);
+  if(!verTodo){ q = q.gte('fecha', _ini).lte('fecha', _fin); }
+  const { data } = await q.order('fecha',{ascending:false}).order('created_at',{ascending:false});
   const rows = data || [];
   const esc = s => String(s==null?'':s).replace(/</g,'&lt;');
   const badge = e => { const cl = e==='Resuelto'?'resuelto':(e==='En seguimiento'?'proceso':'alta'); return `<span class="badge b-${cl}">${esc(e||'Pendiente')}</span>`; };
@@ -4577,8 +4587,8 @@ async function renderSeguimientosTurno(){
   </tr>`).join('');
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
-      <div class="page-title" style="margin-bottom:0">📌 Seguimientos por Turno</div>
-      ${barraCompartir()}<button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('seguimientos-form')">+ Nuevo Seguimiento</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=tr.querySelector('.b-resuelto')?'none':''})">Solo pendientes</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=''})">Todos</button>
+      <div class="page-title" style="margin-bottom:0">📌 Seguimientos por Turno ${verTodo?'— Historial completo':'— Semana '+fmtDate(_ini)+' al '+fmtDate(_fin)}</div>
+      ${barraCompartir()}<button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('seguimientos-form')">+ Nuevo Seguimiento</button><button class="btn btn-outline btn-sm" onclick="window._segVerTodo=${verTodo?'false':'true'};renderSeguimientosTurno()">${verTodo?'📅 Solo esta semana':'🗂️ Ver historial'}</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=tr.querySelector('.b-resuelto')?'none':''})">Solo pendientes</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=''})">Todos</button>
     </div>
     <div class="card">
       <table class="tabla"><thead><tr><th>Fecha</th><th>Turno</th><th>Categoría</th><th>Apto</th><th>Detalle</th><th>Responsable</th><th>Estado</th><th></th></tr></thead>
