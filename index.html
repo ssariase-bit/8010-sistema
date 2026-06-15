@@ -3713,7 +3713,7 @@ async function guardarReserva() {
     tel: document.getElementById('res-tel').value.trim(),
     numero: await getNextNumeroConfirmacion()
   };
-  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, apto: resData.apto, config: resData.config, moneda: resData.moneda, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, numero: resData.numero, empresa: resData.empresa, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, acompanantes: resData.acompanantes, ejecutiva: resData.ejecutiva, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, user_id: currentUser.id }; if (window._reservaEditId) { await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); window._reservaEditId = null; } else { await sb.from('reservas').insert(_rvRow); } } catch(_e){}
+  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, apto: resData.apto, config: resData.config, moneda: resData.moneda, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, numero: resData.numero, empresa: resData.empresa, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, acompanantes: resData.acompanantes, ejecutiva: resData.ejecutiva, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',acompanantes:'Acompanantes',ejecutiva:'Ejecutiva',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insH=((await sb.from('reservas').insert(_rvRow).select('id').single()).data)||{}; if(_insH.id) await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); } } catch(_e){}
   setTimeout(() => {
     if(confirm('¿Deseas generar la Confirmación de Reserva ahora?')) {
       generarConfirmacion(resData);
@@ -4802,7 +4802,7 @@ window.editarReserva = async function(id){
     set('res-tipotarifa',r.tipo_tarifa); set('res-pago',r.pago); set('res-estadopago',r.estado_pago);
     set('res-num-reserva',r.num_reserva); set('res-cxc-tipo',r.cxc_tipo); set('res-cxc-razon',r.cxc_razon);
     set('res-personas',r.personas); set('res-obs',r.obs); set('res-firmante',r.firmante);
-    set('res-cargo',r.cargo); set('res-email',r.email); set('res-tel',r.tel); set('res-empresa',r.empresa); set('res-pax',r.pax);
+    set('res-cargo',r.cargo); set('res-email',r.email); set('res-tel',r.tel); set('res-empresa',r.empresa); set('res-pax',r.pax); set('res-acompanantes',r.acompanantes); set('res-ejecutiva',r.ejecutiva);
     set('res-nf',r.nombre); set('res-ap1',''); set('res-ap2','');
     if(typeof combinarNombreReserva==='function') combinarNombreReserva();
     if(typeof showToast==='function') showToast('Editando reserva de '+(r.nombre||'')+' — ajusta y guarda','success');
@@ -4813,16 +4813,31 @@ window.eliminarReserva = async function(id){
   if(res.error||!res.data){ if(typeof showToast==='function') showToast('No se encontró','error'); return; }
   var r=res.data;
   if(!confirm('¿Eliminar la reserva de '+(r.nombre||'')+' (apto '+(r.apto||'')+') y liberar esas fechas en el rack?')) return;
+  try{ await sb.from('reservas_historial').insert({reserva_id:id,edificio:EDIFICIO_ACTIVO,apto:r.apto,accion:'Eliminada',detalle:'Reserva eliminada de '+(r.nombre||'')+' (apto '+(r.apto||'')+', '+(r.checkin||'')+' a '+(r.checkout||'')+')',usuario:(currentProfile&&currentProfile.nombre)||''}); }catch(_e){}
   await sb.from('reservas').delete().eq('id',id);
   if(r.apto&&r.checkin&&r.checkout){ await sb.from('rack').delete().eq('apto',r.apto).eq('edificio',EDIFICIO_ACTIVO).gte('fecha',r.checkin).lte('fecha',r.checkout); }
   if(typeof showToast==='function') showToast('Reserva eliminada','success');
   renderReservas();
 };
+window.verHistorialReserva = async function(id){
+  var res=await sb.from('reservas_historial').select('*').eq('reserva_id',id).order('created_at',{ascending:false}).limit(100);
+  var rows=res.data||[];
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
+  var items=rows.length? rows.map(function(h){
+    var col=h.accion==='Creada'?'#1A5C2E':h.accion==='Eliminada'?'#C0392B':'#1D3461';
+    return '<div style="border-left:3px solid '+col+';padding:8px 12px;margin:8px 0;background:#f8f9fa;border-radius:0 6px 6px 0"><div style="font-size:11px;color:#666"><strong style="color:'+col+'">'+esc(h.accion)+'</strong> &middot; '+esc(h.usuario||'-')+' &middot; '+new Date(h.created_at).toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true})+'</div><div style="margin-top:4px;white-space:pre-wrap;font-size:12.5px;color:#211D1E">'+esc(h.detalle||'')+'</div></div>';
+  }).join('') : '<div style="color:#999;font-size:13px;margin:10px 0">Sin historial registrado para esta reserva todavia.</div>';
+  var modal=document.createElement('div'); modal.id='modal-hist-rv';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px';
+  modal.innerHTML='<div style="background:#fff;border-radius:14px;padding:20px 22px;max-width:560px;width:100%;max-height:85vh;overflow:auto"><div style="font-size:16px;font-weight:700;color:#1D3461;margin-bottom:4px">📜 Histórico de la reserva</div><div style="font-size:12px;color:#6B7280;margin-bottom:10px">'+rows.length+' movimiento(s)</div>'+items+'<button onclick="document.getElementById(\'modal-hist-rv\').remove()" style="width:100%;margin-top:10px;background:transparent;border:none;color:#9CA3AF;font-size:13px;cursor:pointer;padding:8px">Cerrar</button></div>';
+  modal.addEventListener('click',function(e){ if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+};
 window.renderReservas = async function(filtro){
   var res=await sb.from('reservas').select('*').eq('edificio',EDIFICIO_ACTIVO).order('checkin',{ascending:false}).limit(2000);
   var rows=res.data||[];
   var body=rows.map(function(r){
-    return '<tr><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">$'+(Number(r.tarifa)||0).toLocaleString('es-CO')+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="white-space:nowrap"><span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
+    return '<tr><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">$'+(Number(r.tarifa)||0).toLocaleString('es-CO')+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="white-space:nowrap"><span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
   }).join('');
   document.getElementById('main-content').innerHTML=
     '<div class="page-title">📋 Reservas</div>'+
