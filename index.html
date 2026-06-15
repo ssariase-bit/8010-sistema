@@ -902,8 +902,8 @@ const MENU_COMPLETO = [
   { section: 'Comercial' },
   { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
   { id: 'comercial-form', icon: '➕', label: 'Nueva Cotización' },
-  { id: 'eventos', icon: '🎪', label: 'Eventos' },
-  { id: 'eventos-agenda', icon: '📅', label: 'Agenda de Eventos' },
+  { id: 'eventos', icon: '🎪', label: 'Eventos', roles: ['gerente_general','administrador','eventos'] },
+  { id: 'eventos-agenda', icon: '📅', label: 'Agenda de Eventos', roles: ['gerente_general','administrador','eventos'] },
   { id: 'facturacion-list', icon: '🧾', label: 'Facturación' },
   { id: 'facturacion-form', icon: '➕', label: 'Registrar Factura' },
   { section: 'Auditoría' },
@@ -914,7 +914,8 @@ const MENU_COMPLETO = [
 ];
 
 function buildSidebar() {
-  const items = MENU_COMPLETO;
+  const _rol = currentProfile && currentProfile.rol;
+  const items = MENU_COMPLETO.filter(it => !it.roles || it.roles.indexOf(_rol) > -1);
   const sb2 = document.getElementById('sidebar');
   sb2.innerHTML = items.map(item => {
     if (item.section) return `<div class="nav-section">${item.section}</div>`;
