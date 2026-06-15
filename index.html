@@ -324,9 +324,22 @@ textarea{resize:vertical;min-height:80px}
     <div class="form-group">
       <label>Tarifa por noche ($)</label>
       <input type="number" id="m-tarifa" placeholder="0"></div>
+    <div class="form-row col3">
+      <div class="form-group"><label>Adultos</label><input type="number" id="m-pax-ad" placeholder="0" min="0" oninput="_paxSum()"></div>
+      <div class="form-group"><label>Menores / Niños</label><input type="number" id="m-pax-me" placeholder="0" min="0" oninput="_paxSum()"></div>
+      <div class="form-group"><label>Infantes</label><input type="number" id="m-pax-in" placeholder="0" min="0" oninput="_paxSum()"></div>
+    </div>
     <div class="form-group">
-      <label>PAX en casa (# personas)</label>
-      <input type="number" id="m-pax" placeholder="Ej: 3" min="0">
+      <label>PAX en casa (total)</label>
+      <input type="number" id="m-pax" placeholder="0" min="0" readonly style="background:#eef1f5;font-weight:700">
+    </div>
+    <div class="form-group">
+      <label>Acompañante (servicio)</label>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;padding-top:4px">
+        <label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="m-acomp" value="Empleada"> Empleada</label>
+        <label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="m-acomp" value="Enfermera"> Enfermera</label>
+        <label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="m-acomp" value="Niñera"> Niñera</label>
+      </div>
     </div>
 
     <!-- Toggle Apto Completo — solo para aptos con variante A -->
@@ -472,6 +485,7 @@ const EDIFICIOS = {
     metrajes: {'201':100,'202':29,'203':56,'204':42,'204A':37,'301':100,'302':29,'303':56,'304':42,'304A':37,'401':100,'402':29,'403':56,'404':42,'404A':37,'501':100,'502':29,'503':56,'504':42,'504A':37,'601':100,'602':29,'603':56,'604':42,'604A':37,'701':100,'702':29,'703':56,'704':42,'704A':37,'801':100,'802':29,'803':56,'804':42,'804A':37,'901':100,'902':29,'903':56,'904':42,'904A':37,'PH1':130,'PH2':113},
     cajas: ['8I8 (8i8 Operadora SAS)'],
     facturarA: ['8i8 Operadora SAS','Particular','Otra'],
+    wifi: { red:'HUESPEDES_KL', clave:'kubik8i8' },
     camareras: ['Yolimar Manzanillo','Luz Dary Rodríguez','Ángela Díaz'],
     jornadas: { 'Administrador':540, 'Camarera':500, 'Mantenimiento':540, 'Otro':540 },
     indicadoresMes: {}
@@ -2047,6 +2061,7 @@ function toggleAptoCompleto(chk) {
   }
 }
 
+function _paxSum(){ var g=function(id){ var e=document.getElementById(id); return (e&&e.value!=='')?(Number(e.value)||0):0; }; var t=g('m-pax-ad')+g('m-pax-me')+g('m-pax-in'); var p=document.getElementById('m-pax'); if(p) p.value=t; }
 async function openAptoModal(id, num) {
   const { data } = await sb.from('rack').select('*').eq('id', id).single();
   _aptoData = data || {};
@@ -2058,7 +2073,12 @@ async function openAptoModal(id, num) {
   document.getElementById('m-canal').value   = data?.canal || '';
   document.getElementById('m-checkin').value = data?.checkin || '';
   document.getElementById('m-checkout').value= data?.checkout || '';
-  document.getElementById('m-tarifa').value  = data?.tarifa || ''; if(document.getElementById('m-pax')) document.getElementById('m-pax').value = (data&&data.pax!=null)?data.pax:'';
+  document.getElementById('m-tarifa').value  = data?.tarifa || '';
+  var _sa=function(id,v){ var e=document.getElementById(id); if(e) e.value=(v!=null?v:''); };
+  _sa('m-pax-ad', data&&data.pax_adultos); _sa('m-pax-me', data&&data.pax_menores); _sa('m-pax-in', data&&data.pax_infantes);
+  if(document.getElementById('m-pax')) document.getElementById('m-pax').value = (data&&data.pax!=null)?data.pax:'';
+  var _ac=(data&&data.acompanante)?String(data.acompanante).split(',').map(function(s){return s.trim();}):[];
+  document.querySelectorAll('.m-acomp').forEach(function(c){ c.checked=_ac.indexOf(c.value)>-1; });
   document.getElementById('m-obs').value     = data?.observaciones || '';
   document.getElementById('m-iva').value     = data?.iva || 'incluido';
   document.getElementById('m-empresa').value = data?.empresa || '';
@@ -2110,6 +2130,10 @@ async function saveApto() {
     checkout: document.getElementById('m-checkout').value || null,
     tarifa: Number(document.getElementById('m-tarifa').value) || null,
     pax: (document.getElementById('m-pax') && document.getElementById('m-pax').value!=='') ? Number(document.getElementById('m-pax').value) : null,
+    pax_adultos: (document.getElementById('m-pax-ad') && document.getElementById('m-pax-ad').value!=='') ? Number(document.getElementById('m-pax-ad').value) : null,
+    pax_menores: (document.getElementById('m-pax-me') && document.getElementById('m-pax-me').value!=='') ? Number(document.getElementById('m-pax-me').value) : null,
+    pax_infantes: (document.getElementById('m-pax-in') && document.getElementById('m-pax-in').value!=='') ? Number(document.getElementById('m-pax-in').value) : null,
+    acompanante: (function(){ var a=[]; document.querySelectorAll('.m-acomp:checked').forEach(function(c){a.push(c.value);}); return a.length?a.join(', '):null; })(),
     observaciones: document.getElementById('m-obs').value,
     iva: document.getElementById('m-iva')?.value || 'incluido',
     empresa: document.getElementById('m-empresa')?.value.trim() || null,
@@ -5691,7 +5715,7 @@ function anuncioMasivo(){
 }
 function copiarTelefonos(){ var rows=(window._ehRows||[]).filter(function(r){ return r.huesped&&r.telefono; }); var seen={}; rows=rows.filter(function(r){ var k=(r.huesped||'').trim().toLowerCase(); if(!k||seen[k]) return false; seen[k]=1; return true; }); if(!rows.length){ alert('Ningún huésped en casa tiene WhatsApp guardado todavía.'); return; } var t=rows.map(function(r){ return '+'+normTel(r.telefono)+'  ('+(r.huesped||'')+' · Apto '+r.apto+')'; }).join('\n'); navigator.clipboard.writeText(t).then(function(){ showToast('📋 '+rows.length+' números copiados','success'); }); }
 function waAnuncio(nombreId){ var el=document.getElementById(nombreId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(nombreId); var body=(document.getElementById('anuncio-body')||{}).value||''; if(!body.trim()){ alert('Escribe el mensaje del anuncio primero.'); return; } var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var _trpA=trat?trat+' ':''; var msg=saludo+', '+_trpA+(nombre||'')+'.\n\n'+body+'\n\nCualquier duda o solicitud, comuníquese con nosotros por este medio — estamos disponibles 24/7. Mil gracias. 🙏\n*'+(((typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'))+'*'; window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
-function waBienvenida(codeId){ var el=document.getElementById(codeId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(codeId); var code=(el&&el.value)?el.value:'XXXX#'; var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var ed=(typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'; var _trpB=trat?trat+' ':''; var msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.\n'+'🔑 Código puerta: '+code; window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
+function waBienvenida(codeId){ var el=document.getElementById(codeId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(codeId); var code=(el&&el.value)?el.value:'XXXX#'; var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var ed=(typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'; var _trpB=trat?trat+' ':''; var msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.\n'+'🔑 Código puerta: '+code; var _wf=(typeof EB==='function'&&EB().wifi)||null; if(_wf&&_wf.red){ msg+='\n📶 Red WiFi: '+_wf.red+' · Contraseña: '+(_wf.clave||''); } window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
 async function renderEstadoHuespedes() {
   const _esKL=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')===-1);
   const today = TODAY;
@@ -6191,18 +6215,21 @@ async function renderChecklistTurnos(){
   const { data } = await sb.from('checklist_turnos').select('*').eq('fecha',fecha).eq('turno',turno);
   const done = {}; (data||[]).forEach(r=>{ done[r.tarea]=r; });
   const tareas = CHECKLIST_KL[turno]||[];
-  const hechas = tareas.filter(t=>done[t[0]]&&done[t[0]].hecho).length;
+  const hechas = tareas.filter(t=>done[t[0]]&&(done[t[0]].hecho||done[t[0]].no_aplica)).length;
   const pct = tareas.length?Math.round(hechas/tareas.length*100):0;
   const filas = tareas.map(t=>{
     const sub = t[0].includes('.');
     const d = done[t[0]];
     const ck = d && d.hecho;
-    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 10px;${sub?'margin-left:26px;':''}border-bottom:1px solid #F0EEEB;${ck?'background:#F2FAF2;':''}">
-      <input type="checkbox" ${ck?'checked':''} onchange="marcarTarea('${t[0]}', this.checked)" style="width:17px;height:17px;margin-top:2px;cursor:pointer">
+    const na = d && d.no_aplica;
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 10px;${sub?'margin-left:26px;':''}border-bottom:1px solid #F0EEEB;${ck?'background:#F2FAF2;':na?'background:#F3F4F6;':''}">
+      <input type="checkbox" ${ck?'checked':''} ${na?'disabled':''} title="Realizado" onchange="marcarTarea('${t[0]}','hecho',this.checked)" style="width:17px;height:17px;margin-top:2px;cursor:pointer">
       <div style="flex:1">
-        <span style="font-size:13px;${ck?'color:#6B7280;text-decoration:line-through;':''}"><strong>${t[0]}.</strong> ${t[1]}</span>
+        <span style="font-size:13px;${(ck||na)?'color:#6B7280;text-decoration:line-through;':''}"><strong>${t[0]}.</strong> ${t[1]}</span>
         ${ck&&d.hecho_por?`<div style="font-size:10px;color:#0a7d2c">✓ ${d.hecho_por}${d.hora?' · '+d.hora:''}</div>`:''}
+        ${na?`<div style="font-size:10px;color:#6B7280">⊘ No aplica${d.hecho_por?' · '+d.hecho_por:''}</div>`:''}
       </div>
+      <label style="font-size:11px;color:#6B7280;display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;margin-top:2px"><input type="checkbox" ${na?'checked':''} ${ck?'disabled':''} onchange="marcarTarea('${t[0]}','no_aplica',this.checked)" style="width:15px;height:15px"> N/A</label>
     </div>`;
   }).join('');
   document.getElementById('main-content').innerHTML = `
@@ -6225,9 +6252,11 @@ async function renderChecklistTurnos(){
       ${filas}
     </div>`;
 }
-async function marcarTarea(codigo, ck){
+async function marcarTarea(codigo, campo, valor){
   const fecha = window._clFecha||TODAY, turno = window._clTurno||'Turno 1';
-  const { error } = await sb.from('checklist_turnos').upsert([{ fecha, turno, tarea: codigo, hecho: ck, hecho_por: ck?(currentProfile?.nombre||''):null, hora: ck?fmtHora12():null, user_id: currentUser.id }], { onConflict:'fecha,turno,tarea,edificio' });
+  var row = { fecha, turno, tarea: codigo, hecho_por: valor?(currentProfile?.nombre||''):null, hora: valor?fmtHora12():null, user_id: currentUser.id };
+  if(campo==='no_aplica'){ row.no_aplica=valor; if(valor) row.hecho=false; } else { row.hecho=valor; if(valor) row.no_aplica=false; }
+  const { error } = await sb.from('checklist_turnos').upsert([row], { onConflict:'fecha,turno,tarea,edificio' });
   if(error){ showToast('Error: '+error.message,'error'); return; }
   renderChecklistTurnos();
 }
@@ -6237,7 +6266,7 @@ function compartirChecklist(){
     const done={}; (data||[]).forEach(r=>{ done[r.tarea]=r; });
     const tareas = CHECKLIST_KL[turno]||[];
     const lineas = tareas.map(t=>{ const d=done[t[0]]; return `${d&&d.hecho?'✅':'⬜'} ${t[0]}. ${t[1]}${d&&d.hecho&&d.hecho_por?' _('+d.hecho_por+')_':''}`; });
-    const hechas = tareas.filter(t=>done[t[0]]&&done[t[0]].hecho).length;
+    const hechas = tareas.filter(t=>done[t[0]]&&(done[t[0]].hecho||done[t[0]].no_aplica)).length;
     const txt = `☑️ *${EB().nombre} — Check List ${turno}*\n📅 ${fmtDate(fecha)} · ${hechas}/${tareas.length} completadas\n\n${lineas.join('\n')}`;
     compartirInforme('Check List '+turno+' — '+fmtDate(fecha), txt);
   });
