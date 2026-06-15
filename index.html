@@ -1229,11 +1229,11 @@ async function loadView(view) {
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'empresa',label:'Empresa',type:'text'},
       {id:'facturar_a',label:'Facturar a',type:'select',opts:(EB().facturarA||['Particular','Otra'])},
-      {id:'contrato_firmado',label:'Contrato firmado',type:'select',opts:['Sí','No']},
-      {id:'registro_ingreso',label:'Registro de ingreso',type:'select',opts:['Sí','No']},
-      {id:'copia_documentos',label:'Copia de documentos',type:'select',opts:['Sí','No']},
-      {id:'info_reserva',label:'Info de reserva',type:'select',opts:['Sí','No']},
-      {id:'carpeta_completa',label:'Carpeta completa',type:'select',opts:['Sí','No']},
+      {id:'contrato_firmado',label:'Contrato firmado',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
+      {id:'registro_ingreso',label:'Registro de ingreso',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
+      {id:'copia_documentos',label:'Copia de documentos',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
+      {id:'info_reserva',label:'Info de reserva',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
+      {id:'carpeta_completa',label:'Carpeta completa',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
       {id:'otro_si_1',label:'Otro Sí 1 (descripción)',type:'text'},
       {id:'otro_si_2',label:'Otro Sí 2 (descripción)',type:'text'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
@@ -4038,7 +4038,7 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     let input = '';
     const val = f.default || '';
     if (f.type === 'select') {
-      input = `<select id="gf-${f.id}">${(f.opts||[]).map(o=>`<option value="${o}">${o}</option>`).join('')}</select>`;
+      input = `<select id="gf-${f.id}">${(f.opts||[]).map(o=>{ var ov=(o&&typeof o==='object')?o.v:o; var ol=(o&&typeof o==='object')?o.l:o; return `<option value="${ov}">${ol}</option>`; }).join('')}</select>`;
     } else if (f.type === 'textarea') {
       input = `<textarea id="gf-${f.id}" placeholder="${f.label}..."></textarea>`;
     } else if (f.type === 'aptotar') { var _ms=(typeof EB==='function'&&(((EB().nombre)||'').indexOf('8010')>-1))?[60,70,90,96,120,126,132]:[29,42,56,79,85,100,113,130]; var _rw=_ms.map(function(m){return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><span style="width:64px;font-size:12px;font-weight:600">'+m+' m²</span><input type="number" class="at-ini" data-m="'+m+'" placeholder="Tarifa ini" oninput="aptoTarSync()" style="width:120px;padding:6px"><input type="number" class="at-neg" data-m="'+m+'" placeholder="Negociado" oninput="aptoTarSync()" style="width:120px;padding:6px"></div>';}).join(''); input='<input type="hidden" id="gf-aptos_tarifas"><div id="gf-aptotar-box" style="padding-top:4px">'+_rw+'</div>'; } else if (f.type === 'tipos') { var _to=['1 habitación','2 habitaciones','Studio / Loft','General / Varios']; input = '<input type="hidden" id="gf-'+f.id+'"><div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:4px">'+_to.map(function(o){return '<label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="'+o+'" onchange="cotTiposSync(this)"> '+o+'</label>';}).join('')+'</div>'; } else if (f.type === 'money') {
@@ -5020,7 +5020,7 @@ async function renderList(tabla, titulo, formView, cols, headers) {
     const celdas = cols.map(c => {
       let v = r[c];
       if (v === null || v === undefined) return '<td>-</td>';
-      if (typeof v === 'boolean') return `<td>${v ? '✅' : '❌'}</td>`;
+      if (typeof v === 'boolean') return `<td><span style="color:${v?'#1E7E34':'#B00020'};font-weight:600">${v ? 'Sí' : 'No'}</span></td>`;
       const _cl = String(c).toLowerCase();
       if (['valor','costo','iva','total','tarifa','transporte','lavander','minibar','varios','monto','subtotal','abono','saldo','utilidad','efectivo'].some(m=>_cl.includes(m)) && v!=='' && !isNaN(Number(v))) return `<td>$${fmtNum(Number(v))}</td>`;
       if (String(c).includes('fecha') && String(v).includes('-')) return `<td>${fmtDate(String(v).substring(0,10))}</td>`;
