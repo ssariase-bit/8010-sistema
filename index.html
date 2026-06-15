@@ -452,6 +452,7 @@ const EDIFICIOS = {
     mapaAptoA: {'501':'501A','502':'502A','601':'601A','602':'602A','701':'701A','702':'702A','801':'801A','802':'802A','901':'901A','902':'902A','1001':'1001A','1002':'1002A'},
     metrajes: { '01': {privado:96, total:132}, '02': {privado:90, total:126} },
     cajas: ['OT (8010 SAS)','LTM3 (LTM3 SAS)','PH (Propiedad Horizontal)'],
+    facturarA: ['LTM3 SAS','8010 SAS','Particular','Otra'],
     // Camareras + combinaciones de apoyo (Jaqueline apoya a la que necesite)
     camareras: ['Guillermina Sanabria','Liliana Navarro','Maria Duran','Martha Oyola','Jaqueline Bautista',
                 'Guillermina Sanabria + Jaqueline','Liliana Navarro + Jaqueline','Maria Duran + Jaqueline','Martha Oyola + Jaqueline'],
@@ -470,6 +471,7 @@ const EDIFICIOS = {
     noEntregados: ['201','202','203','204','204A'],
     metrajes: {'201':100,'202':29,'203':56,'204':42,'204A':37,'301':100,'302':29,'303':56,'304':42,'304A':37,'401':100,'402':29,'403':56,'404':42,'404A':37,'501':100,'502':29,'503':56,'504':42,'504A':37,'601':100,'602':29,'603':56,'604':42,'604A':37,'701':100,'702':29,'703':56,'704':42,'704A':37,'801':100,'802':29,'803':56,'804':42,'804A':37,'901':100,'902':29,'903':56,'904':42,'904A':37,'PH1':130,'PH2':113},
     cajas: ['8I8 (8i8 Operadora SAS)'],
+    facturarA: ['8i8 Operadora SAS','Particular','Otra'],
     camareras: ['Yolimar Manzanillo','Luz Dary Rodríguez','Ángela Díaz'],
     jornadas: { 'Administrador':540, 'Camarera':500, 'Mantenimiento':540, 'Otro':540 },
     indicadoresMes: {}
@@ -1226,12 +1228,12 @@ async function loadView(view) {
       {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'empresa',label:'Empresa',type:'text'},
-      {id:'facturar_a',label:'Facturar a',type:'select',opts:['LTM3 SAS','8010 SAS','Particular','Otra']},
-      {id:'contrato_firmado',label:'Contrato firmado',type:'select',opts:['true','false']},
-      {id:'registro_ingreso',label:'Registro de ingreso',type:'select',opts:['true','false']},
-      {id:'copia_documentos',label:'Copia de documentos',type:'select',opts:['true','false']},
-      {id:'info_reserva',label:'Info de reserva',type:'select',opts:['true','false']},
-      {id:'carpeta_completa',label:'Carpeta completa',type:'select',opts:['true','false']},
+      {id:'facturar_a',label:'Facturar a',type:'select',opts:(EB().facturarA||['Particular','Otra'])},
+      {id:'contrato_firmado',label:'Contrato firmado',type:'select',opts:['Sí','No']},
+      {id:'registro_ingreso',label:'Registro de ingreso',type:'select',opts:['Sí','No']},
+      {id:'copia_documentos',label:'Copia de documentos',type:'select',opts:['Sí','No']},
+      {id:'info_reserva',label:'Info de reserva',type:'select',opts:['Sí','No']},
+      {id:'carpeta_completa',label:'Carpeta completa',type:'select',opts:['Sí','No']},
       {id:'otro_si_1',label:'Otro Sí 1 (descripción)',type:'text'},
       {id:'otro_si_2',label:'Otro Sí 2 (descripción)',type:'text'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
@@ -4980,13 +4982,14 @@ window.renderComentariosGerencia = async function(filtro){
   var body=all.map(function(x){
     var apto=(typeof areaApto==='function'?areaApto(x.n).apto:x.n.apto)||'-';
     var dir=x.cm.dirigido_a?('<span style="background:#fef3c7;color:#92400e;font-size:11px;padding:1px 8px;border-radius:8px">→ '+esc(x.cm.dirigido_a)+'</span>'):'<span style="color:#bbb">—</span>';
-    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir / Responder</button></td></tr>';
+    var est=x.n.estado||'Abierto'; var _ec=/resuelto|cerrad|ejecutad|hecho/i.test(est)?{bg:'#D1FAE5',c:'#065F46'}:(/proceso|escalad/i.test(est)?{bg:'#DBEAFE',c:'#1E40AF'}:{bg:'#FEF3C7',c:'#92400E'}); var estB='<span style="background:'+_ec.bg+';color:'+_ec.c+';font-size:11px;padding:2px 9px;border-radius:8px;white-space:nowrap;font-weight:600">'+esc(est)+'</span>';
+    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td>'+estB+'</td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir / Responder</button></td></tr>';
   }).join('');
   var fbtn=function(v,l){ var on=(window._comFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComentariosGerencia(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML=
     '<div class="page-title">💬 Comentarios de gerencia</div>'+
     '<div class="card"><div class="card-header"><div class="card-title">'+all.length+' comentarios</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todos')+fbtn('dirigidos','Dirigidos')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (dirigido a, texto, apto...)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
-    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Apto</th><th>Comentario</th><th>Dirigido a</th><th>Autor</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Apto</th><th>Estado</th><th>Comentario</th><th>Dirigido a</th><th>Autor</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 };
 
 window._alarmaShown = false;
