@@ -4967,6 +4967,15 @@ window.agregarComentarioNovedad = async function(id){
   arr.push({ autor:(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'—', fecha:new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}), texto:texto.trim(), dirigido_a:dir.trim()||null, ts:Date.now() });
   var u=await sb.from('novedades').update({ comentarios:arr }).eq('id',id);
   if(u.error){ if(typeof showToast==='function') showToast('Error: '+u.error.message,'error'); return; }
+  // Avisar por correo al autor de la pregunta cuando alguien MÁS responde
+  try{
+    var _q=arr[0]||{}; var _new=arr[arr.length-1]||{};
+    if(_q.autor_email && _new.autor && _q.autor && String(_new.autor)!==String(_q.autor) && typeof _comEnviarCorreo==='function'){
+      var _e2=function(s){return String(s==null?'':s).replace(/</g,'&lt;');};
+      var _h2='<div style="font-family:Arial,sans-serif;max-width:560px;color:#222"><div style="background:#1D3461;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0"><div style="font-weight:700;font-size:16px">Respondieron tu pregunta</div></div><div style="border:1px solid #e3e6ea;border-top:none;border-radius:0 0 8px 8px;padding:18px"><p><strong>'+_e2(_new.autor)+'</strong> respondió:</p><div style="background:#f8f9fa;border-left:3px solid #1E7E34;padding:10px 14px;margin:10px 0;border-radius:0 6px 6px 0">'+_e2(_new.texto)+'</div><p style="color:#666;font-size:13px">Tu pregunta: '+_e2(_q.texto)+'</p><p style="color:#888;font-size:12px;margin-top:14px">Mensaje automático del Sistema Operativo.</p></div></div>';
+      _comEnviarCorreo(_q.autor_email, 'Respondieron tu pregunta — '+((typeof EB==='function'&&EB().nombre)||''), _h2);
+    }
+  }catch(e){}
   if(typeof showToast==='function') showToast('Comentario agregado','success');
   if(typeof verNovedad==='function') verNovedad(id);
 };
@@ -4998,7 +5007,7 @@ window.renderComentariosGerencia = async function(filtro){
     '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">✍️ Nueva pregunta / comentario</div></div>'+
     '<div style="font-size:12px;color:#666;margin:-2px 0 10px">Hazla puntual a una persona o departamento. Queda abierta hasta que la resuelvan.</div>'+
     '<div class="form-group"><label>Pregunta o comentario</label><textarea id="comg-texto" placeholder="Escribe tu pregunta o aclaración..." style="min-height:60px"></textarea></div>'+
-    '<div class="form-row col3"><div class="form-group"><label>Dirigido a (persona o departamento)</label><input type="text" id="comg-dir" list="dl-comg-dir" placeholder="Ej: Fabio, Recepción, Mantenimiento..."><datalist id="dl-comg-dir"><option>Administradores</option><option>Administración</option><option>Recepción</option><option>Mantenimiento</option><option>Camareras / Aseo</option><option>Comercial</option><option>Eventos</option><option>RRHH</option><option>Compras</option><option>Gerencia</option></datalist></div>'+
+    '<div class="form-row col3"><div class="form-group"><label>Dirigido a (persona o departamento)</label><select id="comg-dir"><option value="">— Selecciona persona o departamento —</option>'+(function(){var d=_destinos(); var g=d.groups.map(function(x){return '<option value="'+x.emails.join(',')+'">'+x.n+'</option>';}).join(''); var p=d.people.map(function(x){return '<option value="'+x.e+'">'+x.n+'</option>';}).join(''); return '<optgroup label="Departamentos">'+g+'</optgroup><optgroup label="Personas">'+p+'</optgroup>';})()+'</select></div>'+
     '<div class="form-group"><label>Apto (opcional)</label><input type="text" id="comg-apto" placeholder="Ej: 301"></div>'+
     '<div class="form-group" style="display:flex;align-items:flex-end"><button class="btn btn-success" style="width:100%" onclick="nuevaPreguntaGerencia()">📨 Enviar pregunta</button></div></div></div>'+
     '<div class="card"><div class="card-header"><div class="card-title">'+all.length+' comentarios</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todos')+fbtn('dirigidos','Dirigidos')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (dirigido a, texto, apto...)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
@@ -5013,20 +5022,73 @@ window.cambiarEstadoCom = async function(id,val,el){
   var _lbl=val==='Abierto'?'Pendiente':(val==='Resuelto'?'Realizado':val);
   if(typeof showToast==='function') showToast('Estado: '+_lbl,'success');
 };
+// Directorio de personas por edificio (para dirigir y notificar por correo)
+const _DIRECTORIO = {
+  '8010': [
+    {n:'Fabio Malaver', e:'fabio.malaver@8010urbanliving.com'},
+    {n:'Cristina Cerviño', e:'cristina.cervino@8010urbanliving.com'},
+    {n:'María José Tosta', e:'maria.tosta@8010urbanliving.com'},
+    {n:'Sebastián Martínez', e:'sebastian.martinez@8010urbanliving.com'},
+    {n:'Andrés Parga', e:'andres.parga@8010urbanliving.com'},
+    {n:'Fernando Herrera', e:'fernando.herrera@8010urbanliving.com'},
+    {n:'Juan Martínez', e:'juan.martinez@8010urbanliving.com'},
+    {n:'Andrés Leguizamón (Compras)', e:'compras@8010urbanliving.com'},
+    {n:'Zareth Varela', e:'zareth.varela@8010urbanliving.com'},
+    {n:'Natalia Muñoz (Eventos)', e:'natalia.munoz@8010urbanliving.com'}
+  ],
+  'kubik': [
+    {n:'Carlos Andrés Jiménez', e:'admin4@8i8op.com'},
+    {n:'Ricardo Vallejo', e:'admin2@8i8op.com'},
+    {n:'Nancy Medina Pabón', e:'admin3@8i8op.com'},
+    {n:'Juanita Noguera', e:'admin1@8i8op.com'},
+    {n:'Angélica Olaya', e:'aolaya@kubiklab.com'}
+  ]
+};
+function _dirEmail(nombre){ var a=_DIRECTORIO[EDIFICIO_ACTIVO]||[]; var m=a.find(function(p){return p.n===nombre;}); return m?m.e:null; }
+function _destinos(){
+  var ed=EDIFICIO_ACTIVO; var people=_DIRECTORIO[ed]||[]; var groups=[];
+  if(ed==='8010'){
+    var adminE=['andres.parga@8010urbanliving.com','juan.martinez@8010urbanliving.com','sebastian.martinez@8010urbanliving.com','fernando.herrera@8010urbanliving.com','cristina.cervino@8010urbanliving.com','zareth.varela@8010urbanliving.com'];
+    groups=[{n:'🏢 Administradores (todos)', emails:adminE},{n:'🏢 Todo el equipo 8010', emails:people.map(function(p){return p.e;})}];
+  } else if(ed==='kubik'){
+    var adminK=['admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com'];
+    groups=[{n:'🏢 Administradores Kubik (todos)', emails:adminK},{n:'🏢 Todo el equipo Kubik', emails:people.map(function(p){return p.e;})}];
+  }
+  return { people:people, groups:groups };
+}
+function _comEnviarCorreo(to, subject, html){ try{ return sb.functions.invoke('enviar-informe',{ body:{ edificio:EDIFICIO_ACTIVO, to:to, subject:subject, html:html } }); }catch(e){ return Promise.resolve({error:e}); } }
+function _htmlComg(titulo, intro, pregunta, extra){
+  var esc=function(s){ return String(s==null?'':s).replace(/</g,'&lt;'); };
+  return '<div style="font-family:Arial,sans-serif;max-width:560px;color:#222">'+
+    '<div style="background:#1D3461;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0"><div style="font-weight:700;font-size:16px">'+esc(titulo)+'</div></div>'+
+    '<div style="border:1px solid #e3e6ea;border-top:none;border-radius:0 0 8px 8px;padding:18px">'+
+    '<p>'+esc(intro)+'</p>'+
+    '<div style="background:#f8f9fa;border-left:3px solid #1D3461;padding:10px 14px;margin:10px 0;border-radius:0 6px 6px 0">'+esc(pregunta)+'</div>'+
+    (extra?('<p>'+esc(extra)+'</p>'):'')+
+    '<p style="margin-top:14px">Entra al sistema → <strong>Comentarios</strong> y responde con "Abrir / Responder".</p>'+
+    '<p style="color:#888;font-size:12px;margin-top:14px">Mensaje automático del Sistema Operativo.</p></div></div>';
+}
 window.nuevaPreguntaGerencia = async function(){
   var texto=(document.getElementById('comg-texto')||{}).value||'';
-  var dir=(document.getElementById('comg-dir')||{}).value||'';
+  var selD=document.getElementById('comg-dir');
+  var email=selD?selD.value:''; var dirNombre=(selD&&selD.selectedIndex>0)?selD.options[selD.selectedIndex].text:'';
   var apto=(document.getElementById('comg-apto')||{}).value||'';
   if(!texto.trim()){ if(typeof showToast==='function') showToast('Escribe la pregunta','error'); return; }
+  if(!email){ if(typeof showToast==='function') showToast('Elige a quién va dirigida','error'); return; }
   var autor=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'Gerencia';
   var fecha=new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true});
-  var com={ autor:autor, fecha:fecha, texto:texto.trim(), dirigido_a:dir.trim()||null, ts:Date.now() };
+  var com={ autor:autor, autor_email:(currentUser&&currentUser.email)||null, fecha:fecha, texto:texto.trim(), dirigido_a:dirNombre||null, ts:Date.now() };
   var _hN=new Date().getHours();
   var row={ fecha:TODAY, turno:_hN<14?'Mañana':(_hN<22?'Tarde':'Noche'), area:'Pregunta de gerencia'+(apto.trim()?(' — Apto '+apto.trim()):''), apto:apto.trim()||null, prioridad:'Media', descripcion:texto.trim(), estado:'Abierto', reportado_por:autor, comentarios:[com], edificio:EDIFICIO_ACTIVO, user_id:currentUser.id };
   var r=await sb.from('novedades').insert(row);
   if(r.error){ if(typeof showToast==='function') showToast('Error: '+r.error.message,'error'); return; }
-  if(typeof showToast==='function') showToast('📨 Pregunta enviada','success');
-  ['comg-texto','comg-dir','comg-apto'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  var _recips=String(email).split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var _subj='Pregunta de gerencia — '+((EB&&EB().nombre)||'');
+  var _html=_htmlComg('Pregunta de gerencia', autor+' dirigió una pregunta a '+dirNombre+(apto.trim()?(' (Apto '+apto.trim()+')'):'')+':', texto.trim(), _recips.length>1?'Cualquiera del grupo puede responderla. Por favor entra al sistema.':'Por favor entra al sistema y respóndela.');
+  var _okC=0; for(var _i=0;_i<_recips.length;_i++){ try{ var rr=await _comEnviarCorreo(_recips[_i], _subj, _html); if(!(rr&&rr.error)) _okC++; }catch(e){} }
+  var _mailMsg=_okC>0?('📨 Enviada y notificada a '+dirNombre+(_recips.length>1?(' ('+_okC+'/'+_recips.length+')'):'')):'Pregunta guardada (correo no enviado)';
+  if(typeof showToast==='function') showToast(_mailMsg,'success');
+  ['comg-texto','comg-apto'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; }); if(selD) selD.selectedIndex=0;
   renderComentariosGerencia();
 };
 window._alarmaShown = false;
