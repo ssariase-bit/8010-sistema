@@ -4880,9 +4880,11 @@ window.guardarSolicitud = async function(){
   var sol=(document.getElementById('sol-solicitante')||{}).value||'';
   var desc=(document.getElementById('sol-desc')||{}).value||'';
   var pri=(document.getElementById('sol-prioridad')||{}).value||'Media';
+  var dir=(document.getElementById('sol-dirigido')||{}).value||'';
   if(!desc.trim()){ if(typeof showToast==='function') showToast('Escribe la solicitud','error'); return; }
-  var row={ edificio:EDIFICIO_ACTIVO, solicitante:sol.trim()||null, descripcion:desc.trim(), prioridad:pri, estado:'Pendiente', imagen:window._solImg||null, tiene_imagen:!!window._solImg, user_id:currentUser.id };
+  var row={ edificio:EDIFICIO_ACTIVO, solicitante:sol.trim()||((typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||null), dirigido_a:dir.trim()||null, descripcion:desc.trim(), prioridad:pri, estado:'Pendiente', imagen:window._solImg||null, tiene_imagen:!!window._solImg, user_id:currentUser.id };
   var r=await sb.from('solicitudes').insert(row);
+  if(r.error && /dirigido_a/.test(r.error.message||'')){ delete row.dirigido_a; r=await sb.from('solicitudes').insert(row); }
   if(r.error){ if(typeof showToast==='function') showToast('Error: '+r.error.message,'error'); return; }
   window._solImg=null;
   if(typeof showToast==='function') showToast('Solicitud enviada','success');
@@ -4900,8 +4902,10 @@ window.responderSolicitud = async function(id){ var t=prompt('¿Qué se hizo? (r
 window.eliminarSolicitud = async function(id){ if(!confirm('¿Eliminar esta solicitud?')) return; await sb.from('solicitudes').delete().eq('id',id); if(typeof showToast==='function') showToast('Eliminada','success'); renderSolicitudes(); };
 window.renderSolicitudes = async function(filtro){
   filtro=(filtro===undefined?(window._solFiltro||''):filtro); window._solFiltro=filtro;
-  var res=await sb.from('solicitudes').select('id,created_at,edificio,solicitante,descripcion,prioridad,estado,tiene_imagen,respuesta,resuelto_at').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(2000);
-  var rows=(res.data||[]).filter(function(r){ return !filtro || r.estado===filtro; });
+  var _cols='id,created_at,edificio,solicitante,dirigido_a,descripcion,prioridad,estado,tiene_imagen,respuesta,resuelto_at';
+  var res=await sb.from('solicitudes').select(_cols).eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(2000);
+  if(res.error && /dirigido_a/.test(res.error.message||'')){ res=await sb.from('solicitudes').select(_cols.replace(',dirigido_a','')).eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(2000); }
+  var rows=(res.data||[]).filter(function(r){ if(filtro==='dirigidas') return !!(r.dirigido_a&&String(r.dirigido_a).trim()); return !filtro || r.estado===filtro; });
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var fmtD=function(iso){ if(!iso) return '-'; var d=new Date(iso); return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); };
   var priColor=function(p){ return p==='Alta'?'#fee2e2;color:#991b1b':(p==='Baja'?'#e0e7ff;color:#3730a3':'#fef3c7;color:#92400e'); };
@@ -4909,19 +4913,22 @@ window.renderSolicitudes = async function(filtro){
     var estSel='<select onchange="cambiarEstadoSolicitud(\''+r.id+'\',this.value)" style="padding:3px 6px;border-radius:6px;font-size:12px">'+['Pendiente','En proceso','Hecho'].map(function(e){return '<option'+(r.estado===e?' selected':'')+'>'+e+'</option>';}).join('')+'</select>';
     var img=r.tiene_imagen?'<span style="cursor:pointer;color:#1e40af" onclick="verImagenSolicitud(\''+r.id+'\')">📷 ver</span>':'<span style="color:#bbb">—</span>';
     var resp=r.respuesta?('<span style="color:#166534">'+esc(r.respuesta)+'</span>'):'<span style="color:#bbb">—</span>';
-    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+fmtD(r.created_at)+'</td><td>'+esc(r.solicitante||'-')+'</td><td style="max-width:240px">'+esc(r.descripcion||'')+'</td><td><span style="background:'+priColor(r.prioridad)+';padding:1px 8px;border-radius:8px;font-size:11px">'+esc(r.prioridad||'')+'</span></td><td>'+img+'</td><td>'+estSel+'</td><td style="max-width:200px;font-size:12px">'+resp+'</td><td style="white-space:nowrap"><span title="Responder / qué se hizo" style="cursor:pointer" onclick="responderSolicitud(\''+r.id+'\')">✍️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarSolicitud(\''+r.id+'\')">🗑️</span></td></tr>';
+    var _ds=!!(r.dirigido_a&&String(r.dirigido_a).trim()); var _dc=_ds?('<span style="background:#fde68a;color:#92400e;font-size:11px;padding:1px 8px;border-radius:8px;font-weight:600">⭐ → '+esc(r.dirigido_a)+'</span>'):'<span style="color:#bbb">—</span>';
+    return '<tr style="vertical-align:top'+(_ds?';background:#FFFBEB':'')+'"><td style="white-space:nowrap">'+fmtD(r.created_at)+'</td><td>'+esc(r.solicitante||'-')+'</td><td>'+_dc+'</td><td style="max-width:240px">'+esc(r.descripcion||'')+'</td><td><span style="background:'+priColor(r.prioridad)+';padding:1px 8px;border-radius:8px;font-size:11px">'+esc(r.prioridad||'')+'</span></td><td>'+img+'</td><td>'+estSel+'</td><td style="max-width:200px;font-size:12px">'+resp+'</td><td style="white-space:nowrap"><span title="Responder / qué se hizo" style="cursor:pointer" onclick="responderSolicitud(\''+r.id+'\')">✍️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarSolicitud(\''+r.id+'\')">🗑️</span></td></tr>';
   }).join('');
   var fbtn=function(v,l){ var on=(window._solFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderSolicitudes(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML=
     '<div class="page-title">📨 Solicitudes</div>'+
-    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">Nueva solicitud</div></div>'+
-    '<div class="form-row"><div class="form-group"><label>Quién la pide</label><input type="text" id="sol-solicitante" placeholder="Recepción / admin / nombre"></div>'+
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">Nueva solicitud / aclaración</div></div>'+
+    '<div style="font-size:12px;color:#666;margin:-2px 0 10px">Dirígela a una persona o departamento. Queda pendiente para que la resuelvan y respondan.</div>'+
+    '<div class="form-row col3"><div class="form-group"><label>Quién la pide</label><input type="text" id="sol-solicitante" placeholder="Tú (se completa solo)"></div>'+
+    '<div class="form-group"><label>Dirigido a (persona o departamento)</label><input type="text" id="sol-dirigido" list="dl-sol-dir" placeholder="Ej: Fabio, Recepción, Mantenimiento..."><datalist id="dl-sol-dir"><option>Administración</option><option>Recepción</option><option>Mantenimiento</option><option>Camareras / Aseo</option><option>Comercial</option><option>Eventos</option><option>RRHH</option><option>Compras</option><option>Gerencia</option></datalist></div>'+
     '<div class="form-group"><label>Prioridad</label><select id="sol-prioridad"><option>Alta</option><option selected>Media</option><option>Baja</option></select></div></div>'+
     '<div class="form-group"><label>Solicitud</label><textarea id="sol-desc" placeholder="Describe la solicitud... (puedes pegar una imagen con Ctrl+V)" style="min-height:70px"></textarea></div>'+
     '<div class="form-group"><label>Imagen (pantallazo) — opcional</label><input type="file" accept="image/*" id="sol-img-file" onchange="_solHandleFile(this.files[0])"><div id="sol-img-preview" style="margin-top:6px"></div></div>'+
     '<button class="btn btn-success" onclick="guardarSolicitud()">📨 Enviar solicitud</button></div>'+
-    '<div class="card"><div class="card-header"><div class="card-title">'+rows.length+' solicitudes</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todas')+fbtn('Pendiente','Pendientes')+fbtn('En proceso','En proceso')+fbtn('Hecho','Hechas')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar..." style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
-    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Quién</th><th>Solicitud</th><th>Prioridad</th><th>Imagen</th><th>Estado</th><th>Respuesta</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    '<div class="card"><div class="card-header"><div class="card-title">'+rows.length+' solicitudes</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todas')+fbtn('dirigidas','⭐ Dirigidas')+fbtn('Pendiente','Pendientes')+fbtn('En proceso','En proceso')+fbtn('Hecho','Hechas')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar..." style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
+    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Quién</th><th>Dirigido a</th><th>Solicitud</th><th>Prioridad</th><th>Imagen</th><th>Estado</th><th>Respuesta</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   setTimeout(function(){ var ta=document.getElementById('sol-desc'); if(ta&&!ta._ph){ ta._ph=true; ta.addEventListener('paste',function(e){ var items=(e.clipboardData||{}).items||[]; for(var i=0;i<items.length;i++){ if(items[i].type.indexOf('image')===0){ window._solHandleFile(items[i].getAsFile()); e.preventDefault(); break; } } }); } var pv=document.getElementById('sol-img-preview'); if(pv&&!window._solImg) pv.innerHTML=''; },100);
 };
 
