@@ -2326,12 +2326,14 @@ let novCount = 0;
 function addNovedadLinea() {
   const id = novCount++;
   const div = document.createElement('div');
-  div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center';
+  div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1.2fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center';
   div.id = 'nov-line-' + id;
+  const _camOpts = '<option value="">— Camarera (si aplica) —</option>' + ((EB().camareras||[]).filter(c=>!String(c).includes('+')).map(c=>`<option value="${String(c).replace(/"/g,'&quot;')}">${c}</option>`).join(''));
   div.innerHTML = `
     <input type="text" placeholder="Descripción de la novedad..." id="nov-desc-${id}" style="padding:9px 12px;border:1px solid var(--gris-b);border-radius:6px;font-size:13px">
     <input type="text" placeholder="Área (ej: Mantenimiento)" id="nov-area-${id}" style="padding:9px 12px;border:1px solid var(--gris-b);border-radius:6px;font-size:13px">
     <input type="text" placeholder="Apto / Ubic." id="nov-apto-${id}" style="padding:9px 12px;border:1px solid var(--gris-b);border-radius:6px;font-size:13px">
+    <select id="nov-cam-${id}" title="Camarera que gestionó (housekeeping)" style="padding:9px 8px;border:1px solid var(--gris-b);border-radius:6px;font-size:13px">${_camOpts}</select>
     <select id="nov-prio-${id}" style="padding:9px 8px;border:1px solid var(--gris-b);border-radius:6px;font-size:13px">
       <option value="Baja">🟢 Baja</option>
       <option value="Media" selected>🟡 Media</option>
@@ -2357,6 +2359,7 @@ async function enviarTurno() {
     const prio = document.getElementById('nov-prio-' + i)?.value;
     const area = document.getElementById('nov-area-' + i)?.value.trim() || 'General';
     const apto = document.getElementById('nov-apto-' + i)?.value.trim() || null;
+    const camarera = document.getElementById('nov-cam-' + i)?.value.trim() || null;
     if (desc) novsToInsert.push({
       fecha: document.getElementById('t-fecha').value,
       turno: document.getElementById('t-turno').value,
@@ -2366,6 +2369,7 @@ async function enviarTurno() {
       reportado_por: entrega,
       area: area,
       apto: apto,
+      gestionado_por: camarera,
       edificio: EDIFICIO_ACTIVO,
       user_id: currentUser.id,
     });
@@ -7127,7 +7131,11 @@ R/${quien}`;
       }
       const { error } = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
       if (error) showToast('Informe generado, pero el rack NO se actualizó: ' + error.message, 'error');
-      else showToast(`📅 Rack actualizado: Apto ${apto}, ${rows.length} día(s) de estadía`, 'success');
+      else {
+        showToast(`📅 Rack actualizado: Apto ${apto}, ${rows.length} día(s) de estadía`, 'success');
+        // Dejar el rack posicionado en el mes del check-in y refrescar si está abierto (que el cambio se vea)
+        try { const _d=new Date(fi+'T00:00:00'); window._rackMes=_d.getMonth(); window._rackYear=_d.getFullYear(); if(window._currentView==='rack' && typeof renderRack==='function') renderRack(); } catch(_){}
+      }
     } catch(e) { console.error('CKI→rack:', e); }
   })();
 
