@@ -6349,8 +6349,7 @@ async function renderNovedadesDiarias() {
       <div class="page-title" style="margin-bottom:0">📋 Novedades del Día — ${fmtDate(TODAY)}</div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-success btn-sm" onclick="loadView('novedad-form')">+ Nueva</button>
-        <button onclick="reporteNovedades()" class="btn btn-outline btn-sm" style="color:var(--azul-m);border-color:var(--azul-m)">📋 Reporte de Novedades</button>
-        <button onclick="compartirNovedadesDiarias()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
+        <button onclick="reporteNovedades()" class="btn btn-sm" style="background:#25D366;color:#fff" title="Genera el reporte del día (mismo formato para 8010 y Kubik). Editas y envías por correo o WhatsApp.">📋 Reporte de Novedades</button>
       </div>
     </div>
 
@@ -7059,10 +7058,23 @@ function generarMsgCKO() {
   const pagoAloja = document.getElementById('cko-pago-aloja')?.value || '';
   const cobroObs = (document.getElementById('cko-cobro')?.value || '').trim();
   const cobroStr = cobroAloja > 0 ? `, realiza el pago del alojamiento ($${cobroAloja.toLocaleString('es-CO')} ${pagoAloja})` : '';
-  const totalStr = (aloja>0||consumos>0) ? `\n💰 Total estadía: $${aloja.toLocaleString('es-CO')} alojamiento${nochesT?` (${nochesT} noche${nochesT===1?'':'s'})`:''}${consumos>0?` + $${consumos.toLocaleString('es-CO')} consumos`:''} = $${(aloja+consumos).toLocaleString('es-CO')}` : '';
-  const _ivaModoCKO = (document.getElementById('cko-iva')||{}).value || 'incluido'; const _ivaLineaCKO = (aloja>0 && typeof _ivaCalc==='function') ? ('\n\ud83e\uddfe IVA: '+_ivaCalc(aloja, _ivaModoCKO).msg) : '';
+  // Blindaje: el "Total alojamiento" debe ser un monto real (>=100 y mayor que el # de noches),
+  // no el número de noches. Evita el "$7 alojamiento ... IVA base $6 + IVA $1".
+  const _alojaOk = aloja >= 100 && aloja > nochesT;
+  let totalStr = '', _alojaWarn = '';
+  if (_alojaOk || consumos>0) {
+    const _p = [];
+    if (_alojaOk) _p.push(`$${aloja.toLocaleString('es-CO')} alojamiento${nochesT?` (${nochesT} noche${nochesT===1?'':'s'})`:''}`);
+    if (consumos>0) _p.push(`$${consumos.toLocaleString('es-CO')} consumos`);
+    const _suma = (_alojaOk?aloja:0) + (consumos>0?consumos:0);
+    totalStr = `\n💰 Total estadía: ${_p.join(' + ')}${_p.length>1?` = $${_suma.toLocaleString('es-CO')}`:''}`;
+  }
+  if (aloja>0 && !_alojaOk) {
+    _alojaWarn = `\n⚠️ Revisar: el Total alojamiento ($${aloja.toLocaleString('es-CO')}) no parece válido${nochesT?` para ${nochesT} noche(s)`:''} — corrige el monto, o déjalo en 0 si es CxC.`;
+  }
+  const _ivaModoCKO = (document.getElementById('cko-iva')||{}).value || 'incluido'; const _ivaLineaCKO = (_alojaOk && typeof _ivaCalc==='function') ? ('\n\ud83e\uddfe IVA: '+_ivaCalc(aloja, _ivaModoCKO).msg) : '';
   const msg = `${h<12?'Buenos días':h<18?'Buenas tardes':'Buenas noches'}, ${_fh}
-Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${cobroStr}${consumosStr}${cobroObs?' ('+cobroObs+')':''}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}${totalStr}${_ivaLineaCKO}
+Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${cobroStr}${consumosStr}${cobroObs?' ('+cobroObs+')':''}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}${totalStr}${_ivaLineaCKO}${_alojaWarn}
 R/${quien}`;
 
   // Registrar el informe en Novedades para que quede en el reporte del día
