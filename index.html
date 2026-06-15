@@ -4958,15 +4958,13 @@ window._renderComentariosNov = function(n){
     '<div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap"><input type="text" id="nov-com-dir" placeholder="Dirigido a (ej: Administradores, Fabio) — opcional" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #ddd;border-radius:8px">'+
     '<button class="btn btn-success btn-sm" onclick="agregarComentarioNovedad(\''+n.id+'\')">Agregar comentario</button></div></div></div>';
 };
-window.agregarComentarioNovedad = async function(id){
-  var texto=(document.getElementById('nov-com-texto')||{}).value||'';
-  var dir=(document.getElementById('nov-com-dir')||{}).value||'';
-  if(!texto.trim()){ if(typeof showToast==='function') showToast('Escribe el comentario','error'); return; }
+window._addComNov = async function(id, texto, dir){
+  texto=String(texto||'').trim(); if(!texto){ if(typeof showToast==='function') showToast('Escribe el comentario','error'); return false; }
   var r=await sb.from('novedades').select('comentarios').eq('id',id).single();
   var arr=[]; try{ var c=r.data&&r.data.comentarios; arr=Array.isArray(c)?c:(c?JSON.parse(c):[]); }catch(e){ arr=[]; }
-  arr.push({ autor:(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'—', fecha:new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}), texto:texto.trim(), dirigido_a:dir.trim()||null, ts:Date.now() });
+  arr.push({ autor:(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'—', autor_email:(currentUser&&currentUser.email)||null, fecha:new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}), texto:texto, dirigido_a:String(dir||'').trim()||null, ts:Date.now() });
   var u=await sb.from('novedades').update({ comentarios:arr }).eq('id',id);
-  if(u.error){ if(typeof showToast==='function') showToast('Error: '+u.error.message,'error'); return; }
+  if(u.error){ if(typeof showToast==='function') showToast('Error: '+u.error.message,'error'); return false; }
   // Avisar por correo al autor de la pregunta cuando alguien MÁS responde
   try{
     var _q=arr[0]||{}; var _new=arr[arr.length-1]||{};
@@ -4976,8 +4974,17 @@ window.agregarComentarioNovedad = async function(id){
       _comEnviarCorreo(_q.autor_email, 'Respondieron tu pregunta — '+((typeof EB==='function'&&EB().nombre)||''), _h2);
     }
   }catch(e){}
-  if(typeof showToast==='function') showToast('Comentario agregado','success');
-  if(typeof verNovedad==='function') verNovedad(id);
+  return true;
+};
+window.agregarComentarioNovedad = async function(id){
+  var ok=await window._addComNov(id, (document.getElementById('nov-com-texto')||{}).value, (document.getElementById('nov-com-dir')||{}).value);
+  if(ok){ if(typeof showToast==='function') showToast('Comentario agregado','success'); if(typeof verNovedad==='function') verNovedad(id); }
+};
+window.toggleReplyCom = function(ri){ var row=document.getElementById('replyrow-'+ri); if(row){ row.style.display = (row.style.display==='none'?'':'none'); var ta=document.getElementById('reply-'+ri); if(ta && row.style.display!=='none') setTimeout(function(){ta.focus();},30); } };
+window.enviarReplyCom = async function(id, ri){
+  var ta=document.getElementById('reply-'+ri);
+  var ok=await window._addComNov(id, ta?ta.value:'', '');
+  if(ok){ if(typeof showToast==='function') showToast('✅ Respuesta enviada','success'); renderComentariosGerencia(); }
 };
 window.correoComentarioNov = function(idx){
   var nv=window._novActual||{}; var c=(nv.comentarios||[])[idx]; if(!c) return;
@@ -4995,11 +5002,12 @@ window.renderComentariosGerencia = async function(filtro){
   all.sort(function(a,b){ return (b.cm.ts||0)-(a.cm.ts||0); });
   if(filtro==='dirigidos') all=all.filter(function(x){ return x.cm.dirigido_a; });
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
-  var body=all.map(function(x){
+  var body=all.map(function(x,ri){
     var apto=(typeof areaApto==='function'?areaApto(x.n).apto:x.n.apto)||'-';
     var dir=x.cm.dirigido_a?('<span style="background:#fef3c7;color:#92400e;font-size:11px;padding:1px 8px;border-radius:8px">→ '+esc(x.cm.dirigido_a)+'</span>'):'<span style="color:#bbb">—</span>';
     var est=x.n.estado||'Abierto'; var _ev=/resuelto|cerrad|ejecutad|hecho|realizad/i.test(est)?'Resuelto':(/proceso|escalad/i.test(est)?'En proceso':'Abierto'); var _ecol=_ev==='Resuelto'?'#065F46':(_ev==='En proceso'?'#1E40AF':'#92400E'); var estSel='<select onchange="cambiarEstadoCom(\''+x.n.id+'\',this.value,this)" style="padding:3px 8px;border-radius:8px;font-size:11px;font-weight:600;color:'+_ecol+';border:1px solid #ddd;background:#fff">'+[['Abierto','Pendiente'],['En proceso','En proceso'],['Resuelto','Realizado']].map(function(o){return '<option value="'+o[0]+'"'+(_ev===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>';
-    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td>'+estSel+'</td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir / Responder</button></td></tr>';
+    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td>'+estSel+'</td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-success btn-sm" style="font-size:11px" onclick="toggleReplyCom('+ri+')">💬 Responder</button> <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir</button></td></tr>'+
+      '<tr id="replyrow-'+ri+'" style="display:none"><td colspan="7" style="background:#f1f5f9;padding:8px 12px"><div style="font-size:11px;color:#555;margin-bottom:4px">Respuesta a: <em>'+esc((x.cm.texto||'').slice(0,60))+'</em></div><textarea id="reply-'+ri+'" placeholder="Escribe tu respuesta..." style="width:100%;min-height:52px;padding:6px;border:1px solid #cbd5e1;border-radius:6px;box-sizing:border-box"></textarea><div style="margin-top:6px;display:flex;gap:6px"><button class="btn btn-success btn-sm" style="font-size:11px" onclick="enviarReplyCom(\''+x.n.id+'\','+ri+')">📨 Enviar respuesta</button><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="toggleReplyCom('+ri+')">Cancelar</button></div></td></tr>';
   }).join('');
   var fbtn=function(v,l){ var on=(window._comFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComentariosGerencia(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML=
