@@ -5967,15 +5967,15 @@ async function renderSemanaInfo(){
   window._semRows = rows; window._semIni = ini; window._semFin = fin;
   const cki = rows.filter(r=>r.tipo==='CKI'), cko = rows.filter(r=>r.tipo==='CKO');
   const ESTADOS_SEM = ['Pendiente','Confirmado','Realizado','Cancelado','Reprogramado','No Show'];
-  const fila = r => { var sp=_semEj(r.observaciones); return `<tr>
+  const fila = r => `<tr>
     <td style="white-space:nowrap"><strong>${r.huesped||''}</strong><br><span style="font-size:11px;color:var(--gris-t)">Apto. ${r.apto}</span></td>
     <td style="white-space:nowrap">${fmtDate(r.fecha)}</td>
     <td><input value="${String(r.pago||'').replace(/"/g,'&quot;')}" style="width:64px;padding:4px;font-size:11px" onchange="updSemana('${r.id}','pago',this.value)"></td>
-    <td><input id="sem-ej-${r.id}" value="${String(sp.ej||'').replace(/"/g,'&quot;')}" placeholder="Ejecutiva / contacto" title="Confirmado con / Ejecutiva — se guarda solo" style="width:130px;padding:4px;font-size:11px" onchange="semSaveEj('${r.id}')"></td>
-    <td><input id="sem-obs-${r.id}" value="${String(sp.obs||'').replace(/"/g,'&quot;')}" placeholder="Observaciones..." style="width:100%;min-width:240px;padding:4px;font-size:12px" onchange="semSaveEj('${r.id}')"></td>
+    <td><input value="${String(r.ejecutiva||'').replace(/"/g,'&quot;')}" placeholder="Ejecutiva / contacto" title="Confirmado con / Ejecutiva — se guarda solo" style="width:130px;padding:4px;font-size:11px" onchange="updSemana('${r.id}','ejecutiva',this.value)"></td>
+    <td><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Observaciones..." style="width:100%;min-width:240px;padding:4px;font-size:12px" onchange="updSemana('${r.id}','observaciones',this.value)"></td>
     <td><select style="padding:4px;font-size:11px" onchange="updSemana('${r.id}','estado',this.value)">${ESTADOS_SEM.map(o=>`<option ${r.estado===o?'selected':''}>${o}</option>`).join('')}</select></td>
     <td><button onclick="delSemana('${r.id}')" title="Eliminar" style="border:none;background:none;cursor:pointer;font-size:14px">🗑️</button></td>
-  </tr>`; };
+  </tr>`;
   const tablaSem = (titulo, arr, color) => `
     <div class="card" style="margin-bottom:16px">
       <div style="font-weight:800;color:${color};margin-bottom:8px;font-size:15px">${titulo}: ${String(arr.length).padStart(2,'0')}</div>
@@ -5998,8 +5998,6 @@ async function renderSemanaInfo(){
     ${tablaSem('CKI DE LA SEMANA', cki, '#0C447C')}
     ${tablaSem('CKO DE LA SEMANA', cko, '#C2410C')}`;
 }
-function _semEj(o){ var s=String(o==null?'':o); var m=s.match(/^([\s\S]*?)\s*\[\[EJ:([\s\S]*?)\]\]\s*$/); return m? {obs:m[1], ej:m[2]} : {obs:s, ej:''}; }
-function semSaveEj(id){ var oe=document.getElementById('sem-obs-'+id), ee=document.getElementById('sem-ej-'+id); var obs=oe?oe.value:''; var ej=ee?ee.value.trim():''; var combined = ej ? ((obs?obs+' ':'')+'[[EJ:'+ej+']]') : obs; updSemana(id,'observaciones',combined); }
 function updSemana(id, campo, val){ const o={}; o[campo]=val; sb.from('semana_seguimiento').update(o).eq('id',id).then(r=>{ if(r.error) showToast('Error: '+r.error.message,'error'); else showToast('✓ Guardado','success'); }); }
 async function delSemana(id){ if(!confirm('¿Eliminar esta fila del informe semanal?')) return; await sb.from('semana_seguimiento').delete().eq('id',id); renderSemanaInfo(); }
 async function addSemanaFila(tipo){
@@ -6012,7 +6010,7 @@ async function addSemanaFila(tipo){
 function compartirSemanaInfo(){
   const rows = window._semRows||[];
   const cki = rows.filter(r=>r.tipo==='CKI'), cko = rows.filter(r=>r.tipo==='CKO');
-  const lin = r => { var sp=_semEj(r.observaciones); return `▪️ *${r.huesped}*, Apto. ${r.apto} · ${fmtDate(r.fecha)} · Pago: ${r.pago||'-'}${sp.ej?(' · Ejecutiva: '+sp.ej):''}\n${sp.obs||'Sin observaciones'} — _${r.estado||'Pendiente'}_`; };
+  const lin = r => `▪️ *${r.huesped}*, Apto. ${r.apto} · ${fmtDate(r.fecha)} · Pago: ${r.pago||'-'}${r.ejecutiva?(' · Ejecutiva: '+r.ejecutiva):''}\n${r.observaciones||'Sin observaciones'} — _${r.estado||'Pendiente'}_`;
   const txt = `📅 *${EB().nombre} — SEMANA DEL ${fmtDate(window._semIni)} al ${fmtDate(window._semFin)}*
 
 *CKI DE LA SEMANA: ${String(cki.length).padStart(2,'0')}*
