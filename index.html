@@ -4989,8 +4989,8 @@ window.renderComentariosGerencia = async function(filtro){
   var body=all.map(function(x){
     var apto=(typeof areaApto==='function'?areaApto(x.n).apto:x.n.apto)||'-';
     var dir=x.cm.dirigido_a?('<span style="background:#fef3c7;color:#92400e;font-size:11px;padding:1px 8px;border-radius:8px">→ '+esc(x.cm.dirigido_a)+'</span>'):'<span style="color:#bbb">—</span>';
-    var est=x.n.estado||'Abierto'; var _ec=/resuelto|cerrad|ejecutad|hecho/i.test(est)?{bg:'#D1FAE5',c:'#065F46'}:(/proceso|escalad/i.test(est)?{bg:'#DBEAFE',c:'#1E40AF'}:{bg:'#FEF3C7',c:'#92400E'}); var estB='<span style="background:'+_ec.bg+';color:'+_ec.c+';font-size:11px;padding:2px 9px;border-radius:8px;white-space:nowrap;font-weight:600">'+esc(est)+'</span>';
-    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td>'+estB+'</td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir / Responder</button>'+(/resuelto|cerrad|ejecutad|hecho/i.test(est)?'':' <button class="btn btn-success btn-sm" style="font-size:11px" onclick="marcarRealizadoCom(\''+x.n.id+'\')">✓ Realizado</button>')+'</td></tr>';
+    var est=x.n.estado||'Abierto'; var _ev=/resuelto|cerrad|ejecutad|hecho|realizad/i.test(est)?'Resuelto':(/proceso|escalad/i.test(est)?'En proceso':'Abierto'); var _ecol=_ev==='Resuelto'?'#065F46':(_ev==='En proceso'?'#1E40AF':'#92400E'); var estSel='<select onchange="cambiarEstadoCom(\''+x.n.id+'\',this.value,this)" style="padding:3px 8px;border-radius:8px;font-size:11px;font-weight:600;color:'+_ecol+';border:1px solid #ddd;background:#fff">'+[['Abierto','Pendiente'],['En proceso','En proceso'],['Resuelto','Realizado']].map(function(o){return '<option value="'+o[0]+'"'+(_ev===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>';
+    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td>'+estSel+'</td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir / Responder</button></td></tr>';
   }).join('');
   var fbtn=function(v,l){ var on=(window._comFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComentariosGerencia(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML=
@@ -5005,11 +5005,13 @@ window.renderComentariosGerencia = async function(filtro){
     '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Apto</th><th>Estado</th><th>Comentario</th><th>Dirigido a</th><th>Autor</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 };
 
-window.marcarRealizadoCom = async function(id){
-  var r=await sb.from('novedades').update({estado:'Resuelto', fecha_cierre:TODAY}).eq('id',id);
+window.cambiarEstadoCom = async function(id,val,el){
+  var upd={estado:val}; if(/resuelto/i.test(val)) upd.fecha_cierre=TODAY;
+  var r=await sb.from('novedades').update(upd).eq('id',id);
   if(r.error){ if(typeof showToast==='function') showToast('Error: '+r.error.message,'error'); return; }
-  if(typeof showToast==='function') showToast('✅ Marcado como realizado','success');
-  renderComentariosGerencia();
+  if(el) el.style.color=/resuelto/i.test(val)?'#065F46':(/proceso/i.test(val)?'#1E40AF':'#92400E');
+  var _lbl=val==='Abierto'?'Pendiente':(val==='Resuelto'?'Realizado':val);
+  if(typeof showToast==='function') showToast('Estado: '+_lbl,'success');
 };
 window.nuevaPreguntaGerencia = async function(){
   var texto=(document.getElementById('comg-texto')||{}).value||'';
