@@ -4931,7 +4931,19 @@ window.verImagenSolicitud = async function(id){
   document.body.appendChild(ov);
 };
 window.cambiarEstadoSolicitud = async function(id,estado){ var upd={estado:estado}; if(estado==='Hecho') upd.resuelto_at=new Date().toISOString(); await sb.from('solicitudes').update(upd).eq('id',id); if(typeof showToast==='function') showToast('Estado: '+estado,'success'); };
-window.responderSolicitud = async function(id){ var t=prompt('¿Qué se hizo? (respuesta para Santiago)'); if(t===null) return; await sb.from('solicitudes').update({respuesta:t, estado:'Hecho', resuelto_at:new Date().toISOString()}).eq('id',id); if(typeof showToast==='function') showToast('Respuesta guardada','success'); renderSolicitudes(); };
+window.responderSolicitud = async function(id){
+  var t=prompt('¿Qué se hizo? (respuesta — se envía copia a Gerencia)'); if(t===null) return;
+  var sres=await sb.from('solicitudes').select('solicitante,descripcion,prioridad,edificio').eq('id',id).single();
+  await sb.from('solicitudes').update({respuesta:t, estado:'Hecho', resuelto_at:new Date().toISOString()}).eq('id',id);
+  if(typeof showToast==='function') showToast('Respuesta guardada — copia enviada a Gerencia','success');
+  try{
+    var s=(sres&&sres.data)||{}; var _e=function(x){return String(x==null?'':x).replace(/</g,'&lt;');};
+    var _h='<div style="font-family:Arial,sans-serif;max-width:560px;color:#222"><div style="background:#1D3461;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0"><div style="font-weight:700;font-size:16px">Solicitud resuelta — '+_e((typeof EB==='function'&&EB().nombre)||'')+'</div></div><div style="border:1px solid #e3e6ea;border-top:none;border-radius:0 0 8px 8px;padding:18px"><p><strong>Solicitud</strong> (de '+_e(s.solicitante||'-')+(s.prioridad?(' · '+_e(s.prioridad)):'')+'):</p><div style="background:#f8f9fa;border-left:3px solid #1D3461;padding:10px 14px;margin:8px 0;border-radius:0 6px 6px 0">'+_e(s.descripcion||'')+'</div><p><strong>Respuesta:</strong></p><div style="background:#f8f9fa;border-left:3px solid #1E7E34;padding:10px 14px;margin:8px 0;border-radius:0 6px 6px 0">'+_e(t)+'</div><p style="color:#888;font-size:12px;margin-top:14px">Mensaje automático del Sistema Operativo.</p></div></div>';
+    var _dest=['sa@8010ul.com']; var _re=(typeof _dirEmail==='function')?_dirEmail(s.solicitante):null; if(_re && _dest.indexOf(_re)<0) _dest.push(_re);
+    if(typeof _comEnviarCorreo==='function'){ _dest.forEach(function(to){ _comEnviarCorreo(to, 'Solicitud resuelta — '+((typeof EB==='function'&&EB().nombre)||''), _h); }); }
+  }catch(e){}
+  renderSolicitudes();
+};
 window.eliminarSolicitud = async function(id){ if(!confirm('¿Eliminar esta solicitud?')) return; await sb.from('solicitudes').delete().eq('id',id); if(typeof showToast==='function') showToast('Eliminada','success'); renderSolicitudes(); };
 window.renderSolicitudes = async function(filtro){
   filtro=(filtro===undefined?(window._solFiltro||''):filtro); window._solFiltro=filtro;
