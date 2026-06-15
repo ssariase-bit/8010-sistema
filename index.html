@@ -1894,7 +1894,7 @@ async function consultarDisponibilidad(){
   if (!dias.length){ showToast('Rango inválido', 'error'); return; }
   const { data, error } = await sb.from('rack').select('apto,fecha,estado,observaciones').gte('fecha', dias[0]).lte('fecha', dias[dias.length-1]);
   if (error){ showToast('Error consultando: '+error.message, 'error'); return; }
-  const NO_LIBRE = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Bloqueado','Mantenimiento','Limpieza'];
+  const NO_LIBRE = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje','Bloqueado','Mantenimiento','Limpieza'];
   const ocupado = {};
   (data||[]).forEach(r=>{
     const noLibre = NO_LIBRE.includes(r.estado) || (r.observaciones||'').includes('Apto completo');
