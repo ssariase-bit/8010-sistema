@@ -2239,8 +2239,8 @@ function renderTurnoForm() {
       <div class="form-section" style="border:2px solid var(--naran);background:#fff9f5">
         <div class="form-section-title" style="color:var(--naran)">⚠️ Novedades del turno</div>
         <div id="t-nov-arrastre" style="margin-bottom:10px"></div>
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;font-size:11px;font-weight:700;color:var(--gris-t);padding:0 4px">
-          <span>Descripción</span><span>Área / Apto</span><span>Prioridad</span><span></span>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;font-size:11px;font-weight:700;color:var(--gris-t);padding:0 4px">
+          <span>Descripción</span><span>Área</span><span>Apto / Ubic.</span><span>Prioridad</span><span></span>
         </div>
         <div id="novedades-turno-list"></div>
         <button type="button" onclick="addNovedadLinea()" style="width:100%;margin-top:10px;padding:10px;border:2px dashed var(--naran);background:transparent;color:var(--naran);border-radius:8px;cursor:pointer;font-weight:700;font-size:13px">
@@ -2326,11 +2326,12 @@ let novCount = 0;
 function addNovedadLinea() {
   const id = novCount++;
   const div = document.createElement('div');
-  div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center';
+  div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center';
   div.id = 'nov-line-' + id;
   div.innerHTML = `
     <input type="text" placeholder="Descripción de la novedad..." id="nov-desc-${id}" style="padding:9px 12px;border:1px solid var(--gris-b);border-radius:6px;font-size:13px">
-    <input type="text" placeholder="Área / Apto" id="nov-area-${id}" style="padding:9px 12px;border:1px solid var(--gris-b);border-radius:6px;font-size:13px">
+    <input type="text" placeholder="Área (ej: Mantenimiento)" id="nov-area-${id}" style="padding:9px 12px;border:1px solid var(--gris-b);border-radius:6px;font-size:13px">
+    <input type="text" placeholder="Apto / Ubic." id="nov-apto-${id}" style="padding:9px 12px;border:1px solid var(--gris-b);border-radius:6px;font-size:13px">
     <select id="nov-prio-${id}" style="padding:9px 8px;border:1px solid var(--gris-b);border-radius:6px;font-size:13px">
       <option value="Baja">🟢 Baja</option>
       <option value="Media" selected>🟡 Media</option>
@@ -2355,6 +2356,7 @@ async function enviarTurno() {
     const desc = document.getElementById('nov-desc-' + i)?.value.trim();
     const prio = document.getElementById('nov-prio-' + i)?.value;
     const area = document.getElementById('nov-area-' + i)?.value.trim() || 'General';
+    const apto = document.getElementById('nov-apto-' + i)?.value.trim() || null;
     if (desc) novsToInsert.push({
       fecha: document.getElementById('t-fecha').value,
       turno: document.getElementById('t-turno').value,
@@ -2363,6 +2365,7 @@ async function enviarTurno() {
       estado: 'Abierto',
       reportado_por: entrega,
       area: area,
+      apto: apto,
       edificio: EDIFICIO_ACTIVO,
       user_id: currentUser.id,
     });
@@ -4909,7 +4912,11 @@ window.guardarSolicitud = async function(){
   var dir=(document.getElementById('sol-dirigido')||{}).value||'';
   if(!desc.trim()){ if(typeof showToast==='function') showToast('Escribe la solicitud','error'); return; }
   var row={ edificio:EDIFICIO_ACTIVO, solicitante:sol.trim()||((typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||null), dirigido_a:dir.trim()||null, descripcion:desc.trim(), prioridad:pri, estado:'Pendiente', imagen:window._solImg||null, tiene_imagen:!!window._solImg, user_id:currentUser.id };
+  var _sfiles=(document.getElementById('sol-files')||{}).files; var _adjs=[];
+  if(_sfiles&&_sfiles.length){ for(var _si=0;_si<_sfiles.length;_si++){ var _sa=await _subirAdjunto(_sfiles[_si]); if(_sa) _adjs.push(_sa); } }
+  if(_adjs.length) row.adjuntos=_adjs;
   var r=await sb.from('solicitudes').insert(row);
+  if(r.error && /adjuntos/.test(r.error.message||'')){ delete row.adjuntos; r=await sb.from('solicitudes').insert(row); }
   if(r.error && /dirigido_a/.test(r.error.message||'')){ delete row.dirigido_a; r=await sb.from('solicitudes').insert(row); }
   if(r.error){ if(typeof showToast==='function') showToast('Error: '+r.error.message,'error'); return; }
   window._solImg=null;
@@ -4928,7 +4935,7 @@ window.responderSolicitud = async function(id){ var t=prompt('¿Qué se hizo? (r
 window.eliminarSolicitud = async function(id){ if(!confirm('¿Eliminar esta solicitud?')) return; await sb.from('solicitudes').delete().eq('id',id); if(typeof showToast==='function') showToast('Eliminada','success'); renderSolicitudes(); };
 window.renderSolicitudes = async function(filtro){
   filtro=(filtro===undefined?(window._solFiltro||''):filtro); window._solFiltro=filtro;
-  var _cols='id,created_at,edificio,solicitante,dirigido_a,descripcion,prioridad,estado,tiene_imagen,respuesta,resuelto_at';
+  var _cols='id,created_at,edificio,solicitante,dirigido_a,descripcion,prioridad,estado,tiene_imagen,adjuntos,respuesta,resuelto_at';
   var res=await sb.from('solicitudes').select(_cols).eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(2000);
   if(res.error && /dirigido_a/.test(res.error.message||'')){ res=await sb.from('solicitudes').select(_cols.replace(',dirigido_a','')).eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(2000); }
   var rows=(res.data||[]).filter(function(r){ if(filtro==='dirigidas') return !!(r.dirigido_a&&String(r.dirigido_a).trim()); return !filtro || r.estado===filtro; });
@@ -4937,7 +4944,9 @@ window.renderSolicitudes = async function(filtro){
   var priColor=function(p){ return p==='Alta'?'#fee2e2;color:#991b1b':(p==='Baja'?'#e0e7ff;color:#3730a3':'#fef3c7;color:#92400e'); };
   var body=rows.map(function(r){
     var estSel='<select onchange="cambiarEstadoSolicitud(\''+r.id+'\',this.value)" style="padding:3px 6px;border-radius:6px;font-size:12px">'+['Pendiente','En proceso','Hecho'].map(function(e){return '<option'+(r.estado===e?' selected':'')+'>'+e+'</option>';}).join('')+'</select>';
-    var img=r.tiene_imagen?'<span style="cursor:pointer;color:#1e40af" onclick="verImagenSolicitud(\''+r.id+'\')">📷 ver</span>':'<span style="color:#bbb">—</span>';
+    var img=r.tiene_imagen?'<span style="cursor:pointer;color:#1e40af" onclick="verImagenSolicitud(\''+r.id+'\')">📷 ver</span>':'';
+    var _sadj=(r.adjuntos&&r.adjuntos.length)?r.adjuntos.map(function(a){return '<a href="'+a.url+'" target="_blank" style="color:#1d4ed8;font-size:11px;display:block">📎 '+String(a.nombre||'archivo').replace(/</g,'&lt;')+'</a>';}).join(''):'';
+    img=(img||_sadj)?(img+_sadj):'<span style="color:#bbb">—</span>';
     var resp=r.respuesta?('<span style="color:#166534">'+esc(r.respuesta)+'</span>'):'<span style="color:#bbb">—</span>';
     var _ds=!!(r.dirigido_a&&String(r.dirigido_a).trim()); var _dc=_ds?('<span style="background:#fde68a;color:#92400e;font-size:11px;padding:1px 8px;border-radius:8px;font-weight:600">⭐ → '+esc(r.dirigido_a)+'</span>'):'<span style="color:#bbb">—</span>';
     return '<tr style="vertical-align:top'+(_ds?';background:#FFFBEB':'')+'"><td style="white-space:nowrap">'+fmtD(r.created_at)+'</td><td>'+esc(r.solicitante||'-')+'</td><td>'+_dc+'</td><td style="max-width:240px">'+esc(r.descripcion||'')+'</td><td><span style="background:'+priColor(r.prioridad)+';padding:1px 8px;border-radius:8px;font-size:11px">'+esc(r.prioridad||'')+'</span></td><td>'+img+'</td><td>'+estSel+'</td><td style="max-width:200px;font-size:12px">'+resp+'</td><td style="white-space:nowrap"><span title="Responder / qué se hizo" style="cursor:pointer" onclick="responderSolicitud(\''+r.id+'\')">✍️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarSolicitud(\''+r.id+'\')">🗑️</span></td></tr>';
@@ -4951,7 +4960,7 @@ window.renderSolicitudes = async function(filtro){
     '<div class="form-group"><label>Dirigido a (persona o departamento)</label><input type="text" id="sol-dirigido" list="dl-sol-dir" placeholder="Ej: Fabio, Recepción, Mantenimiento..."><datalist id="dl-sol-dir"><option>Administración</option><option>Recepción</option><option>Mantenimiento</option><option>Camareras / Aseo</option><option>Comercial</option><option>Eventos</option><option>RRHH</option><option>Compras</option><option>Gerencia</option></datalist></div>'+
     '<div class="form-group"><label>Prioridad</label><select id="sol-prioridad"><option>Alta</option><option selected>Media</option><option>Baja</option></select></div></div>'+
     '<div class="form-group"><label>Solicitud</label><textarea id="sol-desc" placeholder="Describe la solicitud... (puedes pegar una imagen con Ctrl+V)" style="min-height:70px"></textarea></div>'+
-    '<div class="form-group"><label>Imagen (pantallazo) — opcional</label><input type="file" accept="image/*" id="sol-img-file" onchange="_solHandleFile(this.files[0])"><div id="sol-img-preview" style="margin-top:6px"></div></div>'+
+    '<div class="form-group"><label>Adjuntos (varios: imágenes, PDF, Excel…)</label><input type="file" multiple id="sol-files"><div style="font-size:11px;color:#888;margin-top:3px">Puedes seleccionar varios. También puedes pegar un pantallazo con Ctrl+V en la descripción.</div><div id="sol-img-preview" style="margin-top:6px"></div></div>'+
     '<button class="btn btn-success" onclick="guardarSolicitud()">📨 Enviar solicitud</button></div>'+
     '<div class="card"><div class="card-header"><div class="card-title">'+rows.length+' solicitudes</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todas')+fbtn('dirigidas','⭐ Dirigidas')+fbtn('Pendiente','Pendientes')+fbtn('En proceso','En proceso')+fbtn('Hecho','Hechas')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar..." style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
     '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Quién</th><th>Dirigido a</th><th>Solicitud</th><th>Prioridad</th><th>Imagen</th><th>Estado</th><th>Respuesta</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
