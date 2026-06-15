@@ -4975,18 +4975,32 @@ window._renderComentariosNov = function(n){
   var items=arr.map(function(c,idx){
     var dir=c.dirigido_a?('<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 7px;border-radius:8px;margin-left:6px">→ '+esc(c.dirigido_a)+'</span>'):'';
     var mail='<span onclick="correoComentarioNov('+idx+')" style="cursor:pointer;margin-left:8px" title="Enviar por correo">📧</span>';
-    return '<div style="border-left:3px solid #1F3864;padding:6px 10px;margin:8px 0;background:#f8f9fa;border-radius:0 6px 6px 0"><div style="font-size:11px;color:#666"><strong>'+esc(c.autor||'-')+'</strong> · '+esc(c.fecha||'')+dir+mail+'</div><div style="margin-top:3px;white-space:pre-wrap">'+esc(c.texto||'')+'</div></div>';
+    var adj=(c.adjunto&&c.adjunto.url)?('<div style="margin-top:4px"><a href="'+c.adjunto.url+'" target="_blank" style="font-size:11px;color:#1d4ed8;text-decoration:none">📎 '+esc(c.adjunto.nombre||'archivo')+'</a></div>'):'';
+    return '<div style="border-left:3px solid #1F3864;padding:6px 10px;margin:8px 0;background:#f8f9fa;border-radius:0 6px 6px 0"><div style="font-size:11px;color:#666"><strong>'+esc(c.autor||'-')+'</strong> · '+esc(c.fecha||'')+dir+mail+'</div><div style="margin-top:3px;white-space:pre-wrap">'+esc(c.texto||'')+'</div>'+adj+'</div>';
   }).join('') || '<div style="color:#999;font-size:12px;margin:6px 0">Sin comentarios todavía.</div>';
   return '<div class="form-section" style="margin-top:16px"><div class="form-section-title">💬 Comentarios de gerencia</div>'+items+
     '<div style="margin-top:10px"><textarea id="nov-com-texto" style="width:100%;min-height:54px" placeholder="Escribe tu comentario o pregunta..."></textarea>'+
-    '<div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap"><input type="text" id="nov-com-dir" placeholder="Dirigido a (ej: Administradores, Fabio) — opcional" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #ddd;border-radius:8px">'+
+    '<div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap"><input type="text" id="nov-com-dir" placeholder="Dirigido a (ej: Administradores, Fabio) — opcional" style="flex:1;min-width:180px;padding:6px 10px;border:1px solid #ddd;border-radius:8px">'+
+    '<label style="font-size:11px;color:#555;cursor:pointer;white-space:nowrap">📎 <input type="file" id="nov-com-file" style="display:none" onchange="var l=this.parentNode.querySelector(\'span\'); if(l) l.textContent=this.files[0]?this.files[0].name:\'Adjuntar\';"><span>Adjuntar</span></label>'+
     '<button class="btn btn-success btn-sm" onclick="agregarComentarioNovedad(\''+n.id+'\')">Agregar comentario</button></div></div></div>';
 };
-window._addComNov = async function(id, texto, dir){
-  texto=String(texto||'').trim(); if(!texto){ if(typeof showToast==='function') showToast('Escribe el comentario','error'); return false; }
+async function _subirAdjunto(file){
+  if(!file) return null;
+  try{
+    if(file.size > 25*1024*1024){ if(typeof showToast==='function') showToast('El archivo supera 25 MB','error'); return null; }
+    var ext=((file.name||'archivo').split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'');
+    var path='comentarios/'+Date.now()+'_'+Math.random().toString(36).slice(2,8)+(ext?('.'+ext):'');
+    var up=await sb.storage.from('adjuntos').upload(path, file, { cacheControl:'3600', upsert:false, contentType:file.type||undefined });
+    if(up.error){ if(typeof showToast==='function') showToast('No se pudo subir: '+up.error.message,'error'); return null; }
+    var url=sb.storage.from('adjuntos').getPublicUrl(path).data.publicUrl;
+    return { url:url, nombre:(file.name||'archivo') };
+  }catch(e){ if(typeof showToast==='function') showToast('Error subiendo archivo','error'); return null; }
+}
+window._addComNov = async function(id, texto, dir, adjunto){
+  texto=String(texto||'').trim(); if(!texto && !adjunto){ if(typeof showToast==='function') showToast('Escribe el comentario o adjunta un archivo','error'); return false; }
   var r=await sb.from('novedades').select('comentarios').eq('id',id).single();
   var arr=[]; try{ var c=r.data&&r.data.comentarios; arr=Array.isArray(c)?c:(c?JSON.parse(c):[]); }catch(e){ arr=[]; }
-  arr.push({ autor:(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'—', autor_email:(currentUser&&currentUser.email)||null, fecha:new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}), texto:texto, dirigido_a:String(dir||'').trim()||null, ts:Date.now() });
+  arr.push({ autor:(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'—', autor_email:(currentUser&&currentUser.email)||null, fecha:new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}), texto:texto, dirigido_a:String(dir||'').trim()||null, adjunto:adjunto||null, ts:Date.now() });
   var u=await sb.from('novedades').update({ comentarios:arr }).eq('id',id);
   if(u.error){ if(typeof showToast==='function') showToast('Error: '+u.error.message,'error'); return false; }
   // Avisar por correo al autor de la pregunta cuando alguien MÁS responde
@@ -5001,13 +5015,15 @@ window._addComNov = async function(id, texto, dir){
   return true;
 };
 window.agregarComentarioNovedad = async function(id){
-  var ok=await window._addComNov(id, (document.getElementById('nov-com-texto')||{}).value, (document.getElementById('nov-com-dir')||{}).value);
+  var _f=(document.getElementById('nov-com-file')||{}).files; var _adj=(_f&&_f[0])?await _subirAdjunto(_f[0]):null;
+  var ok=await window._addComNov(id, (document.getElementById('nov-com-texto')||{}).value, (document.getElementById('nov-com-dir')||{}).value, _adj);
   if(ok){ if(typeof showToast==='function') showToast('Comentario agregado','success'); if(typeof verNovedad==='function') verNovedad(id); }
 };
 window.toggleReplyCom = function(ri){ var row=document.getElementById('replyrow-'+ri); if(row){ row.style.display = (row.style.display==='none'?'':'none'); var ta=document.getElementById('reply-'+ri); if(ta && row.style.display!=='none') setTimeout(function(){ta.focus();},30); } };
 window.enviarReplyCom = async function(id, ri){
   var ta=document.getElementById('reply-'+ri);
-  var ok=await window._addComNov(id, ta?ta.value:'', '');
+  var _f=(document.getElementById('reply-file-'+ri)||{}).files; var _adj=(_f&&_f[0])?await _subirAdjunto(_f[0]):null;
+  var ok=await window._addComNov(id, ta?ta.value:'', '', _adj);
   if(ok){ if(typeof showToast==='function') showToast('✅ Respuesta enviada','success'); renderComentariosGerencia(); }
 };
 window.correoComentarioNov = function(idx){
@@ -5030,8 +5046,8 @@ window.renderComentariosGerencia = async function(filtro){
     var apto=(typeof areaApto==='function'?areaApto(x.n).apto:x.n.apto)||'-';
     var dir=x.cm.dirigido_a?('<span style="background:#fef3c7;color:#92400e;font-size:11px;padding:1px 8px;border-radius:8px">→ '+esc(x.cm.dirigido_a)+'</span>'):'<span style="color:#bbb">—</span>';
     var est=x.n.estado||'Abierto'; var _ev=/resuelto|cerrad|ejecutad|hecho|realizad/i.test(est)?'Resuelto':(/proceso|escalad/i.test(est)?'En proceso':'Abierto'); var _ecol=_ev==='Resuelto'?'#065F46':(_ev==='En proceso'?'#1E40AF':'#92400E'); var estSel='<select onchange="cambiarEstadoCom(\''+x.n.id+'\',this.value,this)" style="padding:3px 8px;border-radius:8px;font-size:11px;font-weight:600;color:'+_ecol+';border:1px solid #ddd;background:#fff">'+[['Abierto','Pendiente'],['En proceso','En proceso'],['Resuelto','Realizado']].map(function(o){return '<option value="'+o[0]+'"'+(_ev===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>';
-    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td>'+estSel+'</td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-success btn-sm" style="font-size:11px" onclick="toggleReplyCom('+ri+')">💬 Responder</button> <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir</button></td></tr>'+
-      '<tr id="replyrow-'+ri+'" style="display:none"><td colspan="7" style="background:#f1f5f9;padding:8px 12px"><div style="font-size:11px;color:#555;margin-bottom:4px">Respuesta a: <em>'+esc((x.cm.texto||'').slice(0,60))+'</em></div><textarea id="reply-'+ri+'" placeholder="Escribe tu respuesta..." style="width:100%;min-height:52px;padding:6px;border:1px solid #cbd5e1;border-radius:6px;box-sizing:border-box"></textarea><div style="margin-top:6px;display:flex;gap:6px"><button class="btn btn-success btn-sm" style="font-size:11px" onclick="enviarReplyCom(\''+x.n.id+'\','+ri+')">📨 Enviar respuesta</button><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="toggleReplyCom('+ri+')">Cancelar</button></div></td></tr>';
+    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td>'+estSel+'</td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+((x.cm.adjunto&&x.cm.adjunto.url)?('<div style="margin-top:3px"><a href="'+x.cm.adjunto.url+'" target="_blank" style="font-size:11px;color:#1d4ed8;text-decoration:none">📎 '+esc(x.cm.adjunto.nombre||'archivo')+'</a></div>'):'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-success btn-sm" style="font-size:11px" onclick="toggleReplyCom('+ri+')">💬 Responder</button> <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir</button></td></tr>'+
+      '<tr id="replyrow-'+ri+'" style="display:none"><td colspan="7" style="background:#f1f5f9;padding:8px 12px"><div style="font-size:11px;color:#555;margin-bottom:4px">Respuesta a: <em>'+esc((x.cm.texto||'').slice(0,60))+'</em></div><textarea id="reply-'+ri+'" placeholder="Escribe tu respuesta..." style="width:100%;min-height:52px;padding:6px;border:1px solid #cbd5e1;border-radius:6px;box-sizing:border-box"></textarea><div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn btn-success btn-sm" style="font-size:11px" onclick="enviarReplyCom(\''+x.n.id+'\','+ri+')">📨 Enviar respuesta</button><label style="font-size:11px;color:#555;cursor:pointer">📎 <input type="file" id="reply-file-'+ri+'" style="display:none" onchange="var b=this.parentNode.querySelector(\'b\'); if(b) b.textContent=this.files[0]?this.files[0].name:\'Adjuntar\';"><b style="font-weight:400">Adjuntar</b></label><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="toggleReplyCom('+ri+')">Cancelar</button></div></td></tr>';
   }).join('');
   var fbtn=function(v,l){ var on=(window._comFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComentariosGerencia(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML=
@@ -5039,6 +5055,7 @@ window.renderComentariosGerencia = async function(filtro){
     '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">✍️ Nueva pregunta / comentario</div></div>'+
     '<div style="font-size:12px;color:#666;margin:-2px 0 10px">Hazla puntual a una persona o departamento. Queda abierta hasta que la resuelvan.</div>'+
     '<div class="form-group"><label>Pregunta o comentario</label><textarea id="comg-texto" placeholder="Escribe tu pregunta o aclaración..." style="min-height:60px"></textarea></div>'+
+    '<div style="margin:-4px 0 8px"><label style="font-size:12px;color:#555;cursor:pointer">📎 <input type="file" id="comg-file" style="display:none" onchange="var s=document.getElementById(\'comg-file-name\'); if(s) s.textContent=this.files[0]?(\'  \'+this.files[0].name):\'\';"> Adjuntar archivo</label><span id="comg-file-name" style="font-size:11px;color:#1d4ed8"></span></div>'+
     '<div class="form-row col3"><div class="form-group"><label>Dirigido a (persona o departamento)</label><select id="comg-dir"><option value="">— Selecciona persona o departamento —</option>'+(function(){var d=_destinos(); var g=d.groups.map(function(x){return '<option value="'+x.emails.join(',')+'">'+x.n+'</option>';}).join(''); var p=d.people.map(function(x){return '<option value="'+x.e+'">'+x.n+'</option>';}).join(''); return '<optgroup label="Departamentos">'+g+'</optgroup><optgroup label="Personas">'+p+'</optgroup>';})()+'</select></div>'+
     '<div class="form-group"><label>Apto (opcional)</label><input type="text" id="comg-apto" placeholder="Ej: 301"></div>'+
     '<div class="form-group" style="display:flex;align-items:flex-end"><button class="btn btn-success" style="width:100%" onclick="nuevaPreguntaGerencia()">📨 Enviar pregunta</button></div></div></div>'+
@@ -5109,7 +5126,8 @@ window.nuevaPreguntaGerencia = async function(){
   if(!email){ if(typeof showToast==='function') showToast('Elige a quién va dirigida','error'); return; }
   var autor=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'Gerencia';
   var fecha=new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true});
-  var com={ autor:autor, autor_email:(currentUser&&currentUser.email)||null, fecha:fecha, texto:texto.trim(), dirigido_a:dirNombre||null, ts:Date.now() };
+  var _af=(document.getElementById('comg-file')||{}).files; var _adj=(_af&&_af[0])?await _subirAdjunto(_af[0]):null;
+  var com={ autor:autor, autor_email:(currentUser&&currentUser.email)||null, fecha:fecha, texto:texto.trim(), dirigido_a:dirNombre||null, adjunto:_adj||null, ts:Date.now() };
   var _hN=new Date().getHours();
   var row={ fecha:TODAY, turno:_hN<14?'Mañana':(_hN<22?'Tarde':'Noche'), area:'Pregunta de gerencia'+(apto.trim()?(' — Apto '+apto.trim()):''), apto:apto.trim()||null, prioridad:'Media', descripcion:texto.trim(), estado:'Abierto', reportado_por:autor, comentarios:[com], edificio:EDIFICIO_ACTIVO, user_id:currentUser.id };
   var r=await sb.from('novedades').insert(row);
