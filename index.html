@@ -4990,15 +4990,43 @@ window.renderComentariosGerencia = async function(filtro){
     var apto=(typeof areaApto==='function'?areaApto(x.n).apto:x.n.apto)||'-';
     var dir=x.cm.dirigido_a?('<span style="background:#fef3c7;color:#92400e;font-size:11px;padding:1px 8px;border-radius:8px">→ '+esc(x.cm.dirigido_a)+'</span>'):'<span style="color:#bbb">—</span>';
     var est=x.n.estado||'Abierto'; var _ec=/resuelto|cerrad|ejecutad|hecho/i.test(est)?{bg:'#D1FAE5',c:'#065F46'}:(/proceso|escalad/i.test(est)?{bg:'#DBEAFE',c:'#1E40AF'}:{bg:'#FEF3C7',c:'#92400E'}); var estB='<span style="background:'+_ec.bg+';color:'+_ec.c+';font-size:11px;padding:2px 9px;border-radius:8px;white-space:nowrap;font-weight:600">'+esc(est)+'</span>';
-    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td>'+estB+'</td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir / Responder</button></td></tr>';
+    return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td>'+estB+'</td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir / Responder</button>'+(/resuelto|cerrad|ejecutad|hecho/i.test(est)?'':' <button class="btn btn-success btn-sm" style="font-size:11px" onclick="marcarRealizadoCom(\''+x.n.id+'\')">✓ Realizado</button>')+'</td></tr>';
   }).join('');
   var fbtn=function(v,l){ var on=(window._comFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComentariosGerencia(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML=
     '<div class="page-title">💬 Comentarios de gerencia</div>'+
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">✍️ Nueva pregunta / comentario</div></div>'+
+    '<div style="font-size:12px;color:#666;margin:-2px 0 10px">Hazla puntual a una persona o departamento. Queda abierta hasta que la resuelvan.</div>'+
+    '<div class="form-group"><label>Pregunta o comentario</label><textarea id="comg-texto" placeholder="Escribe tu pregunta o aclaración..." style="min-height:60px"></textarea></div>'+
+    '<div class="form-row col3"><div class="form-group"><label>Dirigido a (persona o departamento)</label><input type="text" id="comg-dir" list="dl-comg-dir" placeholder="Ej: Fabio, Recepción, Mantenimiento..."><datalist id="dl-comg-dir"><option>Administradores</option><option>Administración</option><option>Recepción</option><option>Mantenimiento</option><option>Camareras / Aseo</option><option>Comercial</option><option>Eventos</option><option>RRHH</option><option>Compras</option><option>Gerencia</option></datalist></div>'+
+    '<div class="form-group"><label>Apto (opcional)</label><input type="text" id="comg-apto" placeholder="Ej: 301"></div>'+
+    '<div class="form-group" style="display:flex;align-items:flex-end"><button class="btn btn-success" style="width:100%" onclick="nuevaPreguntaGerencia()">📨 Enviar pregunta</button></div></div></div>'+
     '<div class="card"><div class="card-header"><div class="card-title">'+all.length+' comentarios</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todos')+fbtn('dirigidos','Dirigidos')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (dirigido a, texto, apto...)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
     '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Apto</th><th>Estado</th><th>Comentario</th><th>Dirigido a</th><th>Autor</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 };
 
+window.marcarRealizadoCom = async function(id){
+  var r=await sb.from('novedades').update({estado:'Resuelto', fecha_cierre:TODAY}).eq('id',id);
+  if(r.error){ if(typeof showToast==='function') showToast('Error: '+r.error.message,'error'); return; }
+  if(typeof showToast==='function') showToast('✅ Marcado como realizado','success');
+  renderComentariosGerencia();
+};
+window.nuevaPreguntaGerencia = async function(){
+  var texto=(document.getElementById('comg-texto')||{}).value||'';
+  var dir=(document.getElementById('comg-dir')||{}).value||'';
+  var apto=(document.getElementById('comg-apto')||{}).value||'';
+  if(!texto.trim()){ if(typeof showToast==='function') showToast('Escribe la pregunta','error'); return; }
+  var autor=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'Gerencia';
+  var fecha=new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true});
+  var com={ autor:autor, fecha:fecha, texto:texto.trim(), dirigido_a:dir.trim()||null, ts:Date.now() };
+  var _hN=new Date().getHours();
+  var row={ fecha:TODAY, turno:_hN<14?'Mañana':(_hN<22?'Tarde':'Noche'), area:'Pregunta de gerencia'+(apto.trim()?(' — Apto '+apto.trim()):''), apto:apto.trim()||null, prioridad:'Media', descripcion:texto.trim(), estado:'Abierto', reportado_por:autor, comentarios:[com], edificio:EDIFICIO_ACTIVO, user_id:currentUser.id };
+  var r=await sb.from('novedades').insert(row);
+  if(r.error){ if(typeof showToast==='function') showToast('Error: '+r.error.message,'error'); return; }
+  if(typeof showToast==='function') showToast('📨 Pregunta enviada','success');
+  ['comg-texto','comg-dir','comg-apto'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  renderComentariosGerencia();
+};
 window._alarmaShown = false;
 window._alarmaComentarios = async function(conToast){
   try{
