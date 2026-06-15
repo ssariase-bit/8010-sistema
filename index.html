@@ -6643,20 +6643,28 @@ async function reporteNovedades(){
   const hh = Number((new Date().toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',hour12:false})||'').replace(/\D/g,''))||0;
   const saludo = hh<12 ? 'buenos días' : (hh<19 ? 'buenas tardes' : 'buenas noches');
   const admin = (currentProfile && currentProfile.nombre) || (currentUser && currentUser.email) || '';
+  const horaRep = new Date().toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true});
+  const _div = '➖➖➖➖➖➖➖➖';
   const txt =
-'Sr. Arias, '+saludo+'\n\n'+
-'*REPORTE DE NOVEDADES — '+fmtDate(f)+'*\n\n'+
-'*CKO ('+cko.length+')*\n'+(cko.length?num(cko):'N/A')+'\n\n'+
-'*CKI ('+cki.length+')*\n'+(cki.length?num(cki):'N/A')+'\n\n'+
-'*NOVEDADES GENERALES*\n'+(generales.length?num(generales):'Sin novedades generales.')+'\n\n'+
-'*ACTAS*\n'+(actas.length?num(actas):'Sin actas registradas.')+'\n\n'+
-'*OCUPACIÓN*\n'+
-'Ocupados: '+ocup+'\n'+
-'Disponibles: '+disp+'\n'+
-'En casa: '+encasa+'\n'+
-'Viaje: '+viaje+'\n'+
-'Ocupación: '+pct.toFixed(2).replace('.',',')+'%\n'+
-'Tarifa P. Diaria: '+money(adr)+'\n\n'+
+'🏢 *'+String(nombreEd).toUpperCase()+'*\n'+
+'📋 *REPORTE DE NOVEDADES*\n'+
+'🗓️ '+fmtDate(f)+'\n'+
+_div+'\n'+
+'Sr. Arias, '+saludo+'.\n\n'+
+'🔴 *CHECK-OUT ('+cko.length+')*\n'+(cko.length?num(cko):'_Sin salidas hoy_')+'\n\n'+
+'🟢 *CHECK-IN ('+cki.length+')*\n'+(cki.length?num(cki):'_Sin entradas hoy_')+'\n\n'+
+'📌 *NOVEDADES GENERALES*\n'+(generales.length?num(generales):'_Sin novedades_')+'\n\n'+
+'📝 *ACTAS*\n'+(actas.length?num(actas):'_Sin actas registradas_')+'\n\n'+
+_div+'\n'+
+'📊 *OCUPACIÓN*\n'+
+'•  Ocupados:  *'+ocup+'*\n'+
+'•  Disponibles:  '+disp+'\n'+
+'•  En casa:  '+encasa+'\n'+
+'•  En viaje:  '+viaje+'\n'+
+'•  % Ocupación:  *'+pct.toFixed(1).replace('.',',')+'%*\n'+
+'•  Tarifa promedio:  *'+money(adr)+'*\n'+
+_div+'\n'+
+'_Generado '+horaRep+' · Sistema '+nombreEd+'_\n'+
 'R/ '+admin;
   const titulo = 'Reporte de Novedades — '+fmtDate(f);
   const modal = document.createElement('div');
