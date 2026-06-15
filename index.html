@@ -904,6 +904,7 @@ const MENU_COMPLETO = [
   { id: 'comercial-form', icon: '➕', label: 'Nueva Cotización' },
   { id: 'eventos', icon: '🎪', label: 'Eventos', roles: ['gerente_general','administrador','eventos'] },
   { id: 'eventos-agenda', icon: '📅', label: 'Agenda de Eventos', roles: ['gerente_general','administrador','eventos'] },
+  { id: 'eventos-rack', icon: '🗓️', label: 'Rack de Salones', roles: ['gerente_general','administrador','eventos'] },
   { id: 'facturacion-list', icon: '🧾', label: 'Facturación' },
   { id: 'facturacion-form', icon: '➕', label: 'Registrar Factura' },
   { section: 'Auditoría' },
@@ -992,6 +993,7 @@ async function loadView(view) {
     case 'eventos': await renderEventos(); break;
     case 'evento-form': renderEventoForm(); break;
     case 'eventos-agenda': await renderEventosAgenda(); break;
+    case 'eventos-rack': await renderEventosRack(); break;
     case 'comercial-form': renderGenForm('cotizaciones','📞 Nueva Cotización / Lead',[
       {id:'fecha_solicitud',label:'Fecha de solicitud',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del interesado',type:'text',req:true},
@@ -5713,6 +5715,7 @@ async function renderEventos(){
       <div class="page-title" style="margin-bottom:0">🎪 Eventos — 8010</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button onclick="loadView('eventos-agenda')" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">📅 Agenda semanal</button>
+        <button onclick="loadView('eventos-rack')" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">🗓️ Rack salones</button>
         <button class="btn btn-success btn-sm" onclick="window._eventoEdit=null;loadView('evento-form')">+ Nuevo evento</button>
       </div>
     </div>
@@ -5745,10 +5748,81 @@ async function renderEventosAgenda(){
         <button class="btn btn-outline btn-sm" onclick="window._evAgendaLunes='${_evShiftWeek(lunes,-7)}';renderEventosAgenda()">◀</button>
         <span style="font-size:12px;color:#666">${fmtDate(lunes)} – ${fmtDate(dom)}</span>
         <button class="btn btn-outline btn-sm" onclick="window._evAgendaLunes='${_evShiftWeek(lunes,7)}';renderEventosAgenda()">▶</button>
+        <button onclick="loadView('eventos-rack')" class="btn btn-outline btn-sm">🗓️ Rack</button>
         <button onclick="loadView('eventos')" class="btn btn-outline btn-sm">📋 Lista</button>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">${cards}</div>`;
+}
+// ─── Rack de Salones (grilla sala x dia del mes, alimentado de eventos) ───
+var _EV_SALAS = ['SALA 1','SALA 2','SALA 3','SALA 4','SALA 5','GRAN SALÓN','PISO 12','APARTAMENTO'];
+function _evSalasDe(txt){
+  var s = String(txt==null?'':txt).toUpperCase();
+  if(!s.trim()) return ['(Sin asignar)'];
+  var out=[];
+  if(/GRAN\s*SAL/.test(s)) out.push('GRAN SALÓN');
+  if(/PISO\s*12/.test(s)) out.push('PISO 12');
+  if(/APARTAMENTO|APTO/.test(s)) out.push('APARTAMENTO');
+  var nums=(s.match(/\d+/g)||[]).map(Number).filter(function(n){return n>=1&&n<=5;});
+  if(nums.length){
+    if(/-/.test(s) && nums.length>=2){ var lo=Math.min.apply(null,nums), hi=Math.max.apply(null,nums); for(var k=lo;k<=hi;k++) out.push('SALA '+k); }
+    else nums.forEach(function(n){ out.push('SALA '+n); });
+  }
+  if(!out.length) return ['(Sin asignar)'];
+  return out.filter(function(v,i,a){return a.indexOf(v)===i;});
+}
+function _evRackMesShift(ym,delta){ var p=ym.split('-'); var d=new Date(Number(p[0]),Number(p[1])-1+delta,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+async function renderEventosRack(){
+  if(_evSoloKubik()){ document.getElementById('main-content').innerHTML='<div class="page-title">🗓️ Rack de Salones</div><div class="card"><p style="font-size:14px">Solo 8010.</p></div>'; return; }
+  var ym=window._evRackMes || String(TODAY).slice(0,7);
+  window._evRackMes=ym;
+  var Y=Number(ym.split('-')[0]), M=Number(ym.split('-')[1]);
+  var ndias=new Date(Y,M,0).getDate();
+  var ini=ym+'-01', fin=ym+'-'+String(ndias).padStart(2,'0');
+  var r1=await sb.from('eventos').select('*').eq('edificio',EDIFICIO_ACTIVO).not('fecha_fin','is',null).lte('fecha_inicio',fin).gte('fecha_fin',ini);
+  var r2=await sb.from('eventos').select('*').eq('edificio',EDIFICIO_ACTIVO).is('fecha_fin',null).gte('fecha_inicio',ini).lte('fecha_inicio',fin);
+  var all=[...(r1.data||[]),...(r2.data||[])]; var seen={}; all=all.filter(function(e){ if(seen[e.id])return false; seen[e.id]=1; return true; });
+  var esc=function(s){ return String(s==null?'':s).replace(/</g,'&lt;'); };
+  var colEst=function(e){ return e==='Confirmado'?'#1E7E34':e==='Realizado'?'#1D3461':e==='Cancelado'?'#9aa0a6':'#B8860B'; };
+  // mapa sala -> dia -> [eventos]
+  var hayNoAsignados=false;
+  var ocup={}; all.forEach(function(e){
+    var salas=_evSalasDe(e.sala); if(salas.indexOf('(Sin asignar)')>-1) hayNoAsignados=true;
+    var fi=e.fecha_inicio, ff=e.fecha_fin||e.fecha_inicio;
+    for(var dia=1;dia<=ndias;dia++){ var f=ym+'-'+String(dia).padStart(2,'0'); if(f>=fi&&f<=ff){ salas.forEach(function(sa){ (ocup[sa]=ocup[sa]||{})[dia]=((ocup[sa]||{})[dia]||[]); ocup[sa][dia].push(e); }); } }
+  });
+  var filas=_EV_SALAS.slice(); if(hayNoAsignados) filas.push('(Sin asignar)');
+  var letra=['D','L','M','M','J','V','S'];
+  var thDias=''; for(var dia=1;dia<=ndias;dia++){ var wd=new Date(Y,M-1,dia).getDay(); var fin2=(wd===0||wd===6); thDias+='<th style="min-width:30px;font-size:10px;padding:3px;'+(fin2?'background:#eef1f5;':'')+'">'+letra[wd]+'<br>'+dia+'</th>'; }
+  var body=filas.map(function(sa){
+    var tds=''; for(var dia=1;dia<=ndias;dia++){ var evs=(ocup[sa]||{})[dia];
+      if(evs&&evs.length){ var e0=evs[0]; var extra=evs.length>1?('<sup>+'+(evs.length-1)+'</sup>'):''; tds+='<td title="'+esc(e0.empresa)+(evs.length>1?(' (+'+(evs.length-1)+' más)'):'')+'" onclick="editarEvento(\''+e0.id+'\')" style="background:'+colEst(e0.estado)+';color:#fff;font-size:9px;text-align:center;cursor:pointer;padding:2px;line-height:1.1;border:1px solid #fff">'+esc(String(e0.empresa||'').slice(0,7))+extra+'</td>'; }
+      else { var wd=new Date(Y,M-1,dia).getDay(); tds+='<td style="'+((wd===0||wd===6)?'background:#f3f5f8;':'')+'border:1px solid #eee"></td>'; }
+    }
+    return '<tr><td style="position:sticky;left:0;background:#1D3461;color:#fff;font-size:11px;font-weight:600;white-space:nowrap;padding:4px 8px;z-index:1">'+esc(sa)+'</td>'+tds+'</tr>';
+  }).join('');
+  var nm=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  document.getElementById('main-content').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="page-title" style="margin-bottom:0">🗓️ Rack de Salones</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="window._evRackMes='${_evRackMesShift(ym,-1)}';renderEventosRack()">◀</button>
+        <span style="font-size:13px;font-weight:600;color:#1D3461;min-width:110px;text-align:center">${nm[M]} ${Y}</span>
+        <button class="btn btn-outline btn-sm" onclick="window._evRackMes='${_evRackMesShift(ym,1)}';renderEventosRack()">▶</button>
+        <button onclick="loadView('eventos')" class="btn btn-outline btn-sm">📋 Lista</button>
+        <button onclick="loadView('eventos-agenda')" class="btn btn-outline btn-sm">📅 Agenda</button>
+      </div>
+    </div>
+    <div class="card" style="padding:8px">
+      <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%"><thead><tr><th style="position:sticky;left:0;background:#1D3461;color:#fff;font-size:11px;padding:4px 8px;z-index:2">SALA</th>${thDias}</tr></thead><tbody>${body}</tbody></table></div>
+      <div style="font-size:11px;color:#666;margin-top:8px;display:flex;gap:14px;flex-wrap:wrap">
+        <span><span style="display:inline-block;width:11px;height:11px;background:#1E7E34;border-radius:2px"></span> Confirmado</span>
+        <span><span style="display:inline-block;width:11px;height:11px;background:#B8860B;border-radius:2px"></span> Cotizado</span>
+        <span><span style="display:inline-block;width:11px;height:11px;background:#1D3461;border-radius:2px"></span> Realizado</span>
+        <span><span style="display:inline-block;width:11px;height:11px;background:#9aa0a6;border-radius:2px"></span> Cancelado</span>
+        <span style="color:#999">${all.length} eventos en el mes · clic en una celda abre el evento</span>
+      </div>
+    </div>`;
 }
 async function cotizacionEvento(id){
   var r=await sb.from('eventos').select('*').eq('id',id).single(); if(!r.data){ showToast('No encontrado','error'); return; } var e=r.data;
