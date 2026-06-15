@@ -2704,7 +2704,15 @@ async function renderHKForm() {
       <div class="form-row">
         <div class="form-group"><label>Hora ingreso</label><input type="time" id="hk-in"></div>
         <div class="form-group"><label>Hora salida</label><input type="time" id="hk-out"></div>
-        <div class="form-group"><label>Pausa (min)</label><input type="number" id="hk-pausa" min="0" placeholder="0" title="Minutos de pausa (almuerzo u otra tarea). Se descuentan del tiempo; detalla la pausa en Observaciones."></div>
+      </div>
+      <div class="form-group" style="flex:1 1 100%">
+        <label>Pausas (almuerzo u otras tareas) — el total se descuenta solo del tiempo</label>
+        <div id="hk-pausas-box">
+          ${[0,1,2,3,4].map(function(i){return '<div class="hkp-row" style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><input type="time" class="hkp-ini" onchange="hkPausaCalc()" style="padding:4px"> <span style="font-size:12px;color:#888">a</span> <input type="time" class="hkp-fin" onchange="hkPausaCalc()" style="padding:4px"> <span class="hkp-dur" style="font-size:12px;color:#7A5C00;min-width:46px">—</span></div>';}).join('')}
+        </div>
+        <div style="font-size:13px;color:#7A5C00;margin-top:4px">Total pausa: <strong id="hk-pausa-total">0 min</strong></div>
+        <input type="hidden" id="hk-pausa" value="0">
+        <input type="hidden" id="hk-pausa-detalle" value="">
       </div>
       <div class="form-group"><label>Observaciones</label>
         <textarea id="hk-obs" placeholder="Daños encontrados, faltantes, solicitudes del huésped..."></textarea>
@@ -2723,6 +2731,19 @@ function hkCamSel(v) {
   else { inp.style.display = 'none'; inp.value = v; }
 }
 
+function _hkMin(hhmm){ var p=String(hhmm||'').split(':'); return (parseInt(p[0])||0)*60+(parseInt(p[1])||0); }
+function hkPausaCalc(){
+  var box=document.getElementById('hk-pausas-box'); if(!box) return;
+  var total=0, det=[];
+  box.querySelectorAll('.hkp-row').forEach(function(rw){
+    var i=rw.querySelector('.hkp-ini').value, f=rw.querySelector('.hkp-fin').value, dur=rw.querySelector('.hkp-dur');
+    if(i&&f){ var d=_hkMin(f)-_hkMin(i); if(d<0) d+=1440; total+=d; det.push(i+'–'+f+' ('+d+'m)'); dur.textContent=d+' min'; }
+    else { dur.textContent='—'; }
+  });
+  var hp=document.getElementById('hk-pausa'); if(hp) hp.value=total;
+  var hd=document.getElementById('hk-pausa-detalle'); if(hd) hd.value=det.join(', ');
+  var ht=document.getElementById('hk-pausa-total'); if(ht) ht.textContent=total+' min';
+}
 async function enviarHK() {
   const apto = document.getElementById('hk-apto').value.trim();
   if (!apto) { showToast('Indica el apartamento', 'error'); return; }
@@ -2747,8 +2768,8 @@ async function enviarHK() {
     estado: document.getElementById('hk-est').value,
     hora_ingreso: document.getElementById('hk-in').value || null,
     hora_salida: document.getElementById('hk-out').value || null,
-    observaciones: document.getElementById('hk-obs').value,
     pausa_min: parseInt(document.getElementById('hk-pausa') && document.getElementById('hk-pausa').value) || 0,
+    observaciones: (function(){ var o=(document.getElementById('hk-obs').value||'').trim(); var d=(document.getElementById('hk-pausa-detalle')&&document.getElementById('hk-pausa-detalle').value)||''; return d ? (o?(o+' · '):'')+'Pausas: '+d : o; })(),
     user_id: currentUser.id,
   });
   if (error) { showToast('Error al registrar', 'error'); btn.innerHTML = '📤 Registrar limpieza'; btn.disabled = false; return; }
@@ -3240,7 +3261,7 @@ async function renderHKList() {
                     ? `<strong>${h.hora_salida}</strong>`
                     : `<button onclick="registrarSalidaHK('${h.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Registrar salida</button>`
                   }</td>
-                  <td style="font-weight:700;color:${durColor}">${fmtMin(mins)}${(Number(h.pausa_min)||0)>0?` <span style="color:#7A5C00;font-weight:400;font-size:10px">(−${h.pausa_min}m pausa)</span>`:''}</td>
+                  <td style="font-weight:700;color:${durColor}">${fmtMin(mins)}${(Number(h.pausa_min)||0)>0?` <span style="color:#7A5C00;font-weight:400;font-size:10px" title="${h.pausa_detalle?String(h.pausa_detalle).replace(/"/g,'&quot;'):'Pausa'}">(−${h.pausa_min}m pausa)</span>`:''}</td>
                   <td><span class="badge b-${h.estado==='Limpio'?'resuelto':h.estado==='Declina limpieza'?'alta':'proceso'}">${h.estado||'-'}</span></td>
                   <td style="max-width:140px;font-size:11px">${h.observaciones||'-'}</td>
                   <td style="white-space:nowrap">${_btnsEdit('housekeeping', h.id)}</td>
@@ -3471,16 +3492,6 @@ function renderNuevaReserva() {
           <div class="form-group">
             <label>Empresa / Facturar a</label>
             <input type="text" id="res-empresa" placeholder="Nombre empresa o particular">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Acompañantes</label>
-            <input type="text" id="res-acompanantes" placeholder="Nombres de acompañantes (señala quién viaja) — opcional">
-          </div>
-          <div class="form-group">
-            <label>Confirmado con / Ejecutiva</label>
-            <input type="text" id="res-ejecutiva" placeholder="Ejecutiva/contacto que confirma; nota modificaciones — opcional">
           </div>
         </div>
       </div>
@@ -3720,15 +3731,13 @@ async function guardarReserva() {
     cxcRazon: document.getElementById('res-cxc-razon')?.value || '80|10 S.A.S',
     personas: document.getElementById('res-personas')?.value || '1 adulto', pax: document.getElementById('res-pax')?.value || '1',
     obs: document.getElementById('res-obs').value,
-    acompanantes: document.getElementById('res-acompanantes')?.value.trim() || '',
-    ejecutiva: document.getElementById('res-ejecutiva')?.value.trim() || '',
     firmante: document.getElementById('res-firmante').value || currentProfile?.nombre || 'Fabio Malaver',
     cargo: document.getElementById('res-cargo').value || 'Jefe de Administradores',
     email: document.getElementById('res-email').value.trim(),
     tel: document.getElementById('res-tel').value.trim(),
     numero: await getNextNumeroConfirmacion()
   };
-  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, apto: resData.apto, config: resData.config, moneda: resData.moneda, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, numero: resData.numero, empresa: resData.empresa, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, acompanantes: resData.acompanantes, ejecutiva: resData.ejecutiva, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',acompanantes:'Acompanantes',ejecutiva:'Ejecutiva',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insH=((await sb.from('reservas').insert(_rvRow).select('id').single()).data)||{}; if(_insH.id) await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); } } catch(_e){}
+  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, apto: resData.apto, config: resData.config, moneda: resData.moneda, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, numero: resData.numero, empresa: resData.empresa, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insH=((await sb.from('reservas').insert(_rvRow).select('id').single()).data)||{}; if(_insH.id) await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); } } catch(_e){}
   setTimeout(() => {
     if(confirm('¿Deseas generar la Confirmación de Reserva ahora?')) {
       generarConfirmacion(resData);
@@ -4817,7 +4826,7 @@ window.editarReserva = async function(id){
     set('res-tipotarifa',r.tipo_tarifa); set('res-pago',r.pago); set('res-estadopago',r.estado_pago);
     set('res-num-reserva',r.num_reserva); set('res-cxc-tipo',r.cxc_tipo); set('res-cxc-razon',r.cxc_razon);
     set('res-personas',r.personas); set('res-obs',r.obs); set('res-firmante',r.firmante);
-    set('res-cargo',r.cargo); set('res-email',r.email); set('res-tel',r.tel); set('res-empresa',r.empresa); set('res-pax',r.pax); set('res-acompanantes',r.acompanantes); set('res-ejecutiva',r.ejecutiva);
+    set('res-cargo',r.cargo); set('res-email',r.email); set('res-tel',r.tel); set('res-empresa',r.empresa); set('res-pax',r.pax);
     set('res-nf',r.nombre); set('res-ap1',''); set('res-ap2','');
     if(typeof combinarNombreReserva==='function') combinarNombreReserva();
     if(typeof showToast==='function') showToast('Editando reserva de '+(r.nombre||'')+' — ajusta y guarda','success');
@@ -5582,7 +5591,7 @@ async function renderEstadoHuespedes() {
   const rows = (data||[]).filter(r => r.estado !== 'Libre');
   // Empresa/acompañantes de la reserva activa hoy (para reflejar en Estado de Huéspedes)
   let _resMap = {};
-  try { const _rv = await sb.from('reservas').select('apto,empresa,acompanantes').eq('edificio', EDIFICIO_ACTIVO).lte('checkin', today).gte('checkout', today); (_rv.data||[]).forEach(x=>{ if(x.apto && !_resMap[x.apto]) _resMap[x.apto]=x; }); } catch(e){}
+  try { const _rv = await sb.from('reservas').select('id,apto,empresa,acompanantes').eq('edificio', EDIFICIO_ACTIVO).lte('checkin', today).gte('checkout', today); (_rv.data||[]).forEach(x=>{ if(x.apto && !_resMap[x.apto]) _resMap[x.apto]=x; }); } catch(e){}
 
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
@@ -5604,7 +5613,7 @@ async function renderEstadoHuespedes() {
             <tbody>${rows.map(r => `<tr>
               <td><strong style="color:var(--azul);font-size:15px">${r.apto}</strong></td>
               <td><span class="badge b-${r.estado==='Ocupado'?'proceso':r.estado==='Check-in hoy'?'abierto':'alta'}">${r.estado}</span>${(typeof _ivaTag==='function'?_ivaTag(r.iva):'')}</td>
-              <td><strong>${r.huesped||'-'}</strong>${(_resMap[r.apto]&&(_resMap[r.apto].empresa||_resMap[r.apto].acompanantes))?`<div style="font-size:10px;color:#666;margin-top:2px">${_resMap[r.apto].empresa?('🏢 '+String(_resMap[r.apto].empresa).replace(/</g,'&lt;')):''}${(_resMap[r.apto].empresa&&_resMap[r.apto].acompanantes)?' · ':''}${_resMap[r.apto].acompanantes?('👥 '+String(_resMap[r.apto].acompanantes).replace(/</g,'&lt;')):''}</div>`:''}</td>
+              <td><strong>${r.huesped||'-'}</strong>${(_resMap[r.apto]&&_resMap[r.apto].empresa)?`<div style="font-size:10px;color:#666;margin-top:2px">🏢 ${String(_resMap[r.apto].empresa).replace(/</g,'&lt;')}</div>`:''}${(_resMap[r.apto]&&_resMap[r.apto].id)?`<div style="margin-top:3px"><input value="${String(_resMap[r.apto].acompanantes||'').replace(/"/g,'&quot;')}" placeholder="👥 Acompañantes" title="Acompañantes — se guarda solo al salir del campo" onchange="guardarAcompanantesRes('${_resMap[r.apto].id}',this.value)" style="width:170px;padding:3px;font-size:11px"></div>`:''}</td>
               <td>${r.canal||'-'}</td>
               <td>${r.checkin ? fmtDate(r.checkin) : '-'}</td>
               <td>${r.checkout ? fmtDate(r.checkout) : '-'}</td>
@@ -5623,6 +5632,7 @@ async function renderEstadoHuespedes() {
     </div>`;
   window._ehRows = rows;
 }
+function guardarAcompanantesRes(id,val){ sb.from('reservas').update({acompanantes:String(val||'').trim()}).eq('id',id).then(r=>{ if(r.error) showToast('Error: '+r.error.message,'error'); else showToast('✓ Acompañantes guardado','success'); }); }
 
 // ═══════════════════════════════════════════════════════════
 // MÓDULO EVENTOS (8010) — agenda + venta
@@ -5961,7 +5971,8 @@ async function renderSemanaInfo(){
     <td style="white-space:nowrap"><strong>${r.huesped||''}</strong><br><span style="font-size:11px;color:var(--gris-t)">Apto. ${r.apto}</span></td>
     <td style="white-space:nowrap">${fmtDate(r.fecha)}</td>
     <td><input value="${String(r.pago||'').replace(/"/g,'&quot;')}" style="width:64px;padding:4px;font-size:11px" onchange="updSemana('${r.id}','pago',this.value)"></td>
-    <td><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Observaciones..." style="width:100%;min-width:260px;padding:4px;font-size:12px" onchange="updSemana('${r.id}','observaciones',this.value)"></td>
+    <td><input value="${String(r.ejecutiva||'').replace(/"/g,'&quot;')}" placeholder="Ejecutiva / contacto" title="Confirmado con / Ejecutiva — se guarda solo" style="width:130px;padding:4px;font-size:11px" onchange="updSemana('${r.id}','ejecutiva',this.value)"></td>
+    <td><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Observaciones..." style="width:100%;min-width:240px;padding:4px;font-size:12px" onchange="updSemana('${r.id}','observaciones',this.value)"></td>
     <td><select style="padding:4px;font-size:11px" onchange="updSemana('${r.id}','estado',this.value)">${ESTADOS_SEM.map(o=>`<option ${r.estado===o?'selected':''}>${o}</option>`).join('')}</select></td>
     <td><button onclick="delSemana('${r.id}')" title="Eliminar" style="border:none;background:none;cursor:pointer;font-size:14px">🗑️</button></td>
   </tr>`;
@@ -5970,7 +5981,7 @@ async function renderSemanaInfo(){
       <div style="font-weight:800;color:${color};margin-bottom:8px;font-size:15px">${titulo}: ${String(arr.length).padStart(2,'0')}</div>
       ${arr.length===0?'<div style="color:#999;font-size:13px;padding:8px">Sin registros esta semana</div>':
       `<div style="overflow-x:auto"><table class="tabla">
-        <thead><tr><th>Nombre</th><th>Fecha</th><th>Pago</th><th>Observaciones</th><th>Estado</th><th></th></tr></thead>
+        <thead><tr><th>Nombre</th><th>Fecha</th><th>Pago</th><th>Confirmado con / Ejecutiva</th><th>Observaciones</th><th>Estado</th><th></th></tr></thead>
         <tbody>${arr.map(fila).join('')}</tbody></table></div>`}
     </div>`;
   document.getElementById('main-content').innerHTML = `
@@ -5987,7 +5998,7 @@ async function renderSemanaInfo(){
     ${tablaSem('CKI DE LA SEMANA', cki, '#0C447C')}
     ${tablaSem('CKO DE LA SEMANA', cko, '#C2410C')}`;
 }
-function updSemana(id, campo, val){ const o={}; o[campo]=val; sb.from('semana_seguimiento').update(o).eq('id',id).then(r=>{ if(r.error) showToast('Error: '+r.error.message,'error'); else showToast('✓ Guardado','success'); }); }
+function updSemana(id, campo, val){ const o={}; o[campo]=val; sb.from('semana_seguimiento').update(o).eq('id',id).then(r=>{ if(r.error){ if(campo==='ejecutiva' && /column|ejecutiva/i.test(r.error.message||'')) showToast('El campo Ejecutiva se activará en breve','error'); else showToast('Error: '+r.error.message,'error'); } else showToast('✓ Guardado','success'); }); }
 async function delSemana(id){ if(!confirm('¿Eliminar esta fila del informe semanal?')) return; await sb.from('semana_seguimiento').delete().eq('id',id); renderSemanaInfo(); }
 async function addSemanaFila(tipo){
   const huesped = prompt('Nombre del huésped ('+tipo+'):'); if(!huesped) return;
