@@ -1902,7 +1902,7 @@ function mostrarListaCK(est) {
     <div style="font-size:16px;font-weight:800;color:${color};margin-bottom:12px">${esCKI ? '🔵 Llegan hoy' : '🟠 Salen hoy'} (${rows.length})</div>
     ${rows.length ? rows.map(r => `<div style="display:flex;gap:12px;padding:9px 0;border-bottom:1px solid #eee;align-items:center">
       <strong style="min-width:58px;color:${color};font-size:15px">${r.apto}</strong>
-      <span style="flex:1;font-size:13px;${r.huesped?'':'color:#999;font-style:italic'}">${r.huesped || 'sin nombre'}</span>
+      <span style="flex:1;font-size:13px;${r.huesped?'':'color:#999;font-style:italic'}">${_titleCase(r.huesped) || 'sin nombre'}</span>
     </div>`).join('') : '<div style="color:#999;padding:10px 0">Ninguno por hoy ✅</div>'}
     <button onclick="document.body.removeChild(this.closest('[style*=fixed]'))" style="margin-top:16px;background:#1D3461;color:white;border:none;border-radius:8px;padding:10px 18px;cursor:pointer;font-weight:600;width:100%">Cerrar</button>
   </div>`;
@@ -2062,6 +2062,8 @@ function toggleAptoCompleto(chk) {
 }
 
 function _paxSum(){ var g=function(id){ var e=document.getElementById(id); return (e&&e.value!=='')?(Number(e.value)||0):0; }; var t=g('m-pax-ad')+g('m-pax-me')+g('m-pax-in'); var p=document.getElementById('m-pax'); if(p) p.value=t; }
+// Mayúscula inicial: solo normaliza si el texto viene TODO en mayúsculas (no toca nombres ya bien escritos)
+function _titleCase(s){ s=String(s==null?'':s); if(!s) return s; if(/[a-záéíóúñü]/.test(s)) return s; return s.toLowerCase().replace(/(^|[\s'\-\/.])([a-záéíóúñü])/g, function(m,p,c){ return p+c.toUpperCase(); }); }
 async function openAptoModal(id, num) {
   const { data } = await sb.from('rack').select('*').eq('id', id).single();
   _aptoData = data || {};
@@ -2123,7 +2125,7 @@ async function saveApto() {
 
   const updates = {
     estado: document.getElementById('m-estado').value,
-    huesped: document.getElementById('m-huesped').value,
+    huesped: _titleCase(document.getElementById('m-huesped').value),
     tipo: document.getElementById('m-tipo').value,
     canal: document.getElementById('m-canal').value,
     checkin: document.getElementById('m-checkin').value || null,
@@ -5765,7 +5767,7 @@ async function renderEstadoHuespedes() {
             <tbody>${rows.map(r => `<tr>
               <td><strong style="color:var(--azul);font-size:15px">${r.apto}</strong></td>
               <td><span class="badge b-${r.estado==='Ocupado'?'proceso':r.estado==='Check-in hoy'?'abierto':'alta'}">${r.estado}</span>${(typeof _ivaTag==='function'?_ivaTag(r.iva):'')}</td>
-              <td><strong>${r.huesped||'-'}</strong>${(_resMap[r.apto]&&_resMap[r.apto].empresa)?`<div style="font-size:10px;color:#666;margin-top:2px">🏢 ${String(_resMap[r.apto].empresa).replace(/</g,'&lt;')}</div>`:''}${(_resMap[r.apto]&&_resMap[r.apto].id)?`<div style="margin-top:3px"><input value="${String(_resMap[r.apto].acompanantes||'').replace(/"/g,'&quot;')}" placeholder="👥 Acompañantes" title="Acompañantes — se guarda solo al salir del campo" onchange="guardarAcompanantesRes('${_resMap[r.apto].id}',this.value)" style="width:170px;padding:3px;font-size:11px"></div>`:''}</td>
+              <td><strong>${_titleCase(r.huesped)||'-'}</strong>${(r.empresa||(_resMap[r.apto]&&_resMap[r.apto].empresa))?`<div style="font-size:10px;color:#666;margin-top:2px">🏢 ${String(r.empresa||_resMap[r.apto].empresa).replace(/</g,'&lt;')}</div>`:''}${(_resMap[r.apto]&&_resMap[r.apto].id)?`<div style="margin-top:3px"><input value="${String(_resMap[r.apto].acompanantes||'').replace(/"/g,'&quot;')}" placeholder="👥 Acompañantes" title="Acompañantes — se guarda solo al salir del campo" onchange="guardarAcompanantesRes('${_resMap[r.apto].id}',this.value)" style="width:170px;padding:3px;font-size:11px"></div>`:''}</td>
               <td>${r.canal||'-'}</td>
               <td>${r.checkin ? fmtDate(r.checkin) : '-'}</td>
               <td>${r.checkout ? fmtDate(r.checkout) : '-'}</td>
