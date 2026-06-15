@@ -6627,8 +6627,10 @@ async function reporteNovedades(){
   const cko = recs.filter(r=>r.estado==='Check-out hoy').map(lin);
   const cki = recs.filter(r=>r.estado==='Check-in hoy').map(lin);
   const esActa = n => /acta/i.test(((n.area||'')+' '+(n.descripcion||'')));
-  const actas = nv.filter(esActa).map(n=>(n.descripcion||'').trim());
-  const generales = nv.filter(n=>!esActa(n)).map(n=>(n.descripcion||'').trim()+(n.gestionado_por?(' ('+n.gestionado_por+')'):''));
+  // Solo la novedad: se recorta lo que venga después de "✅ Acción tomada:" para que el reporte muestre únicamente el hecho.
+  const _soloNov = d => String(d||'').split(/\n*✅?\s*Acci[oó]n tomada:/i)[0].trim();
+  const actas = nv.filter(esActa).map(n=>_soloNov(n.descripcion));
+  const generales = nv.filter(n=>!esActa(n)).map(n=>_soloNov(n.descripcion));
   const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
   const ENCASA = ['Ocupado','Check-in hoy','Completo'];
   const FUERA = ['Bloqueado','Mantenimiento'];
