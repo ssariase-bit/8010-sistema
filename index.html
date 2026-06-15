@@ -6608,63 +6608,39 @@ _Reporte: ${new Date().toLocaleTimeString('en-US',{timeZone:'America/Bogota',hou
 async function reporteNovedades(){
   const f = TODAY;
   const nombreEd = (typeof EB==='function') ? EB().nombre : '8010 Urban Living';
-  let rk = [], nv = [];
-  try {
-    const [a,b] = await Promise.all([
-      sb.from('rack').select('*').eq('fecha', f).eq('edificio', EDIFICIO_ACTIVO),
-      sb.from('novedades').select('*').eq('fecha', f).eq('edificio', EDIFICIO_ACTIVO).order('created_at',{ascending:true})
-    ]);
-    rk = a.data || []; nv = b.data || [];
-  } catch(e){ showToast('Error cargando datos del reporte','error'); return; }
-  const PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Sucio':1,'Pendiente repaso':1,'Libre':1 };
-  const byApto = {};
-  rk.forEach(r=>{ const c=byApto[r.apto]; if(!c){ byApto[r.apto]=r; return; } const pr=PRIO[r.estado]||0, pc=PRIO[c.estado]||0; if(pr>pc) byApto[r.apto]=r; else if(pr===pc && (r.updated_at||r.created_at||'')>(c.updated_at||c.created_at||'')) byApto[r.apto]=r; });
-  const recs = Object.values(byApto);
-  const pago = r => r.canal ? (' · Pago: '+r.canal) : '';
-  const obs = r => (r.observaciones && String(r.observaciones).trim()) ? (' · '+String(r.observaciones).trim()) : '';
-  const lin = r => (r.huesped||'Sin nombre')+', Apto. '+r.apto+pago(r)+obs(r);
-  const num = arr => arr.length ? arr.map((x,i)=>(i+1)+'. '+x).join('\n') : '';
-  const cko = recs.filter(r=>r.estado==='Check-out hoy').map(lin);
-  const cki = recs.filter(r=>r.estado==='Check-in hoy').map(lin);
-  const esActa = n => /acta/i.test(((n.area||'')+' '+(n.descripcion||'')));
-  // Solo la novedad: se recorta lo que venga después de "✅ Acción tomada:" para que el reporte muestre únicamente el hecho.
-  const _soloNov = d => String(d||'').split(/\n*✅?\s*Acci[oó]n tomada:/i)[0].trim();
-  const actas = nv.filter(esActa).map(n=>_soloNov(n.descripcion));
-  const generales = nv.filter(n=>!esActa(n)).map(n=>_soloNov(n.descripcion));
-  const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
-  const ENCASA = ['Ocupado','Check-in hoy','Completo'];
-  const FUERA = ['Bloqueado','Mantenimiento'];
-  const base = (EB().aptosBase) || [];
-  let ocup=0, disp=0, encasa=0, viaje=0; const tar=[];
-  base.forEach(a=>{ const r=byApto[a]; const e=(r&&r.estado)||'Libre'; const comp=((r&&r.observaciones)||'').includes('Apto completo'); if(FUERA.includes(e)||comp) return; disp++; if(OCU.includes(e)){ ocup++; if(r&&Number(r.tarifa)>0) tar.push(Number(r.tarifa)); } if(ENCASA.includes(e)) encasa++; if(e==='Sale de viaje') viaje++; });
-  const pct = disp ? (ocup/disp*100) : 0;
-  const adr = tar.length ? Math.round(tar.reduce((s,x)=>s+x,0)/tar.length) : 0;
-  const money = n => '$ '+Number(n||0).toLocaleString('es-CO')+' COP';
-  const hh = Number((new Date().toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',hour12:false})||'').replace(/\D/g,''))||0;
-  const saludo = hh<12 ? 'buenos días' : (hh<19 ? 'buenas tardes' : 'buenas noches');
   const admin = (currentProfile && currentProfile.nombre) || (currentUser && currentUser.email) || '';
-  const horaRep = new Date().toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true});
-  const _div = '➖➖➖➖➖➖➖➖';
+  let rows = [], previas = [];
+  try {
+    if (typeof window._cargarAptoNombres==='function') await window._cargarAptoNombres();
+    const [dd, sg] = await Promise.all([
+      sb.from('novedades').select('*').eq('fecha', f).eq('edificio', EDIFICIO_ACTIVO).order('created_at',{ascending:true}),
+      sb.from('novedades').select('*').lt('fecha', f).eq('edificio', EDIFICIO_ACTIVO).in('estado',['Abierto','En proceso','Escalado']).order('fecha',{ascending:false})
+    ]);
+    rows = dd.data || []; previas = sg.data || [];
+  } catch(e){ showToast('Error cargando datos del reporte','error'); return; }
+  // Recorta lo que venga después de "✅ Acción tomada:" — solo el hecho de la novedad
+  const _soloNov = d => String(d||'').split(/\n*✅?\s*Acci[oó]n tomada:/i)[0].trim();
+  const _comLines = r => { let arr=[]; try{ const c=r.comentarios; arr=Array.isArray(c)?c:(c?JSON.parse(c):[]); }catch(_){ arr=[]; } return arr.map(c=>'📋 '+(c.fecha||'')+' — '+String(c.texto||'').trim()).join('\n'); };
+  const _arrName = r => { const a=(typeof areaApto==='function'?areaApto(r).apto:r.apto); return (window._nombreApto?window._nombreApto(a):'')||''; };
+  const _linea = (r, desde) => {
+    let s = '🕐 '+_horaNov(r)+' · *['+(r.prioridad||'-')+'] '+(r.area||'General')+'*'+(desde?' · desde '+fmtDate(r.fecha):'')+' · '+(r.estado||'-')+'\n'+_soloNov(r.descripcion);
+    const com=_comLines(r); if(com) s+='\n'+com;
+    const ar=_arrName(r); if(ar) s+='\n• Arrendatario: '+ar;
+    if(!desde){
+      if(r.causa) s+='\n• Causa: '+r.causa;
+      if(r.fuente) s+='\n• Fuente: '+r.fuente;
+      if(r.tratamiento) s+='\n• Tratamiento: '+r.tratamiento;
+      if(r.reportado_por) s+='\n• Registra: '+r.reportado_por;
+      if(r.gestionado_por) s+=' · Realiza: '+r.gestionado_por;
+    }
+    return s;
+  };
   const txt =
-'🏢 *'+String(nombreEd).toUpperCase()+'*\n'+
-'📋 *REPORTE DE NOVEDADES*\n'+
-'🗓️ '+fmtDate(f)+'\n'+
-_div+'\n'+
-'Sr. Arias, '+saludo+'.\n\n'+
-'🔴 *CHECK-OUT ('+cko.length+')*\n'+(cko.length?num(cko):'_Sin salidas hoy_')+'\n\n'+
-'🟢 *CHECK-IN ('+cki.length+')*\n'+(cki.length?num(cki):'_Sin entradas hoy_')+'\n\n'+
-'📌 *NOVEDADES GENERALES*\n'+(generales.length?num(generales):'_Sin novedades_')+'\n\n'+
-'📝 *ACTAS*\n'+(actas.length?num(actas):'_Sin actas registradas_')+'\n\n'+
-_div+'\n'+
-'📊 *OCUPACIÓN*\n'+
-'•  Ocupados:  *'+ocup+'*\n'+
-'•  Disponibles:  '+disp+'\n'+
-'•  En casa:  '+encasa+'\n'+
-'•  En viaje:  '+viaje+'\n'+
-'•  % Ocupación:  *'+pct.toFixed(1).replace('.',',')+'%*\n'+
-'•  Tarifa promedio:  *'+money(adr)+'*\n'+
-_div+'\n'+
-'_Generado '+horaRep+' · Sistema '+nombreEd+'_\n'+
+'🚨 *'+nombreEd+' — Novedades del '+fmtDate(f)+'*\n'+
+rows.length+' del día'+(previas.length?' · '+previas.length+' en seguimiento':'')+'\n\n'+
+(rows.length?rows.map(r=>_linea(r,false)).join('\n\n'):'Sin novedades del día')+
+(previas.length?'\n\n🔁 *EN SEGUIMIENTO (días anteriores):*\n\n'+previas.map(r=>_linea(r,true)).join('\n\n'):'')+
+'\n\n_Sistema '+nombreEd+'_\n'+
 'R/ '+admin;
   const titulo = 'Reporte de Novedades — '+fmtDate(f);
   const modal = document.createElement('div');
