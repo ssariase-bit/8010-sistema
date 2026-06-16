@@ -7146,6 +7146,17 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
       <div class="form-group"><label>Migración Colombia</label>
         <select id="cki-migracion"><option>No aplica</option><option>Sí, se envía reporte de ingreso</option></select>
       </div>
+      <div class="form-group" style="background:#FFF7E6;border:1px solid #FBC97D;border-radius:8px;padding:12px">
+        <label style="font-weight:700;margin-bottom:8px;display:block">🎁 Cortesías / Mínimos del apartamento</label>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <label style="font-weight:400;display:flex;align-items:center;gap:8px;cursor:pointer;margin:0"><input type="checkbox" id="cki-am-fruta" style="width:16px;height:16px"> 🍎 Cortesía de fruta</label>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:160px">☕ Cápsulas de café</span><input type="number" id="cki-am-cafe" min="0" placeholder="cantidad" style="width:100px;padding:5px 8px"></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:160px">🍷 Botellas de vino</span><input type="number" id="cki-am-vino" min="0" placeholder="cantidad" style="width:100px;padding:5px 8px"></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:160px">💧 Botellas de agua</span><input type="number" id="cki-am-agua" min="0" placeholder="cantidad" style="width:100px;padding:5px 8px"></div>
+          <label style="font-weight:400;display:flex;align-items:center;gap:8px;cursor:pointer;margin:0"><input type="checkbox" id="cki-am-bano" style="width:16px;height:16px"> 🧴 Amenities de baño</label>
+          <input type="text" id="cki-am-otros" placeholder="Otros (ej: flores, chocolates...)" style="padding:6px 10px">
+        </div>
+      </div>
       <div class="form-group"><label>Observaciones adicionales</label><textarea id="cki-obs" placeholder="Detalles adicionales..." style="min-height:60px"></textarea></div>
       <div class="form-actions">
         <button class="btn btn-outline btn-sm" onclick="loadView(window._currentView||'dashboard')">Cancelar</button>
@@ -7208,6 +7219,15 @@ function generarMsgCKI() {
   const _book = (document.getElementById('cki-book')?.value||'').startsWith('Env');
   const quien = document.getElementById('cki-quien').value.trim();
   const obs = document.getElementById('cki-obs').value.trim();
+  // Cortesías / mínimos dejados en el apartamento
+  const _am=[];
+  if(document.getElementById('cki-am-fruta')?.checked) _am.push('cortesía de fruta');
+  const _caf=Number(document.getElementById('cki-am-cafe')?.value)||0; if(_caf) _am.push(_caf+' cápsula'+(_caf>1?'s':'')+' de café');
+  const _vin=Number(document.getElementById('cki-am-vino')?.value)||0; if(_vin) _am.push(_vin+' botella'+(_vin>1?'s':'')+' de vino');
+  const _agu=Number(document.getElementById('cki-am-agua')?.value)||0; if(_agu) _am.push(_agu+' botella'+(_agu>1?'s':'')+' de agua');
+  if(document.getElementById('cki-am-bano')?.checked) _am.push('amenities de baño');
+  const _otr=(document.getElementById('cki-am-otros')?.value||'').trim(); if(_otr) _am.push(_otr);
+  const cortesias = _am.length ? (', se deja en el apartamento: '+_am.join(', ')) : '';
 
   if (!huesped) { showToast('Ingresa el nombre del huésped', 'error'); return; }
 
@@ -7225,7 +7245,7 @@ function generarMsgCKI() {
   const cobroObs = (document.getElementById('cki-cobro')?.value || '').trim();
   const migCKI = (document.getElementById('cki-migracion')?.value || '').startsWith('Sí') ? ', se envía reporte de ingreso a Migración Colombia' : '';
   const msg = `${(function(_h){return _h<12?'Buenos días':_h<18?'Buenas tardes':'Buenas noches';})(new Date().getHours())}, ${_fh}
-Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${cantidad} ${uniLbl}${cantidad>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''}${migCKI} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
+Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${cantidad} ${uniLbl}${cantidad>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''}${migCKI}${cortesias} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
   // Comunicar la estadía al RACK: una fila por noche (Check-in hoy → Ocupado → Check-out hoy)
