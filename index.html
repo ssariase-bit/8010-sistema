@@ -321,9 +321,17 @@ textarea{resize:vertical;min-height:80px}
         <input type="date" id="m-checkout">
       </div>
     </div>
-    <div class="form-group">
-      <label>Tarifa por noche ($)</label>
-      <input type="number" id="m-tarifa" placeholder="0"></div>
+    <div class="form-row col3">
+      <div class="form-group">
+        <label>Tarifa por noche</label>
+        <input type="number" id="m-tarifa" placeholder="0"></div>
+      <div class="form-group">
+        <label>Moneda</label>
+        <select id="m-moneda" onchange="_toggleTRM()"><option value="COP">COP ($)</option><option value="USD">USD ($)</option></select></div>
+      <div class="form-group" id="m-trm-wrap" style="display:none">
+        <label>TRM (COP por USD)</label>
+        <input type="number" id="m-trm" placeholder="Ej: 4100"></div>
+    </div>
     <div class="form-row col3">
       <div class="form-group"><label>Adultos</label><input type="number" id="m-pax-ad" placeholder="0" min="0" oninput="_paxSum()"></div>
       <div class="form-group"><label>Menores / Niños</label><input type="number" id="m-pax-me" placeholder="0" min="0" oninput="_paxSum()"></div>
@@ -2075,7 +2083,12 @@ async function openAptoModal(id, num) {
   document.getElementById('m-canal').value   = data?.canal || '';
   document.getElementById('m-checkin').value = data?.checkin || '';
   document.getElementById('m-checkout').value= data?.checkout || '';
-  document.getElementById('m-tarifa').value  = data?.tarifa || '';
+  // Moneda / tarifa: si la estadía está en USD, mostrar el valor USD original + su TRM
+  var _esUSD = data && data.moneda==='USD';
+  if(document.getElementById('m-moneda')) document.getElementById('m-moneda').value = _esUSD ? 'USD' : 'COP';
+  document.getElementById('m-tarifa').value = _esUSD ? (data.tarifa_usd||'') : (data?.tarifa || '');
+  if(document.getElementById('m-trm')) document.getElementById('m-trm').value = (_esUSD && data.tarifa_usd) ? (data.tarifa ? Math.round(data.tarifa/data.tarifa_usd) : '') : '';
+  if(typeof _toggleTRM==='function') _toggleTRM();
   var _sa=function(id,v){ var e=document.getElementById(id); if(e) e.value=(v!=null?v:''); };
   _sa('m-pax-ad', data&&data.pax_adultos); _sa('m-pax-me', data&&data.pax_menores); _sa('m-pax-in', data&&data.pax_infantes);
   if(document.getElementById('m-pax')) document.getElementById('m-pax').value = (data&&data.pax!=null)?data.pax:'';
@@ -2117,12 +2130,26 @@ async function borrarDiaRack(){
   closeModal('modal-apto');
   renderRack();
 }
+function _toggleTRM(){ var s=document.getElementById('m-moneda'); var w=document.getElementById('m-trm-wrap'); if(w) w.style.display=(s&&s.value==='USD')?'':'none'; }
+// Calcula moneda/tarifa: si es USD exige TRM y guarda el equivalente en COP (para ventas/ADR)
+function _calcTarifaMoneda(idTar, idMon, idTrm){
+  const _mon=(document.getElementById(idMon)?.value)||'COP';
+  const _raw=Number(document.getElementById(idTar)?.value)||null;
+  const _trm=Number(document.getElementById(idTrm)?.value)||null;
+  if(_mon==='USD' && _raw){
+    if(!_trm){ return { error:'Ingresa la TRM para tarifas en USD' }; }
+    return { tarifa: Math.round(_raw*_trm), tarifa_usd:_raw, moneda:'USD' };
+  }
+  return { tarifa:_raw, tarifa_usd:null, moneda:'COP' };
+}
 async function saveApto() {
   const aNum = document.getElementById('modal-apto-num').textContent;
   const fecha = _aptoData?.fecha || TODAY;
   const esCompleto = document.getElementById('m-completo')?.checked || false;
   const varA = APTO_A_MAP[aNum];
 
+  const _tm = _calcTarifaMoneda('m-tarifa','m-moneda','m-trm');
+  if(_tm.error){ showToast(_tm.error,'error'); return; }
   const updates = {
     estado: document.getElementById('m-estado').value,
     huesped: _titleCase(document.getElementById('m-huesped').value),
@@ -2130,7 +2157,9 @@ async function saveApto() {
     canal: document.getElementById('m-canal').value,
     checkin: document.getElementById('m-checkin').value || null,
     checkout: document.getElementById('m-checkout').value || null,
-    tarifa: Number(document.getElementById('m-tarifa').value) || null,
+    tarifa: _tm.tarifa,
+    tarifa_usd: _tm.tarifa_usd,
+    moneda: _tm.moneda,
     pax: (document.getElementById('m-pax') && document.getElementById('m-pax').value!=='') ? Number(document.getElementById('m-pax').value) : null,
     pax_adultos: (document.getElementById('m-pax-ad') && document.getElementById('m-pax-ad').value!=='') ? Number(document.getElementById('m-pax-ad').value) : null,
     pax_menores: (document.getElementById('m-pax-me') && document.getElementById('m-pax-me').value!=='') ? Number(document.getElementById('m-pax-me').value) : null,
@@ -2153,7 +2182,7 @@ async function saveApto() {
     for (let i = 0; i < 400; i++) {
       // Estadías: patrón CKI → Ocupado → CKO. Bloqueos/Mantenimiento/etc: el mismo estado en todo el rango.
       const est = ocupacional ? (f === updates.checkin ? 'Check-in hoy' : (f === updates.checkout ? 'Check-out hoy' : 'Ocupado')) : updates.estado;
-      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, observaciones: updates.observaciones, iva: updates.iva, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
       if (f === updates.checkout) break;
       f = addDay(f);
     }
@@ -5816,7 +5845,7 @@ async function renderEstadoHuespedes() {
               <td>${r.canal||'-'}</td>
               <td>${r.checkin ? fmtDate(r.checkin) : '-'}</td>
               <td>${r.checkout ? fmtDate(r.checkout) : '-'}</td>
-              <td>${r.tarifa ? '$'+fmtNum(r.tarifa) : '-'}</td><td style="text-align:center"><input type="number" min="0" value="${r.pax!=null?r.pax:''}" onchange="guardarPaxHuesped('${r.id}','${r.apto}',this.value)" placeholder="-" title="PAX en casa" style="width:55px;padding:4px;font-size:13px;text-align:center"></td>
+              <td>${r.moneda==='USD' && r.tarifa_usd ? 'USD $'+fmtNum(r.tarifa_usd)+'<div style="font-size:9px;color:#888">≈ $'+fmtNum(r.tarifa)+' COP</div>' : (r.tarifa ? '$'+fmtNum(r.tarifa) : '-')}</td><td style="text-align:center"><input type="number" min="0" value="${r.pax!=null?r.pax:''}" onchange="guardarPaxHuesped('${r.id}','${r.apto}',this.value)" placeholder="-" title="PAX en casa" style="width:55px;padding:4px;font-size:13px;text-align:center"></td>
               <td style="max-width:170px"><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Nota del huésped..." title="Se guarda sola al salir del campo" style="width:160px;padding:4px;font-size:11px" onchange="guardarNotaHuesped('${r.id}','${r.apto}',this.value)"></td>
               <td>${_esKL?`<input id="tel-${r.id}" value="${r.telefono||''}" placeholder="📱 WhatsApp" title="WhatsApp del huésped — se guarda solo al salir del campo" style="width:108px;padding:4px;font-size:11px" onchange="guardarTelHuesped('${r.id}','${r.apto}',this.value)"> <input id="dc-${r.id}" data-nombre="${String(r.huesped||'').replace(/"/g,'')}" data-tratamiento="${r.tratamiento||''}" data-tel="${r.telefono||''}" placeholder="Cód. puerta" style="width:84px;padding:4px;font-size:11px"> <button onclick="waBienvenida('dc-${r.id}')" class="btn btn-sm" style="background:#25D366;color:#fff">💬 Bienvenida</button> <button onclick="waAnuncio('dc-${r.id}')" class="btn btn-sm" style="background:#1D3461;color:#fff">📢</button> `:''}<button onclick="openAptoModal('${r.id}','${r.apto}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
             </tr>`).join('')}
