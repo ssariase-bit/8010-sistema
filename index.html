@@ -2672,41 +2672,76 @@ ${accion || 'Pendiente definir'}
 // ═══════════════════════════════════════════════════════════
 // MANTENIMIENTO OT
 // ═══════════════════════════════════════════════════════════
-function renderMantForm() {
+function renderMantForm(ot) {
+  const e = ot || {};
+  const a = s => String(s==null?'':s).replace(/"/g,'&quot;');
+  const h = s => String(s==null?'':s).replace(/</g,'&lt;');
+  const prioOpts = ['Normal','Urgente','Preventivo'].map(p=>`<option ${e.prioridad===p?'selected':''}>${p}</option>`).join('');
+  const solicitaVal = ot ? a(e.solicitado_por) : a(currentProfile?.nombre || '');
   document.getElementById('main-content').innerHTML = `
-    <div class="page-title">🔧 Nueva Orden de Trabajo</div>
+    <div class="page-title">🔧 ${ot?'Editar':'Nueva'} Orden de Trabajo</div>
     <div class="card" style="max-width:600px">
       <div class="form-row">
-        <div class="form-group"><label>Fecha</label><input type="date" id="ot-fecha" value="${TODAY}"></div>
+        <div class="form-group"><label>Fecha</label><input type="date" id="ot-fecha" value="${e.fecha||TODAY}"></div>
         <div class="form-group"><label>Prioridad</label>
-          <select id="ot-prio"><option>Normal</option><option>Urgente</option><option>Preventivo</option></select>
+          <select id="ot-prio">${prioOpts}</select>
         </div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Área / Apartamento</label>
-          <input type="text" id="ot-area" placeholder="Ej: Apto 301, Lobby, Terraza...">
+          <input type="text" id="ot-area" value="${a(e.area_apto)}" placeholder="Ej: Apto 301, Lobby, Terraza...">
         </div>
         <div class="form-group"><label>Técnico asignado (quien lo hace)</label>
-          <input type="text" id="ot-tec" value="">
+          <input type="text" id="ot-tec" value="${a(e.tecnico)}" placeholder="Quién realiza la actividad">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Solicitado por (quien lo pide) *</label>
-          <input type="text" id="ot-solicita" value="${currentProfile?.nombre || ''}" placeholder="Huésped, recepción, gerencia...">
+          <input type="text" id="ot-solicita" value="${solicitaVal}" placeholder="Huésped, recepción, gerencia...">
         </div>
-        <div class="form-group"></div>
+        ${ot?`<div class="form-group"><label>Estado</label><select id="ot-estado">${['Pendiente','En proceso','Terminado','Cerrado'].map(s=>`<option ${e.estado===s?'selected':''}>${s}</option>`).join('')}</select></div>`:'<div class="form-group"></div>'}
       </div>
       <div class="form-group"><label>Descripción del trabajo</label>
-        <textarea id="ot-desc" placeholder="Describe detalladamente qué se debe hacer o qué ocurrió..." style="min-height:120px"></textarea>
+        <textarea id="ot-desc" placeholder="Describe detalladamente qué se debe hacer o qué ocurrió..." style="min-height:120px">${h(e.descripcion)}</textarea>
       </div>
       <div class="form-group"><label>Costo estimado ($)</label>
-        <input type="number" id="ot-costo" placeholder="0 si aún no se sabe">
+        <input type="number" id="ot-costo" value="${e.costo!=null?e.costo:''}" placeholder="0 si aún no se sabe">
       </div>
       <div class="form-actions">
         <button class="btn btn-outline btn-sm" onclick="loadView('mantenimiento-list')">Cancelar</button>
-        <button class="btn btn-success" onclick="enviarOT()" style="min-width:180px">📤 Abrir Orden de Trabajo</button>
+        <button class="btn btn-success" onclick="${ot?`guardarOT('${e.id}')`:'enviarOT()'}" style="min-width:180px">${ot?'💾 Guardar cambios':'📤 Abrir Orden de Trabajo'}</button>
       </div>
     </div>`;
+}
+async function editarOT(id){
+  const { data, error } = await sb.from('mantenimiento').select('*').eq('id', id).single();
+  if(error || !data){ showToast('No se pudo cargar la orden','error'); return; }
+  renderMantForm(data);
+}
+async function guardarOT(id){
+  const desc = document.getElementById('ot-desc').value.trim();
+  const area = document.getElementById('ot-area').value.trim();
+  if(!desc || !area){ showToast('Completa área y descripción','error'); return; }
+  const btn = document.querySelector('.btn-success'); btn.innerHTML='<span class="spinner"></span>Guardando...'; btn.disabled=true;
+  const upd = {
+    fecha: document.getElementById('ot-fecha').value,
+    area_apto: area,
+    descripcion: desc,
+    tecnico: document.getElementById('ot-tec').value.trim() || null,
+    solicitado_por: document.getElementById('ot-solicita')?.value?.trim() || null,
+    prioridad: document.getElementById('ot-prio').value,
+    costo: Number(document.getElementById('ot-costo').value) || null,
+  };
+  const _est = document.getElementById('ot-estado')?.value; if(_est) upd.estado = _est;
+  const { error } = await sb.from('mantenimiento').update(upd).eq('id', id);
+  if(error){ showToast('Error al guardar: '+error.message,'error'); btn.innerHTML='💾 Guardar cambios'; btn.disabled=false; return; }
+  showToast('✅ Orden actualizada','success');
+  setTimeout(()=>loadView('mantenimiento-list'), 900);
+}
+async function guardarTecnicoOT(id, val){
+  const { error } = await sb.from('mantenimiento').update({ tecnico: String(val||'').trim() || null }).eq('id', id);
+  if(error){ showToast('Error: '+error.message,'error'); return; }
+  showToast('✓ Técnico guardado','success');
 }
 
 async function enviarOT() {
@@ -3168,13 +3203,13 @@ async function renderMantList(filtroApto='') {
       ${rowsFiltrados.length === 0
         ? '<div class="empty"><div class="empty-icon">✅</div><p>Sin órdenes de trabajo</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th>Fecha</th><th>Área/Apto</th><th>Descripción del trabajo</th><th>Solicitó</th><th>Técnico</th><th>Prioridad</th><th>Estado</th><th>Costo</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Área/Apto</th><th>Descripción del trabajo</th><th>Solicitó</th><th>Técnico (quién realiza)</th><th>Prioridad</th><th>Estado</th><th>Costo</th><th></th></tr></thead>
             <tbody>${rowsFiltrados.map(o=>`<tr style="${o.estado==='Pendiente'?'background:#fff9f5':''}">
               <td style="white-space:nowrap">${fmtDate(o.fecha || (o.created_at?o.created_at.split('T')[0]:null))}</td>
               <td><strong style="color:var(--azul)">${o.area_apto}</strong></td>
               <td style="max-width:260px">${o.descripcion}</td>
               <td>${o.solicitado_por||'-'}</td>
-              <td>${o.tecnico||'Por definir'}</td>
+              <td><input value="${String(o.tecnico||'').replace(/"/g,'&quot;')}" placeholder="Quién realiza" title="Asignar quién realiza — se guarda solo" onchange="guardarTecnicoOT('${o.id}',this.value)" style="width:130px;padding:4px;font-size:11px"></td>
               <td><span class="badge b-${o.prioridad==='Urgente'?'alta':o.prioridad==='Normal'?'media':'baja'}">${o.prioridad||'Normal'}</span></td>
               <td>
                 <select onchange="actualizarEstadoOT('${o.id}',this.value)" style="padding:4px 8px;border:1px solid var(--gris-b);border-radius:6px;font-size:11px;cursor:pointer;background:${o.estado==='Pendiente'?'var(--rojo-c)':o.estado==='En proceso'?'var(--naran-c)':'var(--verde-c)'}">
@@ -3185,6 +3220,7 @@ async function renderMantList(filtroApto='') {
                 </select>
               </td>
               <td style="white-space:nowrap">${o.costo ? '<strong>$'+fmtNum(o.costo)+'</strong>' : '-'}</td>
+              <td style="white-space:nowrap"><button onclick="editarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
             </tr>`).join('')}
             </tbody>
            </table></div>`}
