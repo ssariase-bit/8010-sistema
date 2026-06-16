@@ -6313,7 +6313,7 @@ async function renderSemanaInfo(){
   const { data: rk } = await sb.from('rack').select('fecha,apto,estado,huesped,canal').gte('fecha',ini).lte('fecha',fin).in('estado',['Check-in hoy','Check-out hoy']);
   const vistos = {};
   const derivados = (rk||[]).filter(r=>(r.huesped||'').trim()).filter(r=>{ const k=r.fecha+'|'+r.apto+'|'+r.estado; if(vistos[k]) return false; vistos[k]=1; return true; })
-    .map(r=>({ fecha:r.fecha, apto:r.apto, tipo: r.estado==='Check-in hoy'?'CKI':'CKO', huesped:r.huesped, pago:'80|10', observaciones: r.canal?('Reserva de '+r.canal+'.'):'', estado:'Pendiente', user_id:currentUser.id }));
+    .map(r=>({ fecha:r.fecha, apto:r.apto, tipo: r.estado==='Check-in hoy'?'CKI':'CKO', huesped:r.huesped, pago:(((EB&&EB().nombre)||'').indexOf('8010')>-1?'80|10':'8i8'), observaciones: r.canal?('Reserva de '+r.canal+'.'):'', estado:'Pendiente', user_id:currentUser.id }));
   if(derivados.length){ const rr = await sb.from('semana_seguimiento').upsert(derivados, { onConflict:'fecha,apto,tipo,edificio', ignoreDuplicates:true }); if(rr.error) console.error('semana upsert:', rr.error); }
   // 2) Cargar y pintar
   const { data } = await sb.from('semana_seguimiento').select('*').gte('fecha',ini).lte('fecha',fin).order('fecha').order('apto');
@@ -6364,7 +6364,7 @@ async function addSemanaFila(tipo){
   const huesped = window._composeNombre(nombre,apellido1,apellido2); if(!huesped){ showToast('Falta el nombre','error'); return; }
   const apto = prompt('Apartamento:'); if(!apto) return;
   const fecha = prompt('Fecha (AAAA-MM-DD):', TODAY); if(!fecha) return;
-  const { error } = await sb.from('semana_seguimiento').insert({ fecha, apto, tipo, huesped, nombre:nombre.trim()||null, apellido1:apellido1.trim()||null, apellido2:apellido2.trim()||null, pago:'80|10', observaciones:'', estado:'Pendiente', user_id:currentUser.id });
+  const { error } = await sb.from('semana_seguimiento').insert({ fecha, apto, tipo, huesped, nombre:nombre.trim()||null, apellido1:apellido1.trim()||null, apellido2:apellido2.trim()||null, pago:(((EB&&EB().nombre)||'').indexOf('8010')>-1?'80|10':'8i8'), observaciones:'', estado:'Pendiente', user_id:currentUser.id });
   if(error) showToast('Error: '+error.message,'error'); else renderSemanaInfo();
 }
 function compartirSemanaInfo(){
