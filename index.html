@@ -1362,7 +1362,8 @@ function calcKpisDia(registrosHoy){
   const b21 = calc(RACK_BASE21);
   const b33 = calc([...RACK_BASE21, ...RACK_AS]);
   let cki=0, cko=0;
-  RACK_BASE21.forEach(a=>{ const e=getRec(a)?.estado; if(e==='Check-in hoy')cki++; else if(e==='Check-out hoy')cko++; });
+  // Cuenta llegadas/salidas reales en TODAS las unidades (base + habitaciones A), igual que la lista "Llegan/Salen hoy"
+  [...RACK_BASE21, ...RACK_AS].forEach(a=>{ const e=getRec(a)?.estado; if(e==='Check-in hoy')cki++; else if(e==='Check-out hoy')cko++; });
   const adr = b33.tar.length ? Math.round(b33.tar.reduce((s,x)=>s+x,0)/b33.tar.length) : 0;
   const ing = b33.tar.reduce((s,x)=>s+x,0);
   return { b21, b33, pct21: Math.round(b21.ocu/(b21.disp||1)*100), pct33: Math.round(b33.ocu/(b33.disp||1)*100), cki, cko, adr, ing };
