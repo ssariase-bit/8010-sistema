@@ -7362,7 +7362,7 @@ function renderInformeCKO(aptoPreload, huesped, canal) {
       <div class="form-row">
         <div class="form-group"><label>Cobro de alojamiento en este CKO ($)</label><input type="number" id="cko-cobro-aloja" placeholder="0 si ya pagó al CKI" value="0"></div>
         <div class="form-group"><label>Forma de pago alojamiento</label>
-          <select id="cko-pago-aloja"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select>
+          <select id="cko-pago-aloja"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Complementary (cortesía)</option></select>
         </div>
       </div>
       <div class="form-group"><label>💬 Comentario de cobro (opcional — sale junto al pago en el mensaje)</label><input type="text" id="cko-cobro" placeholder="Ej: cancela saldo pendiente del alojamiento"></div>
@@ -7451,7 +7451,8 @@ function generarMsgCKO() {
   const cobroAloja = Number(document.getElementById('cko-cobro-aloja')?.value) || 0;
   const pagoAloja = document.getElementById('cko-pago-aloja')?.value || '';
   const cobroObs = (document.getElementById('cko-cobro')?.value || '').trim();
-  const cobroStr = cobroAloja > 0 ? `, realiza el pago del alojamiento ($${cobroAloja.toLocaleString('es-CO')} ${pagoAloja})` : '';
+  const esComplementary = String(pagoAloja).startsWith('Complementary');
+  const cobroStr = esComplementary ? ', el alojamiento es de cortesía (Complementary), no genera cobro' : (cobroAloja > 0 ? `, realiza el pago del alojamiento ($${cobroAloja.toLocaleString('es-CO')} ${pagoAloja})` : '');
   // Blindaje: el "Total alojamiento" debe ser un monto real (>=100 y mayor que el # de noches),
   // no el número de noches. Evita el "$7 alojamiento ... IVA base $6 + IVA $1".
   const _alojaOk = aloja >= 100 && aloja > nochesT;
