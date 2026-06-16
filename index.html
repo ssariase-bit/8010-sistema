@@ -1053,8 +1053,8 @@ async function loadView(view) {
     ]); break;
     // Recibos Magnifique
     case 'magnifique-list': await renderList('recibos_magnifique','🍽️ Recibos '+(EDIFICIO_ACTIVO==='kubik'?'Bagatelle':'Magnifique'),'magnifique-form',
-      ['fecha','apto','arrendatario','num_comanda','productos','valor_recibo','iva','total'],
-      ['Fecha','Apto','Arrendatario','Comanda','Productos','Valor','IVA','Total']); break;
+      ['fecha','apto','arrendatario','num_comanda','productos','valor_recibo','iva','propina','total'],
+      ['Fecha','Apto','Arrendatario','Comanda','Productos','Valor','IVA','Propina 10%','Total']); break;
     case 'magnifique-form': renderGenForm('recibos_magnifique','🍽️ Registrar Recibo '+(EDIFICIO_ACTIVO==='kubik'?'Bagatelle':'Magnifique'),[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento / Evento / Cliente (elige o escribe)',type:'text',req:true},
@@ -1065,7 +1065,8 @@ async function loadView(view) {
       {id:'domicilio',label:'Domicilio 15%',type:'select',opts:['No','Sí (+15%)']},
       {id:'valor_recibo',label:'Valor recibo con domicilio ($)',type:'number'},
       {id:'iva',label:'IVA ($)',type:'number'},
-      {id:'total',label:'Total ($)',type:'number'},
+      {id:'propina',label:'Propina 10% ($)',type:'number'},
+      {id:'total',label:'Total con propina ($)',type:'number'},
       {id:'valor_domicilio',type:'number',hidden:true,default:0},
       {id:'observaciones',label:'Observaciones',type:'text'},
     ]); break;
@@ -4279,14 +4280,17 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     }
     // Comanda + 15% domicilio (opcional) -> valor recibo; IVA 19% y total con 2 decimales (cuadra con New Hotel; editables)
     const _r2=x=>Math.round((x||0)*100)/100;
-    const _vc=document.getElementById('gf-valor_comanda'), _dm=document.getElementById('gf-domicilio'), _vr=document.getElementById('gf-valor_recibo'), _vd=document.getElementById('gf-valor_domicilio'), _ci=document.getElementById('gf-iva'), _ct=document.getElementById('gf-total');
-    const _recalc=()=>{const com=parseFloat(_vc&&_vc.value)||0;const aplica=_dm&&/15/.test(_dm.value);const dom=aplica?_r2(com*0.15):0;const base=_r2(com+dom);if(_vd)_vd.value=dom;if(_vr)_vr.value=base;const iva=_r2(base*0.19);if(_ci)_ci.value=iva;if(_ct)_ct.value=_r2(base+iva);};
-    const _fromVr=()=>{const base=parseFloat(_vr&&_vr.value)||0;const iva=_r2(base*0.19);if(_ci)_ci.value=iva;if(_ct)_ct.value=_r2(base+iva);};
-    const _fromIva=()=>{const base=parseFloat(_vr&&_vr.value)||0;const iva=parseFloat(_ci&&_ci.value)||0;if(_ct)_ct.value=_r2(base+iva);};
+    const _vc=document.getElementById('gf-valor_comanda'), _dm=document.getElementById('gf-domicilio'), _vr=document.getElementById('gf-valor_recibo'), _vd=document.getElementById('gf-valor_domicilio'), _ci=document.getElementById('gf-iva'), _pp=document.getElementById('gf-propina'), _ct=document.getElementById('gf-total');
+    const _propVal=()=>_r2((parseFloat(_vc&&_vc.value)||0)*0.10); // propina = 10% del consumo (comanda)
+    const _recalc=()=>{const com=parseFloat(_vc&&_vc.value)||0;const aplica=_dm&&/15/.test(_dm.value);const dom=aplica?_r2(com*0.15):0;const base=_r2(com+dom);if(_vd)_vd.value=dom;if(_vr)_vr.value=base;const iva=_r2(base*0.19);if(_ci)_ci.value=iva;const prop=_propVal();if(_pp)_pp.value=prop;if(_ct)_ct.value=_r2(base+iva+prop);};
+    const _fromVr=()=>{const base=parseFloat(_vr&&_vr.value)||0;const iva=_r2(base*0.19);if(_ci)_ci.value=iva;const prop=_propVal();if(_pp)_pp.value=prop;if(_ct)_ct.value=_r2(base+iva+prop);};
+    const _fromIva=()=>{const base=parseFloat(_vr&&_vr.value)||0;const iva=parseFloat(_ci&&_ci.value)||0;const prop=parseFloat(_pp&&_pp.value)||0;if(_ct)_ct.value=_r2(base+iva+prop);};
+    const _fromProp=()=>{const base=parseFloat(_vr&&_vr.value)||0;const iva=parseFloat(_ci&&_ci.value)||0;const prop=parseFloat(_pp&&_pp.value)||0;if(_ct)_ct.value=_r2(base+iva+prop);};
     if(_vc)_vc.addEventListener('input',_recalc);
     if(_dm)_dm.addEventListener('change',_recalc);
     if(_vr)_vr.addEventListener('input',_fromVr);
     if(_ci)_ci.addEventListener('input',_fromIva);
+    if(_pp)_pp.addEventListener('input',_fromProp);
     // Lista de productos (producto + cantidad + valor unitario) -> suma a Valor comanda
     (function(){
       const prodTa=document.getElementById('gf-productos'); if(!prodTa) return;
