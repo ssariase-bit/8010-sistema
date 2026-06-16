@@ -274,8 +274,12 @@ textarea{resize:vertical;min-height:80px}
       </select>
     </div>
     <div class="form-group">
-      <label>Huésped / Empresa</label>
-      <input type="text" id="m-huesped" placeholder="Nombre completo o empresa">
+      <label>Huésped — Nombre y apellidos</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <input type="text" id="m-nombre" placeholder="Nombre(s)">
+        <input type="text" id="m-apellido1" placeholder="Primer apellido">
+        <input type="text" id="m-apellido2" placeholder="Segundo apellido">
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -2079,7 +2083,10 @@ async function openAptoModal(id, num) {
   currentAptoId = id;
   document.getElementById('modal-apto-num').textContent = String(num).split(' · ')[0].trim();
   document.getElementById('m-estado').value  = data?.estado || 'Libre';
-  document.getElementById('m-huesped').value = data?.huesped || '';
+  var _np = window._nombrePartes(data||{});
+  if(document.getElementById('m-nombre')) document.getElementById('m-nombre').value = _np.nombre||'';
+  if(document.getElementById('m-apellido1')) document.getElementById('m-apellido1').value = _np.apellido1||'';
+  if(document.getElementById('m-apellido2')) document.getElementById('m-apellido2').value = _np.apellido2||'';
   document.getElementById('m-tipo').value    = data?.tipo || '';
   document.getElementById('m-canal').value   = data?.canal || '';
   document.getElementById('m-checkin').value = data?.checkin || '';
@@ -2131,6 +2138,18 @@ async function borrarDiaRack(){
   closeModal('modal-apto');
   renderRack();
 }
+// ── Nombre del huésped en 3 partes ──
+window._composeNombre = function(n,a1,a2){ return [n,a1,a2].map(function(s){return String(s||'').trim();}).filter(Boolean).join(' '); };
+window._splitNombre = function(full){
+  var w = String(full||'').trim().replace(/\s+/g,' ').split(' ').filter(Boolean);
+  var n = w.length;
+  if(n===0) return {nombre:'',apellido1:'',apellido2:''};
+  if(n===1) return {nombre:w[0],apellido1:'',apellido2:''};
+  if(n===2) return {nombre:w[0],apellido1:w[1],apellido2:''};
+  return {nombre:w.slice(0,n-2).join(' '),apellido1:w[n-2],apellido2:w[n-1]};
+};
+// Devuelve {nombre,apellido1,apellido2} de un registro: usa las columnas si existen, si no parte el huesped
+window._nombrePartes = function(r){ r=r||{}; if(r.nombre||r.apellido1||r.apellido2) return {nombre:r.nombre||'',apellido1:r.apellido1||'',apellido2:r.apellido2||''}; return window._splitNombre(r.huesped||''); };
 function _toggleTRM(){ var s=document.getElementById('m-moneda'); var w=document.getElementById('m-trm-wrap'); if(w) w.style.display=(s&&s.value==='USD')?'':'none'; }
 // Calcula moneda/tarifa: si es USD exige TRM y guarda el equivalente en COP (para ventas/ADR)
 function _calcTarifaMoneda(idTar, idMon, idTrm){
@@ -2151,9 +2170,14 @@ async function saveApto() {
 
   const _tm = _calcTarifaMoneda('m-tarifa','m-moneda','m-trm');
   if(_tm.error){ showToast(_tm.error,'error'); return; }
+  const _nom = _titleCase(document.getElementById('m-nombre').value);
+  const _ap1 = _titleCase(document.getElementById('m-apellido1').value);
+  const _ap2 = _titleCase(document.getElementById('m-apellido2').value);
+  const _huespedFull = window._composeNombre(_nom,_ap1,_ap2);
   const updates = {
     estado: document.getElementById('m-estado').value,
-    huesped: _titleCase(document.getElementById('m-huesped').value),
+    huesped: _huespedFull,
+    nombre: _nom||null, apellido1: _ap1||null, apellido2: _ap2||null,
     tipo: document.getElementById('m-tipo').value,
     canal: document.getElementById('m-canal').value,
     checkin: document.getElementById('m-checkin').value || null,
@@ -2183,7 +2207,7 @@ async function saveApto() {
     for (let i = 0; i < 400; i++) {
       // Estadías: patrón CKI → Ocupado → CKO. Bloqueos/Mantenimiento/etc: el mismo estado en todo el rango.
       const est = ocupacional ? (f === updates.checkin ? 'Check-in hoy' : (f === updates.checkout ? 'Check-out hoy' : 'Ocupado')) : updates.estado;
-      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
       if (f === updates.checkout) break;
       f = addDay(f);
     }
@@ -7045,17 +7069,17 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
   const h = new Date().getHours();
   const saludo = h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches';
   const nombre = currentProfile?.nombre || '';
+  const _hp = window._splitNombre(huesped||''); const _q = s => String(s||'').replace(/"/g,'&quot;');
 
   document.getElementById('main-content').innerHTML = `
     <div class="page-title">🟢 Informe de Check-In</div>
     <div class="card" style="max-width:680px">
-      <div class="form-row col3">
+      <div class="form-row">
         <div class="form-group"><label>Apartamento *</label>
           <select id="cki-apto">
             ${EB().aptosFull.map(a=>`<option ${a===aptoPreload?'selected':''}>${a}</option>`).join('')}
           </select>
         </div>
-        <div class="form-group"><label>Huésped *</label><input type="text" id="cki-huesped" value="${huesped||''}" placeholder="Sr./Sra. Nombre Apellido"></div>
         <div class="form-group"><label>Canal</label>
           <select id="cki-canal">
             <option ${canal==='Particular'?'selected':''}>Particular</option>
@@ -7068,6 +7092,11 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
             <option ${canal==='Corporativo'?'selected':''}>Corporativo</option>
           </select>
         </div>
+      </div>
+      <div class="form-row col3">
+        <div class="form-group"><label>Nombre(s) *</label><input type="text" id="cki-nombre" value="${_q(_hp.nombre)}" placeholder="Nombre(s)"></div>
+        <div class="form-group"><label>Primer apellido</label><input type="text" id="cki-apellido1" value="${_q(_hp.apellido1)}" placeholder="Primer apellido"></div>
+        <div class="form-group"><label>Segundo apellido</label><input type="text" id="cki-apellido2" value="${_q(_hp.apellido2)}" placeholder="Segundo apellido"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Empresa / Razón social</label><input type="text" id="cki-empresa" value="${empresa||''}" placeholder="Dejar vacío si es particular"></div>
@@ -7194,7 +7223,10 @@ function calcCKI() {
 
 function generarMsgCKI() {
   const apto = document.getElementById('cki-apto').value;
-  const huesped = document.getElementById('cki-huesped').value.trim();
+  const _ckiNom = document.getElementById('cki-nombre')?.value.trim()||'';
+  const _ckiAp1 = document.getElementById('cki-apellido1')?.value.trim()||'';
+  const _ckiAp2 = document.getElementById('cki-apellido2')?.value.trim()||'';
+  const huesped = window._composeNombre(_ckiNom,_ckiAp1,_ckiAp2);
   const canal = document.getElementById('cki-canal').value;
   const fi = document.getElementById('cki-fi').value;
   const ff = document.getElementById('cki-ff').value;
@@ -7259,7 +7291,7 @@ R/${quien}`;
       let f = fi;
       for (let i = 0; i < 400; i++) {
         const estado = f === fi ? 'Check-in hoy' : (f === ff_rack ? 'Check-out hoy' : 'Ocupado');
-        rows.push({ fecha: f, apto, estado, huesped, telefono: normTel(document.getElementById('cki-tel')?.value) || null, tarifa: tarifa || null, canal, empresa: (document.getElementById('cki-empresa')?.value.trim() || null), tratamiento: (document.getElementById('cki-tratamiento')?.value || null), edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+        rows.push({ fecha: f, apto, estado, huesped, nombre: _ckiNom||null, apellido1: _ckiAp1||null, apellido2: _ckiAp2||null, telefono: normTel(document.getElementById('cki-tel')?.value) || null, tarifa: tarifa || null, canal, empresa: (document.getElementById('cki-empresa')?.value.trim() || null), tratamiento: (document.getElementById('cki-tratamiento')?.value || null), edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
         if (f === ff_rack) break;
         f = addDay(f);
       }
@@ -7290,17 +7322,22 @@ R/${quien}`;
 // ═══════════════════════════════════════════════════════════
 function renderInformeCKO(aptoPreload, huesped, canal) {
   const nombre = currentProfile?.nombre || '';
+  const _hp = window._splitNombre(huesped||''); const _q = s => String(s||'').replace(/"/g,'&quot;');
   document.getElementById('main-content').innerHTML = `
     <div class="page-title">🔴 Informe de Check-Out</div>
     <div class="card" style="max-width:680px">
-      <div class="form-row col3">
+      <div class="form-row">
         <div class="form-group"><label>Apartamento *</label>
           <select id="cko-apto">
             ${EB().aptosFull.map(a=>`<option ${a===aptoPreload?'selected':''}>${a}</option>`).join('')}
           </select>
         </div>
-        <div class="form-group"><label>Huésped *</label><input type="text" id="cko-huesped" value="${huesped||''}" placeholder="Sr./Sra. Nombre Apellido"></div>
         <div class="form-group"><label>Canal / Tipo</label><input type="text" id="cko-canal" value="${canal||''}" placeholder="Expedia/VIP, Booking..."></div>
+      </div>
+      <div class="form-row col3">
+        <div class="form-group"><label>Nombre(s) *</label><input type="text" id="cko-nombre" value="${_q(_hp.nombre)}" placeholder="Nombre(s)"></div>
+        <div class="form-group"><label>Primer apellido</label><input type="text" id="cko-apellido1" value="${_q(_hp.apellido1)}" placeholder="Primer apellido"></div>
+        <div class="form-group"><label>Segundo apellido</label><input type="text" id="cko-apellido2" value="${_q(_hp.apellido2)}" placeholder="Segundo apellido"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Consumos adicionales ($)</label><input type="number" id="cko-consumos" placeholder="0" value="0"></div>
@@ -7368,7 +7405,7 @@ async function cargarTotalCKO(){
       prev=r.fecha;
       if(r.tarifa){ total+=Number(r.tarifa)||0; noches++; }
     }
-    const hEl=document.getElementById('cko-huesped'); if(hEl&&!hEl.value) hEl.value=rows[0].huesped||'';
+    var _np0=window._nombrePartes(rows[0]||{}); var _se=function(id,v){var e=document.getElementById(id); if(e&&!e.value) e.value=v||'';}; _se('cko-nombre',_np0.nombre); _se('cko-apellido1',_np0.apellido1); _se('cko-apellido2',_np0.apellido2);
     const aEl=document.getElementById('cko-aloja'); if(aEl) aEl.value=total;
     const nEl=document.getElementById('cko-noches'); if(nEl) nEl.value=noches;
   }catch(e){ console.error('cargarTotalCKO', e); }
@@ -7376,7 +7413,7 @@ async function cargarTotalCKO(){
 
 function generarMsgCKO() {
   const apto = document.getElementById('cko-apto').value;
-  const huesped = document.getElementById('cko-huesped').value.trim();
+  const huesped = window._composeNombre(document.getElementById('cko-nombre')?.value, document.getElementById('cko-apellido1')?.value, document.getElementById('cko-apellido2')?.value);
   const canal = document.getElementById('cko-canal').value.trim();
   const consumos = Number(document.getElementById('cko-consumos').value) || 0;
   const pago = document.getElementById('cko-pago').value;
@@ -7468,13 +7505,13 @@ async function liberarRangoApto() {
   let co = document.getElementById('m-checkout').value;
   if (!ci && !co) { ci = co = (window._aptoData?.fecha || TODAY); }
   if (!ci) ci = co; if (!co) co = ci;
-  const huesped = document.getElementById('m-huesped')?.value?.trim() || '';
+  const huesped = window._composeNombre(document.getElementById('m-nombre')?.value, document.getElementById('m-apellido1')?.value, document.getElementById('m-apellido2')?.value);
   if (!confirm(`¿Liberar el Apto ${apto} del ${fmtDate(ci)} al ${fmtDate(co)}${huesped ? ' (' + huesped + ')' : ''}?\n\nTodas esas fechas quedarán LIBRES en el rack.`)) return;
   const { error } = await sb.from('rack')
-    .update({ estado: 'Libre', huesped: null, telefono: null, tarifa: null, canal: null, observaciones: null, checkin: null, checkout: null, updated_by: currentUser.id })
+    .update({ estado: 'Libre', huesped: null, nombre: null, apellido1: null, apellido2: null, telefono: null, tarifa: null, canal: null, observaciones: null, checkin: null, checkout: null, updated_by: currentUser.id })
     .eq('apto', apto).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
   const _pm = /^([3-9])0([23])$/.exec(apto);
-  if (_pm) { const _part = _pm[1]+'0'+(_pm[2]==='2'?'3':'2'); await sb.from('rack').update({ estado: 'Libre', huesped: null, telefono: null, tarifa: null, canal: null, observaciones: null, checkin: null, checkout: null, updated_by: currentUser.id }).eq('apto', _part).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO).eq('tipo', 'Two Residence'); }
+  if (_pm) { const _part = _pm[1]+'0'+(_pm[2]==='2'?'3':'2'); await sb.from('rack').update({ estado: 'Libre', huesped: null, nombre: null, apellido1: null, apellido2: null, telefono: null, tarifa: null, canal: null, observaciones: null, checkin: null, checkout: null, updated_by: currentUser.id }).eq('apto', _part).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO).eq('tipo', 'Two Residence'); }
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
   closeModal('modal-apto');
   showToast(`🗑 Apto ${apto} liberado del ${fmtDate(ci)} al ${fmtDate(co)}`, 'success');
