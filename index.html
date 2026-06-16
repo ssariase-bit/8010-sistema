@@ -3002,6 +3002,59 @@ async function cambiarEstadoNov(id, estado) {
   setTimeout(() => renderNovedadesList(), 800);
 }
 
+async function informeMantenimiento(filtroApto){
+  filtroApto = (filtroApto && filtroApto!=='undefined') ? filtroApto : '';
+  const nombreEd = (typeof EB==='function') ? EB().nombre : '8010 Urban Living';
+  const { data } = await sb.from('mantenimiento').select('*').order('created_at',{ascending:false}).limit(300);
+  let rows = data||[];
+  if(filtroApto) rows = rows.filter(r=>r.area_apto===filtroApto);
+  const abiertas = rows.filter(r=>r.estado==='Pendiente'||r.estado==='En proceso');
+  const _e = s => String(s==null?'':s).trim();
+  // Sectorizar: agrupar por responsable (tecnico) — deja registro de quién realiza
+  const grupos = {};
+  abiertas.forEach(r=>{ const t=(r.tecnico&&String(r.tecnico).trim())||'Por definir'; (grupos[t]=grupos[t]||[]).push(r); });
+  const lineas = Object.keys(grupos).sort().map(t=>{
+    const items = grupos[t].map(o=>`• [${o.prioridad||'Normal'}] ${_e(o.area_apto)} — ${_e(o.descripcion)} _(${o.estado||'Pendiente'})_`).join('\n');
+    return `👷 *${t}* (${grupos[t].length})\n${items}`;
+  }).join('\n\n');
+  const admin = (currentProfile&&currentProfile.nombre)||'';
+  const hoy = fmtDate(TODAY);
+  const txt =
+'🔧 *'+nombreEd+' — Informe de Mantenimiento*\n'+
+'🗓️ '+hoy+(filtroApto?(' · Apto '+filtroApto):'')+'\n'+
+'➖➖➖➖➖➖➖➖\n'+
+'*Órdenes abiertas: '+abiertas.length+'*\n\n'+
+(abiertas.length?lineas:'_Sin órdenes pendientes_')+'\n'+
+'➖➖➖➖➖➖➖➖\n'+
+'_Generado '+new Date().toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true})+' · Sistema '+nombreEd+'_\n'+
+'R/ '+admin;
+  // Modal editable (mismo patrón que el Reporte de Novedades)
+  const titulo = 'Informe de Mantenimiento — '+hoy;
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  const boxEl = document.createElement('div');
+  boxEl.style.cssText = 'background:#fff;border-radius:16px;padding:22px 24px;max-width:560px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:90vh;overflow:auto';
+  boxEl.innerHTML = '<div style="font-size:17px;font-weight:700;color:#1D3461;margin-bottom:4px">🔧 Informe de Mantenimiento</div><div style="font-size:12px;color:#6B7280;margin-bottom:12px">'+hoy+' · '+nombreEd+' · agrupado por responsable · puedes editar antes de enviar</div>';
+  const ta = document.createElement('textarea');
+  ta.value = txt;
+  ta.style.cssText = 'width:100%;min-height:320px;font-family:monospace;font-size:12px;line-height:1.5;border:1px solid #E2E4E8;border-radius:8px;padding:12px;color:#1F2937;resize:vertical;box-sizing:border-box';
+  boxEl.appendChild(ta);
+  const rowEl = document.createElement('div');
+  rowEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:14px';
+  const mkBtn = (label,bg,fn)=>{ const b=document.createElement('button'); b.innerHTML=label; b.style.cssText='flex:1;min-width:130px;background:'+bg+';color:#fff;border:none;border-radius:10px;padding:11px 14px;font-weight:600;font-size:13px;cursor:pointer'; b.onclick=fn; return b; };
+  rowEl.appendChild(mkBtn('📧 Enviar por correo','#1D3461', function(){ enviarInformeCorreo(titulo, ta.value, this); }));
+  rowEl.appendChild(mkBtn('💬 WhatsApp','#25D366', function(){ window.open('https://wa.me/?text='+encodeURIComponent(ta.value),'_blank'); }));
+  rowEl.appendChild(mkBtn('📋 Copiar','#6B7280', function(){ if(navigator.clipboard) navigator.clipboard.writeText(ta.value); showToast('✅ Copiado','success'); }));
+  boxEl.appendChild(rowEl);
+  const cerrar = document.createElement('button');
+  cerrar.textContent = 'Cerrar';
+  cerrar.style.cssText = 'width:100%;margin-top:8px;background:transparent;border:none;color:#9CA3AF;font-size:12px;cursor:pointer;padding:6px';
+  cerrar.onclick = ()=>modal.remove();
+  boxEl.appendChild(cerrar);
+  modal.appendChild(boxEl);
+  modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+}
 async function renderMantList(filtroApto='') {
   const q = sb.from('mantenimiento').select('*').order('created_at', { ascending: false }).limit(300);
   const { data } = await q;
@@ -3018,7 +3071,10 @@ async function renderMantList(filtroApto='') {
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <div class="page-title" style="margin-bottom:0">🔧 Mantenimiento</div>
-      <button class="btn btn-success btn-sm" onclick="loadView('mant-form')" style="padding:10px 20px">+ Nueva OT</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-sm" style="background:#1D3461;color:#fff" onclick="informeMantenimiento('${filtroApto}')" title="Genera un informe editable, agrupado por responsable, para enviar por correo o WhatsApp">📋 Informe (editable)</button>
+        <button class="btn btn-success btn-sm" onclick="loadView('mant-form')" style="padding:10px 20px">+ Nueva OT</button>
+      </div>
     </div>
 
     <div style="display:flex;gap:10px;margin-bottom:${filtroApto?'10':'16'}px;flex-wrap:wrap;align-items:center">
