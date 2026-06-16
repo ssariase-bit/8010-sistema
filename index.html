@@ -6171,7 +6171,8 @@ async function renderSemanaInfo(){
     <td style="white-space:nowrap">${fmtDate(r.fecha)}</td>
     <td><input value="${String(r.pago||'').replace(/"/g,'&quot;')}" style="width:64px;padding:4px;font-size:11px" onchange="updSemana('${r.id}','pago',this.value)"></td>
     <td><input value="${String(r.ejecutiva||'').replace(/"/g,'&quot;')}" placeholder="Ejecutiva / contacto" title="Confirmado con / Ejecutiva — se guarda solo" style="width:130px;padding:4px;font-size:11px" onchange="updSemana('${r.id}','ejecutiva',this.value)"></td>
-    <td><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Observaciones..." style="width:100%;min-width:240px;padding:4px;font-size:12px" onchange="updSemana('${r.id}','observaciones',this.value)"></td>
+    <td><input value="${String(r.comentarios_ejecutiva||'').replace(/"/g,'&quot;')}" placeholder="Comentarios de la ejecutiva sobre la reserva..." title="Información recibida de la ejecutiva — se guarda solo" style="width:100%;min-width:220px;padding:4px;font-size:12px" onchange="updSemana('${r.id}','comentarios_ejecutiva',this.value)"></td>
+    <td><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Observaciones..." style="width:100%;min-width:200px;padding:4px;font-size:12px" onchange="updSemana('${r.id}','observaciones',this.value)"></td>
     <td><select style="padding:4px;font-size:11px" onchange="updSemana('${r.id}','estado',this.value)">${ESTADOS_SEM.map(o=>`<option ${r.estado===o?'selected':''}>${o}</option>`).join('')}</select></td>
     <td><button onclick="delSemana('${r.id}')" title="Eliminar" style="border:none;background:none;cursor:pointer;font-size:14px">🗑️</button></td>
   </tr>`;
@@ -6180,7 +6181,7 @@ async function renderSemanaInfo(){
       <div style="font-weight:800;color:${color};margin-bottom:8px;font-size:15px">${titulo}: ${String(arr.length).padStart(2,'0')}</div>
       ${arr.length===0?'<div style="color:#999;font-size:13px;padding:8px">Sin registros esta semana</div>':
       `<div style="overflow-x:auto"><table class="tabla">
-        <thead><tr><th>Nombre</th><th>Fecha</th><th>Pago</th><th>Confirmado con / Ejecutiva</th><th>Observaciones</th><th>Estado</th><th></th></tr></thead>
+        <thead><tr><th>Nombre</th><th>Fecha</th><th>Pago</th><th>Confirmado con / Ejecutiva</th><th>Comentarios ejecutiva</th><th>Observaciones</th><th>Estado</th><th></th></tr></thead>
         <tbody>${arr.map(fila).join('')}</tbody></table></div>`}
     </div>`;
   document.getElementById('main-content').innerHTML = `
@@ -6190,7 +6191,7 @@ async function renderSemanaInfo(){
         <input type="date" value="${ini}" onchange="window._semInfoFecha=this.value;renderSemanaInfo()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:12px">
         <button class="btn btn-outline btn-sm" onclick="addSemanaFila('CKI')">+ CKI manual</button>
         <button class="btn btn-outline btn-sm" onclick="addSemanaFila('CKO')">+ CKO manual</button>
-        <button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="compartirSemanaInfo()">📤 Compartir</button>
+        <button class="btn btn-sm" style="background:#1D3461;color:#fff" onclick="compartirSemanaInfo()">📧 Enviar informe</button>
       </div>
     </div>
     <div style="font-size:13px;color:var(--gris-t);margin-bottom:14px">Semana del <strong>${fmtDate(ini)}</strong> al <strong>${fmtDate(fin)}</strong> — se arma sola desde el rack; observaciones, pago y estado se guardan al editar.</div>
@@ -6209,7 +6210,7 @@ async function addSemanaFila(tipo){
 function compartirSemanaInfo(){
   const rows = window._semRows||[];
   const cki = rows.filter(r=>r.tipo==='CKI'), cko = rows.filter(r=>r.tipo==='CKO');
-  const lin = r => `▪️ *${r.huesped}*, Apto. ${r.apto} · ${fmtDate(r.fecha)} · Pago: ${r.pago||'-'}${r.ejecutiva?(' · Ejecutiva: '+r.ejecutiva):''}\n${r.observaciones||'Sin observaciones'} — _${r.estado||'Pendiente'}_`;
+  const lin = r => `▪️ *${r.huesped}*, Apto. ${r.apto} · ${fmtDate(r.fecha)} · Pago: ${r.pago||'-'}${r.ejecutiva?(' · Ejecutiva: '+r.ejecutiva):''}${r.comentarios_ejecutiva?('\n💬 Ejecutiva: '+r.comentarios_ejecutiva):''}\n${r.observaciones||'Sin observaciones'} — _${r.estado||'Pendiente'}_`;
   const txt = `📅 *${EB().nombre} — SEMANA DEL ${fmtDate(window._semIni)} al ${fmtDate(window._semFin)}*
 
 *CKI DE LA SEMANA: ${String(cki.length).padStart(2,'0')}*
@@ -6977,8 +6978,16 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
         </div>
       </div>
       <div class="form-row col3">
-        <div class="form-group"><label>Tarifa/noche</label><input type="number" id="cki-tarifa" value="${tarifa||''}" placeholder="0" onchange="calcCKI()"></div>
-        <div class="form-group"><label>Noches</label><input type="number" id="cki-noches" readonly style="background:#f5f5f5"></div>
+        <div class="form-group"><label>Cobrar por</label>
+          <select id="cki-unidad" onchange="calcCKI()">
+            <option value="Noches">Noches (estándar)</option>
+            <option value="Días">Días</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Tarifa por unidad</label><input type="number" id="cki-tarifa" value="${tarifa||''}" placeholder="0" onchange="calcCKI()"></div>
+        <div class="form-group"><label>Cantidad</label><input type="number" id="cki-noches" readonly style="background:#f5f5f5"></div>
+      </div>
+      <div class="form-row col3">
         <div class="form-group"><label>Subtotal</label><input type="number" id="cki-subtotal" readonly style="background:#f5f5f5"></div>
       </div>
       <div class="form-row col3">
@@ -7035,14 +7044,16 @@ function calcCKI() {
   const exento = document.getElementById('cki-exento')?.checked || false;
   const fi = document.getElementById('cki-fi')?.value;
   const ff = document.getElementById('cki-ff')?.value;
-  let noches = _nochesCKI(fi, ff);
-  if (noches === 0 && tarifa > 0) noches = 1; // sin fechas: asumir 1 noche
+  const unidad = document.getElementById('cki-unidad')?.value || 'Noches';
+  const noches = _nochesCKI(fi, ff);
+  // Cantidad a cobrar: por noche = noches; por día = noches + 1 (cuenta día de entrada y salida)
+  let cantidad = unidad==='Días' ? (noches>0 ? noches+1 : 1) : (noches>0 ? noches : (tarifa>0?1:0));
   const r2 = (n) => moneda === 'USD' ? Math.round(n*100)/100 : Math.round(n);
-  const subtotal = r2(tarifa * noches);
-  const iva = exento ? 0 : r2(tarifa * noches * 0.19);
+  const subtotal = r2(tarifa * cantidad);
+  const iva = exento ? 0 : r2(tarifa * cantidad * 0.19);
   const total = r2(subtotal + iva);
   const set = (id,v) => { const el = document.getElementById(id); if (el) el.value = v; };
-  set('cki-noches', noches);
+  set('cki-noches', cantidad);
   set('cki-subtotal', subtotal);
   set('cki-iva', iva);
   set('cki-total', total);
@@ -7061,10 +7072,12 @@ function generarMsgCKI() {
     ? n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
     : n.toLocaleString('es-CO');
   const r2 = (n) => moneda === 'USD' ? Math.round(n*100)/100 : Math.round(n);
-  let noches = _nochesCKI(fi, ff);
-  if (noches === 0 && tarifa > 0) noches = 1;
-  const subtotal = r2(tarifa * noches);
-  const iva = exento ? 0 : r2(tarifa * noches * 0.19);
+  const unidad = document.getElementById('cki-unidad')?.value || 'Noches';
+  const _nn = _nochesCKI(fi, ff);
+  const cantidad = unidad==='Días' ? (_nn>0 ? _nn+1 : 1) : (_nn>0 ? _nn : (tarifa>0?1:0));
+  const uniLbl = unidad==='Días' ? 'día' : 'noche';
+  const subtotal = r2(tarifa * cantidad);
+  const iva = exento ? 0 : r2(tarifa * cantidad * 0.19);
   const total = r2(subtotal + iva);
   const fv = document.getElementById('cki-fv').value.trim();
   const pago = document.getElementById('cki-pago').value;
@@ -7090,7 +7103,7 @@ function generarMsgCKI() {
   const cobroObs = (document.getElementById('cki-cobro')?.value || '').trim();
   const migCKI = (document.getElementById('cki-migracion')?.value || '').startsWith('Sí') ? ', se envía reporte de ingreso a Migración Colombia' : '';
   const msg = `${(function(_h){return _h<12?'Buenos días':_h<18?'Buenas tardes':'Buenas noches';})(new Date().getHours())}, ${_fh}
-Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${noches} noche${noches>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''}${migCKI} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
+Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${cantidad} ${uniLbl}${cantidad>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''}${migCKI} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
   // Comunicar la estadía al RACK: una fila por noche (Check-in hoy → Ocupado → Check-out hoy)
