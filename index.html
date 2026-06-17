@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-2130';
+const APP_VERSION = '2026-06-17-2300';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1137,6 +1137,7 @@ async function loadView(view) {
       {id:'otro_si_vigencia',label:'Nueva fecha fin (Otro Sí)',type:'date'},
       {type:'section',label:'Carpeta'},
       {id:'carpeta_completa',label:'¿Carpeta completa?',type:'select',opts:['true','false']},
+      {id:'adjunto',label:'Adjuntar contrato (PDF)',type:'file'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'caja-list':          await renderList('caja','💰 Caja y Movimientos','caja-form',['fecha','tipo','concepto','area','empresa','valor','recibo_no','entregado_por'],['Fecha','Tipo','Concepto','Área','Caja / Razón Social','Valor','Recibo','Entregó']); break;
@@ -4519,11 +4520,27 @@ async function submitGenForm(tabla, ids, reqs) {
   const obj = { user_id: currentUser.id };
   ids.forEach(id => {
     const el = document.getElementById('gf-' + id);
-    if (el) {
+    if (el && el.type !== 'file') {
       const v = el.value.trim();
       obj[id] = v === '' ? null : ((el.dataset && el.dataset.money) ? (parseInt(v.replace(/\D/g,''),10) || null) : (el.type === 'number' ? Number(v) || null : v));
     }
   });
+  // Campos de archivo: subir a storage 'adjuntos' y guardar la URL publica
+  for (const id of ids) {
+    const el = document.getElementById('gf-' + id);
+    if (el && el.type === 'file') {
+      if (el.files && el.files[0]) {
+        try {
+          const _f = el.files[0];
+          const _path = tabla + '/' + Date.now() + '_' + String(_f.name||'archivo').replace(/[^a-zA-Z0-9._-]/g,'_');
+          const _up = await sb.storage.from('adjuntos').upload(_path, _f, { cacheControl:'3600', upsert:false, contentType:_f.type||undefined });
+          if (!_up.error) obj[id] = sb.storage.from('adjuntos').getPublicUrl(_path).data.publicUrl;
+        } catch(_e){}
+      } else if (window._genEditData && window._genEditData[id] != null) {
+        obj[id] = window._genEditData[id];
+      }
+    }
+  }
 
   let { error } = window._genEditId ? await sb.from(tabla).update(obj).eq('id',window._genEditId) : await sb.from(tabla).insert(obj);
   if (error && /user_id/.test((error&&error.message)||'')) { delete obj.user_id; var _r2 = window._genEditId ? await sb.from(tabla).update(obj).eq('id',window._genEditId) : await sb.from(tabla).insert(obj); error = _r2.error; }
@@ -5115,7 +5132,8 @@ window.renderContratos = async function(filtroEdif){
       otro = '<span style="background:#d7f0e3;color:#0f6e56;padding:1px 8px;border-radius:8px;font-size:11px;display:inline-block;margin-bottom:3px">'+it.exts.length+' '+(it.exts.length===1?'extensión':'extensiones')+'</span>'+lis;
     }
     var obs = b.observaciones ? window._escH(b.observaciones) : '<span style="color:#bbb">—</span>';
-    var acc = '<span title="Editar contrato" style="cursor:pointer" onclick="abrirEditarGen(\'contratos\',\''+b.id+'\')">✏️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarGen(\'contratos\',\''+b.id+'\')">🗑️</span><br><button class="btn btn-outline btn-sm" style="margin-top:4px;font-size:11px" onclick="nuevoOtroSi(\''+window._escA(b.edificio)+'\',\''+window._escA(b.apto)+'\',\''+window._escA(b.arrendatario)+'\')">+ Otro Sí</button>';
+    var _pdf = b.adjunto ? '<a href="'+window._escA(b.adjunto)+'" target="_blank" style="font-size:11px;color:#1d4ed8;text-decoration:none;display:inline-block;margin-bottom:3px">📎 Ver PDF</a><br>' : '';
+    var acc = _pdf + '<span title="Editar contrato" style="cursor:pointer" onclick="abrirEditarGen(\'contratos\',\''+b.id+'\')">✏️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarGen(\'contratos\',\''+b.id+'\')">🗑️</span><br><button class="btn btn-outline btn-sm" style="margin-top:4px;font-size:11px" onclick="nuevoOtroSi(\''+window._escA(b.edificio)+'\',\''+window._escA(b.apto)+'\',\''+window._escA(b.arrendatario)+'\')">+ Otro Sí</button>';
     return '<tr style="vertical-align:top"><td>'+window._escH(b.apto)+'</td><td>'+window._escH(b.arrendatario)+'</td><td>'+window._compania(b.edificio)+'</td><td style="white-space:nowrap">'+contrato+'</td><td>'+otro+'</td><td style="font-size:12px;color:#555">'+obs+'</td><td style="white-space:nowrap">'+acc+'</td></tr>';
   }).join('');
   document.getElementById('main-content').innerHTML =
@@ -7668,11 +7686,13 @@ function generarMsgCKO() {
   // no el número de noches. Evita el "$7 alojamiento ... IVA base $6 + IVA $1".
   const _alojaOk = aloja >= 100 && aloja > nochesT;
   let totalStr = '', _alojaWarn = '';
+  const _ivaModoT = (document.getElementById('cko-iva')||{}).value || 'incluido';
+  const _alojaT = (_ivaModoT==='encima') ? Math.round(aloja*1.19) : aloja;   // alojamiento CON IVA para el total
   if (_alojaOk || consumos>0) {
     const _p = [];
-    if (_alojaOk) _p.push(`$${aloja.toLocaleString('es-CO')} alojamiento${nochesT?` (${nochesT} noche${nochesT===1?'':'s'})`:''}`);
+    if (_alojaOk) _p.push(`$${_alojaT.toLocaleString('es-CO')} alojamiento${_ivaModoT==='encima'?' (con IVA)':''}${nochesT?` (${nochesT} noche${nochesT===1?'':'s'})`:''}`);
     if (consumos>0) _p.push(`$${consumos.toLocaleString('es-CO')} consumos`);
-    const _suma = (_alojaOk?aloja:0) + (consumos>0?consumos:0);
+    const _suma = (_alojaOk?_alojaT:0) + (consumos>0?consumos:0);
     totalStr = `\n💰 Total estadía: ${_p.join(' + ')}${_p.length>1?` = $${_suma.toLocaleString('es-CO')}`:''}`;
   }
   if (aloja>0 && !_alojaOk) {
