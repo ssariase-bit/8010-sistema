@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-2300';
+const APP_VERSION = '2026-06-17-2340';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3699,7 +3699,7 @@ function renderNuevaReserva() {
             <label>Apartamento *</label>
             <select id="res-apto" onchange="calcReserva();actualizarConfigApto()">
               <option value="">— Seleccionar —</option>
-              ${EB().aptosFull.map(a=>`<option value="${a}">${a}</option>`).join('')}${(((EB&&EB().nombre)||'').indexOf('8010')===-1)?[3,4,5,6,7,8,9].map(_f=>`<option value="TR${_f}">Two Residence Piso ${_f} (${_f}02+${_f}03)</option>`).join(''):''}
+              ${EB().aptosFull.map(a=>`<option value="${a}">${a}</option>`).join('')}${(((EB&&EB().nombre)||'').indexOf('8010')===-1)?[3,4,5,6,7,8,9].map(_f=>`<option value="TR${_f}">Two Residence Piso ${_f} (${_f}02+${_f}03)</option><option value="FR${_f}">Family Residence Piso ${_f} (${_f}01+${_f}02)</option>`).join(''):''}
             </select>
           </div>
           <div class="form-group">
@@ -3997,7 +3997,8 @@ async function guardarReserva() {
 
   // Crear un registro en rack por cada día de la estadía
   const _trM = /^TR(\d+)$/.exec(apto);
-  const _aptosW = _trM ? [_trM[1]+'02', _trM[1]+'03'] : [apto];
+  const _frM = /^FR(\d+)$/.exec(apto);
+  const _aptosW = _trM ? [_trM[1]+'02', _trM[1]+'03'] : (_frM ? [_frM[1]+'01', _frM[1]+'02'] : [apto]);
   const _adjSel = Array.from((document.getElementById('res-adjuntos')||{}).selectedOptions||[]).map(o=>o.value).filter(a=>a&&_aptosW.indexOf(a)<0);
   const _aptosW2 = [..._aptosW, ..._adjSel];
   const _nCombo = _aptosW2.length;
@@ -4008,11 +4009,11 @@ async function guardarReserva() {
     const fecha = d.toISOString().split('T')[0];
     const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
-    for (const _a of _aptosW2){ const _tA=(_adjSel.length>0 && _a!==apto)?null:(tNoche||null); rows.push({ fecha, apto:_a, estado, huesped: nombre, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_adjSel.length>0?'Combo':null) }); }
+    for (const _a of _aptosW2){ const _tA=(_adjSel.length>0 && _a!==apto)?null:(tNoche||null); rows.push({ fecha, apto:_a, estado, huesped: nombre, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Family Residence' : (_adjSel.length>0?'Combo':null)) }); }
   }
   // Día de check-out
   const dco = new Date(co);
-  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_adjSel.length>0?'Combo':null) });
+  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Family Residence' : (_adjSel.length>0?'Combo':null)) });
 
   // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
   await sb.from('rack').delete().in('apto', _aptosW2).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
@@ -4168,15 +4169,16 @@ function generarConfirmacion(r) {
     const _bb=_ap.replace(/A$/,'');
     const _ln=_bb.slice(-2);
     const _cfg=r.config;
-    let _mk=null,_nm='Apartamento',_hb='',_disp=_ap;const _mtr=/^TR(\d+)$/.exec(_ap);
+    let _mk=null,_nm='Apartamento',_hb='',_disp=_ap;const _mtr=/^TR(\d+)$/.exec(_ap);const _mfr=/^FR(\d+)$/.exec(_ap);
     if(_mtr){const _f=_mtr[1];_mk=(_M[_f+'02']||0)+(_M[_f+'03']||0);_nm='Two Residence';_hb='2 habitaciones: 01 cama Queen + 01 cama Queen';_disp=_f+'02+'+_f+'03';}
+    else if(_mfr){const _f=_mfr[1];_mk=130;_nm='Family Residence';_hb='3 habitaciones (Grand Residence + Smart): 01 cama King, 02 camas dobles y 01 cama Queen';_disp=_f+'01+'+_f+'02';}
     else if(_bb==='PH1'){_mk=_M['PH1'];_nm='Penthouse';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas dobles';}
     else if(_bb==='PH2'){_mk=_M['PH2'];_nm='Penthouse';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas sencillas';}
     else if(_cfg==='deluxe'||_isA){_mk=_M[_bb+'A'];_nm='Deluxe';_hb='02 camas dobles (1.40)';}
     else if(_ln==='01'){_mk=_M[_bb];_nm='Grand Residence';_hb='2 habitaciones: habitación principal con 01 cama King y segunda habitación con 02 camas dobles (1.40)';}
     else if(_ln==='02'){_mk=_M[_bb];_nm='Smart';_hb='01 cama Queen';}
     else if(_ln==='03'){_mk=_M[_bb];_nm='One Residence';_hb='1 habitación: 01 cama Queen';}
-    else if(_ln==='04'){if(_cfg==='dividido'){_mk=_M[_bb];_nm='Suit home';_hb='1 habitación: 01 cama King';}else{_mk=(typeof _M[_bb+'A']==='number')?(_M[_bb]+_M[_bb+'A']):_M[_bb];_nm='Suit Deluxe';_hb='2 habitaciones: habitación principal con 01 cama King y habitación adicional con 02 camas dobles (1.40)';}}
+    else if(_ln==='04'){if(_cfg==='dividido'){_mk=_M[_bb];_nm='Suite Home';_hb='1 habitación: 01 cama King';}else{_mk=(typeof _M[_bb+'A']==='number')?(_M[_bb]+_M[_bb+'A']):_M[_bb];_nm='Suite Deluxe';_hb='2 habitaciones: habitación principal con 01 cama King y habitación adicional con 02 camas dobles (1.40)';}}
     if(_mk!=null){tipo=_disp+' - '+_nm+' '+_mk+' m²';desc=_hb+'.';}
   }
   const moneda = r.moneda || 'COP';
@@ -4865,7 +4867,7 @@ function _rackEmailHTML(){
       const e = rec.estado;
       const ocFis = (e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje');
       // Two Residence: la pareja X02+X03 comparte tarifa — contar la venta una sola vez
-      const esParTR = (rec.tipo==='Two Residence' && /03$/.test(String(a)));
+      const esParTR = (rec.tipo==='Two Residence' && /03$/.test(String(a))) || (rec.tipo==='Family Residence' && /02$/.test(String(a)));
       const t = esParTR ? 0 : (Number(rec.tarifa)||0);
       const cobrado = t>0 && _FUERA.indexOf(e)<0;   // dia con tarifa = ingreso real (TxN/TxD, combos)
       if(ocFis||cobrado) nochesMes++;
@@ -6447,7 +6449,7 @@ async function renderIngresos(){
     const e = r.estado; const oc = (e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje');
     if(!oc) return;
     const d = Number(r.fecha.slice(8,10));
-    const esParTR = (r.tipo==='Two Residence' && /03$/.test(String(r.apto)));
+    const esParTR = (r.tipo==='Two Residence' && /03$/.test(String(r.apto))) || (r.tipo==='Family Residence' && /02$/.test(String(r.apto)));
     const t = esParTR ? 0 : (Number(r.tarifa)||0);
     dias[d].noches++; if(d<=corte) nochesFisCorte++;
     if(!esParTR){
