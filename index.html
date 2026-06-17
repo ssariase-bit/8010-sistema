@@ -4426,6 +4426,18 @@ function buscarEnListado(inp){
   document.querySelectorAll('#main-content table tbody tr').forEach(tr=>{
     tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
+  _actualizarTotalBaga();
+}
+// Recalcula el "Total ventas" de Bagatelle según las filas visibles (filtro)
+function _actualizarTotalBaga(){
+  const box=document.getElementById('baga-total'); if(!box) return;
+  const tabla=document.querySelector('#main-content table'); if(!tabla) return;
+  const heads=[...tabla.querySelectorAll('thead th')].map(th=>String(th.textContent||'').trim().toLowerCase());
+  let idx=heads.indexOf('total'); if(idx<0) idx=heads.findIndex(h=>h.includes('total'));
+  if(idx<0) return;
+  let sum=0, n=0;
+  tabla.querySelectorAll('tbody tr').forEach(tr=>{ if(tr.style.display==='none') return; const td=tr.querySelectorAll('td')[idx]; if(!td) return; sum+=Number(String(td.textContent).replace(/[^\d]/g,''))||0; n++; });
+  box.innerHTML='💰 Total ventas: $'+fmtNum(sum)+' <span style="font-size:11px;color:#888">('+n+' recibos)</span>';
 }
 // Ordena una tabla por la columna del encabezado clicado (alterna asc/desc)
 function ordenarTabla(th){
@@ -5396,6 +5408,8 @@ async function renderList(tabla, titulo, formView, cols, headers) {
 
   const esVisitantes = tabla === 'visitantes';
   const esPaquetes = tabla === 'paquetes';
+  const esBaga = tabla === 'recibos_magnifique';
+  const totVentas = esBaga ? rows.reduce((s,r)=>s+(Number(r.total)||0),0) : 0;
   const tableRows = rows.map(r => {
     const celdas = cols.map(c => {
       let v = r[c];
@@ -5423,9 +5437,9 @@ async function renderList(tabla, titulo, formView, cols, headers) {
     <div class="page-title">${titulo}</div>
     <div class="card">
       <div class="card-header">
-        <div class="card-title">${rows.length} registros</div>
+        <div class="card-title">${rows.length} registros${esBaga?` <span id="baga-total" style="margin-left:14px;color:var(--verde);font-weight:700">💰 Total ventas: $${fmtNum(totVentas)} <span style="font-size:11px;color:#888">(${rows.length} recibos)</span></span>`:''}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar..." style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
+          <input type="text" onkeyup="buscarEnListado(this)" placeholder="${esBaga?'🔎 Buscar por apto, huésped, área...':'🔎 Buscar...'}" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
           ${barraCompartir()}<button class="btn btn-success btn-sm" onclick="loadView('${formView}')">+ Nuevo registro</button>
         </div>
       </div>
