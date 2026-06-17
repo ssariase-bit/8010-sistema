@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-2010';
+const APP_VERSION = '2026-06-17-2035';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4768,9 +4768,9 @@ function _informeTablaHTML(){
   const tableHTML='<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;"><thead><tr>'+thHTML+'</tr></thead><tbody>'+body+'</tbody></table>';
   return _informeShell(titulo, tableHTML, ancho);
 }
-async function enviarInformeCorreo(titulo, texto, btn, htmlOverride){
+async function enviarInformeCorreo(titulo, texto, btn, htmlOverride, destOverride){
   const edi = _ediActual();
-  const d = _destInforme(edi, titulo);
+  const d = destOverride || _destInforme(edi, titulo);
   const subject = ((typeof EB==='function')?EB().nombre:'8010 Urban Living') + ' — ' + titulo;
   const html = htmlOverride || _informeHTML(titulo, texto);
   let prev=null;
@@ -4827,32 +4827,34 @@ function _rackEmailHTML(){
   const hoyD = new Date();
   const esMesActual = (hoyD.getFullYear()===year && hoyD.getMonth()===month);
   const corte = esMesActual ? hoyD.getDate() : dim;
-  let ocupHoy=0, ckiHoy=0, ckoHoy=0, nochesOcup=0, ventasCorte=0, nochesMes=0, ventasMes=0, nochesFisCorte=0;
+  let ocupHoy=0, ckiHoy=0, ckoHoy=0, nochesMes=0, nochesTar=0, ventasMes=0;
+  const _FUERA=['Libre','Bloqueado','Mantenimiento'];
   aptos.forEach(function(a){
     for(let d=1; d<=dim; d++){
       const rec = rack[a] && rack[a][d]; if(!rec) continue;
       const e = rec.estado;
-      const oc = (e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje');
+      const ocFis = (e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje');
       // Two Residence: la pareja X02+X03 comparte tarifa — contar la venta una sola vez
       const esParTR = (rec.tipo==='Two Residence' && /03$/.test(String(a)));
       const t = esParTR ? 0 : (Number(rec.tarifa)||0);
-      if(oc){ if(d<=corte) nochesFisCorte++; if(!esParTR){ nochesMes++; ventasMes+=t; if(d<=corte){ nochesOcup++; ventasCorte+=t; } } }
-      if(esMesActual && d===corte){ if(oc) ocupHoy++; if(e==='Check-in hoy') ckiHoy++; if(e==='Check-out hoy') ckoHoy++; }
+      const cobrado = t>0 && _FUERA.indexOf(e)<0;   // dia con tarifa = ingreso real (TxN/TxD, combos)
+      if(ocFis||cobrado) nochesMes++;
+      if(cobrado){ nochesTar++; ventasMes+=t; }
+      if(esMesActual && d===corte){ if(ocFis) ocupHoy++; if(e==='Check-in hoy') ckiHoy++; if(e==='Check-out hoy') ckoHoy++; }
     }
   });
   const totalAptos = aptos.length || 1;
   const pctHoy = Math.round(ocupHoy/totalAptos*100);
-  const pctMes = Math.round(nochesFisCorte/(totalAptos*corte)*100);
-  const tProm = nochesOcup ? Math.round(ventasCorte/nochesOcup) : 0;
+  const pctMes = Math.round(nochesMes/(totalAptos*dim)*100);
+  const tProm = nochesTar ? Math.round(ventasMes/nochesTar) : 0;
   const f$ = function(n){ return '$'+Number(n||0).toLocaleString('es-CO'); };
-  const _kpi = function(lbl,val,sub){ return '<td style="background:#FFFFFF;border:1px solid #DDD8D2;border-radius:8px;padding:10px 14px;text-align:center;vertical-align:top"><div style="font-size:10px;color:#7F7F7F;text-transform:uppercase;letter-spacing:1px;white-space:nowrap">'+lbl+'</div><div style="font-size:19px;font-weight:700;color:#211D1E;margin:3px 0;white-space:nowrap">'+val+'</div>'+(sub?'<div style="font-size:10px;color:#9A938B;white-space:nowrap">'+sub+'</div>':'')+'</td>'; };
-  let resumen = '<table style="border-collapse:separate;border-spacing:6px;margin:0 -6px 14px"><tr>';
+  const _kpi = function(lbl,val,sub){ return '<div style="display:inline-block;background:#FFFFFF;border:1px solid #DDD8D2;border-radius:8px;padding:10px 14px;text-align:center;vertical-align:top;margin:0 8px 8px 0;min-width:120px"><div style="font-size:10px;color:#7F7F7F;text-transform:uppercase;letter-spacing:1px;white-space:nowrap">'+lbl+'</div><div style="font-size:19px;font-weight:700;color:#211D1E;margin:3px 0;white-space:nowrap">'+val+'</div>'+(sub?'<div style="font-size:10px;color:#9A938B;white-space:nowrap">'+sub+'</div>':'')+'</div>'; };
+  let resumen = '<div style="margin:0 0 14px">';
   if (esMesActual) resumen += _kpi('Ocupaci\u00f3n hoy', pctHoy+'%', ocupHoy+' de '+totalAptos+' aptos') + _kpi('Entradas hoy', ckiHoy, 'CKI') + _kpi('Salidas hoy', ckoHoy, 'CKO');
-  resumen += _kpi('Ocupaci\u00f3n del mes', pctMes+'%', 'al '+corte+' de '+mesNombre.toLowerCase())
-    + _kpi('Ventas del mes', f$(ventasCorte), nochesOcup+' noches al corte')
-    + _kpi('Tarifa promedio', f$(tProm), 'por noche')
-    + _kpi('Proyecci\u00f3n del mes', f$(ventasMes), nochesMes+' noches con reservas');
-  resumen += '</tr></table>';
+  resumen += _kpi('Ocupaci\u00f3n del mes', pctMes+'%', 'mes completo')
+    + _kpi('Ventas del mes', f$(ventasMes), nochesMes+' noches')
+    + _kpi('Tarifa promedio', f$(tProm), 'por noche');
+  resumen += '</div>';
   return '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#E7E3E0;font-family:Helvetica,Arial,sans-serif">'
     + '<div style="background:#211D1E;padding:18px 24px">'+logo+'</div>'
     + '<div style="padding:18px 24px">'
@@ -4876,7 +4878,12 @@ function _rackEmailHTML(){
 async function enviarRackCorreo(btn){
   if (!window._rackData) { showToast('Abre el rack primero','error'); return; }
   const titulo = 'Rack \u2014 ' + (window._rackMesNombre||'') + ' ' + (window._rackYear||'');
-  return enviarInformeCorreo(titulo, '', btn, _rackEmailHTML());
+  const _dd = _destInforme(_ediActual(), titulo) || {to:[],cc:[]};
+  const _resp = prompt('\u00bfA qu\u00e9 correo(s) enviar el rack? (separa con coma)', (_dd.to||[]).join(', '));
+  if(_resp===null) return;
+  const _to = _resp.split(',').map(function(s){return s.trim();}).filter(Boolean);
+  if(!_to.length){ showToast('Escribe al menos un correo destino','error'); return; }
+  return enviarInformeCorreo(titulo, '', btn, _rackEmailHTML(), {to:_to, cc:(_dd.cc||[])});
 }
 function compartirWA(){ window.open('https://wa.me/?text='+encodeURIComponent(_informeTextoDOM()),'_blank'); }
 function compartirMail(){ return enviarInformeCorreo(_tituloInforme(), _informeTextoDOM()); }
