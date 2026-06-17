@@ -4282,7 +4282,7 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     // Kubik (Bagatelle): pesos enteros, sin centavos. 8010 (Magnifique): 2 decimales para cuadrar con New Hotel.
     const _r2 = (((EB&&EB().nombre)||'').indexOf('8010')>-1) ? (x=>Math.round((x||0)*100)/100) : (x=>Math.round(x||0));
     const _vc=document.getElementById('gf-valor_comanda'), _dm=document.getElementById('gf-domicilio'), _vr=document.getElementById('gf-valor_recibo'), _vd=document.getElementById('gf-valor_domicilio'), _ci=document.getElementById('gf-iva'), _pp=document.getElementById('gf-propina'), _ct=document.getElementById('gf-total');
-    const _propVal=()=>_r2((parseFloat(_vc&&_vc.value)||0)*0.10); // propina = 10% del consumo (comanda)
+    const _propVal=()=>Math.round((parseFloat(_vc&&_vc.value)||0)*0.10); // propina = 10% del consumo, siempre en pesos enteros (sin decimales)
     const _recalc=()=>{const com=parseFloat(_vc&&_vc.value)||0;const aplica=_dm&&/15/.test(_dm.value);const dom=aplica?_r2(com*0.15):0;const base=_r2(com+dom);if(_vd)_vd.value=dom;if(_vr)_vr.value=base;const iva=_r2(base*0.19);if(_ci)_ci.value=iva;const prop=_propVal();if(_pp)_pp.value=prop;if(_ct)_ct.value=_r2(base+iva+prop);};
     const _fromVr=()=>{const base=parseFloat(_vr&&_vr.value)||0;const iva=_r2(base*0.19);if(_ci)_ci.value=iva;const prop=_propVal();if(_pp)_pp.value=prop;if(_ct)_ct.value=_r2(base+iva+prop);};
     const _fromIva=()=>{const base=parseFloat(_vr&&_vr.value)||0;const iva=parseFloat(_ci&&_ci.value)||0;const prop=parseFloat(_pp&&_pp.value)||0;if(_ct)_ct.value=_r2(base+iva+prop);};
