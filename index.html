@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-1620';
+const APP_VERSION = '2026-06-17-1645';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4059,7 +4059,7 @@ function generarConfirmacion(r) {
   const conIVA = !/LTM3/i.test(r.cxcRazon||'') && r.iva !== 'exento' && r.iva !== 'no_aplica';
   const tratamiento = r.nombre.split(' ')[0].toLowerCase().endsWith('a') ? 'SRA.' : 'SR.';
     const _accent = (((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
-    const _es8010c=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1); const _larga=(Number(r.noches)||0)>30; const _razon=_es8010c?(_larga?'LTM3 SAS':'8010 SAS'):'8i8 Operadora SAS'; const _nit=_es8010c?(_larga?'900.361.992-4':'900.683.855-5'):'902.026.873-8'; const _email=_es8010c?'recepcion@8010urbanliving.com':'recepcion@8i8op.com';
+    const _es8010c=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1); const _larga=(Number(r.noches)||0)>30; const _razon=_es8010c?(_larga?'LTM3 SAS':'8010 SAS'):'8i8 Operadora SAS'; const _nit=_es8010c?(_larga?'900.361.992-4':'900.683.855-5'):'902.026.873-8'; const _email=_es8010c?'recepcion@8010urbanliving.com':'gmercadeo@8i8op.com'; const _firmaNom=_es8010c?'Fabio Malaver':'Cristina Cerviño'; const _firmaCargo=_es8010c?'Jefe de Administradores':'Gerente Mercadeo';
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -4141,7 +4141,7 @@ function generarConfirmacion(r) {
           <li>Internet wifi de alta velocidad (en áreas sociales y privadas).</li>
           <li>1 parqueadero.</li>
           <li>Servicios públicos.</li>
-          <li>Llamadas a telefonía fija local ilimitada.</li>
+          ${_es8010c ? '<li>Llamadas a telefonía fija local ilimitada.</li>' : ''}
           <li>Bodega de equipaje.</li>
           <li>Limpieza básica diaria del apartamento.</li>
         </ul>
@@ -4171,8 +4171,8 @@ function generarConfirmacion(r) {
   <p style="margin-top:12px;font-size:12px">Cordialmente,</p>
 
   <div class="firma" style="margin-top:20px">
-    <p class="nombre-firma">${r.firmante || 'Fabio Malaver'}</p>
-    <p class="nombre-firma">${r.cargo || 'Jefe de Administradores'}</p>
+    <p class="nombre-firma">${r.firmante || _firmaNom}</p>
+    <p class="nombre-firma">${r.cargo || _firmaCargo}</p>
     <p><a href="mailto:${_email}" style="color:#333">${_email}</a></p>
   </div>
 
