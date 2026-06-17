@@ -5392,7 +5392,7 @@ window._alarmaComentarios = async function(conToast){
     if(!link) return 0;
     var res=await sb.from('novedades').select('comentarios').eq('edificio',EDIFICIO_ACTIVO).limit(600);
     var pend=0;
-    (res.data||[]).forEach(function(n){ var arr=Array.isArray(n.comentarios)?n.comentarios:[]; if(arr.length){ var last=arr[arr.length-1]; if(last&&last.dirigido_a) pend++; } });
+    (res.data||[]).forEach(function(n){ var arr=Array.isArray(n.comentarios)?n.comentarios:[]; if(arr.length){ var last=arr[arr.length-1]; if(!last||!last.dirigido_a) return; var mio=((last.autor_email&&typeof currentUser!=='undefined'&&currentUser&&last.autor_email===currentUser.email)||(last.autor&&typeof currentProfile!=='undefined'&&currentProfile&&last.autor===currentProfile.nombre)); if(!mio) pend++; } });
     var old=link.querySelector('.com-badge'); if(old) old.remove();
     if(pend>0){ var b=document.createElement('span'); b.className='com-badge'; b.textContent=pend; b.style.cssText='background:#e24b4a;color:#fff;border-radius:10px;font-size:10px;padding:1px 7px;margin-left:6px;font-weight:700'; link.appendChild(b); }
     if(conToast&&pend>0&&!window._alarmaShown&&typeof showToast==='function'){ window._alarmaShown=true; showToast('💬 Hay '+pend+' comentario'+(pend>1?'s':'')+' de gerencia pendiente'+(pend>1?'s':'')+' — revisa el buzón','info'); }
