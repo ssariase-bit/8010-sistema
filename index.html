@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-1910';
+const APP_VERSION = '2026-06-17-2010';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1395,12 +1395,15 @@ async function renderIndicadores(){
   ]);
   function agg(rows){
     const m = Array.from({length:12}, ()=>({noches:0,nTar:0,ventas:0}));
+    const FUERA=['Libre','Bloqueado','Mantenimiento'];
     (rows||[]).forEach(r=>{
-      if(OCU.indexOf(r.estado)<0) return;
       const mi = parseInt(String(r.fecha).slice(5,7),10)-1;
       if(isNaN(mi)||mi<0||mi>11) return;
-      m[mi].noches++; const t=Number(r.tarifa)||0;
-      if(t>0){ m[mi].nTar++; m[mi].ventas+=t; }
+      const t=Number(r.tarifa)||0;
+      const cobrado = t>0 && FUERA.indexOf(r.estado)<0;       // dia con tarifa = ingreso real (respeta TxN/TxD)
+      const fisica = OCU.indexOf(r.estado)>-1;                 // ocupacion fisica (incluye cortesias)
+      if(cobrado||fisica) m[mi].noches++;
+      if(cobrado){ m[mi].nTar++; m[mi].ventas+=t; }
     });
     return m;
   }
@@ -1472,7 +1475,7 @@ async function renderIndicadores(){
     +semRow('I Semestre',sem[0])+semRow('II Semestre',sem[1])
     +'<tr style="background:#211D1E;color:#fff;font-weight:700"><td style="text-align:left;color:#fff">TOTAL '+yr+'</td><td style="text-align:center;color:#fff">'+totN+'</td><td style="text-align:center;color:#fff">'+totDisp+'</td><td style="text-align:center;color:#fff">'+ocuTot+'%</td><td style="text-align:right;color:#fff">$'+f(totVen)+'</td><td style="text-align:right;color:#fff">$'+f(adrTot)+'</td><td style="text-align:right;color:#fff">$'+f(revparTot)+'</td><td style="text-align:center;color:#fff">'+despTot+'</td></tr>'
     +'</tbody></table></div>'
-    +'<p style="font-size:11px;color:var(--gris-t);margin-top:8px">Noches ocupadas = noches con huésped (no cuenta el día de check-out). Ventas = suma de tarifas de todas las unidades. ADR = ventas ÷ noches con tarifa. RevPAR = ventas ÷ noches disponibles. Desperdicio = noches disponibles no vendidas.</p></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:8px">Ventas = todo lo cobrado en el rack (cualquier día con tarifa), así refleja el ingreso real ya sea cobro por noche o por día. Noches = días ocupados o cobrados. ADR = ventas ÷ noches con tarifa. RevPAR = ventas ÷ noches disponibles. Desperdicio = noches disponibles no vendidas.</p></div>'
     +'<div class="card" style="margin-top:16px"><div class="card-title" style="margin-bottom:6px">📈 Comparativo interanual</div>'+comp+'</div>';
 }
 
