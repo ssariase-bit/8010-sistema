@@ -1286,7 +1286,7 @@ async function loadView(view) {
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del empleado',type:'text',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro']},
-      {id:'horario',label:'Horario asignado',type:'text',default:'8:00 AM - 5:00 PM'},
+      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:00 PM','7:00 AM - 4:00 PM','8:00 AM - 5:00 PM','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','10:00 PM - 6:00 AM']},
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
@@ -4223,7 +4223,7 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     let input = '';
     const val = f.default || '';
     if (f.type === 'select') {
-      input = `<select id="gf-${f.id}">${(f.opts||[]).map(o=>{ var ov=(o&&typeof o==='object')?o.v:o; var ol=(o&&typeof o==='object')?o.l:o; return `<option value="${ov}">${ol}</option>`; }).join('')}</select>`;
+      input = `<select id="gf-${f.id}">${(f.opts||[]).map(o=>{ var ov=(o&&typeof o==='object')?o.v:o; var ol=(o&&typeof o==='object')?o.l:o; var sel=(f.default!=null && String(ov)===String(f.default))?' selected':''; return `<option value="${ov}"${sel}>${ol}</option>`; }).join('')}</select>`;
     } else if (f.type === 'textarea') {
       input = `<textarea id="gf-${f.id}" placeholder="${f.label}..."></textarea>`;
     } else if (f.type === 'aptotar') { var _ms=(typeof EB==='function'&&(((EB().nombre)||'').indexOf('8010')>-1))?[60,70,90,96,120,126,132]:[29,42,56,79,85,100,113,130]; var _rw=_ms.map(function(m){return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><span style="width:64px;font-size:12px;font-weight:600">'+m+' m²</span><input type="number" class="at-ini" data-m="'+m+'" placeholder="Tarifa ini" oninput="aptoTarSync()" style="width:120px;padding:6px"><input type="number" class="at-neg" data-m="'+m+'" placeholder="Negociado" oninput="aptoTarSync()" style="width:120px;padding:6px"></div>';}).join(''); input='<input type="hidden" id="gf-aptos_tarifas"><div id="gf-aptotar-box" style="padding-top:4px">'+_rw+'</div>'; } else if (f.type === 'tipos') { var _to=['1 habitación','2 habitaciones','Studio / Loft','General / Varios']; input = '<input type="hidden" id="gf-'+f.id+'"><div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:4px">'+_to.map(function(o){return '<label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="'+o+'" onchange="cotTiposSync(this)"> '+o+'</label>';}).join('')+'</div>'; } else if (f.type === 'money') {
