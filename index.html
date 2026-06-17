@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-1645';
+const APP_VERSION = '2026-06-17-1720';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -915,6 +915,7 @@ const MENU_COMPLETO = [
   { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tec.' },
   { section: 'Financiero / Admin' },
   { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
+  { id: 'indicadores', icon: '📊', label: 'Indicadores Ocup./Ventas' },
   { id: 'requisiciones-form', icon: '➕', label: 'Nueva Requisición' },
   { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
   { id: 'personal-form', icon: '➕', label: 'Nuevo Personal' },
@@ -1299,6 +1300,7 @@ async function loadView(view) {
 
     case 'estado-huespedes': await renderEstadoHuespedes(); break;
     case 'ingresos': await renderIngresos(); break;
+    case 'indicadores': await renderIndicadores(); break;
     case 'nomina': await renderNomina(); break;
     case 'semana-info': await renderSemanaInfo(); break;
     case 'checklist-turnos': await renderChecklistTurnos(); break;
@@ -1373,6 +1375,98 @@ function calcKpisDia(registrosHoy){
   const adr = b33.tar.length ? Math.round(b33.tar.reduce((s,x)=>s+x,0)/b33.tar.length) : 0;
   const ing = b33.tar.reduce((s,x)=>s+x,0);
   return { b21, b33, pct21: Math.round(b21.ocu/(b21.disp||1)*100), pct33: Math.round(b33.ocu/(b33.disp||1)*100), cki, cko, adr, ing };
+}
+
+// ═══════════════════════════════════════════════════════════
+// INDICADORES DE OCUPACIÓN Y VENTAS (auto desde el rack)
+// ═══════════════════════════════════════════════════════════
+async function renderIndicadores(){
+  const main = document.getElementById('main-content');
+  const yr = window._indYear || new Date().getFullYear();
+  const eb = (typeof EB==='function')?EB():{};
+  const vendibles = (eb.aptosBase||[]).filter(a => ((eb.noEntregados||[]).indexOf(a)<0));
+  const nVend = vendibles.length || 1;
+  const OCU = ['Ocupado','Check-in hoy','Completo','Sale de viaje'];
+  main.innerHTML = '<div class="page-title">📊 Indicadores de Ocupación y Ventas</div><p style="color:var(--gris-t)">Cargando datos del rack…</p>';
+  const [curR, prevR] = await Promise.all([
+    sb.from('rack').select('estado,tarifa,fecha').gte('fecha', yr+'-01-01').lte('fecha', yr+'-12-31'),
+    sb.from('rack').select('estado,tarifa,fecha').gte('fecha', (yr-1)+'-01-01').lte('fecha', (yr-1)+'-12-31')
+  ]);
+  function agg(rows){
+    const m = Array.from({length:12}, ()=>({noches:0,nTar:0,ventas:0}));
+    (rows||[]).forEach(r=>{
+      if(OCU.indexOf(r.estado)<0) return;
+      const mi = parseInt(String(r.fecha).slice(5,7),10)-1;
+      if(isNaN(mi)||mi<0||mi>11) return;
+      m[mi].noches++; const t=Number(r.tarifa)||0;
+      if(t>0){ m[mi].nTar++; m[mi].ventas+=t; }
+    });
+    return m;
+  }
+  const cur=agg(curR.data), prev=agg(prevR.data);
+  const MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const diasMes=(mi)=> new Date(yr, mi+1, 0).getDate();
+  const f=(n)=> (typeof fmtNum==='function')?fmtNum(Math.round(n||0)):Math.round(n||0).toLocaleString('es-CO');
+  let filas='', totN=0,totDisp=0,totVen=0,totTar=0;
+  const sem=[{n:0,d:0,v:0,t:0},{n:0,d:0,v:0,t:0}];
+  let prevN=0,prevVen=0,prevTar=0;
+  for(let i=0;i<12;i++){
+    const disp=nVend*diasMes(i), o=cur[i];
+    const adr=o.nTar?Math.round(o.ventas/o.nTar):0;
+    const ocu=disp?Math.round(o.noches/disp*100):0;
+    const revpar=disp?Math.round(o.ventas/disp):0;
+    const despN=Math.max(0,disp-o.noches);
+    totN+=o.noches; totDisp+=disp; totVen+=o.ventas; totTar+=o.nTar;
+    const S=sem[i<6?0:1]; S.n+=o.noches; S.d+=disp; S.v+=o.ventas; S.t+=o.nTar;
+    prevN+=prev[i].noches; prevVen+=prev[i].ventas; prevTar+=prev[i].nTar;
+    const vacio=(o.noches===0&&o.ventas===0);
+    filas+='<tr style="'+(vacio?'color:#b9b9b9':'')+'">'
+      +'<td style="font-weight:600;text-align:left">'+MES[i]+'</td>'
+      +'<td style="text-align:center">'+o.noches+'</td>'
+      +'<td style="text-align:center;color:#888">'+disp+'</td>'
+      +'<td style="text-align:center;font-weight:600;color:'+(ocu>=50?'#1A7D3C':ocu>=25?'#B8860B':'#C0392B')+'">'+ocu+'%</td>'
+      +'<td style="text-align:right;font-weight:600">$'+f(o.ventas)+'</td>'
+      +'<td style="text-align:right">$'+f(adr)+'</td>'
+      +'<td style="text-align:right;color:#555">$'+f(revpar)+'</td>'
+      +'<td style="text-align:center;color:#C0392B">'+despN+'</td>'
+      +'</tr>';
+  }
+  const adrTot=totTar?Math.round(totVen/totTar):0;
+  const ocuTot=totDisp?Math.round(totN/totDisp*100):0;
+  const revparTot=totDisp?Math.round(totVen/totDisp):0;
+  const despTot=Math.max(0,totDisp-totN);
+  const semRow=(lbl,S)=>{const a=S.t?Math.round(S.v/S.t):0,oc=S.d?Math.round(S.n/S.d*100):0,rp=S.d?Math.round(S.v/S.d):0;return '<tr style="background:#f3f4f6;font-weight:600"><td style="text-align:left">'+lbl+'</td><td style="text-align:center">'+S.n+'</td><td style="text-align:center;color:#888">'+S.d+'</td><td style="text-align:center">'+oc+'%</td><td style="text-align:right">$'+f(S.v)+'</td><td style="text-align:right">$'+f(a)+'</td><td style="text-align:right;color:#555">$'+f(rp)+'</td><td style="text-align:center;color:#C0392B">'+Math.max(0,S.d-S.n)+'</td></tr>';};
+  const prevAdr=prevTar?Math.round(prevVen/prevTar):0;
+  const hayPrev=(prevN>0||prevVen>0);
+  const dpct=(a,b)=> b>0?Math.round((a-b)/b*100):null;
+  const chip=(v)=> v===null?'<span style="color:#aaa">—</span>':'<span style="color:'+(v>=0?'#1A7D3C':'#C0392B')+';font-weight:600">'+(v>=0?'+':'')+v+'%</span>';
+  let comp;
+  if(hayPrev){
+    comp='<table class="tabla" style="margin-top:8px"><thead><tr><th style="text-align:left">Métrica</th><th>'+(yr-1)+'</th><th>'+yr+'</th><th>Variación</th></tr></thead><tbody>'
+      +'<tr><td style="text-align:left">Noches ocupadas</td><td style="text-align:center">'+prevN+'</td><td style="text-align:center">'+totN+'</td><td style="text-align:center">'+chip(dpct(totN,prevN))+'</td></tr>'
+      +'<tr><td style="text-align:left">Ventas</td><td style="text-align:right">$'+f(prevVen)+'</td><td style="text-align:right">$'+f(totVen)+'</td><td style="text-align:center">'+chip(dpct(totVen,prevVen))+'</td></tr>'
+      +'<tr><td style="text-align:left">ADR (tarifa prom.)</td><td style="text-align:right">$'+f(prevAdr)+'</td><td style="text-align:right">$'+f(adrTot)+'</td><td style="text-align:center">'+chip(dpct(adrTot,prevAdr))+'</td></tr>'
+      +'</tbody></table>';
+  } else {
+    comp='<p style="color:var(--gris-t);font-size:13px">Sin histórico '+(yr-1)+' cargado en el sistema para '+(eb.nombre||'este edificio')+'. El comparativo interanual requiere cargar la base del año anterior.</p>';
+  }
+  main.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    +'<div class="page-title" style="margin-bottom:0">📊 Indicadores de Ocupación y Ventas — '+(eb.nombre||'')+'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center"><label style="font-size:12px;color:var(--gris-t)">Año</label>'
+    +'<select onchange="window._indYear=parseInt(this.value);renderIndicadores()" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:8px">'
+    +[yr+1,yr,yr-1,yr-2].filter((v,ix,ar)=>ar.indexOf(v)===ix).map(y=>'<option value="'+y+'"'+(y===yr?' selected':'')+'>'+y+'</option>').join('')
+    +'</select>'
+    +'<button onclick="renderIndicadores()" style="background:var(--azul-m);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">↻</button>'
+    +'<button onclick="window.print()" class="no-print" style="background:#1D3461;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">🖨️ PDF</button></div></div>'
+    +'<div class="card"><div class="card-title" style="margin-bottom:10px">Resumen '+yr+' · '+nVend+' aptos vendibles</div>'
+    +'<div style="overflow-x:auto"><table class="tabla"><thead><tr>'
+    +'<th style="text-align:left">Mes</th><th>Noches ocup.</th><th>Noches disp.</th><th>% Ocup.</th><th>Ventas</th><th>ADR</th><th>RevPAR</th><th>Desperdicio</th>'
+    +'</tr></thead><tbody>'+filas
+    +semRow('I Semestre',sem[0])+semRow('II Semestre',sem[1])
+    +'<tr style="background:#211D1E;color:#fff;font-weight:700"><td style="text-align:left;color:#fff">TOTAL '+yr+'</td><td style="text-align:center;color:#fff">'+totN+'</td><td style="text-align:center;color:#fff">'+totDisp+'</td><td style="text-align:center;color:#fff">'+ocuTot+'%</td><td style="text-align:right;color:#fff">$'+f(totVen)+'</td><td style="text-align:right;color:#fff">$'+f(adrTot)+'</td><td style="text-align:right;color:#fff">$'+f(revparTot)+'</td><td style="text-align:center;color:#fff">'+despTot+'</td></tr>'
+    +'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:8px">Noches ocupadas = noches con huésped (no cuenta el día de check-out). Ventas = suma de tarifas de todas las unidades. ADR = ventas ÷ noches con tarifa. RevPAR = ventas ÷ noches disponibles. Desperdicio = noches disponibles no vendidas.</p></div>'
+    +'<div class="card" style="margin-top:16px"><div class="card-title" style="margin-bottom:6px">📈 Comparativo interanual</div>'+comp+'</div>';
 }
 
 async function renderDashboard() {
