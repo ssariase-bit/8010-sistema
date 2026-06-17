@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-1720';
+const APP_VERSION = '2026-06-17-1810';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3697,6 +3697,16 @@ function renderNuevaReserva() {
             </select>
           </div>
         </div>
+${(((EB&&EB().nombre)||'').indexOf('8010')===-1) ? `
+        <div class="form-row">
+          <div class="form-group">
+            <label>Unir con aptos adjuntos (combo Kubik · opcional)</label>
+            <select id="res-adjuntos" multiple size="5" onchange="calcReserva()" style="height:auto;min-height:96px">
+              ${EB().aptosBase.filter(a=>(EB().noEntregados||[]).indexOf(a)<0).map(a=>`<option value="${a}">${a}</option>`).join('')}
+            </select>
+            <div style="font-size:11px;color:var(--gris-t);margin-top:4px">Selecciona uno o más aptos del mismo piso para unirlos en una sola unidad (ej. 501+502+503). La tarifa total ingresada se reparte entre los aptos del combo y el rack los marca ocupados a todos. (Ctrl/Cmd + clic para varios)</div>
+          </div>
+        </div>` : ``}
         <div class="form-row col3">
           <div class="form-group">
             <label>Noches</label>
@@ -3964,6 +3974,9 @@ async function guardarReserva() {
   // Crear un registro en rack por cada día de la estadía
   const _trM = /^TR(\d+)$/.exec(apto);
   const _aptosW = _trM ? [_trM[1]+'02', _trM[1]+'03'] : [apto];
+  const _adjSel = Array.from((document.getElementById('res-adjuntos')||{}).selectedOptions||[]).map(o=>o.value).filter(a=>a&&_aptosW.indexOf(a)<0);
+  const _aptosW2 = [..._aptosW, ..._adjSel];
+  const _nCombo = _aptosW2.length;
   const rows = [];
   for (let i = 0; i < noches; i++) {
     const d = new Date(ci);
@@ -3971,14 +3984,15 @@ async function guardarReserva() {
     const fecha = d.toISOString().split('T')[0];
     const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
-    for (const _a of _aptosW) rows.push({ fecha, apto:_a, estado, huesped: nombre, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: tNoche || null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : null });
+    const _tShare = (_adjSel.length>0) ? Math.round((tNoche||0)/_nCombo) : tNoche;
+    for (const _a of _aptosW2) rows.push({ fecha, apto:_a, estado, huesped: nombre, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tShare || null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_adjSel.length>0?'Combo':null) });
   }
   // Día de check-out
   const dco = new Date(co);
-  for (const _a of _aptosW) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : null });
+  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_adjSel.length>0?'Combo':null) });
 
   // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
-  await sb.from('rack').delete().in('apto', _aptosW).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
+  await sb.from('rack').delete().in('apto', _aptosW2).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
   const { error } = await sb.from('rack').insert(rows);
 
   if (error) {
@@ -4019,6 +4033,7 @@ async function guardarReserva() {
     tel: document.getElementById('res-tel').value.trim(),
     numero: await getNextNumeroConfirmacion()
   };
+  if (typeof _adjSel!=='undefined' && _adjSel.length>0) { resData.obs = (resData.obs?resData.obs+' | ':'') + 'Combo unido: ' + _aptosW2.join(' + '); }
   try { var _rvRow = { edificio: EDIFICIO_ACTIVO, apto: resData.apto, config: resData.config, moneda: resData.moneda, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, numero: resData.numero, empresa: resData.empresa, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insH=((await sb.from('reservas').insert(_rvRow).select('id').single()).data)||{}; if(_insH.id) await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); } } catch(_e){}
   setTimeout(() => {
     if(confirm('¿Deseas generar la Confirmación de Reserva ahora?')) {
