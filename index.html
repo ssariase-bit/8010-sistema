@@ -1675,7 +1675,8 @@ async function renderRack() {
   window._rackData = rack;
   window._rackMesNombre = monthNames[month];
 
-  let aptos = [...new Set([...EB().aptosFull, ...(allRack||[]).map(r => r.apto)])].sort((a,b) => {
+  const _noEntr = EB().noEntregados || [];
+  let aptos = [...new Set([...EB().aptosFull, ...(allRack||[]).map(r => r.apto)])].filter(a => _noEntr.indexOf(a) < 0).sort((a,b) => {
     const na = parseInt(a); const nb = parseInt(b);
     if (isNaN(na)||isNaN(nb)) return a.localeCompare(b);
     if (na !== nb) return na - nb;
@@ -2025,8 +2026,9 @@ async function marcarCompletoDirecto(id, apto){
 // Muestra ocupación y tarifa promedio (ADR) de un día al hacer clic en su encabezado
 function infoDiaRack(dia){
   const rack = window._rackData || {};
-  const BASE21 = EB().aptosBase;
-  const AS = ['501A','502A','601A','602A','701A','702A','801A','802A','901A','902A','1001A','1002A'];
+  const _noEntr = EB().noEntregados || [];
+  const BASE21 = (EB().aptosBase||[]).filter(a=>_noEntr.indexOf(a)<0);
+  const AS = EB().habitacionesA || [];
   const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
   const FUERA = ['Bloqueado','Mantenimiento'];
   const calc = (lista) => {
@@ -2050,8 +2052,8 @@ function infoDiaRack(dia){
   if (!pop){ pop = document.createElement('div'); pop.id='rack-dia-pop'; document.body.appendChild(pop); }
   pop.style.cssText = 'position:fixed;top:90px;left:50%;transform:translateX(-50%);background:#1F3864;color:#fff;padding:14px 22px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.35);z-index:9999;font-size:13px;text-align:left;min-width:280px';
   pop.innerHTML = `<div style="font-weight:700;margin-bottom:8px;font-size:14px;text-align:center">📅 Día ${dia} · ${window._rackMesNombre||''}</div>
-    <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Ocupación · 21 aptos</span><b>${pct21}% (${b21.ocu}/${b21.disp})</b></div>
-    <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Ocupación · 33 hab.</span><b>${pct33}% (${b33.ocu}/${b33.disp})</b></div>
+    <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Ocupación · ${BASE21.length} aptos</span><b>${pct21}% (${b21.ocu}/${b21.disp})</b></div>
+    ${AS.length>0?`<div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Ocupación · ${BASE21.length+AS.length} hab.</span><b>${pct33}% (${b33.ocu}/${b33.disp})</b></div>`:''}
     <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Tarifa promedio (ADR)</span><b>$${adr.toLocaleString('es-CO')}</b></div>
     <div style="display:flex;justify-content:space-between;gap:18px;margin:4px 0"><span style="opacity:.85">Ingresos del día</span><b>$${ing.toLocaleString('es-CO')}</b></div>
     <div style="text-align:center"><button onclick="this.parentElement.parentElement.remove()" style="margin-top:8px;background:#fff;color:#1F3864;border:none;border-radius:6px;padding:4px 16px;cursor:pointer;font-size:11px;font-weight:600">Cerrar</button></div>`;
