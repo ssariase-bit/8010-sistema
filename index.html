@@ -5410,6 +5410,16 @@ async function renderList(tabla, titulo, formView, cols, headers) {
   const esPaquetes = tabla === 'paquetes';
   const esBaga = tabla === 'recibos_magnifique';
   const totVentas = esBaga ? rows.reduce((s,r)=>s+(Number(r.total)||0),0) : 0;
+  let resumenBaga = '';
+  if(esBaga){
+    const g={}; rows.forEach(r=>{ const k=String(r.apto||'—').trim()||'—'; if(!g[k]) g[k]={n:0,t:0}; g[k].n++; g[k].t+=Number(r.total)||0; });
+    const arr=Object.keys(g).map(k=>({k,n:g[k].n,t:g[k].t})).sort((a,b)=>b.t-a.t);
+    const filasR=arr.map(x=>`<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">${String(x.k).replace(/</g,'&lt;')}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center">${x.n}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:600;color:var(--verde)">$${fmtNum(x.t)}</td></tr>`).join('');
+    resumenBaga = `<div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:10px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><span>🍽️ Consumo por apartamento / cliente</span><span style="color:var(--verde);font-weight:800">GRAN TOTAL: $${fmtNum(totVentas)}</span></div>
+      <div style="overflow-x:auto"><table class="tabla" style="font-size:13px"><thead><tr><th>Apto / Cliente</th><th style="text-align:center">Recibos</th><th style="text-align:right">Total consumido</th></tr></thead><tbody>${filasR||'<tr><td colspan="3" style="text-align:center;color:#999;padding:14px">Sin recibos</td></tr>'}</tbody></table></div>
+    </div>`;
+  }
   const tableRows = rows.map(r => {
     const celdas = cols.map(c => {
       let v = r[c];
@@ -5435,6 +5445,7 @@ async function renderList(tabla, titulo, formView, cols, headers) {
 
   document.getElementById('main-content').innerHTML = `
     <div class="page-title">${titulo}</div>
+    ${resumenBaga}
     <div class="card">
       <div class="card-header">
         <div class="card-title">${rows.length} registros${esBaga?` <span id="baga-total" style="margin-left:14px;color:var(--verde);font-weight:700">💰 Total ventas: $${fmtNum(totVentas)} <span style="font-size:11px;color:#888">(${rows.length} recibos)</span></span>`:''}</div>
