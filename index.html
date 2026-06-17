@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-1840';
+const APP_VERSION = '2026-06-17-1855';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3694,7 +3694,7 @@ function renderNuevaReserva() {
             <input type="date" id="res-checkout" onchange="calcReserva()">
           </div>
         </div>
-        <div class="form-row">
+        ${(((EB&&EB().nombre)||'').indexOf('8010')>-1) ? `<div class="form-row">
           <div class="form-group">
             <label>Configuración del apto (si tiene habitación A)</label>
             <select id="res-config">
@@ -3703,7 +3703,7 @@ function renderNuevaReserva() {
               <option value="deluxe">Habitación Deluxe — 1 habitación (King)</option>
             </select>
           </div>
-        </div>
+        </div>` : `<select id="res-config" style="display:none"><option value="dividido" selected>Dividido</option></select>`}
 ${(((EB&&EB().nombre)||'').indexOf('8010')===-1) ? `
         <div class="form-row">
           <div class="form-group">
