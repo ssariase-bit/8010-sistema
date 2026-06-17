@@ -4563,10 +4563,9 @@ function _accentInforme(titulo){
   for(var i=0;i<map.length;i++){ if(map[i][0].test(t)) return {color:map[i][1],label:map[i][2]}; }
   return {color:'#211D1E',label:'Informe'};
 }
-function _informeHTML(titulo, texto){
+function _informeShell(titulo, innerHTML, anchoTabla){
   const ac = _accentInforme(titulo);
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const bold = s => esc(s).replace(/\*([^*]+)\*/g,'<strong style="color:#211D1E">$1</strong>');
   const nombre = (typeof EB==='function') ? EB().nombre : '8010 Urban Living';
   const edi = _ediActual();
   const fecha = new Date().toLocaleDateString('es-CO',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
@@ -4574,6 +4573,26 @@ function _informeHTML(titulo, texto){
   const logo = edi==='kubik'
     ? '<span style="display:inline-block;color:#FEFDFB;font-size:22px;letter-spacing:3px;">KUBIK<span style="color:#BCB8B7;"> living</span></span><div style="color:#BCB8B7;font-size:10px;letter-spacing:5px;margin-top:5px;font-family:Helvetica,Arial,sans-serif;">8i8 OPERADORA</div>'
     : '<span style="display:inline-block;color:#FEFDFB;font-size:23px;letter-spacing:5px;">80<span style="color:#BCB8B7;">|</span>10</span><div style="color:#BCB8B7;font-size:10px;letter-spacing:5px;margin-top:5px;font-family:Helvetica,Arial,sans-serif;">URBAN LIVING</div>';
+  const ancho = anchoTabla || 600;
+  return ''
+   +'<body style="margin:0;padding:0;background:#E7E3E0;">'
+   +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E7E3E0;"><tr><td align="center" style="padding:28px 12px;">'
+   +'<table role="presentation" width="'+ancho+'" cellpadding="0" cellspacing="0" style="width:'+ancho+'px;max-width:'+ancho+'px;background:#FFFFFF;border:1px solid #DAD6D1;border-radius:10px;overflow:hidden;">'
+   +'<tr><td style="background:#211D1E;padding:22px 28px;">'+logo+'</td></tr>'
+   +'<tr><td style="height:4px;background:'+ac.color+';font-size:0;line-height:0;">&nbsp;</td></tr>'
+   +'<tr><td style="padding:22px 28px 6px;font-family:Georgia,serif;"><div style="margin-bottom:8px;"><span style="display:inline-block;background:'+ac.color+';color:#FFFFFF;font-size:11px;font-weight:bold;letter-spacing:1.5px;padding:4px 11px;border-radius:5px;font-family:Helvetica,Arial,sans-serif;text-transform:uppercase;">'+esc(ac.label)+'</span></div><div style="font-size:23px;color:#211D1E;">'+esc(titulo)+'</div>'
+   +'<div style="font-size:13px;color:#7F7F7F;margin-top:5px;font-family:Helvetica,Arial,sans-serif;letter-spacing:.3px;">'+esc(nombre)+' &middot; '+esc(fecha)+'</div></td></tr>'
+   +'<tr><td style="padding:12px 28px 6px;">'+innerHTML+'</td></tr>'
+   +'<tr><td style="padding:20px 28px 24px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E7E3E0;font-family:Helvetica,Arial,sans-serif;"><tr>'
+   +'<td style="padding-top:14px;font-size:10.5px;color:#9A938B;">Generado automaticamente &middot; Sistema '+esc(nombre)+'<br>'+esc(fecha)+' '+esc(hora)+'</td>'
+   +'<td align="right" style="padding-top:14px;font-size:10.5px;color:#9A938B;">'+esc(nombre)+'<br>Gerencia de operaciones</td>'
+   +'</tr></table></td></tr>'
+   +'</table></td></tr></table></body>';
+}
+function _informeHTML(titulo, texto){
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const bold = s => esc(s).replace(/\*([^*]+)\*/g,'<strong style="color:#211D1E">$1</strong>');
+  const nombre = (typeof EB==='function') ? EB().nombre : '8010 Urban Living';
   const lineas = String(texto||'').split('\n');
   let filas='';
   lineas.forEach(l=>{
@@ -4590,20 +4609,31 @@ function _informeHTML(titulo, texto){
     }
   });
   if(!filas) filas='<tr><td style="padding:16px;font-size:15px;color:#9A938B;font-family:Helvetica,Arial,sans-serif;">Sin registros para este informe.</td></tr>';
-  return ''
-   +'<body style="margin:0;padding:0;background:#E7E3E0;">'
-   +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E7E3E0;"><tr><td align="center" style="padding:28px 12px;">'
-   +'<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#FFFFFF;border:1px solid #DAD6D1;border-radius:10px;overflow:hidden;">'
-   +'<tr><td style="background:#211D1E;padding:22px 28px;">'+logo+'</td></tr>'
-   +'<tr><td style="height:4px;background:'+ac.color+';font-size:0;line-height:0;">&nbsp;</td></tr>'
-   +'<tr><td style="padding:22px 28px 6px;font-family:Georgia,serif;"><div style="margin-bottom:8px;"><span style="display:inline-block;background:'+ac.color+';color:#FFFFFF;font-size:11px;font-weight:bold;letter-spacing:1.5px;padding:4px 11px;border-radius:5px;font-family:Helvetica,Arial,sans-serif;text-transform:uppercase;">'+esc(ac.label)+'</span></div><div style="font-size:23px;color:#211D1E;">'+esc(titulo)+'</div>'
-   +'<div style="font-size:13px;color:#7F7F7F;margin-top:5px;font-family:Helvetica,Arial,sans-serif;letter-spacing:.3px;">'+esc(nombre)+' &middot; '+esc(fecha)+'</div></td></tr>'
-   +'<tr><td style="padding:12px 28px 6px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">'+filas+'</table></td></tr>'
-   +'<tr><td style="padding:20px 28px 24px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E7E3E0;font-family:Helvetica,Arial,sans-serif;"><tr>'
-   +'<td style="padding-top:14px;font-size:10.5px;color:#9A938B;">Generado automaticamente &middot; Sistema '+esc(nombre)+'<br>'+esc(fecha)+' '+esc(hora)+'</td>'
-   +'<td align="right" style="padding-top:14px;font-size:10.5px;color:#9A938B;">'+esc(nombre)+'<br>Gerencia de operaciones</td>'
-   +'</tr></table></td></tr>'
-   +'</table></td></tr></table></body>';
+  return _informeShell(titulo, '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">'+filas+'</table>');
+}
+// Informe en TABLA horizontal (varias columnas) leyendo la tabla en pantalla — para verlos en orden
+function _informeTablaHTML(){
+  const mc=document.getElementById('main-content'); if(!mc) return null;
+  const tabla=mc.querySelector('table'); if(!tabla) return null;
+  const _stripEmo = s => String(s||'').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}️‍]/gu,'').replace(/\s+/g,' ').trim();
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const clean = v => String(v||'').replace(/✅\s*Sí/gi,'Sí').replace(/⬜\s*No/gi,'No').replace(/\s+/g,' ').trim();
+  const allHeads=[...tabla.querySelectorAll('thead th')].map(th=>_stripEmo(th.textContent));
+  const idxs=allHeads.map((h,i)=>({h,i})).filter(o=>o.h); // descarta columna de acciones (header vacío)
+  if(!idxs.length) return null;
+  const titulo=_stripEmo(mc.querySelector('.page-title')?.textContent||'Informe');
+  const thHTML=idxs.map(o=>'<th style="padding:8px 10px;background:#211D1E;color:#FEFDFB;font-size:11px;text-align:left;font-family:Helvetica,Arial,sans-serif;white-space:nowrap;border:1px solid #3a3a3a;text-transform:uppercase;letter-spacing:.5px;">'+esc(o.h)+'</th>').join('');
+  let body='', ri=0;
+  tabla.querySelectorAll('tbody tr').forEach(tr=>{
+    const tds=[...tr.querySelectorAll('td')]; if(!tds.length) return;
+    let row='';
+    idxs.forEach(o=>{ const td=tds[o.i]; const v=td?clean(td.textContent):''; row+='<td style="padding:7px 10px;font-size:12.5px;color:#333;border:1px solid #ECE9E4;font-family:Helvetica,Arial,sans-serif;white-space:nowrap;">'+esc(v)+'</td>'; });
+    body+='<tr style="'+(ri%2?'background:#FAFAF8;':'')+'">'+row+'</tr>'; ri++;
+  });
+  if(!body) return null;
+  const ancho = Math.min(980, Math.max(600, 120*idxs.length));
+  const tableHTML='<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;"><thead><tr>'+thHTML+'</tr></thead><tbody>'+body+'</tbody></table>';
+  return _informeShell(titulo, tableHTML, ancho);
 }
 async function enviarInformeCorreo(titulo, texto, btn, htmlOverride){
   const edi = _ediActual();
@@ -4717,7 +4747,7 @@ async function enviarRackCorreo(btn){
 }
 function compartirWA(){ window.open('https://wa.me/?text='+encodeURIComponent(_informeTextoDOM()),'_blank'); }
 function compartirMail(){ return enviarInformeCorreo(_tituloInforme(), _informeTextoDOM()); }
-function barraCompartir(){ return '<button class="btn btn-outline btn-sm" onclick="compartirWA()" title="Compartir por WhatsApp">📱 WhatsApp</button><button class="btn btn-outline btn-sm" onclick="enviarInformeCorreo(_tituloInforme(), _informeTextoDOM(), this)" title="Enviar por correo">✉️ Correo</button>'; }
+function barraCompartir(){ return '<button class="btn btn-outline btn-sm" onclick="compartirWA()" title="Compartir por WhatsApp">📱 WhatsApp</button><button class="btn btn-outline btn-sm" onclick="enviarInformeCorreo(_tituloInforme(), _informeTextoDOM(), this, _informeTablaHTML())" title="Enviar por correo (tabla)">✉️ Correo</button>'; }
 async function renderSeguimientosTurno(){
   // Semana en curso (lunes a domingo) — mismo cálculo que Información de la Semana
   const _base = new Date(TODAY+'T00:00:00');
