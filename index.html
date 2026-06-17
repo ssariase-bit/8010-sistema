@@ -2574,7 +2574,7 @@ async function renderNovedadForm() {
       <div class="form-row">
         <div class="form-group"><label>Área</label>
           <select id="n-area">
-            <option>Recepción</option><option>Apartamento</option><option>Mantenimiento</option>
+            <option>Recepción</option><option>Apartamento</option><option>Actas</option><option>Mantenimiento</option>
             <option>Housekeeping</option><option>Seguridad</option><option>Zonas comunes</option>
             <option>Financiero</option><option>Huésped</option><option>General</option>
           </select>
@@ -7168,6 +7168,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
         <div class="form-group"><label>Primer apellido</label><input type="text" id="cki-apellido1" value="${_q(_hp.apellido1)}" placeholder="Primer apellido"></div>
         <div class="form-group"><label>Segundo apellido</label><input type="text" id="cki-apellido2" value="${_q(_hp.apellido2)}" placeholder="Segundo apellido"></div>
       </div>
+      <div class="form-group"><label>Acompañantes (si ingresa con esposa, pareja, hijos…)</label><input type="text" id="cki-acomp" placeholder="Ej: esposa e hijo / pareja — dejar vacío si ingresa solo"></div>
       <div class="form-row">
         <div class="form-group"><label>Empresa / Razón social</label><input type="text" id="cki-empresa" value="${empresa||''}" placeholder="Dejar vacío si es particular"></div>
         <div class="form-group"><label>Tratamiento</label>
@@ -7321,6 +7322,8 @@ function generarMsgCKI() {
   const _book = (document.getElementById('cki-book')?.value||'').startsWith('Env');
   const quien = document.getElementById('cki-quien').value.trim();
   const obs = document.getElementById('cki-obs').value.trim();
+  const _acomp = (document.getElementById('cki-acomp')?.value||'').trim();
+  const acompStr = _acomp ? ', ingresa acompañado de '+_acomp : '';
   // Cortesías / mínimos dejados en el apartamento
   const _am=[];
   if(document.getElementById('cki-am-fruta')?.checked) _am.push('cortesía de fruta');
@@ -7347,7 +7350,7 @@ function generarMsgCKI() {
   const cobroObs = (document.getElementById('cki-cobro')?.value || '').trim();
   const migCKI = (document.getElementById('cki-migracion')?.value || '').startsWith('Sí') ? ', se envía reporte de ingreso a Migración Colombia' : '';
   const msg = `${(function(_h){return _h<12?'Buenos días':_h<18?'Buenas tardes':'Buenas noches';})(new Date().getHours())}, ${_fh}
-Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${cantidad} ${uniLbl}${cantidad>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''}${migCKI}${cortesias} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
+Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${cantidad} ${uniLbl}${cantidad>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''}${migCKI}${acompStr}${cortesias} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
   // Comunicar la estadía al RACK: una fila por noche (Check-in hoy → Ocupado → Check-out hoy)
@@ -7409,6 +7412,7 @@ function renderInformeCKO(aptoPreload, huesped, canal) {
         <div class="form-group"><label>Primer apellido</label><input type="text" id="cko-apellido1" value="${_q(_hp.apellido1)}" placeholder="Primer apellido"></div>
         <div class="form-group"><label>Segundo apellido</label><input type="text" id="cko-apellido2" value="${_q(_hp.apellido2)}" placeholder="Segundo apellido"></div>
       </div>
+      <div class="form-group"><label>Acompañantes (si estuvo con esposa, pareja, hijos…)</label><input type="text" id="cko-acomp" placeholder="Ej: esposa e hijo — dejar vacío si estuvo solo"></div>
       <div class="form-row">
         <div class="form-group"><label>Consumos adicionales ($)</label><input type="number" id="cko-consumos" placeholder="0" value="0"></div>
         <div class="form-group"><label>Forma de pago adicional</label>
@@ -7494,6 +7498,8 @@ function generarMsgCKO() {
   const acta = document.getElementById('cko-acta').value;
   const quien = document.getElementById('cko-quien').value.trim();
   const obs = document.getElementById('cko-obs').value.trim();
+  const _acompCKO = (document.getElementById('cko-acomp')?.value||'').trim();
+  const acompStrCKO = _acompCKO ? ', estuvo acompañado de '+_acompCKO : '';
 
   if (!huesped) { showToast('Ingresa el nombre del huésped', 'error'); return; }
 
@@ -7529,7 +7535,7 @@ function generarMsgCKO() {
   }
   const _ivaModoCKO = (document.getElementById('cko-iva')||{}).value || 'incluido'; const _ivaLineaCKO = (_alojaOk && typeof _ivaCalc==='function') ? ('\n\ud83e\uddfe IVA: '+_ivaCalc(aloja, _ivaModoCKO).msg) : '';
   const msg = `${h<12?'Buenos días':h<18?'Buenas tardes':'Buenas noches'}, ${_fh}
-Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${cobroStr}${consumosStr}${cobroObs?' ('+cobroObs+')':''}${fvStr}${mig}${enc}${actaStr} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}${totalStr}${_ivaLineaCKO}${_alojaWarn}
+Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${cobroStr}${consumosStr}${cobroObs?' ('+cobroObs+')':''}${fvStr}${mig}${enc}${actaStr}${acompStrCKO} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}${totalStr}${_ivaLineaCKO}${_alojaWarn}
 R/${quien}`;
 
   // Registrar el informe en Novedades para que quede en el reporte del día
