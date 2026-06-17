@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-2110';
+const APP_VERSION = '2026-06-17-2130';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4118,25 +4118,25 @@ const DESC_APTO = {
   '401':'Apartamento de 96 m² con 1 habitación:<br>01 cama King.',
   '402':'Apartamento de 90 m² con 1 habitación:<br>01 cama King.',
   '403':'Apartamento de 60 m² con 1 habitación:<br>01 cama King.',
-  '501':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
-  '502':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
-  '601':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
-  '602':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
+  '501':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
+  '502':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
+  '601':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
+  '602':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
   '602A':'Apartamento de 60 m² con 1 habitación:<br>01 cama King.',
-  '701':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
-  '702':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
+  '701':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
+  '702':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
   '702A':'Apartamento de 60 m² con 1 habitación:<br>01 cama King.',
-  '801':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
-  '802':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
+  '801':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
+  '802':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
   '802A':'Apartamento de 60 m² con 1 habitación:<br>01 cama King.',
-  '901':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
-  '902':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
+  '901':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
+  '902':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
   '902A':'Apartamento de 60 m² con 1 habitación:<br>01 cama King.',
-  '1001':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
-  '1002':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
+  '1001':'Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
+  '1002':'Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
   '1002A':'Apartamento de 60 m² con 1 habitación:<br>01 cama King.',
-  '1101':'Apartamento de 120 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.',
-  '1102':'Apartamento de 120 m² con 2 habitaciones:<br>01 cama King, 01 cama doble.'
+  '1101':'Apartamento de 120 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.',
+  '1102':'Apartamento de 120 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'
 };
 
 function fmtFechaLarga(d) {
