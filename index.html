@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-2035';
+const APP_VERSION = '2026-06-17-2110';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2199,6 +2199,19 @@ async function openAptoModal(id, num) {
   document.getElementById('m-canal').value   = data?.canal || '';
   document.getElementById('m-checkin').value = data?.checkin || '';
   document.getElementById('m-checkout').value= data?.checkout || '';
+  // Si la fila no trae fechas (reservas viejas), derivar el rango ocupado contiguo del mismo huesped
+  if((!data?.checkin || !data?.checkout) && data?.huesped && data?.fecha){
+    try{
+      const _q = await sb.from('rack').select('fecha').eq('edificio', data.edificio).eq('apto', data.apto).eq('huesped', data.huesped);
+      const _set = new Set((_q.data||[]).map(x=>x.fecha));
+      const _add = (f,n)=>{ const d=new Date(f+'T00:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
+      let _lo=data.fecha, _hi=data.fecha;
+      while(_set.has(_add(_lo,-1))) _lo=_add(_lo,-1);
+      while(_set.has(_add(_hi,1)))  _hi=_add(_hi,1);
+      if(!data?.checkin)  document.getElementById('m-checkin').value  = _lo;
+      if(!data?.checkout) document.getElementById('m-checkout').value = _hi;
+    }catch(_e){}
+  }
   // Moneda / tarifa: si la estadía está en USD, mostrar el valor USD original + su TRM
   var _esUSD = data && data.moneda==='USD';
   if(document.getElementById('m-moneda')) document.getElementById('m-moneda').value = _esUSD ? 'USD' : 'COP';
@@ -3994,11 +4007,11 @@ async function guardarReserva() {
     const fecha = d.toISOString().split('T')[0];
     const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
-    for (const _a of _aptosW2){ const _tA=(_adjSel.length>0 && _a!==apto)?null:(tNoche||null); rows.push({ fecha, apto:_a, estado, huesped: nombre, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_adjSel.length>0?'Combo':null) }); }
+    for (const _a of _aptosW2){ const _tA=(_adjSel.length>0 && _a!==apto)?null:(tNoche||null); rows.push({ fecha, apto:_a, estado, huesped: nombre, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_adjSel.length>0?'Combo':null) }); }
   }
   // Día de check-out
   const dco = new Date(co);
-  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_adjSel.length>0?'Combo':null) });
+  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_adjSel.length>0?'Combo':null) });
 
   // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
   await sb.from('rack').delete().in('apto', _aptosW2).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
