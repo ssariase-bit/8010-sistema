@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-1810';
+const APP_VERSION = '2026-06-17-1840';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -487,6 +487,7 @@ const EDIFICIOS = {
   },
   'kubik': {
     nombre: 'Kubik Living 8i8',
+    inicioOperacion: '2026-04',
     logo: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4ODAgMzQ1Ij48dGV4dCB4PSIwIiB5PSIxNTAiIGZvbnQtZmFtaWx5PSJBcmlhbCBCbGFjaywgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI5MDAiIGZvbnQtc2l6ZT0iMTUwIiBsZXR0ZXItc3BhY2luZz0iMiIgZmlsbD0iI2ZmZmZmZiIgdHJhbnNmb3JtPSJzY2FsZSgxLjA2LDEpIj5LVUJJSzwvdGV4dD48cGF0aCBmaWxsPSIjZmZmZmZmIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik02OTAsMjIgTDc4MiwyMiBRODEyLDIyIDgxMiw1MiBMODEyLDE3NCBMNjYwLDE3NCBMNjYwLDUyIFE2NjAsMjIgNjkwLDIyIFogTTcyOCwyMiBMNzQ0LDIyIEw3NDQsNTggTDcyOCw1OCBaIE02NjAsODYgTDgxMiw4NiBMODEyLDEwNCBMNjYwLDEwNCBaIE03MjgsMTA0IEw3NDQsMTA0IEw3NDQsMTc0IEw3MjgsMTc0IFoiLz48dGV4dCB4PSIyIiB5PSIzMTIiIGZvbnQtZmFtaWx5PSJBcmlhbCwgSGVsdmV0aWNhLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iNTAwIiBmb250LXNpemU9IjExOCIgbGV0dGVyLXNwYWNpbmc9IjE0IiBmaWxsPSIjZmZmZmZmIiB0cmFuc2Zvcm09InNjYWxlKDEuMDIsMSkiPkxJVklORyA4aTg8L3RleHQ+PC9zdmc+',
     nit: '902026873-8',
     aptosBase: ['301','302','303','304','304A','401','402','403','404','404A','501','502','503','504','504A','601','602','603','604','604A','701','702','703','704','704A','801','802','803','804','804A','901','902','903','904','904A','PH1','PH2'],
@@ -1410,15 +1411,21 @@ async function renderIndicadores(){
   let filas='', totN=0,totDisp=0,totVen=0,totTar=0;
   const sem=[{n:0,d:0,v:0,t:0},{n:0,d:0,v:0,t:0}];
   let prevN=0,prevVen=0,prevTar=0;
+  const _ini = eb.inicioOperacion || null;
+  const _iy = _ini ? parseInt(_ini.slice(0,4),10) : null;
+  const _im = _ini ? parseInt(_ini.slice(5,7),10) : null;
+  const _opera = (i)=> !_ini ? true : ((yr>_iy) || (yr===_iy && (i+1)>=_im));
   for(let i=0;i<12;i++){
-    const disp=nVend*diasMes(i), o=cur[i];
+    const _op=_opera(i);
+    const disp=_op?nVend*diasMes(i):0, o=cur[i];
     const adr=o.nTar?Math.round(o.ventas/o.nTar):0;
     const ocu=disp?Math.round(o.noches/disp*100):0;
     const revpar=disp?Math.round(o.ventas/disp):0;
-    const despN=Math.max(0,disp-o.noches);
+    const despN=disp?Math.max(0,disp-o.noches):0;
     totN+=o.noches; totDisp+=disp; totVen+=o.ventas; totTar+=o.nTar;
     const S=sem[i<6?0:1]; S.n+=o.noches; S.d+=disp; S.v+=o.ventas; S.t+=o.nTar;
     prevN+=prev[i].noches; prevVen+=prev[i].ventas; prevTar+=prev[i].nTar;
+    if(!_op){ filas+='<tr style="color:#c2c2c2;font-style:italic"><td style="text-align:left">'+MES[i]+'</td><td colspan="7" style="text-align:center">— no operaba —</td></tr>'; continue; }
     const vacio=(o.noches===0&&o.ventas===0);
     filas+='<tr style="'+(vacio?'color:#b9b9b9':'')+'">'
       +'<td style="font-weight:600;text-align:left">'+MES[i]+'</td>'
