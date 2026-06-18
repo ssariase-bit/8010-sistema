@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0070';
+const APP_VERSION = '2026-06-17-0080';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -6067,6 +6067,44 @@ async function tablaControlPersonal(fechaSel) {
   w.document.close();
 }
 
+function calcRecargos(){
+  var hoy=new Date(); var D=(hoy>=new Date('2026-07-01'))?0.90:0.80;
+  var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes','error'); return; }
+  var html=`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Calculadora de recargos</title>
+  <style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937;max-width:780px}
+  h2{color:#1D3461;margin:0 0 4px}.sub{color:#6b7280;font-size:13px;margin-bottom:16px}
+  table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #cbd5e1;padding:7px 9px}
+  th{background:#1F3864;color:#fff;text-align:left}.r{text-align:right}
+  input{width:110px;padding:5px;border:1px solid #cbd5e1;border-radius:5px;font-size:13px}
+  .tot{font-size:18px;font-weight:800;color:#15803d}.cfg{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px;align-items:end}
+  .cfg label{font-size:12px;color:#374151;display:block;margin-bottom:3px}
+  .btn{background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-top:14px}
+  @media print{.btn{display:none}}</style></head>
+  <body><h2>Calculadora de recargos y horas extra</h2>
+  <div class="sub">Colombia · Ley 2466/2025 · vigente ${hoy.toLocaleDateString('es-CO')}</div>
+  <div class="cfg">
+   <div><label>Valor hora ordinaria $</label><input type="number" id="vh" value="0" oninput="rc()"></div>
+   <div><label>o salario mensual ÷240</label><input type="number" id="sm" placeholder="0" oninput="var v=parseFloat(this.value)||0; if(v){document.getElementById('vh').value=Math.round(v/240);} rc();"></div>
+   <div><label>% dominical/festivo (auto)</label><input type="number" id="dom" value="${Math.round(D*100)}" oninput="rc()"></div>
+  </div>
+  <table><thead><tr><th>Concepto</th><th>Factor</th><th>Horas</th><th class="r">Valor a pagar</th></tr></thead>
+  <tbody id="tb"></tbody>
+  <tfoot><tr><td colspan="3" style="text-align:right;font-weight:700">TOTAL</td><td class="r"><span id="total" class="tot">$0</span></td></tr></tfoot></table>
+  <p style="font-size:11px;color:#9a938b;margin-top:10px">Factores sobre la hora ordinaria: extra diurna +25%, extra nocturna +75%, recargo nocturno +35% (7pm–6am), dominical/festivo el % indicado (80% hasta jun-2026, 90% desde jul-2026). Los combinados suman los recargos. Verificar con nómina.</p>
+  <button class="btn" onclick="window.print()">Imprimir / PDF</button>
+  <script>
+   var TIPOS=[['Hora extra diurna',0.25,0],['Hora extra nocturna',0.75,0],['Recargo nocturno (hora 7pm-6am)',0.35,0],['Dominical/festivo (hora)',0,1],['Recargo nocturno dominical/festivo',0.35,1],['Hora extra diurna dominical/festiva',0.25,1],['Hora extra nocturna dominical/festiva',0.75,1]];
+   function fmt(n){return '$'+Math.round(n||0).toLocaleString('es-CO');}
+   function rc(){var vh=parseFloat(document.getElementById('vh').value)||0;var D=(parseFloat(document.getElementById('dom').value)||0)/100;var tot=0;
+     TIPOS.forEach(function(t,i){var f=t[2]?(1+D+t[1]):(1+t[1]);var hin=document.getElementById('h'+i);var h=parseFloat(hin?hin.value:0)||0;var val=vh*f*h;tot+=val;
+       document.getElementById('f'+i).textContent='x'+f.toFixed(2);document.getElementById('v'+i).textContent=fmt(val);});
+     document.getElementById('total').textContent=fmt(tot);}
+   document.getElementById('tb').innerHTML=TIPOS.map(function(t,i){return '<tr><td>'+t[0]+'</td><td id="f'+i+'">-</td><td><input type="number" min="0" step="0.5" id="h'+i+'" value="0" oninput="rc()"></td><td class="r" id="v'+i+'">$0</td></tr>';}).join('');
+   rc();
+  <\/script></body></html>`;
+  w.document.write(html); w.document.close();
+}
+
 async function tablaSimplePersonal(){ var fIn=document.getElementById('cp-fecha-informe'); var fecha=fIn?fIn.value:''; if(!fecha){ alert('Selecciona una fecha para el informe'); return; } var resp=await sb.from('control_personal').select('*').eq('fecha',fecha).order('cargo').order('nombre'); var rows=resp.data||[]; var hhmm=function(h){ h=(h||'').slice(0,5); if(!h) return '--:--'; var pp=h.split(':'); var H=Number(pp[0])||0, M=pp[1]||'00'; var ap=H<12?'AM':'PM'; var h12=H%12||12; return h12+':'+M+' '+ap; }; var h2=function(m){ m=Number(m)||0; if(!m) return '—'; var hh=Math.floor(m/60), mm=m%60; return (hh?hh+'h ':'')+(mm?mm+'m':(hh?'':'0m')); }; var h2t=function(m){ m=Number(m)||0; if(!m) return '--'; var hh=Math.floor(m/60), mm=m%60; return (hh?hh+'h':'')+(mm?mm+'m':(hh?'':'0m')); }; var nb=(typeof EB==='function'&&EB()&&EB().nombre)||''; var cuerpo=''; rows.forEach(function(r,i){ var ret=Number(r.tiempo_retraso)||0, adi=Number(r.tiempo_adicional)||0; cuerpo+='<tr><td style="text-align:center">'+(i+1)+'</td><td>'+(r.nombre||'')+'</td><td>'+(r.cargo||'—')+'</td><td style="text-align:center">'+hhmm(r.marcacion_ingreso)+'</td><td style="text-align:center">'+(r.marcacion_salida?hhmm(r.marcacion_salida):'<i style="color:#999">en turno</i>')+'</td><td style="text-align:center;color:'+(ret?'#C00000':'#333')+'">'+(ret?h2(ret):'—')+'</td><td style="text-align:center;color:'+(adi?'#0a7d2c':'#333')+'">'+(adi?h2(adi):'—')+'</td></tr>'; }); if(!cuerpo) cuerpo='<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Sin registros para esta fecha</td></tr>'; var pad=function(s,n){ s=String(s==null?'':s); if(s.length>n) s=s.slice(0,n-1)+'…'; while(s.length<n) s+=' '; return s; }; var lineas=[]; lineas.push(pad('NOMBRE',16)+' '+pad('ING',5)+' '+pad('SAL',5)+' '+pad('RET',5)+' ADI'); rows.forEach(function(r){ var ret=Number(r.tiempo_retraso)||0, adi=Number(r.tiempo_adicional)||0; lineas.push(pad(r.nombre,16)+' '+pad(hhmm(r.marcacion_ingreso),5)+' '+pad(r.marcacion_salida?hhmm(r.marcacion_salida):'--',5)+' '+pad(ret?h2t(ret):'--',5)+' '+(adi?h2t(adi):'--')); }); if(!rows.length) lineas.push('(sin registros)'); var txt='🕐 '+nb+' — Control de Ingreso y Salida de Personal\n📅 '+fmtDate(fecha)+' · '+rows.length+' registro'+(rows.length===1?'':'s')+'\n\n```\n'+lineas.join('\n')+'\n```'; var waHref='https://wa.me/?text='+encodeURIComponent(txt); var mailHref='mailto:?subject='+encodeURIComponent('Control de Personal — '+fmtDate(fecha))+'&body='+encodeURIComponent(txt); var w=window.open('','_blank'); w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Control de Personal</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#222}h2{margin:0 0 2px}.sub{color:#666;font-size:13px;margin-bottom:14px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #bbb;padding:6px 8px}thead th{background:#1f3b57;color:#fff;text-align:center}tbody tr:nth-child(even){background:#f4f6f8}.bar{margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap}.bar a,.bar button{font:inherit;font-size:13px;padding:8px 14px;border:1px solid #1f3b57;border-radius:6px;background:#fff;color:#1f3b57;cursor:pointer;text-decoration:none;display:inline-block}.bar .wa{background:#25D366;border-color:#25D366;color:#fff}@media print{.bar{display:none}}</style></head><body><div class="bar"><button onclick="window.print()">🖨 Imprimir / Guardar PDF</button><a class="wa" href="'+waHref+'" target="_blank">💬 WhatsApp</a><a href="'+mailHref+'">📧 Correo</a><button onclick="navigator.clipboard.writeText(document.getElementById(&#39;rawtxt&#39;).value);this.textContent=&#39;✓ Copiado&#39;">📋 Copiar texto</button></div><textarea id="rawtxt" style="position:absolute;left:-9999px">'+txt+'</textarea><h2>'+nb+' — Control de Ingreso y Salida de Personal</h2><div class="sub">'+fmtDate(fecha)+' · '+rows.length+' registro'+(rows.length===1?'':'s')+'</div><table><thead><tr><th>#</th><th>Nombre</th><th>Cargo</th><th>Ingreso</th><th>Salida</th><th>Retraso</th><th>H. adicionales</th></tr></thead><tbody>'+cuerpo+'</tbody></table></body></html>'); w.document.close(); } 
 
     async function renderControlPersonal() {
@@ -6090,6 +6128,7 @@ async function tablaSimplePersonal(){ var fIn=document.getElementById('cp-fecha-
         <input type="date" id="cp-fecha-informe" value="${TODAY}" title="Fecha del informe a compartir" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
         <button class="btn btn-outline btn-sm" onclick="tablaControlPersonal()" style="padding:10px 16px;color:var(--azul);border-color:var(--azul)">🖨️ Ver tabla / Imprimir</button>
         <button class="btn btn-outline btn-sm" onclick="tablaSimplePersonal()" style="padding:10px 16px">🖨 Tabla</button><button class="btn btn-outline btn-sm" onclick="compartirControlPersonal()" style="padding:10px 16px">📤 Compartir</button>
+        <button class="btn btn-outline btn-sm" onclick="calcRecargos()" style="padding:10px 16px;color:#7c3aed;border-color:#7c3aed">🧮 Calculadora de recargos</button>
         <button class="btn btn-success btn-sm" onclick="loadView('control-personal-form')" style="padding:10px 20px">+ Registrar</button>
       </div>
     </div>
