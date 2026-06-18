@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0320';
+const APP_VERSION = '2026-06-17-0330';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -666,6 +666,8 @@ const NAV_ITEMS = {
     { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
     { id: 'capsulas-list', icon: '🧴', label: 'Cápsulas Cortesía' },
     { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tec.' },
+    { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
+  { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
     { section: 'Financiero / Admin' },
     { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
     { id: 'nomina', icon: '💼', label: 'Nómina 8i8' },
@@ -726,6 +728,8 @@ const NAV_ITEMS = {
     { id: 'maletas-list', icon: '🧳', label: 'Maletas en Bodega' },
     { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
     { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tec.' },
+    { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
+  { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
     { id: 'capsulas-list', icon: '🧴', label: 'Cápsulas Cortesía' },
     { section: 'Financiero' },
     { id: 'caja-list', icon: '💰', label: 'Caja' },
@@ -938,6 +942,7 @@ const MENU_COMPLETO = [
   { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
   { id: 'prestamos-form', icon: '💻', label: 'Préstamo Tecnología' },
   { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tec.' },
+  { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
   { section: 'Financiero / Admin' },
   { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
   { id: 'indicadores', icon: '📊', label: 'Indicadores Ocup./Ventas' },
@@ -1221,6 +1226,7 @@ async function loadView(view) {
       {id:'capsulas_lavadora',label:'Cápsulas lavadora',type:'number'},
       {id:'entregado_por',label:'Entregado por',type:'text'},
     ]); break;
+    case 'prestamos-elem': await renderPrestamosElementos(); break;
     case 'prestamos-list':     await renderList('prestamos_tec','💻 Préstamos Tecnología','prestamos-form',['fecha_prestamo','apto','arrendatario','articulo','cantidad','estado','fecha_devolucion'],['Fecha','Apto','Arrendatario','Artículo','Cant.','Estado','Devolución']); break;
     case 'prestamos-form':     renderGenForm('prestamos_tec','💻 Registrar Préstamo de Tecnología',[
       {id:'fecha_prestamo',label:'Fecha préstamo',type:'date',default:TODAY,req:true},
@@ -6287,6 +6293,96 @@ async function cargarRevisionesApto(){
   var fmtF=function(f){if(!f)return '-';var p=String(f).slice(0,10).split('-');return p[2]+'/'+p[1]+'/'+p[0];};
   var tr=rows.map(function(x){return '<tr><td>'+fmtF(x.fecha)+'</td><td><b>'+esc(x.apto)+'</b></td><td>'+esc(x.estado_apto||'')+'</td><td style="text-align:left">'+esc(x.cortesias||'')+'</td><td style="text-align:left">'+esc(x.observaciones||'')+'</td><td>'+esc(x.revisado_por||'')+'</td></tr>';}).join('')||'<tr><td colspan="6" style="text-align:center;color:#999;padding:16px">Sin revisiones registradas</td></tr>';
   cont.innerHTML='<div class="card"><div class="card-title" style="margin-bottom:8px">Revisiones recientes</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th>Fecha</th><th>Apto</th><th>Estado</th><th>Cortesías</th><th>Observaciones</th><th>Revisó</th></tr></thead><tbody>'+tr+'</tbody></table></div></div>';
+}
+
+async function renderPrestamosElementos(){
+  document.getElementById('main-content').innerHTML=
+    '<div class="page-title">☂️ Préstamos e Inventario</div>'+
+    '<div id="pe-inv"></div>'+
+    '<div class="card" style="max-width:760px;margin-top:14px">'+
+      '<div class="card-title" style="margin-bottom:8px">Registrar préstamo</div>'+
+      '<div class="form-row col3">'+
+        '<div class="form-group"><label>Elemento</label><select id="pe-item"></select></div>'+
+        '<div class="form-group"><label>Cantidad</label><input type="number" id="pe-cant" min="1" value="1"></div>'+
+        '<div class="form-group"><label>Fecha préstamo</label><input type="date" id="pe-fecha" value="'+TODAY+'"></div>'+
+      '</div>'+
+      '<div class="form-row col3">'+
+        '<div class="form-group"><label>Apto / Habitación</label><input type="text" id="pe-apto"></div>'+
+        '<div class="form-group"><label>Huésped / Quien recibe</label><input type="text" id="pe-huesped"></div>'+
+        '<div class="form-group"><label>Devolución pactada</label><input type="date" id="pe-devpact"></div>'+
+      '</div>'+
+      '<div class="form-group"><label>Observaciones</label><input type="text" id="pe-obs" placeholder="Opcional"></div>'+
+      '<button class="btn btn-success" onclick="registrarPrestamoElem()">📦 Registrar préstamo</button>'+
+    '</div>'+
+    '<div id="pe-lista" style="margin-top:14px"></div>';
+  await cargarInventarioElem();
+  await cargarPrestamosElem();
+}
+async function cargarInventarioElem(){
+  var inv=await sb.from('inventario_items').select('*').eq('edificio',EDIFICIO_ACTIVO).order('nombre');
+  var items=(inv.data)||[];
+  var pr=await sb.from('prestamos_elementos').select('item,cantidad').eq('edificio',EDIFICIO_ACTIVO).eq('estado','Prestado');
+  var prestadas={}; (pr.data||[]).forEach(function(x){ prestadas[x.item]=(prestadas[x.item]||0)+(Number(x.cantidad)||0); });
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');};
+  var cards=items.map(function(it){
+    var p=prestadas[it.nombre]||0; var disp=(Number(it.total)||0)-p;
+    var col=disp<=0?'#C0392B':(disp<=2?'#B9770E':'#1E7E34');
+    return '<div style="border:1px solid #e3e6ea;border-radius:10px;padding:12px;min-width:170px;background:#fff">'+
+      '<div style="font-weight:700;font-size:15px">'+esc(it.nombre)+'</div>'+
+      '<div style="font-size:12px;color:#666;margin:4px 0">Total: <b>'+(Number(it.total)||0)+'</b> · Prestadas: <b>'+p+'</b></div>'+
+      '<div style="font-size:22px;font-weight:800;color:'+col+'">'+disp+' <span style="font-size:12px;font-weight:500;color:#666">disponibles</span></div>'+
+      '<button class="btn btn-secondary" style="margin-top:8px;padding:4px 10px;font-size:12px" onclick="editarTotalItem(\''+it.id+'\','+(Number(it.total)||0)+',\''+esc(it.nombre)+'\')">✏️ Editar total</button>'+
+    '</div>';
+  }).join('');
+  document.getElementById('pe-inv').innerHTML=
+    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="card-title">Inventario</div>'+
+    '<button class="btn btn-primary" style="padding:5px 12px;font-size:13px" onclick="nuevoItemInventario()">+ Nuevo elemento</button></div>'+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap">'+(cards||'<div style="color:#999;padding:8px">Sin elementos. Crea uno (ej. Sombrillas).</div>')+'</div></div>';
+  // rellenar select del form
+  var sel=document.getElementById('pe-item');
+  if(sel) sel.innerHTML=items.map(function(it){return '<option>'+esc(it.nombre)+'</option>';}).join('')||'<option value="">(crea un elemento primero)</option>';
+}
+async function nuevoItemInventario(){
+  var nom=prompt('Nombre del elemento (ej. Sombrillas):'); if(!nom) return;
+  var tot=prompt('Cantidad total en inventario:','0'); if(tot===null) return;
+  var r=await sb.from('inventario_items').insert({edificio:EDIFICIO_ACTIVO,nombre:nom.trim(),total:Number(tot)||0});
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('✓ Elemento creado','success'); cargarInventarioElem();
+}
+async function editarTotalItem(id,actual,nombre){
+  var tot=prompt('Total de '+nombre+' en inventario:',String(actual)); if(tot===null) return;
+  var r=await sb.from('inventario_items').update({total:Number(tot)||0}).eq('id',id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('✓ Inventario actualizado','success'); cargarInventarioElem();
+}
+async function registrarPrestamoElem(){
+  var item=document.getElementById('pe-item').value;
+  if(!item){ showToast('Crea un elemento primero','error'); return; }
+  var row={ edificio:EDIFICIO_ACTIVO, item:item, cantidad:Number(document.getElementById('pe-cant').value)||1, fecha_prestamo:document.getElementById('pe-fecha').value||TODAY, apto:(document.getElementById('pe-apto').value||'').trim(), huesped:(document.getElementById('pe-huesped').value||'').trim(), fecha_dev_pactada:document.getElementById('pe-devpact').value||null, observaciones:(document.getElementById('pe-obs').value||'').trim(), estado:'Prestado', user_id:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null };
+  var r=await sb.from('prestamos_elementos').insert(row);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('✓ Préstamo registrado','success');
+  document.getElementById('pe-apto').value=''; document.getElementById('pe-huesped').value=''; document.getElementById('pe-obs').value='';
+  await cargarInventarioElem(); await cargarPrestamosElem();
+}
+async function devolverPrestamoElem(id){
+  var r=await sb.from('prestamos_elementos').update({estado:'Devuelto',fecha_devolucion:TODAY}).eq('id',id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('✓ Devolución registrada','success');
+  await cargarInventarioElem(); await cargarPrestamosElem();
+}
+async function cargarPrestamosElem(){
+  var cont=document.getElementById('pe-lista'); if(!cont) return;
+  var r=await sb.from('prestamos_elementos').select('*').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(60);
+  var rows=(r.data)||[];
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
+  var fmtF=function(f){if(!f)return '-';var p=String(f).slice(0,10).split('-');return p[2]+'/'+p[1]+'/'+p[0];};
+  var tr=rows.map(function(x){
+    var badge=x.estado==='Devuelto'?'<span style="color:#1E7E34;font-weight:600">Devuelto</span>':'<span style="color:#B9770E;font-weight:600">Prestado</span>';
+    var acc=x.estado==='Prestado'?'<button class="btn btn-success" style="padding:3px 9px;font-size:12px" onclick="devolverPrestamoElem(\''+x.id+'\')">↩ Devolver</button>':(fmtF(x.fecha_devolucion));
+    return '<tr><td>'+fmtF(x.fecha_prestamo)+'</td><td><b>'+esc(x.item)+'</b></td><td>'+(Number(x.cantidad)||1)+'</td><td>'+esc(x.apto||'')+'</td><td style="text-align:left">'+esc(x.huesped||'')+'</td><td>'+badge+'</td><td>'+acc+'</td></tr>';
+  }).join('')||'<tr><td colspan="7" style="text-align:center;color:#999;padding:16px">Sin préstamos registrados</td></tr>';
+  cont.innerHTML='<div class="card"><div class="card-title" style="margin-bottom:8px">Préstamos</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th>Fecha</th><th>Elemento</th><th>Cant.</th><th>Apto</th><th>Recibe</th><th>Estado</th><th></th></tr></thead><tbody>'+tr+'</tbody></table></div></div>';
 }
 
 async function tablaSimplePersonal(){ var fIn=document.getElementById('cp-fecha-informe'); var fecha=fIn?fIn.value:''; if(!fecha){ alert('Selecciona una fecha para el informe'); return; } var resp=await sb.from('control_personal').select('*').eq('fecha',fecha).order('cargo').order('nombre'); var rows=resp.data||[]; var hhmm=function(h){ h=(h||'').slice(0,5); if(!h) return '--:--'; var pp=h.split(':'); var H=Number(pp[0])||0, M=pp[1]||'00'; var ap=H<12?'AM':'PM'; var h12=H%12||12; return h12+':'+M+' '+ap; }; var h2=function(m){ m=Number(m)||0; if(!m) return '—'; var hh=Math.floor(m/60), mm=m%60; return (hh?hh+'h ':'')+(mm?mm+'m':(hh?'':'0m')); }; var h2t=function(m){ m=Number(m)||0; if(!m) return '--'; var hh=Math.floor(m/60), mm=m%60; return (hh?hh+'h':'')+(mm?mm+'m':(hh?'':'0m')); }; var nb=(typeof EB==='function'&&EB()&&EB().nombre)||''; var cuerpo=''; rows.forEach(function(r,i){ var ret=Number(r.tiempo_retraso)||0, adi=Number(r.tiempo_adicional)||0; cuerpo+='<tr><td style="text-align:center">'+(i+1)+'</td><td>'+(r.nombre||'')+'</td><td>'+(r.cargo||'—')+'</td><td style="text-align:center">'+hhmm(r.marcacion_ingreso)+'</td><td style="text-align:center">'+(r.marcacion_salida?hhmm(r.marcacion_salida):'<i style="color:#999">en turno</i>')+'</td><td style="text-align:center;color:'+(ret?'#C00000':'#333')+'">'+(ret?h2(ret):'—')+'</td><td style="text-align:center;color:'+(adi?'#0a7d2c':'#333')+'">'+(adi?h2(adi):'—')+'</td></tr>'; }); if(!cuerpo) cuerpo='<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Sin registros para esta fecha</td></tr>'; var pad=function(s,n){ s=String(s==null?'':s); if(s.length>n) s=s.slice(0,n-1)+'…'; while(s.length<n) s+=' '; return s; }; var lineas=[]; lineas.push(pad('NOMBRE',16)+' '+pad('ING',5)+' '+pad('SAL',5)+' '+pad('RET',5)+' ADI'); rows.forEach(function(r){ var ret=Number(r.tiempo_retraso)||0, adi=Number(r.tiempo_adicional)||0; lineas.push(pad(r.nombre,16)+' '+pad(hhmm(r.marcacion_ingreso),5)+' '+pad(r.marcacion_salida?hhmm(r.marcacion_salida):'--',5)+' '+pad(ret?h2t(ret):'--',5)+' '+(adi?h2t(adi):'--')); }); if(!rows.length) lineas.push('(sin registros)'); var txt='🕐 '+nb+' — Control de Ingreso y Salida de Personal\n📅 '+fmtDate(fecha)+' · '+rows.length+' registro'+(rows.length===1?'':'s')+'\n\n```\n'+lineas.join('\n')+'\n```'; var waHref='https://wa.me/?text='+encodeURIComponent(txt); var mailHref='mailto:?subject='+encodeURIComponent('Control de Personal — '+fmtDate(fecha))+'&body='+encodeURIComponent(txt); var w=window.open('','_blank'); w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Control de Personal</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#222}h2{margin:0 0 2px}.sub{color:#666;font-size:13px;margin-bottom:14px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #bbb;padding:6px 8px}thead th{background:#1f3b57;color:#fff;text-align:center}tbody tr:nth-child(even){background:#f4f6f8}.bar{margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap}.bar a,.bar button{font:inherit;font-size:13px;padding:8px 14px;border:1px solid #1f3b57;border-radius:6px;background:#fff;color:#1f3b57;cursor:pointer;text-decoration:none;display:inline-block}.bar .wa{background:#25D366;border-color:#25D366;color:#fff}@media print{.bar{display:none}}</style></head><body><div class="bar"><button onclick="window.print()">🖨 Imprimir / Guardar PDF</button><a class="wa" href="'+waHref+'" target="_blank">💬 WhatsApp</a><a href="'+mailHref+'">📧 Correo</a><button onclick="navigator.clipboard.writeText(document.getElementById(&#39;rawtxt&#39;).value);this.textContent=&#39;✓ Copiado&#39;">📋 Copiar texto</button></div><textarea id="rawtxt" style="position:absolute;left:-9999px">'+txt+'</textarea><h2>'+nb+' — Control de Ingreso y Salida de Personal</h2><div class="sub">'+fmtDate(fecha)+' · '+rows.length+' registro'+(rows.length===1?'':'s')+'</div><table><thead><tr><th>#</th><th>Nombre</th><th>Cargo</th><th>Ingreso</th><th>Salida</th><th>Retraso</th><th>H. adicionales</th></tr></thead><tbody>'+cuerpo+'</tbody></table></body></html>'); w.document.close(); } 
