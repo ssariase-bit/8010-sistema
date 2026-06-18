@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0210';
+const APP_VERSION = '2026-06-17-0220';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -6115,55 +6115,53 @@ async function renderCajaInforme(){
   var opc = '<option value="__todas">Todas las cajas</option>' + cajas.map(function(c){ return '<option value="'+c.replace(/"/g,'&quot;')+'">'+c+'</option>'; }).join('');
   document.getElementById('main-content').innerHTML =
     '<div class="page-title">🧾 Informe de Caja</div>'+
-    '<div class="card" style="max-width:760px">'+
+    '<div class="card" style="max-width:920px">'+
       '<div class="form-row col3">'+
         '<div class="form-group"><label>Caja / Razón Social</label><select id="ci-caja">'+opc+'</select></div>'+
         '<div class="form-group"><label>Desde</label><input type="date" id="ci-desde" value="'+ini+'"></div>'+
         '<div class="form-group"><label>Hasta</label><input type="date" id="ci-hasta" value="'+hoy+'"></div>'+
       '</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-success" onclick="generarInformeCaja()">📄 Generar / Imprimir</button></div>'+
-      '<div id="ci-resultado" style="margin-top:14px;color:var(--gris-t);font-size:13px">Selecciona la caja y el rango de fechas, y genera el informe.</div>'+
-    '</div>';
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-success" onclick="generarInformeCaja()">📄 Generar informe</button><button class="btn btn-outline" onclick="imprimirInformeCaja()" id="ci-print-btn" style="display:none">🖨️ Imprimir / PDF</button></div>'+
+    '</div>'+
+    '<div id="ci-resultado" style="margin-top:14px"></div>';
 }
+window._ciPrintHTML='';
 async function generarInformeCaja(){
   var caja = document.getElementById('ci-caja').value;
   var desde = document.getElementById('ci-desde').value;
   var hasta = document.getElementById('ci-hasta').value;
+  var cont = document.getElementById('ci-resultado');
   if(!desde || !hasta){ if(typeof showToast==='function') showToast('Selecciona el rango de fechas','error'); return; }
+  cont.innerHTML = '<div style="color:var(--gris-t)">Cargando movimientos…</div>';
   var cajas = (typeof EB==='function' && EB().cajas) ? EB().cajas : [];
   var q = sb.from('caja').select('*').gte('fecha',desde).lte('fecha',hasta).order('fecha');
   if(caja && caja!=='__todas') q = q.eq('empresa', caja); else q = q.in('empresa', cajas);
   var res = await q;
-  if(res.error){ if(typeof showToast==='function') showToast('Error: '+res.error.message,'error'); return; }
+  if(res.error){ cont.innerHTML='<div style="color:#b91c1c">Error: '+res.error.message+'</div>'; return; }
   var rows = res.data || [];
   var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var fmt = function(n){ return '$'+Math.round(Number(n)||0).toLocaleString('es-CO'); };
   var fmtF = function(f){ if(!f) return '-'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
-  var entradas=0, salidas=0;
-  var ENT = ['Ingreso','Fondo'];
+  var ENT=['Ingreso','Fondo']; var entradas=0, salidas=0;
   rows.forEach(function(r){ var v=Number(r.valor)||0; if(ENT.indexOf(r.tipo)>=0) entradas+=v; else salidas+=v; });
-  var saldo = entradas - salidas;
-  var nomEd = (typeof EB==='function' && EB().nombre) || '';
-  var cajaLbl = (caja==='__todas') ? 'Todas las cajas' : caja;
-  var tr = rows.map(function(r){
-    var v=Number(r.valor)||0; var esEnt=ENT.indexOf(r.tipo)>=0;
-    return '<tr><td>'+fmtF(r.fecha)+'</td><td>'+esc(r.empresa||'')+'</td><td>'+esc(r.tipo||'')+'</td><td style="text-align:left">'+esc(r.concepto||'')+'</td><td>'+esc(r.area||'')+'</td><td>'+esc(r.recibo_no||'')+'</td><td>'+esc(r.entregado_por||'')+'</td><td style="text-align:right;color:'+(esEnt?'#15803d':'#b91c1c')+'">'+(esEnt?'':'-')+fmt(v)+'</td></tr>';
-  }).join('') || '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px">Sin movimientos en ese rango</td></tr>';
-  var w = window.open('','_blank');
-  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe de Caja</title>'+
-    '<style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}h2{color:#1D3461;margin:0 0 2px}.sub{color:#6b7280;font-size:13px;margin-bottom:14px}'+
-    'table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}th{background:#1F3864;color:#fff}'+
-    '.tot{margin-top:14px;font-size:14px}.tot div{margin:3px 0}.btn{background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px}@media print{.btn{display:none}}</style></head><body>'+
-    '<button class="btn" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>'+
-    '<h2>'+esc(nomEd)+' — Informe de Caja</h2>'+
-    '<div class="sub">Caja: <b>'+esc(cajaLbl)+'</b> · Del '+fmtF(desde)+' al '+fmtF(hasta)+' · '+rows.length+' movimiento'+(rows.length===1?'':'s')+'</div>'+
-    '<table><thead><tr><th>Fecha</th><th>Caja</th><th>Tipo</th><th>Concepto</th><th>Área</th><th>Recibo</th><th>Entregado por</th><th>Valor</th></tr></thead><tbody>'+tr+'</tbody></table>'+
-    '<div class="tot"><div>Total ingresos: <b style="color:#15803d">'+fmt(entradas)+'</b></div><div>Total egresos: <b style="color:#b91c1c">'+fmt(salidas)+'</b></div><div style="font-size:16px">Saldo: <b>'+fmt(saldo)+'</b></div></div>'+
-    '<p class="sub" style="margin-top:16px">Generado desde el Sistema '+esc(nomEd)+' · '+(typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO'))+'</p>'+
-    '</body></html>');
-  w.document.close();
-  document.getElementById('ci-resultado').innerHTML = '✓ Informe generado en una pestaña nueva ('+rows.length+' movimientos · saldo '+fmt(saldo)+'). Si no abrió, permite ventanas emergentes.';
+  var saldo=entradas-salidas;
+  var nomEd=(typeof EB==='function' && EB().nombre)||'';
+  var cajaLbl=(caja==='__todas')?'Todas las cajas':caja;
+  var tr = rows.map(function(r){ var v=Number(r.valor)||0; var esEnt=ENT.indexOf(r.tipo)>=0;
+    return '<tr><td>'+fmtF(r.fecha)+'</td><td>'+esc(r.empresa||'')+'</td><td>'+esc(r.tipo||'')+'</td><td style="text-align:left">'+esc(r.concepto||'')+'</td><td>'+esc(r.area||'')+'</td><td>'+esc(r.recibo_no||'')+'</td><td>'+esc(r.entregado_por||'')+'</td><td style="text-align:right;color:'+(esEnt?'#15803d':'#b91c1c')+';white-space:nowrap">'+(esEnt?'':'-')+fmt(v)+'</td></tr>';
+  }).join('') || '<tr><td colspan="8" style="text-align:center;color:#999;padding:18px">Sin movimientos en ese rango</td></tr>';
+  var encabezado = '<h2 style="color:#1D3461;margin:0 0 2px">'+esc(nomEd)+' — Informe de Caja</h2>'+
+    '<div style="color:#6b7280;font-size:13px;margin-bottom:12px">Caja: <b>'+esc(cajaLbl)+'</b> · Del '+fmtF(desde)+' al '+fmtF(hasta)+' · '+rows.length+' movimiento'+(rows.length===1?'':'s')+'</div>';
+  var tabla = '<table class="tabla" style="width:100%;font-size:12px"><thead><tr><th>Fecha</th><th>Caja</th><th>Tipo</th><th>Concepto</th><th>Área</th><th>Recibo</th><th>Entregado por</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+tr+'</tbody></table>';
+  var totales = '<div style="margin-top:14px;display:flex;gap:24px;flex-wrap:wrap;font-size:15px">'+
+    '<div>Total ingresos: <b style="color:#15803d">'+fmt(entradas)+'</b></div>'+
+    '<div>Total egresos: <b style="color:#b91c1c">'+fmt(salidas)+'</b></div>'+
+    '<div style="font-size:18px">Total del período (saldo): <b style="color:#1D3461">'+fmt(saldo)+'</b></div></div>';
+  cont.innerHTML = '<div class="card">'+encabezado+'<div style="overflow-x:auto">'+tabla+'</div>'+totales+'</div>';
+  window._ciPrintHTML = '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe de Caja</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}h2{color:#1D3461;margin:0 0 2px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}th{background:#1F3864;color:#fff}@media print{.np{display:none}}</style></head><body><button class="np" onclick="window.print()" style="background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">🖨️ Imprimir / PDF</button>'+encabezado+tabla+totales+'</body></html>';
+  var pb=document.getElementById('ci-print-btn'); if(pb) pb.style.display='inline-block';
 }
+function imprimirInformeCaja(){ if(!window._ciPrintHTML){ if(typeof showToast==='function') showToast('Genera el informe primero','error'); return; } var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(window._ciPrintHTML); w.document.close(); }
 
 async function tablaSimplePersonal(){ var fIn=document.getElementById('cp-fecha-informe'); var fecha=fIn?fIn.value:''; if(!fecha){ alert('Selecciona una fecha para el informe'); return; } var resp=await sb.from('control_personal').select('*').eq('fecha',fecha).order('cargo').order('nombre'); var rows=resp.data||[]; var hhmm=function(h){ h=(h||'').slice(0,5); if(!h) return '--:--'; var pp=h.split(':'); var H=Number(pp[0])||0, M=pp[1]||'00'; var ap=H<12?'AM':'PM'; var h12=H%12||12; return h12+':'+M+' '+ap; }; var h2=function(m){ m=Number(m)||0; if(!m) return '—'; var hh=Math.floor(m/60), mm=m%60; return (hh?hh+'h ':'')+(mm?mm+'m':(hh?'':'0m')); }; var h2t=function(m){ m=Number(m)||0; if(!m) return '--'; var hh=Math.floor(m/60), mm=m%60; return (hh?hh+'h':'')+(mm?mm+'m':(hh?'':'0m')); }; var nb=(typeof EB==='function'&&EB()&&EB().nombre)||''; var cuerpo=''; rows.forEach(function(r,i){ var ret=Number(r.tiempo_retraso)||0, adi=Number(r.tiempo_adicional)||0; cuerpo+='<tr><td style="text-align:center">'+(i+1)+'</td><td>'+(r.nombre||'')+'</td><td>'+(r.cargo||'—')+'</td><td style="text-align:center">'+hhmm(r.marcacion_ingreso)+'</td><td style="text-align:center">'+(r.marcacion_salida?hhmm(r.marcacion_salida):'<i style="color:#999">en turno</i>')+'</td><td style="text-align:center;color:'+(ret?'#C00000':'#333')+'">'+(ret?h2(ret):'—')+'</td><td style="text-align:center;color:'+(adi?'#0a7d2c':'#333')+'">'+(adi?h2(adi):'—')+'</td></tr>'; }); if(!cuerpo) cuerpo='<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Sin registros para esta fecha</td></tr>'; var pad=function(s,n){ s=String(s==null?'':s); if(s.length>n) s=s.slice(0,n-1)+'…'; while(s.length<n) s+=' '; return s; }; var lineas=[]; lineas.push(pad('NOMBRE',16)+' '+pad('ING',5)+' '+pad('SAL',5)+' '+pad('RET',5)+' ADI'); rows.forEach(function(r){ var ret=Number(r.tiempo_retraso)||0, adi=Number(r.tiempo_adicional)||0; lineas.push(pad(r.nombre,16)+' '+pad(hhmm(r.marcacion_ingreso),5)+' '+pad(r.marcacion_salida?hhmm(r.marcacion_salida):'--',5)+' '+pad(ret?h2t(ret):'--',5)+' '+(adi?h2t(adi):'--')); }); if(!rows.length) lineas.push('(sin registros)'); var txt='🕐 '+nb+' — Control de Ingreso y Salida de Personal\n📅 '+fmtDate(fecha)+' · '+rows.length+' registro'+(rows.length===1?'':'s')+'\n\n```\n'+lineas.join('\n')+'\n```'; var waHref='https://wa.me/?text='+encodeURIComponent(txt); var mailHref='mailto:?subject='+encodeURIComponent('Control de Personal — '+fmtDate(fecha))+'&body='+encodeURIComponent(txt); var w=window.open('','_blank'); w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Control de Personal</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#222}h2{margin:0 0 2px}.sub{color:#666;font-size:13px;margin-bottom:14px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #bbb;padding:6px 8px}thead th{background:#1f3b57;color:#fff;text-align:center}tbody tr:nth-child(even){background:#f4f6f8}.bar{margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap}.bar a,.bar button{font:inherit;font-size:13px;padding:8px 14px;border:1px solid #1f3b57;border-radius:6px;background:#fff;color:#1f3b57;cursor:pointer;text-decoration:none;display:inline-block}.bar .wa{background:#25D366;border-color:#25D366;color:#fff}@media print{.bar{display:none}}</style></head><body><div class="bar"><button onclick="window.print()">🖨 Imprimir / Guardar PDF</button><a class="wa" href="'+waHref+'" target="_blank">💬 WhatsApp</a><a href="'+mailHref+'">📧 Correo</a><button onclick="navigator.clipboard.writeText(document.getElementById(&#39;rawtxt&#39;).value);this.textContent=&#39;✓ Copiado&#39;">📋 Copiar texto</button></div><textarea id="rawtxt" style="position:absolute;left:-9999px">'+txt+'</textarea><h2>'+nb+' — Control de Ingreso y Salida de Personal</h2><div class="sub">'+fmtDate(fecha)+' · '+rows.length+' registro'+(rows.length===1?'':'s')+'</div><table><thead><tr><th>#</th><th>Nombre</th><th>Cargo</th><th>Ingreso</th><th>Salida</th><th>Retraso</th><th>H. adicionales</th></tr></thead><tbody>'+cuerpo+'</tbody></table></body></html>'); w.document.close(); } 
 
