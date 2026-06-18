@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0260';
+const APP_VERSION = '2026-06-17-0270';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -682,6 +682,8 @@ const NAV_ITEMS = {
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
     { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
+    { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
+  { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
     { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
     { id: 'magnifique-form', icon: '➕', label: 'Nuevo Recibo' },
@@ -782,6 +784,8 @@ const NAV_ITEMS = {
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
     { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
+    { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
+  { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
     { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
@@ -931,6 +935,7 @@ const MENU_COMPLETO = [
   { id: 'cuadro-extras', icon: '⏲️', label: 'Cuadro Horas Extra' },
   { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
   { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
+  { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
   { id: 'magnifique-form', icon: '➕', label: 'Nuevo Recibo' },
   { id: 'magnifique-list', icon: '🍽️', label: EDIFICIO_ACTIVO==='kubik'?'Recibos Bagatelle':'Recibos Magnifique' },
   { id: 'cargos-form', icon: '➕', label: 'Registrar Cargo' },
@@ -1319,6 +1324,7 @@ async function loadView(view) {
     case 'semana-resumen':     await renderSemanaResumen(); break;
     case 'formato-huespedes':  await renderFormatoHuespedes(); break;
 
+    case 'reembolsos-informe': await renderReembolsoInforme(); break;
     case 'reembolsos-list': await renderList('reembolsos','💸 Reembolsos','reembolsos-form',
       ['fecha','recibo_no','empresa','descripcion','area','valor','estado'],
       ['Fecha','Recibo','Empresa','Descripción','Área','Valor','Estado']); break;
@@ -6169,6 +6175,51 @@ async function generarInformeCaja(){
   var pb=document.getElementById('ci-print-btn'); if(pb) pb.style.display='inline-block';
 }
 function imprimirInformeCaja(){ if(!window._ciPrintHTML){ if(typeof showToast==='function') showToast('Genera el informe primero','error'); return; } var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(window._ciPrintHTML); w.document.close(); }
+
+async function renderReembolsoInforme(){
+  var hoy = TODAY; var ini = (new Date()).toISOString().slice(0,8)+'01';
+  var ests = ['Pendiente','Aprobado','Reembolso recibido completo','Reembolso recibido parcial','Rechazado','Pagado'];
+  var opE = '<option value="__todos">Todos los estados</option>' + ests.map(function(e){ return '<option value="'+e+'">'+e+'</option>'; }).join('');
+  document.getElementById('main-content').innerHTML =
+    '<div class="page-title">🧾 Informe de Reembolsos</div>'+
+    '<div class="card" style="max-width:920px">'+
+      '<div class="form-row col3">'+
+        '<div class="form-group"><label>Estado</label><select id="ri-estado">'+opE+'</select></div>'+
+        '<div class="form-group"><label>Desde</label><input type="date" id="ri-desde" value="'+ini+'"></div>'+
+        '<div class="form-group"><label>Hasta</label><input type="date" id="ri-hasta" value="'+hoy+'"></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-success" onclick="generarInformeReembolso()">📄 Generar informe</button><button class="btn btn-outline" id="ri-print-btn" onclick="imprimirInformeReembolso()" style="display:none">🖨️ Imprimir / PDF</button></div>'+
+    '</div>'+
+    '<div id="ri-resultado" style="margin-top:14px"></div>';
+}
+window._riPrintHTML='';
+async function generarInformeReembolso(){
+  var estado = document.getElementById('ri-estado').value;
+  var desde = document.getElementById('ri-desde').value;
+  var hasta = document.getElementById('ri-hasta').value;
+  var cont = document.getElementById('ri-resultado');
+  if(!desde || !hasta){ if(typeof showToast==='function') showToast('Selecciona el rango de fechas','error'); return; }
+  cont.innerHTML = '<div style="color:var(--gris-t)">Cargando…</div>';
+  var q = sb.from('reembolsos').select('*').gte('fecha',desde).lte('fecha',hasta).order('fecha');
+  if(estado && estado!=='__todos') q = q.eq('estado', estado);
+  var res = await q;
+  if(res.error){ cont.innerHTML='<div style="color:#b91c1c">Error: '+res.error.message+'</div>'; return; }
+  var rows = res.data || [];
+  var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var fmt = function(n){ return '$'+Math.round(Number(n)||0).toLocaleString('es-CO'); };
+  var fmtF = function(f){ if(!f) return '-'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  var total = rows.reduce(function(s,r){ return s+(Number(r.valor)||0); },0);
+  var nomEd=(typeof EB==='function' && EB().nombre)||'';
+  var estLbl=(estado==='__todos')?'Todos los estados':estado;
+  var tr = rows.map(function(r){ return '<tr><td>'+fmtF(r.fecha)+'</td><td>'+fmtF(r.fecha_factura)+'</td><td>'+esc(r.recibo_no||'')+'</td><td style="text-align:left">'+esc(r.empresa||'')+'</td><td style="text-align:left">'+esc(r.descripcion||'')+'</td><td>'+esc(r.area||'')+'</td><td>'+esc(r.estado||'')+'</td><td style="text-align:right;white-space:nowrap">'+fmt(r.valor)+'</td></tr>'; }).join('') || '<tr><td colspan="8" style="text-align:center;color:#999;padding:18px">Sin reembolsos en ese rango</td></tr>';
+  var encabezado = '<h2 style="color:#1D3461;margin:0 0 2px">'+esc(nomEd)+' — Informe de Reembolsos</h2><div style="color:#6b7280;font-size:13px;margin-bottom:12px">Estado: <b>'+esc(estLbl)+'</b> · Del '+fmtF(desde)+' al '+fmtF(hasta)+' · '+rows.length+' reembolso'+(rows.length===1?'':'s')+'</div>';
+  var tabla = '<table class="tabla" style="width:100%;font-size:12px"><thead><tr><th>F. carga</th><th>F. factura</th><th>Recibo</th><th>Empresa / Proveedor</th><th>Descripción</th><th>Área</th><th>Estado</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+tr+'</tbody></table>';
+  var totales = '<div style="margin-top:14px;font-size:18px">Total reembolsos del período: <b style="color:#1D3461">'+fmt(total)+'</b></div>';
+  cont.innerHTML = '<div class="card">'+encabezado+'<div style="overflow-x:auto">'+tabla+'</div>'+totales+'</div>';
+  window._riPrintHTML = '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe de Reembolsos</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}h2{color:#1D3461;margin:0 0 2px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}th{background:#1F3864;color:#fff}@media print{.np{display:none}}</style></head><body><button class="np" onclick="window.print()" style="background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">🖨️ Imprimir / PDF</button>'+encabezado+tabla+totales+'</body></html>';
+  var pb=document.getElementById('ri-print-btn'); if(pb) pb.style.display='inline-block';
+}
+function imprimirInformeReembolso(){ if(!window._riPrintHTML){ if(typeof showToast==='function') showToast('Genera el informe primero','error'); return; } var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(window._riPrintHTML); w.document.close(); }
 
 async function tablaSimplePersonal(){ var fIn=document.getElementById('cp-fecha-informe'); var fecha=fIn?fIn.value:''; if(!fecha){ alert('Selecciona una fecha para el informe'); return; } var resp=await sb.from('control_personal').select('*').eq('fecha',fecha).order('cargo').order('nombre'); var rows=resp.data||[]; var hhmm=function(h){ h=(h||'').slice(0,5); if(!h) return '--:--'; var pp=h.split(':'); var H=Number(pp[0])||0, M=pp[1]||'00'; var ap=H<12?'AM':'PM'; var h12=H%12||12; return h12+':'+M+' '+ap; }; var h2=function(m){ m=Number(m)||0; if(!m) return '—'; var hh=Math.floor(m/60), mm=m%60; return (hh?hh+'h ':'')+(mm?mm+'m':(hh?'':'0m')); }; var h2t=function(m){ m=Number(m)||0; if(!m) return '--'; var hh=Math.floor(m/60), mm=m%60; return (hh?hh+'h':'')+(mm?mm+'m':(hh?'':'0m')); }; var nb=(typeof EB==='function'&&EB()&&EB().nombre)||''; var cuerpo=''; rows.forEach(function(r,i){ var ret=Number(r.tiempo_retraso)||0, adi=Number(r.tiempo_adicional)||0; cuerpo+='<tr><td style="text-align:center">'+(i+1)+'</td><td>'+(r.nombre||'')+'</td><td>'+(r.cargo||'—')+'</td><td style="text-align:center">'+hhmm(r.marcacion_ingreso)+'</td><td style="text-align:center">'+(r.marcacion_salida?hhmm(r.marcacion_salida):'<i style="color:#999">en turno</i>')+'</td><td style="text-align:center;color:'+(ret?'#C00000':'#333')+'">'+(ret?h2(ret):'—')+'</td><td style="text-align:center;color:'+(adi?'#0a7d2c':'#333')+'">'+(adi?h2(adi):'—')+'</td></tr>'; }); if(!cuerpo) cuerpo='<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Sin registros para esta fecha</td></tr>'; var pad=function(s,n){ s=String(s==null?'':s); if(s.length>n) s=s.slice(0,n-1)+'…'; while(s.length<n) s+=' '; return s; }; var lineas=[]; lineas.push(pad('NOMBRE',16)+' '+pad('ING',5)+' '+pad('SAL',5)+' '+pad('RET',5)+' ADI'); rows.forEach(function(r){ var ret=Number(r.tiempo_retraso)||0, adi=Number(r.tiempo_adicional)||0; lineas.push(pad(r.nombre,16)+' '+pad(hhmm(r.marcacion_ingreso),5)+' '+pad(r.marcacion_salida?hhmm(r.marcacion_salida):'--',5)+' '+pad(ret?h2t(ret):'--',5)+' '+(adi?h2t(adi):'--')); }); if(!rows.length) lineas.push('(sin registros)'); var txt='🕐 '+nb+' — Control de Ingreso y Salida de Personal\n📅 '+fmtDate(fecha)+' · '+rows.length+' registro'+(rows.length===1?'':'s')+'\n\n```\n'+lineas.join('\n')+'\n```'; var waHref='https://wa.me/?text='+encodeURIComponent(txt); var mailHref='mailto:?subject='+encodeURIComponent('Control de Personal — '+fmtDate(fecha))+'&body='+encodeURIComponent(txt); var w=window.open('','_blank'); w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Control de Personal</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#222}h2{margin:0 0 2px}.sub{color:#666;font-size:13px;margin-bottom:14px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #bbb;padding:6px 8px}thead th{background:#1f3b57;color:#fff;text-align:center}tbody tr:nth-child(even){background:#f4f6f8}.bar{margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap}.bar a,.bar button{font:inherit;font-size:13px;padding:8px 14px;border:1px solid #1f3b57;border-radius:6px;background:#fff;color:#1f3b57;cursor:pointer;text-decoration:none;display:inline-block}.bar .wa{background:#25D366;border-color:#25D366;color:#fff}@media print{.bar{display:none}}</style></head><body><div class="bar"><button onclick="window.print()">🖨 Imprimir / Guardar PDF</button><a class="wa" href="'+waHref+'" target="_blank">💬 WhatsApp</a><a href="'+mailHref+'">📧 Correo</a><button onclick="navigator.clipboard.writeText(document.getElementById(&#39;rawtxt&#39;).value);this.textContent=&#39;✓ Copiado&#39;">📋 Copiar texto</button></div><textarea id="rawtxt" style="position:absolute;left:-9999px">'+txt+'</textarea><h2>'+nb+' — Control de Ingreso y Salida de Personal</h2><div class="sub">'+fmtDate(fecha)+' · '+rows.length+' registro'+(rows.length===1?'':'s')+'</div><table><thead><tr><th>#</th><th>Nombre</th><th>Cargo</th><th>Ingreso</th><th>Salida</th><th>Retraso</th><th>H. adicionales</th></tr></thead><tbody>'+cuerpo+'</tbody></table></body></html>'); w.document.close(); } 
 
