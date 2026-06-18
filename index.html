@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0140';
+const APP_VERSION = '2026-06-17-0150';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1290,7 +1290,7 @@ async function loadView(view) {
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del empleado',type:'text',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro']},
-      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:25 PM (Mantenimiento)','7:00 AM - 3:00 PM','7:30 AM - 3:50 PM (Camareras)','7:00 AM - 4:00 PM','8:00 AM - 5:00 PM','8:00 AM - 5:45 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
+      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:25 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 2:20 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:50 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','8:00 AM - 5:00 PM','8:00 AM - 5:45 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
