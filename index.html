@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0220';
+const APP_VERSION = '2026-06-17-0230';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1151,7 +1151,7 @@ async function loadView(view) {
     case 'caja-list':          await renderList('caja','💰 Caja y Movimientos','caja-form',['fecha','tipo','concepto','area','empresa','valor','recibo_no','entregado_por'],['Fecha','Tipo','Concepto','Área','Caja / Razón Social','Valor','Recibo','Entregó']); break;
     case 'caja-form':          renderGenForm('caja','💰 Movimiento de Caja',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
-      {id:'tipo',label:'Tipo',type:'select',opts:['Ingreso','Egreso','Fondo','Reembolso','Entrega efectivo'],req:true},
+      {id:'tipo',label:'Tipo',type:'select',opts:['Ingreso','Egreso','Provisional','Fondo','Reembolso','Entrega efectivo'],req:true},
       {id:'concepto',label:'Concepto / Descripción',type:'text',req:true},
       {id:'area',label:'Área',type:'select',opts:['Recepción','Mantenimiento','Housekeeping','Administración','General']},
       {id:'empresa',label:'Caja / Razón Social',type:'select',opts:EB().cajas},
@@ -6142,8 +6142,8 @@ async function generarInformeCaja(){
   var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var fmt = function(n){ return '$'+Math.round(Number(n)||0).toLocaleString('es-CO'); };
   var fmtF = function(f){ if(!f) return '-'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
-  var ENT=['Ingreso','Fondo']; var entradas=0, salidas=0;
-  rows.forEach(function(r){ var v=Number(r.valor)||0; if(ENT.indexOf(r.tipo)>=0) entradas+=v; else salidas+=v; });
+  var ENT=['Ingreso','Fondo']; var entradas=0, salidas=0, provis=0;
+  rows.forEach(function(r){ var v=Number(r.valor)||0; if(r.tipo==='Provisional') provis+=v; else if(ENT.indexOf(r.tipo)>=0) entradas+=v; else salidas+=v; });
   var saldo=entradas-salidas;
   var nomEd=(typeof EB==='function' && EB().nombre)||'';
   var cajaLbl=(caja==='__todas')?'Todas las cajas':caja;
@@ -6156,6 +6156,7 @@ async function generarInformeCaja(){
   var totales = '<div style="margin-top:14px;display:flex;gap:24px;flex-wrap:wrap;font-size:15px">'+
     '<div>Total ingresos: <b style="color:#15803d">'+fmt(entradas)+'</b></div>'+
     '<div>Total egresos: <b style="color:#b91c1c">'+fmt(salidas)+'</b></div>'+
+    (provis>0?'<div>Provisionales (no suman al saldo): <b style="color:#b45309">'+fmt(provis)+'</b></div>':'')+
     '<div style="font-size:18px">Total del período (saldo): <b style="color:#1D3461">'+fmt(saldo)+'</b></div></div>';
   cont.innerHTML = '<div class="card">'+encabezado+'<div style="overflow-x:auto">'+tabla+'</div>'+totales+'</div>';
   window._ciPrintHTML = '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe de Caja</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}h2{color:#1D3461;margin:0 0 2px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}th{background:#1F3864;color:#fff}@media print{.np{display:none}}</style></head><body><button class="np" onclick="window.print()" style="background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">🖨️ Imprimir / PDF</button>'+encabezado+tabla+totales+'</body></html>';
