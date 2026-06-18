@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0300';
+const APP_VERSION = '2026-06-17-0320';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -717,6 +717,8 @@ const NAV_ITEMS = {
     { id: 'control-personal-form', icon: '➕', label: 'Registrar Ingreso Personal' },
     { section: 'Huéspedes' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
+  { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
@@ -764,6 +766,8 @@ const NAV_ITEMS = {
     { id: 'caja-form', icon: '💰', label: 'Movimiento Caja' },
     { section: 'Huéspedes' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
+  { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'visitantes-form', icon: '👥', label: 'Registrar Visitante' },
@@ -800,6 +804,8 @@ const NAV_ITEMS = {
     { id: 'contratos-form', icon: '➕', label: 'Nuevo Contrato' },
     { section: 'Huéspedes' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
+  { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'formato-huespedes', icon: '🏨', label: 'Formato Huéspedes' },
@@ -827,6 +833,8 @@ const NAV_ITEMS = {
     { id: 'transportes-form', icon: '➕', label: 'Registrar Transporte' },
     { section: 'Auditoría' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
+  { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
@@ -850,6 +858,8 @@ rrhh: [
     { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
     { section: 'Auditoría' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
+  { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
@@ -870,6 +880,8 @@ rrhh: [
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'novedades-list', icon: '📋', label: 'Novedades abiertas' }, { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+    { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
+  { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
@@ -909,6 +921,7 @@ const MENU_COMPLETO = [
   { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
   { section: 'Huéspedes' },
   { id: 'estado-huespedes', icon: '🏨', label: 'Estado Huéspedes' },
+  { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
   { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
   { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
   { id: 'formato-huespedes', icon: '📅', label: 'Calendario Huéspedes' },
@@ -1314,6 +1327,7 @@ async function loadView(view) {
       {id:'obs_salida',label:'Observaciones de salida (ej: Turno 12 horas, Autorizado G.O)',type:'text'},
     ]); break;
 
+    case 'revision-apto': await renderRevisionApto(); break;
     case 'estado-huespedes': await renderEstadoHuespedes(); break;
     case 'ingresos': await renderIngresos(); break;
     case 'indicadores': await renderIndicadores(); break;
@@ -6221,6 +6235,60 @@ async function generarInformeReembolso(){
 }
 function imprimirInformeReembolso(){ if(!window._riPrintHTML){ if(typeof showToast==='function') showToast('Genera el informe primero','error'); return; } var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(window._riPrintHTML); w.document.close(); }
 
+async function renderRevisionApto(){
+  var eb=(typeof EB==='function')?EB():{};
+  var aptos=(eb.aptosFull||eb.aptosBase||[]);
+  var opc=aptos.map(function(a){return '<option>'+a+'</option>';}).join('');
+  var quien=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'';
+  document.getElementById('main-content').innerHTML=
+    '<div class="page-title">🧹 Revisión de Apartamento</div>'+
+    '<div class="card" style="max-width:720px">'+
+      '<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Revisión y alistamiento del apartamento ANTES del ingreso del huésped. Aquí se marcan las cortesías que se dejan.</div>'+
+      '<div class="form-row col3">'+
+        '<div class="form-group"><label>Apartamento</label><select id="rv-apto">'+opc+'</select></div>'+
+        '<div class="form-group"><label>Fecha (automática)</label><input type="date" value="'+TODAY+'" disabled style="background:#eef0f2;color:#555"></div>'+
+        '<div class="form-group"><label>Estado del apto</label><select id="rv-estado"><option>Listo para entrega</option><option>Pendiente de alistar</option><option>Con observaciones</option></select></div>'+
+      '</div>'+
+      '<div class="form-group" style="background:#FFF7E6;border:1px solid #FBC97D;border-radius:8px;padding:12px">'+
+        '<label style="font-weight:700;margin-bottom:8px;display:block">🎁 Cortesías / Mínimos a dejar</label>'+
+        '<div style="display:flex;flex-direction:column;gap:10px">'+
+          '<label style="font-weight:400;display:flex;align-items:center;gap:8px;cursor:pointer;margin:0"><input type="checkbox" id="rv-fruta" style="width:16px;height:16px"> 🍎 Cortesía de fruta</label>'+
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:160px">☕ Cápsulas de café</span><input type="number" id="rv-cafe" min="0" placeholder="cantidad" style="width:100px;padding:5px 8px"></div>'+
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:160px">💧 Botellas de agua</span><input type="number" id="rv-agua" min="0" placeholder="cantidad" style="width:100px;padding:5px 8px"></div>'+
+          '<label style="font-weight:400;display:flex;align-items:center;gap:8px;cursor:pointer;margin:0"><input type="checkbox" id="rv-bano" style="width:16px;height:16px"> 🧴 Amenities de baño</label>'+
+          '<input type="text" id="rv-otros" placeholder="Otros (ej: flores, chocolates...)" style="padding:6px 10px">'+
+        '</div></div>'+
+      '<div class="form-group"><label>Observaciones</label><textarea id="rv-obs" placeholder="Pendientes, daños, novedades del alistamiento..."></textarea></div>'+
+      '<div class="form-group"><label>Revisado por</label><input type="text" id="rv-quien" value="'+String(quien).replace(/"/g,'&quot;')+'"></div>'+
+      '<button class="btn btn-success" onclick="guardarRevisionApto()">💾 Guardar revisión</button>'+
+    '</div>'+
+    '<div id="rv-lista" style="margin-top:14px"></div>';
+  cargarRevisionesApto();
+}
+async function guardarRevisionApto(){
+  var apto=document.getElementById('rv-apto').value;
+  var _am=[];
+  if(document.getElementById('rv-fruta').checked) _am.push('cortesía de fruta');
+  var _c=Number(document.getElementById('rv-cafe').value)||0; if(_c) _am.push(_c+' cápsula'+(_c>1?'s':'')+' de café');
+  var _a=Number(document.getElementById('rv-agua').value)||0; if(_a) _am.push(_a+' botella'+(_a>1?'s':'')+' de agua');
+  if(document.getElementById('rv-bano').checked) _am.push('amenities de baño');
+  var _o=(document.getElementById('rv-otros').value||'').trim(); if(_o) _am.push(_o);
+  var row={ edificio:EDIFICIO_ACTIVO, apto:apto, fecha:TODAY, cortesias:_am.join(', '), estado_apto:document.getElementById('rv-estado').value, observaciones:(document.getElementById('rv-obs').value||'').trim(), revisado_por:(document.getElementById('rv-quien').value||'').trim(), user_id:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null };
+  var r=await sb.from('revisiones_apto').insert(row);
+  if(r.error){ if(typeof showToast==='function') showToast('Error: '+r.error.message,'error'); return; }
+  if(typeof showToast==='function') showToast('✓ Revisión guardada para apto '+apto,'success');
+  cargarRevisionesApto();
+}
+async function cargarRevisionesApto(){
+  var cont=document.getElementById('rv-lista'); if(!cont) return;
+  var r=await sb.from('revisiones_apto').select('*').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(40);
+  var rows=(r.data)||[];
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
+  var fmtF=function(f){if(!f)return '-';var p=String(f).slice(0,10).split('-');return p[2]+'/'+p[1]+'/'+p[0];};
+  var tr=rows.map(function(x){return '<tr><td>'+fmtF(x.fecha)+'</td><td><b>'+esc(x.apto)+'</b></td><td>'+esc(x.estado_apto||'')+'</td><td style="text-align:left">'+esc(x.cortesias||'')+'</td><td style="text-align:left">'+esc(x.observaciones||'')+'</td><td>'+esc(x.revisado_por||'')+'</td></tr>';}).join('')||'<tr><td colspan="6" style="text-align:center;color:#999;padding:16px">Sin revisiones registradas</td></tr>';
+  cont.innerHTML='<div class="card"><div class="card-title" style="margin-bottom:8px">Revisiones recientes</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th>Fecha</th><th>Apto</th><th>Estado</th><th>Cortesías</th><th>Observaciones</th><th>Revisó</th></tr></thead><tbody>'+tr+'</tbody></table></div></div>';
+}
+
 async function tablaSimplePersonal(){ var fIn=document.getElementById('cp-fecha-informe'); var fecha=fIn?fIn.value:''; if(!fecha){ alert('Selecciona una fecha para el informe'); return; } var resp=await sb.from('control_personal').select('*').eq('fecha',fecha).order('cargo').order('nombre'); var rows=resp.data||[]; var hhmm=function(h){ h=(h||'').slice(0,5); if(!h) return '--:--'; var pp=h.split(':'); var H=Number(pp[0])||0, M=pp[1]||'00'; var ap=H<12?'AM':'PM'; var h12=H%12||12; return h12+':'+M+' '+ap; }; var h2=function(m){ m=Number(m)||0; if(!m) return '—'; var hh=Math.floor(m/60), mm=m%60; return (hh?hh+'h ':'')+(mm?mm+'m':(hh?'':'0m')); }; var h2t=function(m){ m=Number(m)||0; if(!m) return '--'; var hh=Math.floor(m/60), mm=m%60; return (hh?hh+'h':'')+(mm?mm+'m':(hh?'':'0m')); }; var nb=(typeof EB==='function'&&EB()&&EB().nombre)||''; var cuerpo=''; rows.forEach(function(r,i){ var ret=Number(r.tiempo_retraso)||0, adi=Number(r.tiempo_adicional)||0; cuerpo+='<tr><td style="text-align:center">'+(i+1)+'</td><td>'+(r.nombre||'')+'</td><td>'+(r.cargo||'—')+'</td><td style="text-align:center">'+hhmm(r.marcacion_ingreso)+'</td><td style="text-align:center">'+(r.marcacion_salida?hhmm(r.marcacion_salida):'<i style="color:#999">en turno</i>')+'</td><td style="text-align:center;color:'+(ret?'#C00000':'#333')+'">'+(ret?h2(ret):'—')+'</td><td style="text-align:center;color:'+(adi?'#0a7d2c':'#333')+'">'+(adi?h2(adi):'—')+'</td></tr>'; }); if(!cuerpo) cuerpo='<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Sin registros para esta fecha</td></tr>'; var pad=function(s,n){ s=String(s==null?'':s); if(s.length>n) s=s.slice(0,n-1)+'…'; while(s.length<n) s+=' '; return s; }; var lineas=[]; lineas.push(pad('NOMBRE',16)+' '+pad('ING',5)+' '+pad('SAL',5)+' '+pad('RET',5)+' ADI'); rows.forEach(function(r){ var ret=Number(r.tiempo_retraso)||0, adi=Number(r.tiempo_adicional)||0; lineas.push(pad(r.nombre,16)+' '+pad(hhmm(r.marcacion_ingreso),5)+' '+pad(r.marcacion_salida?hhmm(r.marcacion_salida):'--',5)+' '+pad(ret?h2t(ret):'--',5)+' '+(adi?h2t(adi):'--')); }); if(!rows.length) lineas.push('(sin registros)'); var txt='🕐 '+nb+' — Control de Ingreso y Salida de Personal\n📅 '+fmtDate(fecha)+' · '+rows.length+' registro'+(rows.length===1?'':'s')+'\n\n```\n'+lineas.join('\n')+'\n```'; var waHref='https://wa.me/?text='+encodeURIComponent(txt); var mailHref='mailto:?subject='+encodeURIComponent('Control de Personal — '+fmtDate(fecha))+'&body='+encodeURIComponent(txt); var w=window.open('','_blank'); w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Control de Personal</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#222}h2{margin:0 0 2px}.sub{color:#666;font-size:13px;margin-bottom:14px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #bbb;padding:6px 8px}thead th{background:#1f3b57;color:#fff;text-align:center}tbody tr:nth-child(even){background:#f4f6f8}.bar{margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap}.bar a,.bar button{font:inherit;font-size:13px;padding:8px 14px;border:1px solid #1f3b57;border-radius:6px;background:#fff;color:#1f3b57;cursor:pointer;text-decoration:none;display:inline-block}.bar .wa{background:#25D366;border-color:#25D366;color:#fff}@media print{.bar{display:none}}</style></head><body><div class="bar"><button onclick="window.print()">🖨 Imprimir / Guardar PDF</button><a class="wa" href="'+waHref+'" target="_blank">💬 WhatsApp</a><a href="'+mailHref+'">📧 Correo</a><button onclick="navigator.clipboard.writeText(document.getElementById(&#39;rawtxt&#39;).value);this.textContent=&#39;✓ Copiado&#39;">📋 Copiar texto</button></div><textarea id="rawtxt" style="position:absolute;left:-9999px">'+txt+'</textarea><h2>'+nb+' — Control de Ingreso y Salida de Personal</h2><div class="sub">'+fmtDate(fecha)+' · '+rows.length+' registro'+(rows.length===1?'':'s')+'</div><table><thead><tr><th>#</th><th>Nombre</th><th>Cargo</th><th>Ingreso</th><th>Salida</th><th>Retraso</th><th>H. adicionales</th></tr></thead><tbody>'+cuerpo+'</tbody></table></body></html>'); w.document.close(); } 
 
     async function renderControlPersonal() {
@@ -7597,16 +7665,6 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
       </div>
       <div class="form-group"><label>Migración Colombia</label>
         <select id="cki-migracion"><option>No aplica</option><option>Sí, se envía reporte de ingreso</option></select>
-      </div>
-      <div class="form-group" style="background:#FFF7E6;border:1px solid #FBC97D;border-radius:8px;padding:12px">
-        <label style="font-weight:700;margin-bottom:8px;display:block">🎁 Cortesías / Mínimos del apartamento</label>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <label style="font-weight:400;display:flex;align-items:center;gap:8px;cursor:pointer;margin:0"><input type="checkbox" id="cki-am-fruta" style="width:16px;height:16px"> 🍎 Cortesía de fruta</label>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:160px">☕ Cápsulas de café</span><input type="number" id="cki-am-cafe" min="0" placeholder="cantidad" style="width:100px;padding:5px 8px"></div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:160px">💧 Botellas de agua</span><input type="number" id="cki-am-agua" min="0" placeholder="cantidad" style="width:100px;padding:5px 8px"></div>
-          <label style="font-weight:400;display:flex;align-items:center;gap:8px;cursor:pointer;margin:0"><input type="checkbox" id="cki-am-bano" style="width:16px;height:16px"> 🧴 Amenities de baño</label>
-          <input type="text" id="cki-am-otros" placeholder="Otros (ej: flores, chocolates...)" style="padding:6px 10px">
-        </div>
       </div>
       <div class="form-group"><label>Observaciones adicionales</label><textarea id="cki-obs" placeholder="Detalles adicionales..." style="min-height:60px"></textarea></div>
       <div class="form-actions">
