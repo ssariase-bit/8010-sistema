@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-2340';
+const APP_VERSION = '2026-06-18-0010';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4969,7 +4969,7 @@ function _pfRowHTML(piso){
     <td><input type="text" class="pf-cam" placeholder="Camarera" style="width:150px;padding:4px 6px"></td>
     <td>${sel('cuadros')}</td>
     <td>${sel('tapete')}</td>
-    <td>${sel('ventanas')}</td>
+    ${(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik') ? `<td>${sel('gabinete')}</td><td>${sel('puerta')}</td>` : `<td>${sel('ventanas')}</td>`}
     <td><button type="button" class="btn btn-outline btn-sm" onclick="this.closest('tr').remove()">✕</button></td>
   </tr>`;
 }
@@ -4979,7 +4979,7 @@ function renderPuntosFijosFormMulti(){
     <div class="page-title">🧽 Puntos Fijos de Pisos — Registro</div>
     <div class="card" style="max-width:780px">
       <div class="form-group" style="max-width:220px"><label>Fecha</label><input type="date" id="pf-fecha" value="${TODAY}"></div>
-      <div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Piso</th><th>Camarera</th><th>Cuadros</th><th>Tapete</th><th>Ventanas y Marcos</th><th></th></tr></thead>
+      <div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Piso</th><th>Camarera</th><th>Cuadros</th><th>Tapete</th>${(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')?'<th>Gabinete incendios</th><th>Puerta cortafuegos</th>':'<th>Ventanas y Marcos</th>'}<th></th></tr></thead>
       <tbody id="pf-body">${pisos.map(_pfRowHTML).join('')}</tbody></table></div>
       <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="document.getElementById('pf-body').insertAdjacentHTML('beforeend', _pfRowHTML(''))">+ Agregar piso</button>
       <div class="form-actions" style="margin-top:14px;display:flex;gap:8px">
@@ -4993,7 +4993,7 @@ async function savePuntosFijos(){
   const regs=[];
   document.querySelectorAll('#pf-body .pf-row').forEach(f=>{
     const piso=f.querySelector('.pf-piso').value.trim(); if(!piso) return;
-    regs.push({ edificio:EDIFICIO_ACTIVO, fecha, piso, camarera:f.querySelector('.pf-cam').value.trim()||null, cuadros:f.querySelector('.pf-cuadros').value, tapete:f.querySelector('.pf-tapete').value, ventanas:f.querySelector('.pf-ventanas').value });
+    var _reg={ edificio:EDIFICIO_ACTIVO, fecha, piso, camarera:f.querySelector('.pf-cam').value.trim()||null, cuadros:f.querySelector('.pf-cuadros').value, tapete:f.querySelector('.pf-tapete').value }; if(EDIFICIO_ACTIVO==='kubik'){ _reg.gabinete_incendios=(f.querySelector('.pf-gabinete')||{}).value||'No'; _reg.puerta_cortafuegos=(f.querySelector('.pf-puerta')||{}).value||'No'; } else { _reg.ventanas=(f.querySelector('.pf-ventanas')||{}).value; } regs.push(_reg);
   });
   if(!regs.length){ showToast('Agrega al menos un piso','error'); return; }
   const { error } = await sb.from('puntos_fijos').insert(regs);
@@ -5012,7 +5012,7 @@ async function renderPuntosFijos(){
     <td>${esc(r.camarera)||'-'}</td>
     <td>${chk(r.id,'cuadros',r.cuadros)}</td>
     <td>${chk(r.id,'tapete',r.tapete)}</td>
-    <td>${chk(r.id,'ventanas',r.ventanas)}</td>
+    ${EDIFICIO_ACTIVO==='kubik' ? `<td>${chk(r.id,'gabinete_incendios',r.gabinete_incendios)}</td><td>${chk(r.id,'puerta_cortafuegos',r.puerta_cortafuegos)}</td>` : `<td>${chk(r.id,'ventanas',r.ventanas)}</td>`}
     <td style="white-space:nowrap">${_btnsEdit('puntos_fijos', r.id)}</td>
   </tr>`).join('');
   document.getElementById('main-content').innerHTML = `
@@ -5022,8 +5022,8 @@ async function renderPuntosFijos(){
       <button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('puntos-fijos-form')">+ Nuevo Punto Fijo</button>
     </div>
     <div class="card">
-      <table class="tabla"><thead><tr><th>Piso</th><th>Fecha</th><th>Camarera</th><th>Cuadros</th><th>Tapete</th><th>Ventanas y Marcos</th><th></th></tr></thead>
-      <tbody>${filas || '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Sin registros. Crea uno con “+ Nuevo Punto Fijo”.</td></tr>'}</tbody></table>
+      <table class="tabla"><thead><tr><th>Piso</th><th>Fecha</th><th>Camarera</th><th>Cuadros</th><th>Tapete</th>${(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')?'<th>Gabinete incendios</th><th>Puerta cortafuegos</th>':'<th>Ventanas y Marcos</th>'}<th></th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px">Sin registros. Crea uno con “+ Nuevo Punto Fijo”.</td></tr>'}</tbody></table>
     </div>`;
 }
 async function togglePF(id, campo, val){
@@ -7953,7 +7953,7 @@ async function renderComercialReporte(){const{data}=await sb.from('cotizaciones'
   </table>`;
 }
 
-function aptoTarSync(){ var box=document.getElementById('gf-aptotar-box'); if(!box) return; var arr=[], total=0; box.querySelectorAll('.at-ini').forEach(function(ini){ var m=ini.getAttribute('data-m'); var neg=box.querySelector('.at-neg[data-m="'+m+'"]'); var vi=parseFloat(ini.value)||0, vn=parseFloat(neg?neg.value:0)||0; if(vi||vn){ arr.push({m:Number(m),ini:vi,neg:vn}); total+=(vn||vi); } }); var h=document.getElementById('gf-aptos_tarifas'); if(h) h.value=JSON.stringify(arr); var vc=document.getElementById('gf-valor_cotizado'); if(vc) vc.value=total; }
+function aptoTarSync(){ var box=document.getElementById('gf-aptotar-box'); if(!box) return; var arr=[], total=0; box.querySelectorAll('.at-ini').forEach(function(ini){ var m=ini.getAttribute('data-m'); var neg=box.querySelector('.at-neg[data-m="'+m+'"]'); var vi=parseFloat(ini.value)||0, vn=parseFloat(neg?neg.value:0)||0; if(vi||vn){ arr.push({m:Number(m),ini:vi,neg:vn}); total+=(vn||vi); } }); var h=document.getElementById('gf-aptos_tarifas'); if(h) h.value=JSON.stringify(arr); var vc=document.getElementById('gf-valor_cotizado'); if(vc && arr.length<=1) vc.value=total; }  // con varios aptos NO suma: el valor cotizado es el del apto que elige el cliente (se digita)
 function cotTiposSync(cb){ var fg=cb.closest('.form-group'); if(!fg) return; var hid=fg.querySelector('input[type=hidden]'); var vals=[]; fg.querySelectorAll('input[type=checkbox]').forEach(function(c){ if(c.checked) vals.push(c.value); }); if(hid) hid.value=vals.join(', '); }
 
     async function editarCotizacion(id){ var r=(window._cotRows||[]).find(function(x){return String(x.id)===String(id);}); if(!r){ try{ var rr=await sb.from('cotizaciones').select('*').eq('id',id).single(); r=rr.data; }catch(e){} } if(!r){ showToast('No se pudo cargar la cotización','error'); return; } window._genEditId=id; window._genEditData=r; loadView('comercial-form'); setTimeout(function(){ var d=window._genEditData||{}; ['fecha_solicitud','nombre','telefono','correo','interes','canal','estado','moneda','periodicidad','tarifa_inicial','valor_cotizado','proximo_contacto','notas'].forEach(function(k){ var el=document.getElementById('gf-'+k); if(el && d[k]!=null){ el.value=d[k]; try{ el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); }catch(e){} } }); try{ var _at=d.aptos_tarifas; if(_at){ var _arr=(typeof _at==='string')?JSON.parse(_at):_at; var _box=document.getElementById('gf-aptotar-box'); var _hid=document.getElementById('gf-aptos_tarifas'); if(_hid) _hid.value=(typeof _at==='string')?_at:JSON.stringify(_at); if(_box && Array.isArray(_arr)){ _arr.forEach(function(it){ var ii=_box.querySelector('.at-ini[data-m="'+it.m+'"]'); var nn=_box.querySelector('.at-neg[data-m="'+it.m+'"]'); if(ii) ii.value=(it.ini||''); if(nn) nn.value=(it.neg||''); }); if(typeof aptoTarSync==='function') aptoTarSync(); } } }catch(e){} var _ti=document.getElementById('gf-tipos_apto'); if(_ti && d.tipos_apto){ _ti.value=d.tipos_apto; var _fg=_ti.closest('.form-group'); if(_fg){ var _sel=String(d.tipos_apto).split(',').map(function(s){return s.trim();}); _fg.querySelectorAll('input[type=checkbox]').forEach(function(c){ c.checked=_sel.indexOf(c.value)>-1; }); } } var btn=document.querySelector('.btn-success'); if(btn) btn.textContent='💾 Actualizar'; window._genEditData=null; }, 400); }
