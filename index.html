@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0290';
+const APP_VERSION = '2026-06-17-0300';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1304,7 +1304,7 @@ async function loadView(view) {
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del empleado',type:'text',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro']},
-      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:25 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 2:20 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:50 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','8:00 AM - 5:00 PM','8:00 AM - 5:45 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
+      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:25 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 2:20 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:50 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','8:00 AM - 5:00 PM','8:00 AM - 5:45 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
@@ -6403,7 +6403,7 @@ function _evNum(id){ var e=document.getElementById(id); var v=e?String(e.value).
 function _evMoney(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); }
 function _evSoloKubik(){ return (typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO==='kubik'); }
 function _evRecalc(){ var base=_evNum('ev-val-sala')+_evNum('ev-val-alim')+_evNum('ev-val-consumos')+_evNum('ev-val-personal')+_evNum('ev-val-tasa'); var b=document.getElementById('ev-base-out'); if(b) b.textContent=_evMoney(base); var t=document.getElementById('ev-total-out'); if(t) t.textContent=_evMoney(base+_evNum('ev-iva')); }
-function _evImpuesto(){ var base=_evNum('ev-val-sala')+_evNum('ev-val-alim')+_evNum('ev-val-consumos')+_evNum('ev-val-personal')+_evNum('ev-val-tasa'); var sel=document.getElementById('ev-imp-tipo'); var t=sel?sel.value:''; var pct=t.indexOf('19')>=0?0.19:(t.indexOf('8')>=0?0.08:0); var iv=document.getElementById('ev-iva'); if(iv) iv.value=Math.round(base*pct); _evRecalc(); }
+function _evImpuesto(){ var base=_evNum('ev-val-sala')+_evNum('ev-val-alim')+_evNum('ev-val-consumos')+_evNum('ev-val-personal')+_evNum('ev-val-tasa'); var pct=0; var a=document.getElementById('ev-impo'); var b=document.getElementById('ev-ivachk'); if(a&&a.checked) pct+=0.08; if(b&&b.checked) pct+=0.19; var iv=document.getElementById('ev-iva'); if(iv) iv.value=Math.round(base*pct); _evRecalc(); }
 function _evShiftWeek(lunesStr,delta){ var d=new Date(lunesStr+'T00:00:00'); d.setDate(d.getDate()+delta); return d.toISOString().slice(0,10); }
 function renderEventoForm(){
   if(_evSoloKubik()){ document.getElementById('main-content').innerHTML='<div class="page-title">🎪 Eventos</div><div class="card"><p style="font-size:14px">El módulo de Eventos es solo para 8010. Cambia el edificio arriba.</p></div>'; return; }
@@ -6439,7 +6439,7 @@ function renderEventoForm(){
         <div class="form-row">
           <div class="form-group"><label>Personal de servicio $</label><input type="number" id="ev-val-personal" value="${esc(v('val_personal',0))}" oninput="_evImpuesto()"></div>
           <div class="form-group"><label>Tasa 10% $</label><input type="number" id="ev-val-tasa" value="${esc(v('val_tasa',0))}" oninput="_evImpuesto()"></div>
-          <div class="form-group"><label>Impuesto</label><select id="ev-imp-tipo" onchange="_evImpuesto()">${(function(){var b=(Number(v('val_sala',0))||0)+(Number(v('val_alimentacion',0))||0)+(Number(v('val_consumos',0))||0)+(Number(v('val_personal',0))||0)+(Number(v('val_tasa',0))||0);var iv=Number(v('iva',0))||0;var p=b>0?iv/b:0;var sel=(ed&&iv===0)?'Exento':(Math.abs(p-0.19)<0.02?'IVA 19%':'Impoconsumo 8%');return ['Impoconsumo 8%','IVA 19%','Exento'].map(function(o){return '<option'+(o===sel?' selected':'')+'>'+o+'</option>';}).join('');})()}</select></div><div class="form-group"><label>Impuesto $</label><input type="number" id="ev-iva" value="${esc(v('iva',0))}" oninput="_evRecalc()"></div>
+          <div class="form-group"><label>Impuestos</label><label style="display:block;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" id="ev-impo" onchange="_evImpuesto()"> Impoconsumo 8%</label><label style="display:block;font-size:13px;font-weight:400;cursor:pointer"><input type="checkbox" id="ev-ivachk" onchange="_evImpuesto()"> IVA 19%</label></div><div class="form-group"><label>Impuesto $</label><input type="number" id="ev-iva" value="${esc(v('iva',0))}" oninput="_evRecalc()"></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label>Costo del evento $</label><input type="number" id="ev-costo" value="${esc(v('costo',0))}"></div>
@@ -7603,7 +7603,6 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
         <div style="display:flex;flex-direction:column;gap:10px">
           <label style="font-weight:400;display:flex;align-items:center;gap:8px;cursor:pointer;margin:0"><input type="checkbox" id="cki-am-fruta" style="width:16px;height:16px"> 🍎 Cortesía de fruta</label>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:160px">☕ Cápsulas de café</span><input type="number" id="cki-am-cafe" min="0" placeholder="cantidad" style="width:100px;padding:5px 8px"></div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:160px">🍷 Botellas de vino</span><input type="number" id="cki-am-vino" min="0" placeholder="cantidad" style="width:100px;padding:5px 8px"></div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:160px">💧 Botellas de agua</span><input type="number" id="cki-am-agua" min="0" placeholder="cantidad" style="width:100px;padding:5px 8px"></div>
           <label style="font-weight:400;display:flex;align-items:center;gap:8px;cursor:pointer;margin:0"><input type="checkbox" id="cki-am-bano" style="width:16px;height:16px"> 🧴 Amenities de baño</label>
           <input type="text" id="cki-am-otros" placeholder="Otros (ej: flores, chocolates...)" style="padding:6px 10px">
@@ -7680,7 +7679,7 @@ function generarMsgCKI() {
   const _am=[];
   if(document.getElementById('cki-am-fruta')?.checked) _am.push('cortesía de fruta');
   const _caf=Number(document.getElementById('cki-am-cafe')?.value)||0; if(_caf) _am.push(_caf+' cápsula'+(_caf>1?'s':'')+' de café');
-  const _vin=Number(document.getElementById('cki-am-vino')?.value)||0; if(_vin) _am.push(_vin+' botella'+(_vin>1?'s':'')+' de vino');
+
   const _agu=Number(document.getElementById('cki-am-agua')?.value)||0; if(_agu) _am.push(_agu+' botella'+(_agu>1?'s':'')+' de agua');
   if(document.getElementById('cki-am-bano')?.checked) _am.push('amenities de baño');
   const _otr=(document.getElementById('cki-am-otros')?.value||'').trim(); if(_otr) _am.push(_otr);
