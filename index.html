@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0270';
+const APP_VERSION = '2026-06-17-0280';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1155,8 +1155,8 @@ async function loadView(view) {
     case 'caja-informe':       await renderCajaInforme(); break;
     case 'caja-list':          await renderList('caja','💰 Caja y Movimientos','caja-form',['fecha','tipo','concepto','area','empresa','valor','recibo_no','entregado_por'],['Fecha','Tipo','Concepto','Área','Caja / Razón Social','Valor','Recibo','Entregó']); break;
     case 'caja-form':          renderGenForm('caja','💰 Movimiento de Caja',[
-      {id:'fecha',label:'Fecha de carga',type:'date',default:TODAY,req:true},
-      {id:'fecha_factura',label:'Fecha de la factura',type:'date'},
+      {id:'fecha',label:'Fecha de creado',type:'date',default:TODAY,req:true},
+      {id:'fecha_factura',label:'Fecha del recibo',type:'date'},
       {id:'tipo',label:'Tipo',type:'select',opts:['Ingreso','Egreso','Provisional','Fondo','Reembolso','Entrega efectivo'],req:true},
       {id:'concepto',label:'Concepto / Descripción',type:'text',req:true},
       {id:'area',label:'Área',type:'select',opts:['Recepción','Mantenimiento','Housekeeping','Administración','General']},
@@ -1329,8 +1329,8 @@ async function loadView(view) {
       ['fecha','recibo_no','empresa','descripcion','area','valor','estado'],
       ['Fecha','Recibo','Empresa','Descripción','Área','Valor','Estado']); break;
     case 'reembolsos-form': renderGenForm('reembolsos','💸 Registrar Reembolso',[
-      {id:'fecha',label:'Fecha de carga',type:'date',default:TODAY,req:true},
-      {id:'fecha_factura',label:'Fecha de la factura',type:'date'},
+      {id:'fecha',label:'Fecha de creado',type:'date',default:TODAY,req:true},
+      {id:'fecha_factura',label:'Fecha del recibo',type:'date'},
       {id:'recibo_no',label:'No. Recibo',type:'text'},
       {id:'tipo',label:'Tipo',type:'select',opts:['NIT','CC','CE','Pasaporte','Otro']},
       {id:'numero',label:'Número identificación',type:'text'},
@@ -6164,7 +6164,7 @@ async function generarInformeCaja(){
   }).join('') || '<tr><td colspan="9" style="text-align:center;color:#999;padding:18px">Sin movimientos en ese rango</td></tr>';
   var encabezado = '<h2 style="color:#1D3461;margin:0 0 2px">'+esc(nomEd)+' — Informe de Caja</h2>'+
     '<div style="color:#6b7280;font-size:13px;margin-bottom:12px">Caja: <b>'+esc(cajaLbl)+'</b> · Del '+fmtF(desde)+' al '+fmtF(hasta)+' · '+rows.length+' movimiento'+(rows.length===1?'':'s')+'</div>';
-  var tabla = '<table class="tabla" style="width:100%;font-size:12px"><thead><tr><th>F. carga</th><th>F. factura</th><th>Caja</th><th>Tipo</th><th>Concepto</th><th>Área</th><th>Recibo</th><th>Entregado por</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+tr+'</tbody></table>';
+  var tabla = '<table class="tabla" style="width:100%;font-size:12px"><thead><tr><th>F. creado</th><th>F. recibo</th><th>Caja</th><th>Tipo</th><th>Concepto</th><th>Área</th><th>Recibo</th><th>Entregado por</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+tr+'</tbody></table>';
   var totales = '<div style="margin-top:14px;display:flex;gap:24px;flex-wrap:wrap;font-size:15px">'+
     '<div>Total ingresos: <b style="color:#15803d">'+fmt(entradas)+'</b></div>'+
     '<div>Total egresos: <b style="color:#b91c1c">'+fmt(salidas)+'</b></div>'+
@@ -6213,7 +6213,7 @@ async function generarInformeReembolso(){
   var estLbl=(estado==='__todos')?'Todos los estados':estado;
   var tr = rows.map(function(r){ return '<tr><td>'+fmtF(r.fecha)+'</td><td>'+fmtF(r.fecha_factura)+'</td><td>'+esc(r.recibo_no||'')+'</td><td style="text-align:left">'+esc(r.empresa||'')+'</td><td style="text-align:left">'+esc(r.descripcion||'')+'</td><td>'+esc(r.area||'')+'</td><td>'+esc(r.estado||'')+'</td><td style="text-align:right;white-space:nowrap">'+fmt(r.valor)+'</td></tr>'; }).join('') || '<tr><td colspan="8" style="text-align:center;color:#999;padding:18px">Sin reembolsos en ese rango</td></tr>';
   var encabezado = '<h2 style="color:#1D3461;margin:0 0 2px">'+esc(nomEd)+' — Informe de Reembolsos</h2><div style="color:#6b7280;font-size:13px;margin-bottom:12px">Estado: <b>'+esc(estLbl)+'</b> · Del '+fmtF(desde)+' al '+fmtF(hasta)+' · '+rows.length+' reembolso'+(rows.length===1?'':'s')+'</div>';
-  var tabla = '<table class="tabla" style="width:100%;font-size:12px"><thead><tr><th>F. carga</th><th>F. factura</th><th>Recibo</th><th>Empresa / Proveedor</th><th>Descripción</th><th>Área</th><th>Estado</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+tr+'</tbody></table>';
+  var tabla = '<table class="tabla" style="width:100%;font-size:12px"><thead><tr><th>F. creado</th><th>F. recibo</th><th>Recibo</th><th>Empresa / Proveedor</th><th>Descripción</th><th>Área</th><th>Estado</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+tr+'</tbody></table>';
   var totales = '<div style="margin-top:14px;font-size:18px">Total reembolsos del período: <b style="color:#1D3461">'+fmt(total)+'</b></div>';
   cont.innerHTML = '<div class="card">'+encabezado+'<div style="overflow-x:auto">'+tabla+'</div>'+totales+'</div>';
   window._riPrintHTML = '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe de Reembolsos</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}h2{color:#1D3461;margin:0 0 2px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}th{background:#1F3864;color:#fff}@media print{.np{display:none}}</style></head><body><button class="np" onclick="window.print()" style="background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">🖨️ Imprimir / PDF</button>'+encabezado+tabla+totales+'</body></html>';
