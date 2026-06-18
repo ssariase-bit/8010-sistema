@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0170';
+const APP_VERSION = '2026-06-17-0180';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4080,6 +4080,7 @@ function previsualizarConfirmacion() {
   if (!apto || !ci || !nombre) { showToast('Completa apto, fechas y nombre primero', 'error'); return; }
   generarConfirmacion({
     nombre, apto, noches, tarifa,
+    valorTotal: (function(){ var pn=document.getElementById('res-pornoche-toggle')&&document.getElementById('res-pornoche-toggle').checked; var t=0; if(pn){ document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(function(inp){ t+=Number(inp.value)||0; }); } if(!(t>0)) t=tarifa*noches; if(!(t>0)) t=parseInt(((document.getElementById('res-total')||{}).value||'').replace(/[^0-9]/g,''),10)||0; return t; })(),
     config: document.getElementById('res-config')?.value || 'completo',
     moneda: document.getElementById('res-moneda')?.value || 'COP',
     tipoTarifa: document.getElementById('res-tipotarifa')?.value || 'TxN',
