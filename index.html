@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0280';
+const APP_VERSION = '2026-06-17-0290';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1155,7 +1155,7 @@ async function loadView(view) {
     case 'caja-informe':       await renderCajaInforme(); break;
     case 'caja-list':          await renderList('caja','💰 Caja y Movimientos','caja-form',['fecha','tipo','concepto','area','empresa','valor','recibo_no','entregado_por'],['Fecha','Tipo','Concepto','Área','Caja / Razón Social','Valor','Recibo','Entregó']); break;
     case 'caja-form':          renderGenForm('caja','💰 Movimiento de Caja',[
-      {id:'fecha',label:'Fecha de creado',type:'date',default:TODAY,req:true},
+      {id:'fecha',label:'Fecha de creado (automática)',type:'date',default:TODAY,locked:true},
       {id:'fecha_factura',label:'Fecha del recibo',type:'date'},
       {id:'tipo',label:'Tipo',type:'select',opts:['Ingreso','Egreso','Provisional','Fondo','Reembolso','Entrega efectivo'],req:true},
       {id:'concepto',label:'Concepto / Descripción',type:'text',req:true},
@@ -1329,7 +1329,7 @@ async function loadView(view) {
       ['fecha','recibo_no','empresa','descripcion','area','valor','estado'],
       ['Fecha','Recibo','Empresa','Descripción','Área','Valor','Estado']); break;
     case 'reembolsos-form': renderGenForm('reembolsos','💸 Registrar Reembolso',[
-      {id:'fecha',label:'Fecha de creado',type:'date',default:TODAY,req:true},
+      {id:'fecha',label:'Fecha de creado (automática)',type:'date',default:TODAY,locked:true},
       {id:'fecha_factura',label:'Fecha del recibo',type:'date'},
       {id:'recibo_no',label:'No. Recibo',type:'text'},
       {id:'tipo',label:'Tipo',type:'select',opts:['NIT','CC','CE','Pasaporte','Otro']},
@@ -4375,7 +4375,7 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     } else if (f.type === 'aptotar') { var _ms=(typeof EB==='function'&&(((EB().nombre)||'').indexOf('8010')>-1))?[60,70,90,96,120,126,132]:[29,42,56,79,85,100,113,130]; var _rw=_ms.map(function(m){return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><span style="width:64px;font-size:12px;font-weight:600">'+m+' m²</span><input type="number" class="at-ini" data-m="'+m+'" placeholder="Tarifa ini" oninput="aptoTarSync()" style="width:120px;padding:6px"><input type="number" class="at-neg" data-m="'+m+'" placeholder="Negociado" oninput="aptoTarSync()" style="width:120px;padding:6px"></div>';}).join(''); input='<input type="hidden" id="gf-aptos_tarifas"><div id="gf-aptotar-box" style="padding-top:4px">'+_rw+'</div>'; } else if (f.type === 'tipos') { var _to=['1 habitación','2 habitaciones','Studio / Loft','General / Varios']; input = '<input type="hidden" id="gf-'+f.id+'"><div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:4px">'+_to.map(function(o){return '<label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="'+o+'" onchange="cotTiposSync(this)"> '+o+'</label>';}).join('')+'</div>'; } else if (f.type === 'money') {
       input = `<input type="text" inputmode="numeric" data-money="1" id="gf-${f.id}" value="${val}" oninput="fmtMoneyInput(this)" placeholder="${f.label}">`;
     } else {
-      input = `<input type="${f.type}" id="gf-${f.id}" value="${val}" placeholder="${f.label}${f.req?'*':''}">`;
+      input = `<input type="${f.type}" id="gf-${f.id}" value="${val}"${f.locked?' readonly disabled style="background:#eef0f2;color:#555;cursor:not-allowed"':''} placeholder="${f.label}${f.req?'*':''}">`;
     }
     return `<div class="form-group"><label>${f.label}${f.req?' *':''}</label>${input}</div>`;
   });
