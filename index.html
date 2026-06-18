@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0020';
+const APP_VERSION = '2026-06-17-0030';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4519,6 +4519,7 @@ async function submitGenForm(tabla, ids, reqs) {
   if (!btn) { console.error('No se encontró el botón de guardar'); return; }
   btn.innerHTML = '<span class="spinner"></span>Guardando...'; btn.disabled = true;
 
+  const _wasEdit = !!window._genEditId;
   const obj = { user_id: currentUser.id };
   ids.forEach(id => {
     const el = document.getElementById('gf-' + id);
@@ -4560,6 +4561,21 @@ async function submitGenForm(tabla, ids, reqs) {
     return;
   }
   showToast('✅ Registro '+(window._genEditId?'actualizado':'guardado')+' correctamente', 'success'); window._genEditId=null;
+  // Sol #6: al CREAR una cotización/lead, avisar automáticamente a Mercadeo (server-side)
+  if (tabla==='cotizaciones' && !_wasEdit) {
+    try {
+      const _mkt = 'gmercadeo@8i8op.com';
+      const _escm = v => String(v==null?'':v).replace(/</g,'&lt;');
+      const _f = k => (obj[k]!=null && obj[k]!=='') ? obj[k] : '—';
+      const _vc = Number(obj.valor_cotizado)||0;
+      const _per = obj.periodicidad ? (' '+obj.periodicidad) : '';
+      const _edi = (typeof EB==='function' && EB().nombre) || '';
+      const _pares = [['Interesado',_f('nombre')],['Teléfono',_f('telefono')],['Correo',_f('correo')],['Interés',_f('interes')],['Canal',_f('canal')],['Estado',_f('estado')],['Valor cotizado', _vc>0?('$'+fmtNum(_vc)+_per):'—'],['Próximo contacto',_f('proximo_contacto')],['Notas',_f('notas')]];
+      const _rows = _pares.map(p=>`<tr><td style="padding:5px 10px;color:#6b7280;width:150px">${p[0]}</td><td style="padding:5px 10px;font-weight:600">${_escm(p[1])}</td></tr>`).join('');
+      const _html = `<div style="font-family:Arial,sans-serif;max-width:600px;color:#222"><div style="background:#1D3461;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0"><div style="font-weight:700;font-size:16px">📞 Nueva cotización / lead — ${_escm(_edi)}</div></div><div style="border:1px solid #e3e6ea;border-top:none;border-radius:0 0 8px 8px;padding:18px"><p>Se registró un nuevo interesado en el sistema. Datos para seguimiento de Mercadeo:</p><table style="width:100%;border-collapse:collapse;font-size:13px">${_rows}</table><p style="margin-top:14px;font-size:11px;color:#9a938b">Generado automáticamente desde el Sistema ${_escm(_edi)}${typeof fmtFH12==='function'?(' · '+fmtFH12()):''}</p></div></div>`;
+      _comEnviarCorreo(_mkt, 'Nueva cotización / lead — '+_f('nombre')+' · '+_edi, _html).then(r=>{ if(r&&r.error) showToast('Lead guardado, pero el aviso a Mercadeo falló','error'); else showToast('📧 Aviso enviado a Mercadeo','success'); });
+    } catch(_e){ console.error('aviso mercadeo:', _e); }
+  }
   const listaView = {
     'prestamos_tec': 'prestamos-list',
     'desayunos': 'desayunos-list',
