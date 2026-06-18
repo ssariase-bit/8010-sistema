@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0060';
+const APP_VERSION = '2026-06-17-0070';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1574,7 +1574,7 @@ async function renderDashboard() {
       <div class="kpi k-azul" style="border-left-width:5px">
         <div class="kpi-lbl">Ocupados hoy</div>
         <div class="kpi-val">${ocupados}</div>
-        <div class="kpi-sub">de ${TOTAL_APTOS} aptos — ${ocuHoyPct}%</div>
+        <div class="kpi-sub">de ${TOTAL_APTOS} aptos — ${ocuHoyPct}%${EB().aptosFull.length!==EB().aptosBase.length ? ` · ${_k.b33.ocu} de ${_k.b33.disp} unidades` : ''}</div>
       </div>
       <div class="kpi k-verde">
         <div class="kpi-lbl">Disponibles hoy</div>
@@ -6215,7 +6215,7 @@ async function renderEstadoHuespedes() {
             </tr>`).join('')}
             <tr style="background:var(--azul-c);font-weight:700">
               <td colspan="2" style="color:var(--azul)">TOTAL: ${rows.length} aptos</td>
-              <td colspan="6" style="color:var(--azul)">Ocupación: ${Math.round(rows.length/21*100)}%</td>
+              <td colspan="6" style="color:var(--azul)">Ocupación: ${Math.round(rows.length/(EB().aptosFull.length||21)*100)}% (${rows.length} de ${EB().aptosFull.length||21} unidades)</td>
               <td style="color:var(--verde)">$${fmtNum(rows.filter(r=>r.tarifa).reduce((s,r)=>s+Number(r.tarifa),0))}</td>
               <td colspan="3"></td>
             </tr>
