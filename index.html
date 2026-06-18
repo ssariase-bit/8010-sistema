@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-18-0010';
+const APP_VERSION = '2026-06-17-0020';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -6186,7 +6186,7 @@ async function renderEstadoHuespedes() {
             <tbody>${rows.map(r => `<tr>
               <td><strong style="color:var(--azul);font-size:15px">${r.apto}</strong></td>
               <td><span class="badge b-${r.estado==='Ocupado'?'proceso':r.estado==='Check-in hoy'?'abierto':'alta'}">${r.estado}</span>${(typeof _ivaTag==='function'?_ivaTag(r.iva):'')}</td>
-              <td><strong>${_titleCase(window._nombrePartes(r).nombre)||'-'}</strong>${(r.empresa||(_resMap[r.apto]&&_resMap[r.apto].empresa))?`<div style="font-size:10px;color:#666;margin-top:2px">🏢 ${String(r.empresa||_resMap[r.apto].empresa).replace(/</g,'&lt;')}</div>`:''}${(_resMap[r.apto]&&_resMap[r.apto].id)?`<div style="margin-top:3px"><input value="${String(_resMap[r.apto].acompanantes||'').replace(/"/g,'&quot;')}" placeholder="👥 Acompañantes" title="Acompañantes — se guarda solo al salir del campo" onchange="guardarAcompanantesRes('${_resMap[r.apto].id}',this.value)" style="width:150px;padding:3px;font-size:11px"></div>`:''}</td>
+              <td><strong>${_titleCase(window._nombrePartes(r).nombre)||'-'}</strong>${(r.empresa||(_resMap[r.apto]&&_resMap[r.apto].empresa))?`<div style="font-size:10px;color:#666;margin-top:2px">🏢 ${String(r.empresa||_resMap[r.apto].empresa).replace(/</g,'&lt;')}</div>`:''}<div style="margin-top:3px"><input value="${String(r.acompanantes||(_resMap[r.apto]&&_resMap[r.apto].acompanantes)||'').replace(/"/g,'&quot;')}" placeholder="👥 Acompañantes" title="Acompañantes — se guarda solo al salir del campo" onchange="guardarAcompanantesRack('${r.id}',this.value)" style="width:150px;padding:3px;font-size:11px"></div></td>
               <td>${_titleCase(window._nombrePartes(r).apellido1)||'-'}</td>
               <td>${_titleCase(window._nombrePartes(r).apellido2)||'-'}</td>
               <td>${r.canal||'-'}</td>
@@ -6208,6 +6208,7 @@ async function renderEstadoHuespedes() {
   window._ehRows = rows;
 }
 function guardarAcompanantesRes(id,val){ sb.from('reservas').update({acompanantes:String(val||'').trim()}).eq('id',id).then(r=>{ if(r.error) showToast('Error: '+r.error.message,'error'); else showToast('✓ Acompañantes guardado','success'); }); }
+function guardarAcompanantesRack(id,val){ sb.from('rack').update({acompanantes:String(val||'').trim()}).eq('id',id).then(r=>{ if(r.error) showToast('Error: '+r.error.message,'error'); else showToast('✓ Acompañantes guardado','success'); }); }
 
 // ═══════════════════════════════════════════════════════════
 // MÓDULO EVENTOS (8010) — agenda + venta
@@ -7529,7 +7530,7 @@ R/${quien}`;
       let f = fi;
       for (let i = 0; i < 400; i++) {
         const estado = f === fi ? 'Check-in hoy' : (f === ff_rack ? 'Check-out hoy' : 'Ocupado');
-        rows.push({ fecha: f, apto, estado, huesped, nombre: _ckiNom||null, apellido1: _ckiAp1||null, apellido2: _ckiAp2||null, telefono: normTel(document.getElementById('cki-tel')?.value) || null, tarifa: tarifa || null, canal, empresa: (document.getElementById('cki-empresa')?.value.trim() || null), tratamiento: (document.getElementById('cki-tratamiento')?.value || null), edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+        rows.push({ fecha: f, apto, estado, huesped, nombre: _ckiNom||null, apellido1: _ckiAp1||null, apellido2: _ckiAp2||null, telefono: normTel(document.getElementById('cki-tel')?.value) || null, tarifa: tarifa || null, canal, empresa: (document.getElementById('cki-empresa')?.value.trim() || null), tratamiento: (document.getElementById('cki-tratamiento')?.value || null), acompanantes: _acomp||null, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
         if (f === ff_rack) break;
         f = addDay(f);
       }
@@ -8022,7 +8023,7 @@ async function compartirEstadoHuespedes() {
 *Ocupación: ${ocupadas} de ${_tot} (${Math.round(ocupadas/_tot*100)}%)*
 🟢 Ocupados: ${ocu}   🔵 Check-in: ${cki}   🟠 Check-out: ${cko}   ⚪ Libres: ${libres}
 
-${rows.map(r=>{const est=(r.checkin||r.checkout)?` · 🗓 ${r.checkin?fmtDate(r.checkin):'—'} a ${r.checkout?fmtDate(r.checkout):'—'}`:'';return `*${r.apto}* · ${r.huesped||'—'} · ${r.estado}${est}${r.observaciones?'\n    '+r.observaciones:''}`;}).join('\n')}
+${rows.map(r=>{const est=(r.checkin||r.checkout)?` · 🗓 ${r.checkin?fmtDate(r.checkin):'—'} a ${r.checkout?fmtDate(r.checkout):'—'}`:'';return `*${r.apto}* · ${r.huesped||'—'} · ${r.estado}${est}${r.acompanantes?'\n    👥 '+r.acompanantes:''}${r.observaciones?'\n    '+r.observaciones:''}`;}).join('\n')}
 
 _Sistema ${EB().nombre}_`;
   compartirInforme('Estado de Huéspedes — ' + fmtDate(TODAY), txt);
@@ -8311,7 +8312,7 @@ async function tablaEstadoHuespedes() {
       <td style="text-align:left">${libre?'<i style="color:#bbb">Libre</i>':esc(window._nombrePartes(r).nombre||'—')}</td>
       <td style="text-align:left">${libre?'':esc(window._nombrePartes(r).apellido1||'')}</td>
       <td style="text-align:left">${libre?'':esc(window._nombrePartes(r).apellido2||'')}</td>
-      <td style="text-align:left">${esc((r.observaciones||'').trim()).replace(/\n/g,'<br>')}</td>
+      <td style="text-align:left">${r.acompanantes?('<b>👥 '+esc(r.acompanantes)+'</b>'+((r.observaciones||'').trim()?'<br>':'')):''}${esc((r.observaciones||'').trim()).replace(/\n/g,'<br>')}</td>
       <td>${esc(estadia)}</td>
       <td>${esc(r.estado||'')}</td>
     </tr>`;}).join('');
