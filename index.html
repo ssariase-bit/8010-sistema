@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0190';
+const APP_VERSION = '2026-06-17-0200';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2213,6 +2213,7 @@ async function openAptoModal(id, num) {
       if(!data?.checkout) document.getElementById('m-checkout').value = _hi;
     }catch(_e){}
   }
+  window._aptoModalOldRange = { apto:(data&&data.apto)||null, huesped:(data&&data.huesped)||null, checkin:document.getElementById('m-checkin').value||null, checkout:document.getElementById('m-checkout').value||null };
   // Moneda / tarifa: si la estadía está en USD, mostrar el valor USD original + su TRM
   var _esUSD = data && data.moneda==='USD';
   if(document.getElementById('m-moneda')) document.getElementById('m-moneda').value = _esUSD ? 'USD' : 'COP';
@@ -2333,6 +2334,7 @@ async function saveApto() {
       if (f === updates.checkout) break;
       f = addDay(f);
     }
+    try{ var _om=window._aptoModalOldRange; if(_om && _om.checkin && _om.checkout){ var _dq=sb.from('rack').delete().eq('apto',aNum).eq('edificio',EDIFICIO_ACTIVO).gte('fecha',_om.checkin).lte('fecha',_om.checkout); if(_om.huesped) _dq=_dq.eq('huesped',_om.huesped); await _dq; } window._aptoModalOldRange=null; }catch(e){}
     const rr = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
     if (rr.error) { showToast('Error al aplicar el rango: ' + rr.error.message, 'error'); return; }
     if (varA && ocupacional) await aplicarCompleto(aNum, fecha, updates.checkin, updates.checkout, updates.huesped, esCompleto);
