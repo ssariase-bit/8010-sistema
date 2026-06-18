@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0180';
+const APP_VERSION = '2026-06-17-0190';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3721,16 +3721,6 @@ function renderNuevaReserva() {
             </select>
           </div>
         </div>` : `<select id="res-config" style="display:none"><option value="dividido" selected>Dividido</option></select>`}
-${(((EB&&EB().nombre)||'').indexOf('8010')===-1) ? `
-        <div class="form-row">
-          <div class="form-group">
-            <label>Unir con aptos adjuntos (combo Kubik · opcional)</label>
-            <select id="res-adjuntos" multiple size="5" onchange="calcReserva()" style="height:auto;min-height:96px">
-              ${EB().aptosBase.filter(a=>(EB().noEntregados||[]).indexOf(a)<0).map(a=>`<option value="${a}">${a}</option>`).join('')}
-            </select>
-            <div style="font-size:11px;color:var(--gris-t);margin-top:4px">Selecciona uno o más aptos del mismo piso para unirlos en una sola unidad (ej. 501+502+503). La tarifa total ingresada se reparte entre los aptos del combo y el rack los marca ocupados a todos. (Ctrl/Cmd + clic para varios)</div>
-          </div>
-        </div>` : ``}
         <div class="form-row col3">
           <div class="form-group">
             <label>Noches</label>
