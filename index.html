@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0030';
+const APP_VERSION = '2026-06-17-0060';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1290,7 +1290,7 @@ async function loadView(view) {
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del empleado',type:'text',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro']},
-      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:00 PM','7:00 AM - 4:00 PM','8:00 AM - 5:00 PM','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','10:00 PM - 6:00 AM']},
+      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:00 PM','7:00 AM - 4:00 PM','8:00 AM - 5:00 PM','8:00 AM - 5:45 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','10:00 PM - 6:00 AM']},
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
@@ -5336,7 +5336,7 @@ window.responderSolicitud = async function(id){
   try{
     var s=(sres&&sres.data)||{}; var _e=function(x){return String(x==null?'':x).replace(/</g,'&lt;');};
     var _h='<div style="font-family:Arial,sans-serif;max-width:560px;color:#222"><div style="background:#1D3461;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0"><div style="font-weight:700;font-size:16px">Solicitud resuelta — '+_e((typeof EB==='function'&&EB().nombre)||'')+'</div></div><div style="border:1px solid #e3e6ea;border-top:none;border-radius:0 0 8px 8px;padding:18px"><p><strong>Solicitud</strong> (de '+_e(s.solicitante||'-')+(s.prioridad?(' · '+_e(s.prioridad)):'')+'):</p><div style="background:#f8f9fa;border-left:3px solid #1D3461;padding:10px 14px;margin:8px 0;border-radius:0 6px 6px 0">'+_e(s.descripcion||'')+'</div><p><strong>Respuesta:</strong></p><div style="background:#f8f9fa;border-left:3px solid #1E7E34;padding:10px 14px;margin:8px 0;border-radius:0 6px 6px 0">'+_e(t)+'</div><p style="color:#888;font-size:12px;margin-top:14px">Mensaje automático del Sistema Operativo.</p></div></div>';
-    var _dest=['sa@8010ul.com']; var _re=(typeof _dirEmail==='function')?_dirEmail(s.solicitante):null; if(_re && _dest.indexOf(_re)<0) _dest.push(_re);
+    var _ger=(EDIFICIO_ACTIVO==='kubik')?'sariase@8i8op.com':'santiago.arias@8010urbanliving.com'; var _dest=[_ger]; var _re=(typeof _dirEmail==='function')?_dirEmail(s.solicitante):null; if(_re && _dest.indexOf(_re)<0) _dest.push(_re);
     if(typeof _comEnviarCorreo==='function'){ _dest.forEach(function(to){ _comEnviarCorreo(to, 'Solicitud resuelta — '+((typeof EB==='function'&&EB().nombre)||''), _h); }); }
   }catch(e){}
   renderSolicitudes();
@@ -5513,7 +5513,8 @@ const _DIRECTORIO = {
     {n:'Angélica Olaya', e:'aolaya@kubiklab.com'}
   ]
 };
-function _dirEmail(nombre){ var a=_DIRECTORIO[EDIFICIO_ACTIVO]||[]; var m=a.find(function(p){return p.n===nombre;}); return m?m.e:null; }
+function _normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\([^)]*\)/g,'').replace(/[^a-z ]/g,'').replace(/\s+/g,' ').trim(); }
+function _dirEmail(nombre){ var a=_DIRECTORIO[EDIFICIO_ACTIVO]||[]; var t=_normNom(nombre); if(!t) return null; var m=a.find(function(p){return _normNom(p.n)===t;}); if(m) return m.e; var tk=t.split(' ').filter(Boolean); var ap=tk[tk.length-1]; var byAp=a.filter(function(p){return _normNom(p.n).split(' ').indexOf(ap)>=0;}); if(byAp.length===1) return byAp[0].e; var byFn=a.filter(function(p){return _normNom(p.n).split(' ')[0]===tk[0];}); if(byFn.length===1) return byFn[0].e; return null; }
 function _destinos(){
   var ed=EDIFICIO_ACTIVO; var people=_DIRECTORIO[ed]||[]; var groups=[];
   if(ed==='8010'){
@@ -6235,6 +6236,7 @@ function _evNum(id){ var e=document.getElementById(id); var v=e?String(e.value).
 function _evMoney(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); }
 function _evSoloKubik(){ return (typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO==='kubik'); }
 function _evRecalc(){ var base=_evNum('ev-val-sala')+_evNum('ev-val-alim')+_evNum('ev-val-consumos')+_evNum('ev-val-personal')+_evNum('ev-val-tasa'); var b=document.getElementById('ev-base-out'); if(b) b.textContent=_evMoney(base); var t=document.getElementById('ev-total-out'); if(t) t.textContent=_evMoney(base+_evNum('ev-iva')); }
+function _evImpuesto(){ var base=_evNum('ev-val-sala')+_evNum('ev-val-alim')+_evNum('ev-val-consumos')+_evNum('ev-val-personal')+_evNum('ev-val-tasa'); var sel=document.getElementById('ev-imp-tipo'); var t=sel?sel.value:''; var pct=t.indexOf('19')>=0?0.19:(t.indexOf('8')>=0?0.08:0); var iv=document.getElementById('ev-iva'); if(iv) iv.value=Math.round(base*pct); _evRecalc(); }
 function _evShiftWeek(lunesStr,delta){ var d=new Date(lunesStr+'T00:00:00'); d.setDate(d.getDate()+delta); return d.toISOString().slice(0,10); }
 function renderEventoForm(){
   if(_evSoloKubik()){ document.getElementById('main-content').innerHTML='<div class="page-title">🎪 Eventos</div><div class="card"><p style="font-size:14px">El módulo de Eventos es solo para 8010. Cambia el edificio arriba.</p></div>'; return; }
@@ -6263,14 +6265,14 @@ function renderEventoForm(){
       </div>
       <div class="form-section"><div class="form-section-title">💳 Venta (desglose de cargos)</div>
         <div class="form-row">
-          <div class="form-group"><label>Sala $</label><input type="number" id="ev-val-sala" value="${esc(v('val_sala',0))}" oninput="_evRecalc()"></div>
-          <div class="form-group"><label>Alimentación / Bebidas $</label><input type="number" id="ev-val-alim" value="${esc(v('val_alimentacion',0))}" oninput="_evRecalc()"></div>
-          <div class="form-group"><label>Consumos adicionales $</label><input type="number" id="ev-val-consumos" value="${esc(v('val_consumos',0))}" oninput="_evRecalc()"></div>
+          <div class="form-group"><label>Sala $</label><input type="number" id="ev-val-sala" value="${esc(v('val_sala',0))}" oninput="_evImpuesto()"></div>
+          <div class="form-group"><label>Alimentación / Bebidas $</label><input type="number" id="ev-val-alim" value="${esc(v('val_alimentacion',0))}" oninput="_evImpuesto()"></div>
+          <div class="form-group"><label>Consumos adicionales $</label><input type="number" id="ev-val-consumos" value="${esc(v('val_consumos',0))}" oninput="_evImpuesto()"></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label>Personal de servicio $</label><input type="number" id="ev-val-personal" value="${esc(v('val_personal',0))}" oninput="_evRecalc()"></div>
-          <div class="form-group"><label>Tasa 10% $</label><input type="number" id="ev-val-tasa" value="${esc(v('val_tasa',0))}" oninput="_evRecalc()"></div>
-          <div class="form-group"><label>IVA $</label><input type="number" id="ev-iva" value="${esc(v('iva',0))}" oninput="_evRecalc()"></div>
+          <div class="form-group"><label>Personal de servicio $</label><input type="number" id="ev-val-personal" value="${esc(v('val_personal',0))}" oninput="_evImpuesto()"></div>
+          <div class="form-group"><label>Tasa 10% $</label><input type="number" id="ev-val-tasa" value="${esc(v('val_tasa',0))}" oninput="_evImpuesto()"></div>
+          <div class="form-group"><label>Impuesto</label><select id="ev-imp-tipo" onchange="_evImpuesto()">${(function(){var b=(Number(v('val_sala',0))||0)+(Number(v('val_alimentacion',0))||0)+(Number(v('val_consumos',0))||0)+(Number(v('val_personal',0))||0)+(Number(v('val_tasa',0))||0);var iv=Number(v('iva',0))||0;var p=b>0?iv/b:0;var sel=(ed&&iv===0)?'Exento':(Math.abs(p-0.19)<0.02?'IVA 19%':'Impoconsumo 8%');return ['Impoconsumo 8%','IVA 19%','Exento'].map(function(o){return '<option'+(o===sel?' selected':'')+'>'+o+'</option>';}).join('');})()}</select></div><div class="form-group"><label>Impuesto $</label><input type="number" id="ev-iva" value="${esc(v('iva',0))}" oninput="_evRecalc()"></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label>Costo del evento $</label><input type="number" id="ev-costo" value="${esc(v('costo',0))}"></div>
@@ -7965,11 +7967,12 @@ async function renderComercialReporte(){const{data}=await sb.from('cotizaciones'
         <td style="font-size:12px;max-width:220px">${ultNota?`<span title="${(r.notas||'').replace(/"/g,'&quot;')}">${ultNota.substring(0,60)}${ultNota.length>60?'…':''}</span><br>`:''}
           <a href="javascript:void(0)" onclick="editarCotizacion('${r.id}')" style="font-size:11px;color:#1D3461;font-weight:700">✏️ Editar</a> · <a href="javascript:void(0)" onclick="cotNota('${r.id}')" style="font-size:11px">📝 Agregar nota</a> ·
           <a href="javascript:void(0)" onclick="cotProx('${r.id}')" style="font-size:11px">📅 Próx. contacto</a><br>
-          <a href="javascript:void(0)" onclick="cotPasarComercial('${r.id}')" style="font-size:11px;color:#0d9488;font-weight:700">📤 Pasar a comercial</a></td>
+          <a href="javascript:void(0)" onclick="cotPasarComercial('${r.id}')" style="font-size:11px;color:#0d9488;font-weight:700">📤 Pasar a comercial</a> · <a href="javascript:void(0)" onclick="cotEliminar('${r.id}')" style="font-size:11px;color:#b91c1c;font-weight:700">🗑️ Eliminar</a></td>
       </tr>`;}).join('')}</tbody>
   </table>`;
 }
 
+async function cotEliminar(id){ if(!confirm('Eliminar esta cotizacion? No se puede deshacer.')) return; var r=await sb.from('cotizaciones').delete().eq('id',id).eq('edificio',EDIFICIO_ACTIVO); if(r.error){ if(typeof showToast==='function') showToast('Error: '+r.error.message,'error'); return; } if(typeof showToast==='function') showToast('Cotizacion eliminada','success'); if(typeof renderComercial==='function') renderComercial(); }
 function aptoTarSync(){ var box=document.getElementById('gf-aptotar-box'); if(!box) return; var arr=[], total=0; box.querySelectorAll('.at-ini').forEach(function(ini){ var m=ini.getAttribute('data-m'); var neg=box.querySelector('.at-neg[data-m="'+m+'"]'); var vi=parseFloat(ini.value)||0, vn=parseFloat(neg?neg.value:0)||0; if(vi||vn){ arr.push({m:Number(m),ini:vi,neg:vn}); total+=(vn||vi); } }); var h=document.getElementById('gf-aptos_tarifas'); if(h) h.value=JSON.stringify(arr); var vc=document.getElementById('gf-valor_cotizado'); if(vc && arr.length<=1) vc.value=total; }  // con varios aptos NO suma: el valor cotizado es el del apto que elige el cliente (se digita)
 function cotTiposSync(cb){ var fg=cb.closest('.form-group'); if(!fg) return; var hid=fg.querySelector('input[type=hidden]'); var vals=[]; fg.querySelectorAll('input[type=checkbox]').forEach(function(c){ if(c.checked) vals.push(c.value); }); if(hid) hid.value=vals.join(', '); }
 
