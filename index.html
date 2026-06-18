@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0080';
+const APP_VERSION = '2026-06-17-0090';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -6242,14 +6242,14 @@ async function renderEstadoHuespedes() {
             <tbody>${rows.map(r => `<tr>
               <td><strong style="color:var(--azul);font-size:15px">${r.apto}</strong></td>
               <td><span class="badge b-${r.estado==='Ocupado'?'proceso':r.estado==='Check-in hoy'?'abierto':'alta'}">${r.estado}</span>${(typeof _ivaTag==='function'?_ivaTag(r.iva):'')}</td>
-              <td><strong>${_titleCase(window._nombrePartes(r).nombre)||'-'}</strong>${(r.empresa||(_resMap[r.apto]&&_resMap[r.apto].empresa))?`<div style="font-size:10px;color:#666;margin-top:2px">🏢 ${String(r.empresa||_resMap[r.apto].empresa).replace(/</g,'&lt;')}</div>`:''}<div style="margin-top:3px"><input value="${String(r.acompanantes||(_resMap[r.apto]&&_resMap[r.apto].acompanantes)||'').replace(/"/g,'&quot;')}" placeholder="👥 Acompañantes" title="Acompañantes — se guarda solo al salir del campo" onchange="guardarAcompanantesRack('${r.id}',this.value)" style="width:150px;padding:3px;font-size:11px"></div></td>
+              <td><strong>${_titleCase(window._nombrePartes(r).nombre)||'-'}</strong>${(r.empresa||(_resMap[r.apto]&&_resMap[r.apto].empresa))?`<div style="font-size:10px;color:#666;margin-top:2px">🏢 ${String(r.empresa||_resMap[r.apto].empresa).replace(/</g,'&lt;')}</div>`:''}${(function(){window._paxMap=window._paxMap||{};var a=r.acomp_pax;try{a=Array.isArray(a)?a:(a?JSON.parse(a):[]);}catch(e){a=[];}if((!a||!a.length)&&(r.acompanantes||(_resMap[r.apto]&&_resMap[r.apto].acompanantes))){a=[{n:(r.acompanantes||_resMap[r.apto].acompanantes),e:'IN'}];}window._paxMap[r.id]=a||[];return '';})()}<div style="margin-top:3px"><div style="font-size:10px;color:#666">👥 Acompañantes:</div><div id="pax-${r.id}">${_paxHTML(r.id)}</div></div></td>
               <td>${_titleCase(window._nombrePartes(r).apellido1)||'-'}</td>
               <td>${_titleCase(window._nombrePartes(r).apellido2)||'-'}</td>
               <td>${r.canal||'-'}</td>
               <td>${r.checkin ? fmtDate(r.checkin) : '-'}</td>
               <td>${r.checkout ? fmtDate(r.checkout) : '-'}</td>
               <td>${r.moneda==='USD' && r.tarifa_usd ? 'USD $'+fmtNum(r.tarifa_usd)+'<div style="font-size:9px;color:#888">≈ $'+fmtNum(r.tarifa)+' COP</div>' : (r.tarifa ? '$'+fmtNum(r.tarifa) : '-')}</td><td style="text-align:center"><input type="number" min="0" value="${r.pax!=null?r.pax:''}" onchange="guardarPaxHuesped('${r.id}','${r.apto}',this.value)" placeholder="-" title="PAX en casa" style="width:55px;padding:4px;font-size:13px;text-align:center"></td>
-              <td style="max-width:170px"><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Nota del huésped..." title="Se guarda sola al salir del campo" style="width:160px;padding:4px;font-size:11px" onchange="guardarNotaHuesped('${r.id}','${r.apto}',this.value)"></td>
+              <td style="max-width:170px"><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Nota del huésped..." title="Se guarda sola al salir del campo" style="width:160px;padding:4px;font-size:11px" onchange="guardarNotaHuesped('${r.id}','${r.apto}',this.value)"><input value="${String(r.seguimiento||'').replace(/"/g,'&quot;')}" placeholder="📌 Seguimiento..." title="Seguimiento — se guarda solo al salir" style="width:160px;padding:4px;font-size:11px;margin-top:3px" onchange="guardarSeguimiento('${r.id}',this.value)"></td>
               <td>${_esKL?`<input id="tel-${r.id}" value="${r.telefono||''}" placeholder="📱 WhatsApp" title="WhatsApp del huésped — se guarda solo al salir del campo" style="width:108px;padding:4px;font-size:11px" onchange="guardarTelHuesped('${r.id}','${r.apto}',this.value)"> <input id="dc-${r.id}" data-nombre="${String(r.huesped||'').replace(/"/g,'')}" data-tratamiento="${r.tratamiento||''}" data-tel="${r.telefono||''}" placeholder="Cód. puerta" style="width:84px;padding:4px;font-size:11px"> <button onclick="waBienvenida('dc-${r.id}')" class="btn btn-sm" style="background:#25D366;color:#fff">💬 Bienvenida</button> <button onclick="waAnuncio('dc-${r.id}')" class="btn btn-sm" style="background:#1D3461;color:#fff">📢</button> `:''}<button onclick="openAptoModal('${r.id}','${r.apto}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
             </tr>`).join('')}
             <tr style="background:var(--azul-c);font-weight:700">
@@ -6265,6 +6265,18 @@ async function renderEstadoHuespedes() {
 }
 function guardarAcompanantesRes(id,val){ sb.from('reservas').update({acompanantes:String(val||'').trim()}).eq('id',id).then(r=>{ if(r.error) showToast('Error: '+r.error.message,'error'); else showToast('✓ Acompañantes guardado','success'); }); }
 function guardarAcompanantesRack(id,val){ sb.from('rack').update({acompanantes:String(val||'').trim()}).eq('id',id).then(r=>{ if(r.error) showToast('Error: '+r.error.message,'error'); else showToast('✓ Acompañantes guardado','success'); }); }
+
+window._paxMap=window._paxMap||{};
+function _paxEstadoOpts(sel){ return ['IN','Sale de viaje','CKO'].map(function(o){return '<option'+(o===sel?' selected':'')+'>'+o+'</option>';}).join(''); }
+function _paxHTML(id){ var arr=window._paxMap[id]||[]; var esc=function(s){return String(s==null?'':s).replace(/"/g,'&quot;');}; var rows=arr.map(function(p,i){ return '<div style="display:flex;gap:3px;margin-top:2px;align-items:center"><input value="'+esc(p.n)+'" placeholder="Nombre" onchange="paxSet(\''+id+'\','+i+',\'n\',this.value)" style="width:90px;padding:2px;font-size:10px"><select onchange="paxSet(\''+id+'\','+i+',\'e\',this.value)" style="font-size:10px;padding:2px">'+_paxEstadoOpts(p.e||'IN')+'</select><span onclick="paxDel(\''+id+'\','+i+')" title="Quitar" style="cursor:pointer;color:#b91c1c;font-weight:700;padding:0 3px">x</span></div>'; }).join(''); return rows+'<div style="margin-top:2px"><span onclick="paxAdd(\''+id+'\')" style="cursor:pointer;color:#1d4ed8;font-size:10px;font-weight:700">+ acompanante</span></div>'; }
+function _paxRefresh(id){ var el=document.getElementById('pax-'+id); if(el) el.innerHTML=_paxHTML(id); }
+function _paxSave(id){ sb.from('rack').update({acomp_pax: window._paxMap[id]||[]}).eq('id',id).then(function(r){ if(r.error && typeof showToast==='function') showToast('Error acompanantes: '+r.error.message,'error'); }); }
+function paxAdd(id){ window._paxMap[id]=window._paxMap[id]||[]; window._paxMap[id].push({n:'',e:'IN'}); _paxRefresh(id); }
+function paxDel(id,i){ if(!window._paxMap[id]) return; window._paxMap[id].splice(i,1); _paxRefresh(id); _paxSave(id); }
+function paxSet(id,i,k,v){ if(!window._paxMap[id]||!window._paxMap[id][i]) return; window._paxMap[id][i][k]=v; _paxSave(id); }
+function _paxStr(r){ var a=r&&r.acomp_pax; try{ a=Array.isArray(a)?a:(a?JSON.parse(a):[]); }catch(e){ a=[]; } if(a&&a.length){ var t=a.map(function(p){return (p.n||'')+(p.e?(' ('+p.e+')'):'');}).filter(function(x){return x.replace(/[()A-Za-zñ ]/g,'').length>=0 && x.trim() && x.trim()!=='(IN)';}); return t.join(', '); } return (r&&r.acompanantes)||''; }
+function guardarSeguimiento(id,val){ sb.from('rack').update({seguimiento:String(val||'').trim()}).eq('id',id).then(function(r){ if(r.error){ if(typeof showToast==='function') showToast('Error seguimiento: '+r.error.message,'error'); } else if(typeof showToast==='function') showToast('Seguimiento guardado','success'); }); }
+
 
 // ═══════════════════════════════════════════════════════════
 // MÓDULO EVENTOS (8010) — agenda + venta
@@ -8081,7 +8093,7 @@ async function compartirEstadoHuespedes() {
 *Ocupación: ${ocupadas} de ${_tot} (${Math.round(ocupadas/_tot*100)}%)*
 🟢 Ocupados: ${ocu}   🔵 Check-in: ${cki}   🟠 Check-out: ${cko}   ⚪ Libres: ${libres}
 
-${rows.map(r=>{const est=(r.checkin||r.checkout)?` · 🗓 ${r.checkin?fmtDate(r.checkin):'—'} a ${r.checkout?fmtDate(r.checkout):'—'}`:'';return `*${r.apto}* · ${r.huesped||'—'} · ${r.estado}${est}${r.acompanantes?'\n    👥 '+r.acompanantes:''}${r.observaciones?'\n    '+r.observaciones:''}`;}).join('\n')}
+${rows.map(r=>{const est=(r.checkin||r.checkout)?` · 🗓 ${r.checkin?fmtDate(r.checkin):'—'} a ${r.checkout?fmtDate(r.checkout):'—'}`:'';return `*${r.apto}* · ${r.huesped||'—'} · ${r.estado}${est}${(function(){var sx=_paxStr(r);return sx?'\n    👥 '+sx:'';})()}${r.observaciones?'\n    '+r.observaciones:''}`;}).join('\n')}
 
 _Sistema ${EB().nombre}_`;
   compartirInforme('Estado de Huéspedes — ' + fmtDate(TODAY), txt);
@@ -8370,7 +8382,7 @@ async function tablaEstadoHuespedes() {
       <td style="text-align:left">${libre?'<i style="color:#bbb">Libre</i>':esc(window._nombrePartes(r).nombre||'—')}</td>
       <td style="text-align:left">${libre?'':esc(window._nombrePartes(r).apellido1||'')}</td>
       <td style="text-align:left">${libre?'':esc(window._nombrePartes(r).apellido2||'')}</td>
-      <td style="text-align:left">${r.acompanantes?('<b>👥 '+esc(r.acompanantes)+'</b>'+((r.observaciones||'').trim()?'<br>':'')):''}${esc((r.observaciones||'').trim()).replace(/\n/g,'<br>')}</td>
+      <td style="text-align:left">${(function(){var px=_paxStr(r);return px?('<b>👥 '+esc(px)+'</b><br>'):'';})()}${esc((r.observaciones||'').trim()).replace(/\n/g,'<br>')}${(r.seguimiento||'').trim()?('<br><i>📌 '+esc(r.seguimiento.trim())+'</i>'):''}</td>
       <td>${esc(estadia)}</td>
       <td>${esc(r.estado||'')}</td>
     </tr>`;}).join('');
