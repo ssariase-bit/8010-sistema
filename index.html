@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-17-0340';
+const APP_VERSION = '2026-06-17-0350';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4876,7 +4876,10 @@ async function enviarInformeCorreo(titulo, texto, btn, htmlOverride, destOverrid
   let prev=null;
   if(btn){ prev=btn.innerHTML; btn.disabled=true; btn.innerHTML='⏳ Enviando…'; }
   try{
-    const { data, error } = await sb.functions.invoke('enviar-informe', { body:{ to:d.to, cc:d.cc, subject, html, edificio:edi } });
+    const _copiaFija = (edi==='kubik') ? 'recepcion@8i8op.com' : 'recepcion@8010urbanliving.com';
+    const _ccBase = Array.isArray(d.cc) ? d.cc.slice() : (d.cc?[d.cc]:[]);
+    if (_ccBase.indexOf(_copiaFija)===-1 && (d.to||[]).indexOf(_copiaFija)===-1) _ccBase.push(_copiaFija);
+    const { data, error } = await sb.functions.invoke('enviar-informe', { body:{ to:d.to, cc:_ccBase, subject, html, edificio:edi } });
     if(error) throw error;
     if(!data || !data.ok) throw new Error((data&&data.error)||'No se pudo enviar');
     showToast('✅ Informe enviado a '+d.to.join(', '),'success');
