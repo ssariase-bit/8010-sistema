@@ -270,7 +270,7 @@ textarea{resize:vertical;min-height:80px}
       <label>Estado</label>
       <select id="m-estado">
         <option>Libre</option><option value="Ocupado">Ocupado / En casa (IN)</option><option>Check-in hoy</option>
-        <option>Check-out hoy</option><option>No Show</option><option>Sucio</option><option>Pendiente repaso</option><option>Sale de viaje</option><option>Limpieza</option><option>Mantenimiento</option><option>Bloqueado</option>
+        <option>Check-out hoy</option><option>No Show</option><option>Sucio</option><option>Pendiente repaso</option><option>Sale de viaje</option><option>En viaje</option><option>Limpieza</option><option>Mantenimiento</option><option>Bloqueado</option>
       </select>
     </div>
     <div class="form-group">
@@ -380,6 +380,14 @@ textarea{resize:vertical;min-height:80px}
       </label>
       <div style="font-size:11px;color:#7c4a03;margin-top:4px">Con esto, el cambio que hagas aquí se replica en todo el rango de fechas, no solo en el día seleccionado.</div>
     </div>
+    <div class="form-group" style="background:#EEF4FF;border:1px solid #9DB8E8;border-radius:8px;padding:10px">
+      <label style="display:block;margin:0 0 6px;font-weight:600">📅 Aplicar el estado a un rango de fechas</label>
+      <div class="form-row">
+        <div class="form-group"><label>Desde</label><input type="date" id="m-rango-desde"></div>
+        <div class="form-group"><label>Hasta</label><input type="date" id="m-rango-hasta"></div>
+      </div>
+      <div style="font-size:11px;color:#1D3461;margin-top:2px">Toma el <b>Estado</b> de arriba (ej. "En viaje") y lo marca en todas las fechas entre Desde y Hasta, conservando el huésped y sin tocar el resto de la estadía.</div>
+    </div>
     <div class="form-actions">
       <button class="btn btn-outline btn-sm" onclick="closeModal('modal-apto')">Cancelar</button>
       <button class="btn btn-danger btn-sm" onclick="declinarLimpieza()" title="Registra novedad automática: el arrendatario no quiere limpieza hoy">
@@ -447,7 +455,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-19-0510';
+const APP_VERSION = '2026-06-19-0520';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2287,6 +2295,7 @@ async function openAptoModal(id, num) {
       if(!data?.checkout) document.getElementById('m-checkout').value = _hi;
     }catch(_e){}
   }
+  (function(){ var a=document.getElementById('m-rango-desde'); if(a)a.value=''; var b=document.getElementById('m-rango-hasta'); if(b)b.value=''; var c=document.getElementById('m-rango'); if(c)c.checked=false; })();
   window._aptoModalOldRange = { apto:(data&&data.apto)||null, huesped:(data&&data.huesped)||null, checkin:document.getElementById('m-checkin').value||null, checkout:document.getElementById('m-checkout').value||null };
   // Moneda / tarifa: si la estadía está en USD, mostrar el valor USD original + su TRM
   var _esUSD = data && data.moneda==='USD';
@@ -2394,6 +2403,22 @@ async function saveApto() {
     updated_by: currentUser.id,
     updated_at: new Date().toISOString(),
   };
+
+  // Aplicar el estado a un rango de fechas especifico (no destructivo: solo reescribe ese rango)
+  const _rd = document.getElementById('m-rango-desde')?.value;
+  const _rh = document.getElementById('m-rango-hasta')?.value;
+  if (_rd && _rh && _rd <= _rh) {
+    const addDay = s => { const [y,m,d] = s.split('-').map(Number); return new Date(Date.UTC(y, m-1, d+1)).toISOString().split('T')[0]; };
+    const rows = []; let f = _rd;
+    for (let i = 0; i < 400; i++) {
+      rows.push({ fecha: f, apto: aNum, estado: updates.estado, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      if (f === _rh) break; f = addDay(f);
+    }
+    const rr = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
+    if (rr.error) { showToast('Error al aplicar el rango: ' + rr.error.message, 'error'); return; }
+    showToast(`\u2705 Apto ${aNum}: "${updates.estado}" aplicado del ${fmtDate(_rd)} al ${fmtDate(_rh)} (${rows.length} dia(s))`, 'success');
+    closeModal('modal-apto'); renderRack(); return;
+  }
 
   // ¿Aplicar a toda la estadía? (todas las fechas del rango CI–CO)
   const _rango = document.getElementById('m-rango')?.checked && updates.checkin && updates.checkout && updates.checkin <= updates.checkout;
