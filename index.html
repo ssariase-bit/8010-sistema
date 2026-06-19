@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-19-0400';
+const APP_VERSION = '2026-06-19-0410';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2450,6 +2450,14 @@ function renderTurnoForm() {
         </div>
       </div>
 
+      ${EDIFICIO_ACTIVO==='kubik' ? `<div class="form-section">
+        <div class="form-section-title">🔑 Entrega de turno (llaves / sombrillas)</div>
+        <div class="form-row col3">
+          <div class="form-group"><label>Llaves de acceso entregadas</label><input type="number" id="t-llaves" min="0" placeholder="0"></div>
+          <div class="form-group"><label>Sombrillas disponibles</label><input type="number" id="t-sombrillas" min="0" placeholder="0"></div>
+          <div class="form-group"><label>Sombrillas en préstamo</label><input type="number" id="t-sombrillas-prest" min="0" placeholder="0"></div>
+        </div>
+      </div>` : ``}
       <div class="form-section" style="border:2px solid var(--naran);background:#fff9f5">
         <div class="form-section-title" style="color:var(--naran)">⚠️ Novedades del turno</div>
         <div id="t-nov-arrastre" style="margin-bottom:10px"></div>
@@ -2605,6 +2613,9 @@ async function enviarTurno() {
     checkins_hoy: Number(document.getElementById('t-checkins').value) || 0,
     checkouts_hoy: Number(document.getElementById('t-checkouts').value) || 0,
     caja_cierre: Number(document.getElementById('t-caja').value) || 0,
+    llaves_entregadas: Number(document.getElementById('t-llaves')?.value) || null,
+    sombrillas_disp: Number(document.getElementById('t-sombrillas')?.value) || null,
+    sombrillas_prest: Number(document.getElementById('t-sombrillas-prest')?.value) || null,
     pendientes: document.getElementById('t-pendientes').value,
     notas: document.getElementById('t-notas').value,
     user_id: currentUser.id,
@@ -2626,6 +2637,9 @@ async function enviarTurno() {
   const caja     = Number(document.getElementById('t-caja').value || 0).toLocaleString('es-CO');
   const pend   = document.getElementById('t-pendientes').value.trim();
   const notas  = document.getElementById('t-notas').value.trim();
+  const llaves = document.getElementById('t-llaves')?.value || '0';
+  const sombDisp = document.getElementById('t-sombrillas')?.value || '0';
+  const sombPrest = document.getElementById('t-sombrillas-prest')?.value || '0';
   const [y,m,d] = fecha.split('-');
 
   const _fmtFT = f => { try{ const p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]; }catch(_){ return ''; } };
@@ -2650,7 +2664,11 @@ async function enviarTurno() {
 ▪️ Aptos ocupados: ${ocup} | Disponibles: ${disp}
 ▪️ Check-ins: ${cki} | Check-outs: ${cko}
 ${EDIFICIO_ACTIVO==='kubik' ? `▪️ Caja 8i8: $${cajaLTM3}` : `▪️ Caja LTM3: $${cajaLTM3} | OT: $${cajaOT} | PH: $${cajaPH}`}
-▪️ Total caja: $${caja}
+▪️ Total caja: $${caja}${EDIFICIO_ACTIVO==='kubik' ? `
+
+*ENTREGA DE TURNO:*
+▪️ Llaves de acceso: ${llaves}
+▪️ Sombrillas: ${sombDisp} disponibles | ${sombPrest} en préstamo` : ''}
 
 *NOVEDADES:*
 ${novResumen}
@@ -8027,7 +8045,8 @@ async function cargarTotalCKO(){
       prev=r.fecha;
       if(r.tarifa){ total+=Number(r.tarifa)||0; noches++; }
     }
-    var _np0=window._nombrePartes(rows[0]||{}); var _se=function(id,v){var e=document.getElementById(id); if(e&&!e.value) e.value=v||'';}; _se('cko-nombre',_np0.nombre); _se('cko-apellido1',_np0.apellido1); _se('cko-apellido2',_np0.apellido2);
+    var _gapDias=Math.round((new Date(TODAY+'T00:00:00')-new Date((rows[0].fecha||TODAY)+'T00:00:00'))/86400000);
+    if(_gapDias<=1){ var _np0=window._nombrePartes(rows[0]||{}); var _se=function(id,v){var e=document.getElementById(id); if(e&&!e.value) e.value=v||'';}; _se('cko-nombre',_np0.nombre); _se('cko-apellido1',_np0.apellido1); _se('cko-apellido2',_np0.apellido2); }
     const aEl=document.getElementById('cko-aloja'); if(aEl) aEl.value=total;
     const nEl=document.getElementById('cko-noches'); if(nEl) nEl.value=noches;
   }catch(e){ console.error('cargarTotalCKO', e); }
