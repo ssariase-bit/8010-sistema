@@ -455,7 +455,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-19-0520';
+const APP_VERSION = '2026-06-19-0530';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -8351,12 +8351,23 @@ function cotPasarComercial(id){
     <div style="background:#F2F3F5;border-radius:8px;padding:12px;font-size:12px;white-space:pre-wrap;max-height:220px;overflow:auto;margin-bottom:16px">${txt.replace(/</g,'&lt;')}</div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <a href="https://wa.me/?text=${wa}" target="_blank" onclick="document.getElementById('modal-comercial').remove()" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#25D366;color:#fff;padding:12px;border-radius:10px;text-decoration:none;font-weight:700;font-size:13px">💬 Enviar por WhatsApp</a>
-      <a href="mailto:?subject=${asunto}&body=${cuerpo}" onclick="document.getElementById('modal-comercial').remove()" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#1D3461;color:#fff;padding:12px;border-radius:10px;text-decoration:none;font-weight:700;font-size:13px">📧 Enviar por correo</a>
+      <button onclick="_enviarLeadMercadeo(this)" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#1D3461;color:#fff;padding:12px;border-radius:10px;border:none;cursor:pointer;font-weight:700;font-size:13px">📧 Enviar a Mercadeo (automático)</button>
       <button onclick="(navigator.clipboard&&navigator.clipboard.writeText(window._txtComercial||''));showToast('✅ Copiado','success')" style="background:#6B7280;color:#fff;border:none;padding:11px;border-radius:10px;cursor:pointer;font-weight:700;font-size:13px">📋 Copiar</button>
       <button onclick="document.getElementById('modal-comercial').remove()" style="background:transparent;border:none;padding:6px;cursor:pointer;font-size:12px;color:#9CA3AF">Cancelar</button>
     </div></div>`;
   document.body.appendChild(m);
   m.addEventListener('click', e=>{ if(e.target===m) m.remove(); });
+}
+async function _enviarLeadMercadeo(btn){
+  var dest = (EDIFICIO_ACTIVO==='kubik') ? 'gmercadeo@8i8op.com' : 'recepcion@8010urbanliving.com';
+  var edn = (EDIFICIO_ACTIVO==='kubik') ? 'Kubik Living 8i8' : '8010 Urban Living';
+  var txt = window._txtComercial || '';
+  var html = '<div style="font-family:Arial,sans-serif;max-width:600px;color:#222"><div style="background:#1D3461;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0"><div style="font-weight:700;font-size:16px">\ud83d\udcde Lead para Comercial \u2014 '+edn+'</div></div><div style="border:1px solid #e3e6ea;border-top:none;border-radius:0 0 8px 8px;padding:18px"><pre style="white-space:pre-wrap;font-family:Arial,sans-serif;font-size:13px;margin:0">'+String(txt).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</pre></div></div>';
+  if(btn){ btn.disabled=true; btn.textContent='Enviando\u2026'; }
+  var r = await _comEnviarCorreo(dest, 'Lead comercial \u2014 '+edn, html);
+  var m=document.getElementById('modal-comercial'); if(m) m.remove();
+  if(r && r.error){ showToast('No se pudo enviar a Mercadeo: '+((r.error&&r.error.message)||''),'error'); }
+  else { showToast('\ud83d\udce7 Lead enviado automaticamente a Mercadeo ('+dest+')','success'); }
 }
 async function renderComercial() {
   const { data } = await sb.from('cotizaciones').select('*').order('fecha_solicitud',{ascending:false});
