@@ -3785,7 +3785,7 @@ function renderNuevaReserva() {
             <option value="70">Apartamento 70 m² — 1 habitación, 01 cama King</option>
             <option value="90">Apartamento 90 m² — 1 habitación, 01 cama King</option>
             <option value="96">Apartamento 96 m² — 1 habitación, 01 cama King</option>
-            <option value="PH120">Penthouse 120 m² — 2 habitaciones, 01 King + 02 Twin</option>
+            <option value="PH120">Penthouse 120 m² — 1 habitación, 01 cama King</option>
             <option value="126">Apartamento 126 m² — 2 habitaciones, 01 King + 02 Twin</option>
             <option value="132">Apartamento 132 m² — 2 habitaciones, 01 King + 02 Twin</option>
           </select>
@@ -4265,7 +4265,7 @@ function generarConfirmacion(r) {
     if(_mk!=null){tipo=_disp+' - '+_nm+' '+_mk+' m²';desc=_hb+'.';}
   }
   const _taMan = r.tipoAptoManual || r.tipo_apto_manual || '';
-  const _tamap = { '60':['Apartamento de 60 m²','Apartamento de 60 m² con 1 habitación:<br>01 cama King.'], '70':['Apartamento de 70 m²','Apartamento de 70 m² con 1 habitación:<br>01 cama King.'], '90':['Apartamento de 90 m²','Apartamento de 90 m² con 1 habitación:<br>01 cama King.'], '96':['Apartamento de 96 m²','Apartamento de 96 m² con 1 habitación:<br>01 cama King.'], 'PH120':['Penthouse de 120 m²','Penthouse de 120 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'], '126':['Apartamento de 126 m²','Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'], '132':['Apartamento de 132 m²','Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'] };
+  const _tamap = { '60':['Apartamento de 60 m²','Apartamento de 60 m² con 1 habitación:<br>01 cama King.'], '70':['Apartamento de 70 m²','Apartamento de 70 m² con 1 habitación:<br>01 cama King.'], '90':['Apartamento de 90 m²','Apartamento de 90 m² con 1 habitación:<br>01 cama King.'], '96':['Apartamento de 96 m²','Apartamento de 96 m² con 1 habitación:<br>01 cama King.'], 'PH120':['Penthouse de 120 m²','Penthouse de 120 m² con 1 habitación:<br>01 cama King.'], '126':['Apartamento de 126 m²','Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'], '132':['Apartamento de 132 m²','Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'] };
   if (_taMan && _tamap[_taMan]) { tipo = _tamap[_taMan][0]; desc = _tamap[_taMan][1]; }
   const moneda = r.moneda || 'COP';
   const esUSD = moneda === 'USD';
