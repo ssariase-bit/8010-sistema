@@ -391,6 +391,9 @@ textarea{resize:vertical;min-height:80px}
       <button class="btn btn-outline btn-sm" onclick="abrirInformeCKO()" style="color:var(--rojo);border-color:var(--rojo)" title="Generar informe de Check-Out y marcar como libre">
         🔴 Generar CKO
       </button>
+      <button class="btn btn-outline btn-sm" onclick="cambiarAptoModal()" style="color:#1D3461;border-color:#1D3461" title="Mover este huesped a otro apartamento, dejando el actual libre">
+        🔀 Cambiar de apto
+      </button>
       <button class="btn btn-outline btn-sm" onclick="liberarRangoApto()" style="color:#92400E;border-color:#92400E" title="Anula el bloqueo o la estadía: pone Libre todas las fechas del rango Check-in/Check-out de este apto">
         🗑 Liberar rango
       </button>
@@ -444,7 +447,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-19-0420';
+const APP_VERSION = '2026-06-19-0510';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2222,6 +2225,41 @@ function toggleAptoCompleto(chk) {
 function _paxSum(){ var g=function(id){ var e=document.getElementById(id); return (e&&e.value!=='')?(Number(e.value)||0):0; }; var t=g('m-pax-ad')+g('m-pax-me')+g('m-pax-in'); var p=document.getElementById('m-pax'); if(p) p.value=t; }
 // Mayúscula inicial: solo normaliza si el texto viene TODO en mayúsculas (no toca nombres ya bien escritos)
 function _titleCase(s){ s=String(s==null?'':s); if(!s) return s; if(/[a-záéíóúñü]/.test(s)) return s; return s.toLowerCase().replace(/(^|[\s'\-\/.])([a-záéíóúñü])/g, function(m,p,c){ return p+c.toUpperCase(); }); }
+async function cambiarAptoModal(){
+  var eb=(typeof EB==='function')?EB():{}; var aptos=(eb.aptosFull||eb.aptosBase||[]);
+  var origen=(window._aptoData&&_aptoData.apto)||(window._aptoModalOldRange&&_aptoModalOldRange.apto);
+  var huesped=(window._aptoData&&_aptoData.huesped)||(window._aptoModalOldRange&&_aptoModalOldRange.huesped);
+  var ci=document.getElementById('m-checkin').value, co=document.getElementById('m-checkout').value;
+  if(!origen){ showToast('No identifico el apto de origen','error'); return; }
+  if(!huesped || !ci || !co){ showToast('Este apto no tiene una estadia (huesped + fechas) para mover','error'); return; }
+  var lista=aptos.filter(function(a){return String(a)!==String(origen);});
+  var destino=prompt('Mover a '+huesped+' (apto '+origen+', '+ci+' a '+co+') hacia cual apartamento?\n\nDisponibles: '+lista.join(', '),'');
+  if(destino===null) return; destino=String(destino).trim();
+  if(!destino) return;
+  if(aptos.map(String).indexOf(destino)===-1){ showToast('Apto destino invalido: '+destino,'error'); return; }
+  if(destino===String(origen)){ showToast('El destino es el mismo apto','error'); return; }
+  if(!confirm('Confirmar: mover a '+huesped+' del '+origen+' al '+destino+' ('+ci+' a '+co+').\nEl apto '+origen+' quedara libre en esas fechas.')) return;
+  await doCambiarApto(String(origen),destino,huesped,ci,co);
+}
+async function doCambiarApto(origen,destino,huesped,ci,co){
+  try{
+    var r=await sb.from('rack').select('*').eq('edificio',EDIFICIO_ACTIVO).eq('apto',origen).gte('fecha',ci).lte('fecha',co);
+    var rows=(r.data||[]);
+    if(!rows.length){ showToast('No hay filas de rack para mover en ese rango','error'); return; }
+    var c=await sb.from('rack').select('fecha,huesped,estado').eq('edificio',EDIFICIO_ACTIVO).eq('apto',destino).gte('fecha',ci).lte('fecha',co);
+    var ocup=(c.data||[]).filter(function(x){ return (x.huesped&&String(x.huesped).trim()) && String(x.huesped).trim()!==String(huesped).trim() && x.estado && x.estado!=='Libre'; });
+    if(ocup.length){ showToast('El apto '+destino+' ya esta ocupado por otro huesped en esas fechas ('+ocup[0].fecha+'). No se movio nada.','error'); return; }
+    var copies=rows.map(function(x){ var o={}; for(var k in x){ if(k==='id'||k==='created_at'||k==='updated_at') continue; o[k]=x[k]; } o.apto=destino; return o; });
+    await sb.from('rack').delete().eq('edificio',EDIFICIO_ACTIVO).eq('apto',destino).gte('fecha',ci).lte('fecha',co);
+    var ins=await sb.from('rack').insert(copies);
+    if(ins.error){ showToast('Error al mover: '+ins.error.message,'error'); return; }
+    await sb.from('rack').delete().eq('edificio',EDIFICIO_ACTIVO).eq('apto',origen).gte('fecha',ci).lte('fecha',co);
+    try{ await sb.from('reservas').update({apto:destino}).eq('edificio',EDIFICIO_ACTIVO).eq('apto',origen).eq('checkin',ci).eq('checkout',co); }catch(_e){}
+    showToast('\u2713 '+huesped+' movido del apto '+origen+' al '+destino,'success');
+    if(typeof closeModal==='function') closeModal('modal-apto');
+    if(typeof loadView==='function') loadView('rack');
+  }catch(e){ showToast('Error: '+(e&&e.message?e.message:e),'error'); }
+}
 async function openAptoModal(id, num) {
   const { data } = await sb.from('rack').select('*').eq('id', id).single();
   _aptoData = data || {};
