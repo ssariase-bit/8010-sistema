@@ -444,7 +444,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-19-0410';
+const APP_VERSION = '2026-06-19-0420';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2450,14 +2450,14 @@ function renderTurnoForm() {
         </div>
       </div>
 
-      ${EDIFICIO_ACTIVO==='kubik' ? `<div class="form-section">
+      <div class="form-section">
         <div class="form-section-title">🔑 Entrega de turno (llaves / sombrillas)</div>
         <div class="form-row col3">
           <div class="form-group"><label>Llaves de acceso entregadas</label><input type="number" id="t-llaves" min="0" placeholder="0"></div>
           <div class="form-group"><label>Sombrillas disponibles</label><input type="number" id="t-sombrillas" min="0" placeholder="0"></div>
           <div class="form-group"><label>Sombrillas en préstamo</label><input type="number" id="t-sombrillas-prest" min="0" placeholder="0"></div>
         </div>
-      </div>` : ``}
+      </div>
       <div class="form-section" style="border:2px solid var(--naran);background:#fff9f5">
         <div class="form-section-title" style="color:var(--naran)">⚠️ Novedades del turno</div>
         <div id="t-nov-arrastre" style="margin-bottom:10px"></div>
@@ -2664,7 +2664,7 @@ async function enviarTurno() {
 ▪️ Aptos ocupados: ${ocup} | Disponibles: ${disp}
 ▪️ Check-ins: ${cki} | Check-outs: ${cko}
 ${EDIFICIO_ACTIVO==='kubik' ? `▪️ Caja 8i8: $${cajaLTM3}` : `▪️ Caja LTM3: $${cajaLTM3} | OT: $${cajaOT} | PH: $${cajaPH}`}
-▪️ Total caja: $${caja}${EDIFICIO_ACTIVO==='kubik' ? `
+▪️ Total caja: $${caja}${(Number(llaves)||Number(sombDisp)||Number(sombPrest)) ? `
 
 *ENTREGA DE TURNO:*
 ▪️ Llaves de acceso: ${llaves}
