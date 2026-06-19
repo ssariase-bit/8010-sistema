@@ -455,7 +455,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-19-0610';
+const APP_VERSION = '2026-06-19-0710';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3830,16 +3830,7 @@ function renderNuevaReserva() {
             <input type="date" id="res-checkout" onchange="calcReserva()">
           </div>
         </div>
-        ${(((EB&&EB().nombre)||'').indexOf('8010')>-1) ? `<div class="form-row">
-          <div class="form-group">
-            <label>Configuración del apto (si tiene habitación A)</label>
-            <select id="res-config">
-              <option value="completo">Completo — apto + habitación A</option>
-              <option value="dividido">Dividido — solo apto principal</option>
-              <option value="deluxe">Habitación Deluxe — 1 habitación (King)</option>
-            </select>
-          </div>
-        </div>` : `<select id="res-config" style="display:none"><option value="dividido" selected>Dividido</option></select>`}
+        <select id="res-config" style="display:none"><option value="dividido" selected>Dividido</option></select>
         ${(((EB&&EB().nombre)||'').indexOf('8010')>-1) ? `<div class="form-row"><div class="form-group">
           <label>Tipo de apto en la confirmación (opcional)</label>
           <select id="res-tipo-manual">
@@ -3849,6 +3840,7 @@ function renderNuevaReserva() {
             <option value="90">Apartamento 90 m² — 1 habitación, 01 cama King</option>
             <option value="96">Apartamento 96 m² — 1 habitación, 01 cama King</option>
             <option value="PH120">Penthouse 120 m² — 1 habitación, 01 cama King</option>
+            <option value="DELUXE">Habitación Deluxe — 01 cama King</option>
             <option value="126">Apartamento 126 m² — 2 habitaciones, 01 King + 02 Twin</option>
             <option value="132">Apartamento 132 m² — 2 habitaciones, 01 King + 02 Twin</option>
           </select>
@@ -3866,15 +3858,10 @@ function renderNuevaReserva() {
               <option value="USD">USD — Dólares</option>
             </select>
           </div>
-          <div class="form-group" id="res-trm-wrap" style="display:none">
-            <label>TRM (COP por USD) *</label>
-            <input type="number" id="res-trm" onchange="calcReserva()" placeholder="Ej: 4100" style="font-weight:600">
-          </div>
           <div class="form-group">
             <label>IVA</label>
             <select id="res-iva" style="font-weight:600">
-              <option value="incluido">Incluye IVA (19%)</option>
-              <option value="encima">IVA 19% (se suma)</option><option value="exento">Exento de IVA</option><option value="no_aplica">No aplica (N/A)</option>
+              <option value="encima">IVA 19% (se suma)</option><option value="exento">Exento de IVA</option>
             </select>
           </div>
           <div class="form-group">
@@ -4042,10 +4029,8 @@ function calcReserva() {
   const co = document.getElementById('res-checkout').value;
   const tarifa = Number(document.getElementById('res-tarifa').value) || 0;
   const moneda = document.getElementById('res-moneda')?.value || 'COP';
-  const trm = Number(document.getElementById('res-trm')?.value) || 0;
-  const sym = moneda === 'USD' ? 'USD $' : '$';
+  const sym = moneda === 'USD' ? 'USD' : '$';
   if (document.getElementById('res-moneda-sym')) document.getElementById('res-moneda-sym').textContent = sym;
-  var _trmW = document.getElementById('res-trm-wrap'); if (_trmW) _trmW.style.display = (moneda==='USD') ? '' : 'none';
   if (ci && co) {
     const noches = Math.max(0, Math.round((new Date(co) - new Date(ci)) / 86400000));
     document.getElementById('res-noches').value = noches;
@@ -4053,10 +4038,7 @@ function calcReserva() {
     if (porNoche) renderNochesTarifa();
     let total = noches * tarifa;
     if (porNoche) { total = 0; document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(inp=>{ total += Number(inp.value)||0; }); }
-    if (moneda === 'USD') {
-      if (trm > 0) { const _tc = Math.round(total*trm); document.getElementById('res-total').value = `$ ${_tc.toLocaleString('es-CO')} (USD ${total.toLocaleString('es-CO')} × TRM ${trm.toLocaleString('es-CO')})`; }
-      else { document.getElementById('res-total').value = `USD ${total.toLocaleString('es-CO')} — ingresa la TRM`; }
-    } else { document.getElementById('res-total').value = `$ ${total.toLocaleString('es-CO')}`; }
+    document.getElementById('res-total').value = (moneda === 'USD') ? `USD ${total.toLocaleString('es-CO')}` : `$ ${total.toLocaleString('es-CO')}`;
     // Mostrar resumen
     const apto = document.getElementById('res-apto').value;
     if (apto && noches > 0) {
@@ -4108,10 +4090,7 @@ async function guardarReserva() {
   const _rNom = (document.getElementById('res-nf')?.value||'').trim()||null;
   const _rAp1 = (document.getElementById('res-ap1')?.value||'').trim()||null;
   const _rAp2 = (document.getElementById('res-ap2')?.value||'').trim()||null;
-  const _monRes = document.getElementById('res-moneda')?.value || 'COP';
-  const _trmRes = Number(document.getElementById('res-trm')?.value) || 0;
-  const _tarifaRaw = Number(document.getElementById('res-tarifa').value) || 0;
-  const tarifa  = (_monRes==='USD' && _trmRes>0) ? Math.round(_tarifaRaw*_trmRes) : _tarifaRaw;
+  const tarifa  = Number(document.getElementById('res-tarifa').value) || 0;
   const noches  = Number(document.getElementById('res-noches').value) || 0;
   const canal   = document.getElementById('res-canal').value;
   const iva     = document.getElementById('res-iva')?.value || 'incluido';
@@ -4119,8 +4098,6 @@ async function guardarReserva() {
   const porNoche = document.getElementById('res-pornoche-toggle')?.checked;
   const tarifasNoche = {};
   if (porNoche) document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(inp=>{ tarifasNoche[inp.getAttribute('data-fecha')] = Number(inp.value)||0; });
-  if (_monRes==='USD' && _trmRes>0) { Object.keys(tarifasNoche).forEach(function(k){ tarifasNoche[k]=Math.round((Number(tarifasNoche[k])||0)*_trmRes); }); }
-  if (_monRes==='USD' && !_trmRes) { showToast('Ingresa la TRM para reservas en USD','error'); return; }
 
   if (!apto || !ci || !co || !nombre) {
     showToast('Completa: Apartamento, fechas y nombre del huésped', 'error'); return;
@@ -4179,8 +4156,6 @@ async function guardarReserva() {
     checkin: ci, checkout: co,
     canal, iva: document.getElementById('res-iva')?.value || 'incluido', empresa: document.getElementById('res-empresa').value.trim(),
     moneda: document.getElementById('res-moneda')?.value || 'COP',
-    tarifa_usd: (_monRes==='USD') ? _tarifaRaw : null,
-    trm: (_monRes==='USD') ? _trmRes : null,
     tipoAptoManual: document.getElementById('res-tipo-manual')?.value || '',
     config: document.getElementById('res-config')?.value || 'completo',
     tipoTarifa: document.getElementById('res-tipotarifa')?.value || 'TxN',
@@ -4213,10 +4188,7 @@ function previsualizarConfirmacion() {
   const ci = document.getElementById('res-checkin').value;
   const co = document.getElementById('res-checkout').value;
   const nombre = document.getElementById('res-nombre').value.trim();
-  const _monP = document.getElementById('res-moneda')?.value || 'COP';
-  const _trmP = Number(document.getElementById('res-trm')?.value) || 0;
-  const _tarRawP = Number(document.getElementById('res-tarifa').value) || 0;
-  const tarifa = (_monP==='USD' && _trmP>0) ? Math.round(_tarRawP*_trmP) : _tarRawP;
+  const tarifa = Number(document.getElementById('res-tarifa').value) || 0;
   const noches = Number(document.getElementById('res-noches').value) || 0;
   if (!apto || !ci || !nombre) { showToast('Completa apto, fechas y nombre primero', 'error'); return; }
   generarConfirmacion({
@@ -4224,7 +4196,6 @@ function previsualizarConfirmacion() {
     valorTotal: (function(){ var pn=document.getElementById('res-pornoche-toggle')&&document.getElementById('res-pornoche-toggle').checked; var t=0; if(pn){ document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(function(inp){ t+=Number(inp.value)||0; }); } if(!(t>0)) t=tarifa*noches; if(!(t>0)) t=parseInt(((document.getElementById('res-total')||{}).value||'').replace(/[^0-9]/g,''),10)||0; return t; })(),
     config: document.getElementById('res-config')?.value || 'completo',
     moneda: document.getElementById('res-moneda')?.value || 'COP',
-    tarifa_usd: (_monP==='USD')?_tarRawP:null, trm:(_monP==='USD')?_trmP:null,
     tipoAptoManual: document.getElementById('res-tipo-manual')?.value || '',
     tipoTarifa: document.getElementById('res-tipotarifa')?.value || 'TxN',
     iva: document.getElementById('res-iva')?.value || 'incluido',
@@ -4328,15 +4299,12 @@ function generarConfirmacion(r) {
     if(_mk!=null){tipo=_disp+' - '+_nm+' '+_mk+' m²';desc=_hb+'.';}
   }
   const _taMan = r.tipoAptoManual || r.tipo_apto_manual || '';
-  const _tamap = { '60':['Apartamento de 60 m²','Apartamento de 60 m² con 1 habitación:<br>01 cama King.'], '70':['Apartamento de 70 m²','Apartamento de 70 m² con 1 habitación:<br>01 cama King.'], '90':['Apartamento de 90 m²','Apartamento de 90 m² con 1 habitación:<br>01 cama King.'], '96':['Apartamento de 96 m²','Apartamento de 96 m² con 1 habitación:<br>01 cama King.'], 'PH120':['Penthouse de 120 m²','Penthouse de 120 m² con 1 habitación:<br>01 cama King.'], '126':['Apartamento de 126 m²','Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'], '132':['Apartamento de 132 m²','Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'] };
+  const _tamap = { '60':['Apartamento de 60 m²','Apartamento de 60 m² con 1 habitación:<br>01 cama King.'], '70':['Apartamento de 70 m²','Apartamento de 70 m² con 1 habitación:<br>01 cama King.'], '90':['Apartamento de 90 m²','Apartamento de 90 m² con 1 habitación:<br>01 cama King.'], '96':['Apartamento de 96 m²','Apartamento de 96 m² con 1 habitación:<br>01 cama King.'], 'PH120':['Penthouse de 120 m²','Penthouse de 120 m² con 1 habitación:<br>01 cama King.'], 'DELUXE':['Habitación Deluxe','Habitación Deluxe:<br>01 cama King.'], '126':['Apartamento de 126 m²','Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'], '132':['Apartamento de 132 m²','Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'] };
   if (_taMan && _tamap[_taMan]) { tipo = _tamap[_taMan][0]; desc = _tamap[_taMan][1]; }
   const moneda = r.moneda || 'COP';
   const esUSD = moneda === 'USD';
-  const _trmC = Number(r.trm)||0;
-  const _tarUsdC = Number(r.tarifa_usd)||0;
-  const _convUSD = esUSD && _trmC>0;
-  const simb = '$';
-  const monedaLabel = (esUSD && !_convUSD) ? 'USD' : 'COP';
+  const simb = esUSD ? 'USD' : '$';
+  const monedaLabel = '';
   const esExento = r.iva === 'exento';
   const ivaPct = 0.19;
   const iva = esExento ? 0 : Math.round(r.tarifa * ivaPct);
@@ -4413,12 +4381,12 @@ function generarConfirmacion(r) {
     <tr><td>Fecha de Entrada</td><td>${fmtFechaLarga(r.checkin)}</td></tr>
     <tr><td>Fecha de Salida</td><td>${fmtFechaLarga(r.checkout)}</td></tr>
     <tr><td>Total de Días</td><td>${r.tipoTarifa==='TxD' ? String(r.noches).padStart(2,'0')+' día'+(r.noches>1?'s':'') : 'N/A'}</td></tr>
-    <tr><td>Tarifa Apartamento por Día</td><td>${r.tipoTarifa==='TxD' ? ('$ '+(((r.tarifa>0)?r.tarifa:((r.valorTotal>0&&r.noches>0)?Math.round(r.valorTotal/r.noches):0))).toLocaleString('es-CO')+' '+monedaLabel+(conIVA?' + IVA':'')+((r.tarifa>0)?'':' (promedio)')) : 'N/A'}</td></tr>
+    <tr><td>Tarifa Apartamento por Día</td><td>${r.tipoTarifa==='TxD' ? (simb+' '+(((r.tarifa>0)?r.tarifa:((r.valorTotal>0&&r.noches>0)?Math.round(r.valorTotal/r.noches):0))).toLocaleString('es-CO')+(conIVA?' + IVA':'')+((r.tarifa>0)?'':' (promedio)')) : 'N/A'}</td></tr>
     <tr><td>Total de Noches</td><td>${r.tipoTarifa==='TxD' ? 'N/A' : String(r.noches).padStart(2,'0')+' noche'+(r.noches>1?'s':'')}</td></tr>
-    <tr><td>Tarifa Apartamento por Noche</td><td>${r.tipoTarifa==='TxD' ? 'N/A' : ('$ '+(((r.tarifa>0)?r.tarifa:((r.valorTotal>0&&r.noches>0)?Math.round(r.valorTotal/r.noches):0))).toLocaleString('es-CO')+' '+monedaLabel+(conIVA?' + IVA':'')+((r.tarifa>0)?'':' (promedio)'))}</td></tr>
+    <tr><td>Tarifa Apartamento por Noche</td><td>${r.tipoTarifa==='TxD' ? 'N/A' : (simb+' '+(((r.tarifa>0)?r.tarifa:((r.valorTotal>0&&r.noches>0)?Math.round(r.valorTotal/r.noches):0))).toLocaleString('es-CO')+(conIVA?' + IVA':'')+((r.tarifa>0)?'':' (promedio)'))}</td></tr>
     <tr><td>Tarifa Apartamento por Mes</td><td>N/A</td></tr>
-    <tr><td>Valor Total del Contrato</td><td class="bold-val">$ ${(((r.valorTotal!=null&&r.valorTotal>0)?r.valorTotal:(r.tarifa*r.noches))||0).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}</td></tr>
-    ${_convUSD ? `<tr><td>Tarifa por noche en USD (ref.)</td><td>USD ${_tarUsdC.toLocaleString('es-CO')}</td></tr><tr><td>TRM aplicada</td><td>$ ${_trmC.toLocaleString('es-CO')} por USD</td></tr><tr><td>Total en USD (ref.)</td><td>USD ${(_tarUsdC*(Number(r.noches)||0)).toLocaleString('es-CO')}</td></tr><tr><td>Moneda de origen</td><td><strong>USD — Dólares</strong></td></tr>` : (esUSD ? `<tr><td>Moneda de cobro</td><td><strong>USD — Dólares americanos</strong></td></tr><tr><td>TRM</td><td>Del día en que se efectúe el pago</td></tr>` : `<tr><td>TRM</td><td>N/A</td></tr>`)}
+    <tr><td>Valor Total del Contrato</td><td class="bold-val">${simb} ${(((r.valorTotal!=null&&r.valorTotal>0)?r.valorTotal:(r.tarifa*r.noches))||0).toLocaleString('es-CO')}${conIVA?' + IVA':''}</td></tr>
+    ${esUSD ? `<tr><td>Moneda de cobro</td><td><strong>USD — Dólares americanos</strong></td></tr><tr><td>Conversión a pesos</td><td>Se realiza el día del pago, a la TRM de ese día.</td></tr>` : ``}
     <tr><td>Forma de Pago</td><td>${/factur/i.test(r.pago||'') ? `Pago <strong>POR FACTURAR</strong> &mdash; <strong>${r.cxcTipo||'CxC Full'}</strong> a cargo de la empresa.<br>Facturar por <strong>${r.cxcRazon||_razon}</strong>` : `Pago <strong>${r.pago.toUpperCase()}</strong> ${r.estadoPago==='Pagado' ? '&mdash; <strong>YA PAGADA</strong>' : (r.estadoPago==='50% adelanto' ? '&mdash; <strong>50% de adelanto recibido</strong>, saldo a su llegada' : 'por parte del Cliente <strong>a su llegada</strong>')}.<br>Facturar por <strong>${r.cxcRazon||_razon}</strong>`}</td></tr>
     <tr>
       <td>Incluidos en la Tarifa</td>
@@ -6786,7 +6754,7 @@ async function renderEventos(){
     </div>`;
 }
 function enviarAgendaEventos(btn){
-  var dest={ to:['natalia.munoz@8010urbanliving.com'], cc:['cristina.cervino@8010urbanliving.com','santiago.arias@8010urbanliving.com'] };
+  var dest={ to:['natalia.munoz@8010urbanliving.com','cristina.cervino@8010urbanliving.com'], cc:['santiago.arias@8010urbanliving.com','gerencia@8010urbanliving.com','fabio.malaver@8010urbanliving.com','mantenimiento@8010urbanliving.com','compras@8010urbanliving.com','administrativo@8010urbanliving.com','zareth.varela@8010urbanliving.com'] };
   return enviarInformeCorreo('Agenda de Eventos · '+(window._evAgWeek||''), window._evAgTxt||'Sin eventos.', btn, null, dest);
 }
 async function renderEventosAgenda(){
