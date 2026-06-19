@@ -455,7 +455,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-19-0540';
+const APP_VERSION = '2026-06-19-0600';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -8041,6 +8041,10 @@ function renderInformeCKO(aptoPreload, huesped, canal) {
         <div class="form-group"><label>Primer apellido</label><input type="text" id="cko-apellido1" value="${_q(_hp.apellido1)}" placeholder="Primer apellido"></div>
         <div class="form-group"><label>Segundo apellido</label><input type="text" id="cko-apellido2" value="${_q(_hp.apellido2)}" placeholder="Segundo apellido"></div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label>Correo del huésped *</label><input type="email" id="cko-correo" placeholder="correo@ejemplo.com"></div>
+        <div class="form-group"><label>Teléfono / WhatsApp *</label><input type="tel" id="cko-tel" placeholder="57 3XX XXX XXXX"></div>
+      </div>
       <div class="form-group"><label>Acompañantes (si estuvo con esposa, pareja, hijos…)</label><input type="text" id="cko-acomp" placeholder="Ej: esposa e hijo — dejar vacío si estuvo solo"></div>
       <div class="form-row">
         <div class="form-group"><label>Consumos adicionales ($)</label><input type="number" id="cko-consumos" placeholder="0" value="0"></div>
@@ -8109,12 +8113,35 @@ async function cargarTotalCKO(){
       if(r.tarifa){ total+=Number(r.tarifa)||0; noches++; }
     }
     var _gapDias=Math.round((new Date(TODAY+'T00:00:00')-new Date((rows[0].fecha||TODAY)+'T00:00:00'))/86400000);
-    if(_gapDias<=1){ var _np0=window._nombrePartes(rows[0]||{}); var _se=function(id,v){var e=document.getElementById(id); if(e&&!e.value) e.value=v||'';}; _se('cko-nombre',_np0.nombre); _se('cko-apellido1',_np0.apellido1); _se('cko-apellido2',_np0.apellido2); }
+    if(_gapDias<=1){ var _np0=window._nombrePartes(rows[0]||{}); var _se=function(id,v){var e=document.getElementById(id); if(e&&!e.value) e.value=v||'';}; _se('cko-nombre',_np0.nombre); _se('cko-apellido1',_np0.apellido1); _se('cko-apellido2',_np0.apellido2); _se('cko-tel', rows[0].telefono); }
     const aEl=document.getElementById('cko-aloja'); if(aEl) aEl.value=total;
     const nEl=document.getElementById('cko-noches'); if(nEl) nEl.value=noches;
   }catch(e){ console.error('cargarTotalCKO', e); }
 }
 
+const ENCUESTA_CFG = {
+  '8010': { url:'https://docs.google.com/forms/d/e/1FAIpQLSdl2zWdtXPXiwOO1dxnmL28T0VV9DRf2txLTckhTXb0MgCxsw/viewform', nombre:'8010 Urban Living' },
+  'kubik': { url:'https://forms.office.com/Pages/ResponsePage.aspx?id=N4sE1fzghk-fzKKlMT2cWHubpewM4q9Esy1yNj02NktURDdWUEFFOEpKNEgwSERLNk4wT0RMQlBSTy4u', nombre:'Kubik Living 8i8' }
+};
+function _encCfg(edi){ return ENCUESTA_CFG[edi] || ENCUESTA_CFG['8010']; }
+function _encQR(u){ return 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&qzone=1&data='+encodeURIComponent(u); }
+function _encWaLink(tel, nombre, edi){ var cfg=_encCfg(edi); var t=String(tel||'').replace(/\D/g,''); if(t.length===10) t='57'+t; var msg='Hola '+(nombre||'')+', gracias por hospedarse en '+cfg.nombre+'. Nos encantaria conocer tu opinion: responde nuestra breve encuesta de satisfaccion aqui: '+cfg.url; return 'https://wa.me/'+t+'?text='+encodeURIComponent(msg); }
+async function enviarEncuestaCKO(nombre, correo, edi){
+  var cfg=_encCfg(edi);
+  var html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#222">'
+    + '<div style="background:#1D3461;color:#fff;padding:18px 22px;border-radius:8px 8px 0 0;text-align:center"><div style="font-weight:700;font-size:18px">'+cfg.nombre+'</div><div style="font-size:13px;opacity:.9">Encuesta de satisfacción</div></div>'
+    + '<div style="border:1px solid #e3e6ea;border-top:none;border-radius:0 0 8px 8px;padding:24px">'
+    + '<p>Estimado(a) '+(nombre||'huésped')+':</p>'
+    + '<p>Gracias por haberse hospedado con nosotros. Su opinión es muy importante para seguir mejorando nuestro servicio.</p>'
+    + '<p>Le agradeceríamos responder esta breve encuesta sobre su estadía (toma solo un par de minutos):</p>'
+    + '<div style="text-align:center;margin:22px 0"><a href="'+cfg.url+'" style="background:#1D3461;color:#fff;text-decoration:none;padding:13px 30px;border-radius:8px;font-weight:700;font-size:14px">Responder la encuesta</a></div>'
+    + '<p style="text-align:center;font-size:12px;color:#666">O escanee este código con su celular:</p>'
+    + '<div style="text-align:center;margin:8px 0"><img src="'+_encQR(cfg.url)+'" alt="QR encuesta" width="160" height="160" style="border:1px solid #eee;border-radius:6px"></div>'
+    + '<p style="margin-top:6px">Será un gusto recibirlo nuevamente y ser su primera opción de alojamiento en Bogotá.</p>'
+    + '<p style="margin-top:18px">Cordialmente,<br><b>'+cfg.nombre+'</b> — Recepción</p>'
+    + '</div></div>';
+  return _comEnviarCorreo(correo, cfg.nombre+' — Encuesta de satisfacción de su estadía', html);
+}
 function generarMsgCKO() {
   const apto = document.getElementById('cko-apto').value;
   const huesped = window._composeNombre(document.getElementById('cko-nombre')?.value, document.getElementById('cko-apellido1')?.value, document.getElementById('cko-apellido2')?.value);
@@ -8132,6 +8159,12 @@ function generarMsgCKO() {
   const acompStrCKO = _acompCKO ? ', estuvo acompañado de '+_acompCKO : '';
 
   if (!huesped) { showToast('Ingresa el nombre del huésped', 'error'); return; }
+  const correoH = (document.getElementById('cko-correo')?.value||'').trim();
+  const telH = (document.getElementById('cko-tel')?.value||'').trim();
+  if (!correoH || correoH.indexOf('@')<1) { showToast('Ingresa el correo del huésped (obligatorio para la encuesta)', 'error'); return; }
+  if (!telH) { showToast('Ingresa el teléfono del huésped (obligatorio)', 'error'); return; }
+  const _encWa = _encWaLink(telH, huesped, EDIFICIO_ACTIVO);
+  enviarEncuestaCKO(huesped, correoH, EDIFICIO_ACTIVO).then(function(r){ if(r && r.error) showToast('Encuesta: no se pudo enviar el correo','error'); else showToast('\ud83d\udce7 Encuesta de satisfacción enviada a '+correoH,'success'); });
 
   const h = new Date().getHours();
   const consumosStr = consumos > 0 ? `, realiza el pago de sus consumos adicionales ($${consumos.toLocaleString('es-CO')} ${pago})` : '';
@@ -8194,6 +8227,8 @@ R/${quien}`;
            style="display:flex;align-items:center;gap:10px;background:#1D3461;color:white;padding:12px 16px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px">
           📧 Enviar por Email
         </a>
+        <div style="font-size:11px;color:#15803d;text-align:center;margin-top:2px">✓ Encuesta de satisfacción enviada por correo a ${correoH}</div>
+        <a href="${_encWa}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#0E8A4F;color:white;padding:12px 16px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px">📨 Enviar encuesta al huésped por WhatsApp</a>
         <button id="cko-libre-btn" onclick="marcarAptoCKOLibre('${apto}')"
            style="background:#C0392B;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700">
           ✅ Confirmar salida — Apto ${apto} queda SUCIO (por limpiar)
