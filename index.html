@@ -455,7 +455,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-19-0600';
+const APP_VERSION = '2026-06-19-0610';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -6785,6 +6785,10 @@ async function renderEventos(){
       <div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Empresa</th><th>Sala</th><th>PAX</th><th>Estado</th><th>Total</th><th></th></tr></thead><tbody>${body}</tbody></table></div>
     </div>`;
 }
+function enviarAgendaEventos(btn){
+  var dest={ to:['natalia.munoz@8010urbanliving.com'], cc:['cristina.cervino@8010urbanliving.com','santiago.arias@8010urbanliving.com'] };
+  return enviarInformeCorreo('Agenda de Eventos · '+(window._evAgWeek||''), window._evAgTxt||'Sin eventos.', btn, null, dest);
+}
 async function renderEventosAgenda(){
   if(_evSoloKubik()){ document.getElementById('main-content').innerHTML='<div class="page-title">🎪 Eventos</div><div class="card"><p style="font-size:14px">Solo 8010.</p></div>'; return; }
   var baseD=window._evAgendaLunes?new Date(window._evAgendaLunes+'T00:00:00'):new Date();
@@ -6794,6 +6798,16 @@ async function renderEventosAgenda(){
   var r2=await sb.from('eventos').select('*').eq('edificio',EDIFICIO_ACTIVO).is('fecha_fin',null).gte('fecha_inicio',lunes).lte('fecha_inicio',dom);
   var all=[...(r1.data||[]),...(r2.data||[])]; var seen={}; all=all.filter(function(e){ if(seen[e.id])return false; seen[e.id]=1; return true; });
   var dias=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']; var esc=function(s){ return String(s==null?'':s).replace(/</g,'&lt;'); };
+  window._evAgWeek = fmtDate(lunes)+' – '+fmtDate(dom);
+  var _agTxt='📅 Agenda de Eventos · '+window._evAgWeek+' · '+EB().nombre+'\n'; var _hayEv=false;
+  for(var _j=0;_j<7;_j++){ var _dj=new Date(d); _dj.setDate(_dj.getDate()+_j); var _fj=_dj.toISOString().slice(0,10);
+    var _evj=all.filter(function(e){ var fi=e.fecha_inicio, ff=e.fecha_fin||e.fecha_inicio; return _fj>=fi && _fj<=ff; });
+    if(!_evj.length) continue; _hayEv=true;
+    _agTxt+='\n'+dias[_j]+' '+fmtDate(_fj)+':\n';
+    _evj.forEach(function(e){ _agTxt+='  • '+(e.empresa||'(evento)')+(e.sala?(' — '+e.sala):'')+(e.hora?(' — '+e.hora):'')+(e.pax?(' — '+e.pax+' pax'):'')+(e.estado?(' ('+e.estado+')'):'')+'\n'; });
+  }
+  if(!_hayEv) _agTxt+='\nSin eventos esta semana.';
+  window._evAgTxt=_agTxt; var _agWa='https://wa.me/?text='+encodeURIComponent(_agTxt);
   var cards='';
   for(var i=0;i<7;i++){ var dd=new Date(d); dd.setDate(dd.getDate()+i); var fstr=dd.toISOString().slice(0,10);
     var evs=all.filter(function(e){ var fi=e.fecha_inicio, ff=e.fecha_fin||e.fecha_inicio; return fstr>=fi && fstr<=ff; });
@@ -6809,6 +6823,8 @@ async function renderEventosAgenda(){
         <button class="btn btn-outline btn-sm" onclick="window._evAgendaLunes='${_evShiftWeek(lunes,7)}';renderEventosAgenda()">▶</button>
         <button onclick="loadView('eventos-rack')" class="btn btn-outline btn-sm">🗓️ Rack</button>
         <button onclick="loadView('eventos')" class="btn btn-outline btn-sm">📋 Lista</button>
+        <a href="${_agWa}" target="_blank" class="btn btn-outline btn-sm" style="color:#0E8A4F;border-color:#0E8A4F;text-decoration:none">💬 Enviar WhatsApp</a>
+        <button onclick="enviarAgendaEventos(this)" class="btn btn-outline btn-sm" style="color:#1D3461;border-color:#1D3461">📧 Enviar correo</button>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">${cards}</div>`;
