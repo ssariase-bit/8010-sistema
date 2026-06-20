@@ -5658,7 +5658,7 @@ function _normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD')
 function _dirEmail(nombre){ var a=_DIRECTORIO[EDIFICIO_ACTIVO]||[]; var t=_normNom(nombre); if(!t) return null; var m=a.find(function(p){return _normNom(p.n)===t;}); if(m) return m.e; var tk=t.split(' ').filter(Boolean); var ap=tk[tk.length-1]; var byAp=a.filter(function(p){return _normNom(p.n).split(' ').indexOf(ap)>=0;}); if(byAp.length===1) return byAp[0].e; var byFn=a.filter(function(p){return _normNom(p.n).split(' ')[0]===tk[0];}); if(byFn.length===1) return byFn[0].e; return null; }
 // Departamento -> correo (direcciones confirmadas del ecosistema). Para dirigir solicitudes a un area.
 const _DEPTOS = {
-  '8010': { 'recepcion':'recepcion@8010urbanliving.com', 'mantenimiento':'mantenimiento@8010urbanliving.com', 'compras':'compras@8010urbanliving.com', 'administracion':'administrativo@8010urbanliving.com', 'administrativo':'administrativo@8010urbanliving.com', 'gerencia':'gerencia@8010urbanliving.com', 'eventos':'natalia.munoz@8010urbanliving.com', 'comercial':'cristina.cervino@8010urbanliving.com' },
+  '8010': { 'recepcion':'recepcion@8010urbanliving.com', 'mantenimiento':'mantenimiento@8010urbanliving.com', 'compras':'compras@8010urbanliving.com', 'administracion':'administrativo@8010urbanliving.com', 'administrativo':'administrativo@8010urbanliving.com', 'gerencia':'santiago.arias@8010urbanliving.com', 'eventos':'natalia.munoz@8010urbanliving.com', 'comercial':'cristina.cervino@8010urbanliving.com' },
   'kubik': { 'recepcion':'recepcion@8i8op.com', 'gerencia':'sariase@8i8op.com' }
 };
 function _depEmail(nombre){ var d=_DEPTOS[EDIFICIO_ACTIVO]||{}; var t=_normNom(nombre); return (t&&d[t])||null; }
