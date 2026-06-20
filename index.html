@@ -5440,6 +5440,24 @@ window.guardarSolicitud = async function(){
   if(r.error && /dirigido_a/.test(r.error.message||'')){ delete row.dirigido_a; r=await sb.from('solicitudes').insert(row); }
   if(r.error){ if(typeof showToast==='function') showToast('Error: '+r.error.message,'error'); return; }
   window._solImg=null;
+  // Aviso por correo al destinatario cuando la solicitud va dirigida (persona o departamento)
+  try{
+    if(dir && dir.trim() && typeof _comEnviarCorreo==='function'){
+      var _to=(typeof _dirEmail==='function'?_dirEmail(dir):null)||(typeof _depEmail==='function'?_depEmail(dir):null);
+      if(_to){
+        var _e=function(x){return String(x==null?'':x).replace(/</g,'&lt;');};
+        var _nom=(typeof EB==='function'&&EB().nombre)||'';
+        var _solName=row.solicitante||'-';
+        var _h='<div style="font-family:Arial,sans-serif;max-width:560px;color:#222">'
+          +'<div style="background:#1D3461;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0"><div style="font-weight:700;font-size:16px">Nueva solicitud dirigida a ti — '+_e(_nom)+'</div></div>'
+          +'<div style="border:1px solid #e3e6ea;border-top:none;border-radius:0 0 8px 8px;padding:18px">'
+          +'<p><strong>De:</strong> '+_e(_solName)+' &middot; <strong>Prioridad:</strong> '+_e(pri)+'</p>'
+          +'<div style="background:#f8f9fa;border-left:3px solid #1D3461;padding:10px 14px;margin:8px 0;border-radius:0 6px 6px 0">'+_e(desc.trim())+'</div>'
+          +'<p style="color:#888;font-size:12px;margin-top:14px">Ingresa al Sistema Operativo para responderla. Mensaje automatico.</p></div></div>';
+        _comEnviarCorreo(_to, 'Nueva solicitud dirigida a ti — '+_nom+(pri?(' ['+pri+']'):''), _h);
+      }
+    }
+  }catch(e){}
   if(typeof showToast==='function') showToast('Solicitud enviada','success');
   renderSolicitudes();
 };
@@ -5638,6 +5656,12 @@ const _DIRECTORIO = {
 };
 function _normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\([^)]*\)/g,'').replace(/[^a-z ]/g,'').replace(/\s+/g,' ').trim(); }
 function _dirEmail(nombre){ var a=_DIRECTORIO[EDIFICIO_ACTIVO]||[]; var t=_normNom(nombre); if(!t) return null; var m=a.find(function(p){return _normNom(p.n)===t;}); if(m) return m.e; var tk=t.split(' ').filter(Boolean); var ap=tk[tk.length-1]; var byAp=a.filter(function(p){return _normNom(p.n).split(' ').indexOf(ap)>=0;}); if(byAp.length===1) return byAp[0].e; var byFn=a.filter(function(p){return _normNom(p.n).split(' ')[0]===tk[0];}); if(byFn.length===1) return byFn[0].e; return null; }
+// Departamento -> correo (direcciones confirmadas del ecosistema). Para dirigir solicitudes a un area.
+const _DEPTOS = {
+  '8010': { 'recepcion':'recepcion@8010urbanliving.com', 'mantenimiento':'mantenimiento@8010urbanliving.com', 'compras':'compras@8010urbanliving.com', 'administracion':'administrativo@8010urbanliving.com', 'administrativo':'administrativo@8010urbanliving.com', 'gerencia':'gerencia@8010urbanliving.com', 'eventos':'natalia.munoz@8010urbanliving.com', 'comercial':'cristina.cervino@8010urbanliving.com' },
+  'kubik': { 'recepcion':'recepcion@8i8op.com', 'gerencia':'sariase@8i8op.com' }
+};
+function _depEmail(nombre){ var d=_DEPTOS[EDIFICIO_ACTIVO]||{}; var t=_normNom(nombre); return (t&&d[t])||null; }
 function _destinos(){
   var ed=EDIFICIO_ACTIVO; var people=_DIRECTORIO[ed]||[]; var groups=[];
   if(ed==='8010'){
