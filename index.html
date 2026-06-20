@@ -1322,9 +1322,9 @@ async function loadView(view) {
       {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'empresa',label:'Empresa',type:'text'},
-      {id:'master',label:'Master / Canal',type:'text'},
-      {id:'saldo_total',label:'Saldo total ($)',type:'number'},
+      {id:'master',label:'Master ($)',type:'money'},
       {id:'extras',label:'Extras ($)',type:'number'},
+      {id:'saldo_total',label:'Saldo total ($) — automático (Master + Extras)',type:'number'},
       {id:'descripcion_extras',label:'Descripción extras',type:'text'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
@@ -4636,6 +4636,12 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
         if (inp){ let dl=document.getElementById('dl-fds-resp'); if(!dl){dl=document.createElement('datalist');dl.id='dl-fds-resp';inp.parentNode.appendChild(dl);} dl.innerHTML=nombres.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}">`).join(''); inp.setAttribute('list','dl-fds-resp'); inp.setAttribute('autocomplete','off'); inp.setAttribute('placeholder','Escribe o elige del personal'); }
       } catch(e){}
     })();
+  }
+  // Cuadro de Saldos: Total = Master + Extras (automatico)
+  if (tabla === 'saldos_aptos') {
+    var _scalc=function(){ var pm=function(id){var e=document.getElementById(id); if(!e) return 0; var v=String(e.value||'').replace(/[^\d.-]/g,''); return parseFloat(v)||0;}; var st=document.getElementById('gf-saldo_total'); if(st){ st.value=pm('gf-master')+pm('gf-extras'); st.readOnly=true; st.style.background='#E2EFDA'; st.style.fontWeight='700'; st.title='Automatico: Master + Extras'; } };
+    ['gf-master','gf-extras'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', _scalc); });
+    _scalc();
   }
 }
 
