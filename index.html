@@ -4614,6 +4614,17 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
       }
     });
   }
+  // Tareas de Fin de Semana: "Responsable" con lista del personal del edificio (elegir o escribir)
+  if (tabla === 'tareas_fds') {
+    (async () => {
+      try {
+        const pe = await sb.from('personal').select('nombre');
+        const nombres = [...new Set([...(EB().camareras||[]), ...((pe.data||[]).map(x=>x.nombre))].filter(Boolean))].sort((a,b)=>String(a).localeCompare(b));
+        const inp = document.getElementById('gf-responsable');
+        if (inp){ let dl=document.getElementById('dl-fds-resp'); if(!dl){dl=document.createElement('datalist');dl.id='dl-fds-resp';inp.parentNode.appendChild(dl);} dl.innerHTML=nombres.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}">`).join(''); inp.setAttribute('list','dl-fds-resp'); inp.setAttribute('autocomplete','off'); inp.setAttribute('placeholder','Escribe o elige del personal'); }
+      } catch(e){}
+    })();
+  }
 }
 
 async function submitGenForm(tabla, ids, reqs) {
@@ -5180,8 +5191,10 @@ async function renderTareasFDS(){
   const _fS = d=>d.toISOString().split('T')[0];
   const _ini=_fS(_lun), _fin=_fS(_dom);
   const verTodo = !!window._fdsVerTodo;
+  const _desde = window._fdsDesde || _ini;
+  const _hasta = window._fdsHasta || _fin;
   let _q = sb.from('tareas_fds').select('*').eq('edificio', EDIFICIO_ACTIVO);
-  if(!verTodo){ _q = _q.gte('fecha', _ini).lte('fecha', _fin); }
+  if(!verTodo){ _q = _q.gte('fecha', _desde).lte('fecha', _hasta); }
   const { data } = await _q.order('fecha',{ascending:true});
   const rows = data || [];
   const esc = s => String(s==null?'':s).replace(/</g,'&lt;');
@@ -5200,10 +5213,16 @@ async function renderTareasFDS(){
   }).join('');
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
-      <div class="page-title" style="margin-bottom:0">🧹 Tareas de Fin de Semana ${verTodo?'— Historial completo':'— Semana '+fmtDate(_ini)+' al '+fmtDate(_fin)}</div>
+      <div class="page-title" style="margin-bottom:0">🧹 Tareas de Fin de Semana ${verTodo?'— Historial completo':'— '+fmtDate(_desde)+' al '+fmtDate(_hasta)}</div>
       ${barraCompartir()}<button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('tareas-fds-form')">+ Nueva Tarea</button><button class="btn btn-outline btn-sm" onclick="window._fdsVerTodo=${verTodo?'false':'true'};renderTareasFDS()">${verTodo?'📅 Solo esta semana':'🗂️ Ver historial'}</button>
     </div>
     <div class="card">
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+        <div><label style="font-size:12px;color:var(--gris-t);display:block;margin-bottom:2px">Desde</label><input type="date" value="${_desde}" ${verTodo?'disabled':''} onchange="window._fdsDesde=this.value;window._fdsVerTodo=false;renderTareasFDS()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div>
+        <div><label style="font-size:12px;color:var(--gris-t);display:block;margin-bottom:2px">Hasta</label><input type="date" value="${_hasta}" ${verTodo?'disabled':''} onchange="window._fdsHasta=this.value;window._fdsVerTodo=false;renderTareasFDS()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div>
+        <button class="btn btn-outline btn-sm" onclick="window._fdsDesde=null;window._fdsHasta=null;window._fdsVerTodo=false;renderTareasFDS()">↺ Semana actual</button>
+        <div style="font-size:12px;color:var(--gris-t);align-self:center;max-width:320px">📧 Por correo/WhatsApp se envía solo lo que se ve en este rango.</div>
+      </div>
       <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar por fecha, área, responsable, estado..." style="margin-bottom:12px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;width:100%;max-width:440px;display:block"><table class="tabla"><thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Fecha ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Día ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Área ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Tarea ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Responsable ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Observación ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Estado ⇅</th><th></th></tr></thead>
       <tbody>${filas || '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px">Sin tareas. Crea una con “+ Nueva Tarea”.</td></tr>'}</tbody></table>
     </div>`;
