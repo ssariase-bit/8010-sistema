@@ -334,7 +334,7 @@ textarea{resize:vertical;min-height:80px}
         <select id="m-moneda" onchange="_toggleTRM()"><option value="COP">COP ($)</option><option value="USD">USD ($)</option></select></div>
       <div class="form-group" id="m-trm-wrap" style="display:none">
         <label>TRM (COP por USD)</label>
-        <input type="number" id="m-trm" placeholder="Ej: 4100"></div>
+        <input type="number" id="m-trm" step="0.01" inputmode="decimal" placeholder="Ej: 4100.50"></div>
     </div>
     <div class="form-row col3">
       <div class="form-group"><label>Adultos</label><input type="number" id="m-pax-ad" placeholder="0" min="0" oninput="_paxSum()"></div>
@@ -2301,7 +2301,7 @@ async function openAptoModal(id, num) {
   var _esUSD = data && data.moneda==='USD';
   if(document.getElementById('m-moneda')) document.getElementById('m-moneda').value = _esUSD ? 'USD' : 'COP';
   document.getElementById('m-tarifa').value = _esUSD ? (data.tarifa_usd||'') : (data?.tarifa || '');
-  if(document.getElementById('m-trm')) document.getElementById('m-trm').value = (_esUSD && data.tarifa_usd) ? (data.tarifa ? Math.round(data.tarifa/data.tarifa_usd) : '') : '';
+  if(document.getElementById('m-trm')) document.getElementById('m-trm').value = (_esUSD && data.tarifa_usd) ? (data.tarifa ? (data.tarifa/data.tarifa_usd).toFixed(2) : '') : '';
   if(typeof _toggleTRM==='function') _toggleTRM();
   var _sa=function(id,v){ var e=document.getElementById(id); if(e) e.value=(v!=null?v:''); };
   _sa('m-pax-ad', data&&data.pax_adultos); _sa('m-pax-me', data&&data.pax_menores); _sa('m-pax-in', data&&data.pax_infantes);
@@ -5692,7 +5692,7 @@ function _destinos(){
   }
   return { people:people, groups:groups };
 }
-function _comEnviarCorreo(to, subject, html){ try{ return sb.functions.invoke('enviar-informe',{ body:{ edificio:EDIFICIO_ACTIVO, to:to, subject:subject, html:html } }); }catch(e){ return Promise.resolve({error:e}); } }
+function _comEnviarCorreo(to, subject, html, cc){ try{ return sb.functions.invoke('enviar-informe',{ body:{ edificio:EDIFICIO_ACTIVO, to:to, cc:cc, subject:subject, html:html } }); }catch(e){ return Promise.resolve({error:e}); } }
 function _htmlComg(titulo, intro, pregunta, extra){
   var esc=function(s){ return String(s==null?'':s).replace(/</g,'&lt;'); };
   return '<div style="font-family:Arial,sans-serif;max-width:560px;color:#222">'+
@@ -8150,8 +8150,8 @@ async function cargarTotalCKO(){
 }
 
 const ENCUESTA_CFG = {
-  '8010': { url:'https://docs.google.com/forms/d/e/1FAIpQLSdl2zWdtXPXiwOO1dxnmL28T0VV9DRf2txLTckhTXb0MgCxsw/viewform', nombre:'8010 Urban Living' },
-  'kubik': { url:'https://forms.office.com/Pages/ResponsePage.aspx?id=N4sE1fzghk-fzKKlMT2cWHubpewM4q9Esy1yNj02NktURDdWUEFFOEpKNEgwSERLNk4wT0RMQlBSTy4u', nombre:'Kubik Living 8i8' }
+  '8010': { url:'https://docs.google.com/forms/d/e/1FAIpQLSdl2zWdtXPXiwOO1dxnmL28T0VV9DRf2txLTckhTXb0MgCxsw/viewform', nombre:'8010 Urban Living', recepcion:'recepcion@8010urbanliving.com' },
+  'kubik': { url:'https://forms.office.com/Pages/ResponsePage.aspx?id=N4sE1fzghk-fzKKlMT2cWHubpewM4q9Esy1yNj02NktURDdWUEFFOEpKNEgwSERLNk4wT0RMQlBSTy4u', nombre:'Kubik Living 8i8', recepcion:'recepcion@8i8op.com' }
 };
 function _encCfg(edi){ return ENCUESTA_CFG[edi] || ENCUESTA_CFG['8010']; }
 function _encQR(u){ return 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&qzone=1&data='+encodeURIComponent(u); }
@@ -8170,7 +8170,7 @@ async function enviarEncuestaCKO(nombre, correo, edi){
     + '<p style="margin-top:6px">Será un gusto recibirlo nuevamente y ser su primera opción de alojamiento en Bogotá.</p>'
     + '<p style="margin-top:18px">Cordialmente,<br><b>'+cfg.nombre+'</b> — Recepción</p>'
     + '</div></div>';
-  return _comEnviarCorreo(correo, cfg.nombre+' — Encuesta de satisfacción de su estadía', html);
+  return _comEnviarCorreo(correo, cfg.nombre+' — Encuesta de satisfacción de su estadía', html, cfg.recepcion?[cfg.recepcion]:undefined);
 }
 function generarMsgCKO() {
   const apto = document.getElementById('cko-apto').value;
