@@ -268,7 +268,7 @@ textarea{resize:vertical;min-height:80px}
     </div>
     <div class="form-group">
       <label>Estado</label>
-      <select id="m-estado">
+      <select id="m-estado" onchange="_autoObsViaje(this.value)">
         <option>Libre</option><option value="Ocupado">Ocupado / En casa (IN)</option><option>Check-in hoy</option><option value="Completo">Completo (apto completo)</option>
         <option>Check-out hoy</option><option>No Show</option><option>Sucio</option><option>Pendiente repaso</option><option>Sale de viaje</option><option>En viaje</option><option>Limpieza</option><option>Mantenimiento</option><option>Bloqueado</option>
       </select>
@@ -2274,6 +2274,7 @@ async function openAptoModal(id, num) {
   currentAptoId = id;
   document.getElementById('modal-apto-num').textContent = String(num).split(' · ')[0].trim();
   document.getElementById('m-estado').value  = data?.estado || 'Libre';
+  window._mEstadoPrev = document.getElementById('m-estado').value;
   var _np = window._nombrePartes(data||{});
   if(document.getElementById('m-nombre')) document.getElementById('m-nombre').value = _np.nombre||'';
   if(document.getElementById('m-apellido1')) document.getElementById('m-apellido1').value = _np.apellido1||'';
@@ -2357,6 +2358,17 @@ window._splitNombre = function(full){
 // Devuelve {nombre,apellido1,apellido2} de un registro: usa las columnas si existen, si no parte el huesped
 window._nombrePartes = function(r){ r=r||{}; if(r.nombre||r.apellido1||r.apellido2) return {nombre:r.nombre||'',apellido1:r.apellido1||'',apellido2:r.apellido2||''}; return window._splitNombre(r.huesped||''); };
 function _toggleTRM(){ var s=document.getElementById('m-moneda'); var w=document.getElementById('m-trm-wrap'); if(w) w.style.display=(s&&s.value==='USD')?'':'none'; }
+// Observacion automatica de hora al salir/volver de viaje (rellena el campo; editable antes de guardar)
+function _autoObsViaje(nuevo){
+  var prev = window._mEstadoPrev; window._mEstadoPrev = nuevo;
+  var ob = document.getElementById('m-obs'); if(!ob) return;
+  var n=new Date(); var p=x=>String(x).padStart(2,'0');
+  var stamp = p(n.getDate())+'/'+p(n.getMonth()+1)+' '+p(n.getHours())+':'+p(n.getMinutes());
+  var nota=null;
+  if(nuevo==='Sale de viaje') nota='Sale de viaje: '+stamp;
+  else if((nuevo==='Ocupado'||nuevo==='Check-in hoy') && prev==='Sale de viaje') nota='Regresa de viaje: '+stamp;
+  if(nota){ var cur=ob.value||''; if(cur.indexOf(nota)<0) ob.value=(cur.trim()?cur.trim()+' | ':'')+nota; }
+}
 // Calcula moneda/tarifa: si es USD exige TRM y guarda el equivalente en COP (para ventas/ADR)
 function _calcTarifaMoneda(idTar, idMon, idTrm){
   const _mon=(document.getElementById(idMon)?.value)||'COP';
