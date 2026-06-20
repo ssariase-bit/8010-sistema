@@ -269,7 +269,7 @@ textarea{resize:vertical;min-height:80px}
     <div class="form-group">
       <label>Estado</label>
       <select id="m-estado">
-        <option>Libre</option><option value="Ocupado">Ocupado / En casa (IN)</option><option>Check-in hoy</option>
+        <option>Libre</option><option value="Ocupado">Ocupado / En casa (IN)</option><option>Check-in hoy</option><option value="Completo">Completo (apto completo)</option>
         <option>Check-out hoy</option><option>No Show</option><option>Sucio</option><option>Pendiente repaso</option><option>Sale de viaje</option><option>En viaje</option><option>Limpieza</option><option>Mantenimiento</option><option>Bloqueado</option>
       </select>
     </div>
@@ -7034,16 +7034,17 @@ async function renderSemanaInfo(){
   const dom = new Date(lun); dom.setDate(lun.getDate()+6);
   const fS = d=>d.toISOString().split('T')[0];
   const ini=fS(lun), fin=fS(dom);
-  // 1) Derivar CKI/CKO de la semana desde el rack (no pisa lo ya editado)
-  const { data: rk } = await sb.from('rack').select('fecha,apto,estado,huesped,canal').gte('fecha',ini).lte('fecha',fin).in('estado',['Check-in hoy','Check-out hoy']);
+  const _ini = window._semDesde || ini; const _fin = window._semHasta || fin;
+  // 1) Derivar CKI/CKO del rango desde el rack (no pisa lo ya editado)
+  const { data: rk } = await sb.from('rack').select('fecha,apto,estado,huesped,canal').gte('fecha',_ini).lte('fecha',_fin).in('estado',['Check-in hoy','Check-out hoy']);
   const vistos = {};
   const derivados = (rk||[]).filter(r=>(r.huesped||'').trim()).filter(r=>{ const k=r.fecha+'|'+r.apto+'|'+r.estado; if(vistos[k]) return false; vistos[k]=1; return true; })
     .map(r=>({ fecha:r.fecha, apto:r.apto, tipo: r.estado==='Check-in hoy'?'CKI':'CKO', huesped:r.huesped, pago:(((EB&&EB().nombre)||'').indexOf('8010')>-1?'80|10':'8i8'), observaciones: r.canal?('Reserva de '+r.canal+'.'):'', estado:'Pendiente', user_id:currentUser.id }));
   if(derivados.length){ const rr = await sb.from('semana_seguimiento').upsert(derivados, { onConflict:'fecha,apto,tipo,edificio', ignoreDuplicates:true }); if(rr.error) console.error('semana upsert:', rr.error); }
   // 2) Cargar y pintar
-  const { data } = await sb.from('semana_seguimiento').select('*').gte('fecha',ini).lte('fecha',fin).order('fecha').order('apto');
+  const { data } = await sb.from('semana_seguimiento').select('*').gte('fecha',_ini).lte('fecha',_fin).order('fecha').order('apto');
   const rows = data||[];
-  window._semRows = rows; window._semIni = ini; window._semFin = fin;
+  window._semRows = rows; window._semIni = _ini; window._semFin = _fin;
   const cki = rows.filter(r=>r.tipo==='CKI'), cko = rows.filter(r=>r.tipo==='CKO');
   const ESTADOS_SEM = ['Pendiente','Confirmado','Realizado','Cancelado','Reprogramado','No Show'];
   const fila = r => `<tr>
@@ -7070,13 +7071,15 @@ async function renderSemanaInfo(){
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">
       <div class="page-title" style="margin-bottom:0">📅 Información de la Semana</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input type="date" value="${ini}" onchange="window._semInfoFecha=this.value;renderSemanaInfo()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:12px">
+        <label style="font-size:12px;color:var(--gris-t)">Desde <input type="date" value="${_ini}" onchange="window._semDesde=this.value;renderSemanaInfo()" style="padding:6px;border:1px solid var(--gris-b);border-radius:8px;font-size:12px"></label>
+        <label style="font-size:12px;color:var(--gris-t)">Hasta <input type="date" value="${_fin}" onchange="window._semHasta=this.value;renderSemanaInfo()" style="padding:6px;border:1px solid var(--gris-b);border-radius:8px;font-size:12px"></label>
+        <button class="btn btn-outline btn-sm" onclick="window._semDesde=null;window._semHasta=null;window._semInfoFecha=null;renderSemanaInfo()">↺ Semana actual</button>
         <button class="btn btn-outline btn-sm" onclick="addSemanaFila('CKI')">+ CKI manual</button>
         <button class="btn btn-outline btn-sm" onclick="addSemanaFila('CKO')">+ CKO manual</button>
         <button class="btn btn-sm" style="background:#1D3461;color:#fff" onclick="compartirSemanaInfo()">📧 Enviar informe</button>
       </div>
     </div>
-    <div style="font-size:13px;color:var(--gris-t);margin-bottom:14px">Semana del <strong>${fmtDate(ini)}</strong> al <strong>${fmtDate(fin)}</strong> — se arma sola desde el rack; observaciones, pago y estado se guardan al editar.</div>
+    <div style="font-size:13px;color:var(--gris-t);margin-bottom:14px">Del <strong>${fmtDate(_ini)}</strong> al <strong>${fmtDate(_fin)}</strong> — se arma sola desde el rack; observaciones, pago y estado se guardan al editar.</div>
     ${tablaSem('CKI DE LA SEMANA', cki, '#0C447C')}
     ${tablaSem('CKO DE LA SEMANA', cko, '#C2410C')}`;
 }
