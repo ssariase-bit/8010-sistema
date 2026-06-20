@@ -6627,7 +6627,7 @@ async function renderEstadoHuespedes() {
   clearTimeout(window._ehTimer);
   window._ehTimer = setTimeout(() => { if (window._currentView === 'estado-huespedes') renderEstadoHuespedes(); }, 60000);
   const _esKL=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')===-1);
-  const today = TODAY;
+  const today = window._ehFecha || TODAY;
   const { data: rawData } = await sb.from('rack').select('*').eq('fecha', today);
   const _aptoOrder = EB().aptosFull;
   const data = (rawData||[]).sort((a,b) => _aptoOrder.indexOf(a.apto) - _aptoOrder.indexOf(b.apto));
@@ -6639,7 +6639,9 @@ async function renderEstadoHuespedes() {
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <div class="page-title" style="margin-bottom:0">🏠 Estado de Huéspedes — ${fmtDate(today)}</div>${_esKL?`<div style="flex:0 0 100%;background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px;margin-top:8px"><div style="font-weight:600;margin-bottom:6px">📢 Anuncio a huéspedes en casa</div><textarea id="anuncio-body" placeholder="Escribe el mensaje (el sistema le pone el saludo y el nombre a cada huésped). Envíalo a todos con el botón verde, o a uno solo con el 📢 de su fila." style="width:100%;min-height:64px;padding:8px;font-size:13px;border:1px solid #ccc;border-radius:6px"></textarea><div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center"><button class="btn btn-sm" style="background:#25D366;color:#fff" onclick="anuncioMasivo()">📢 Enviar a todos (uno tras otro)</button><button class="btn btn-outline btn-sm" onclick="copiarTelefonos()">📋 Copiar números</button><span id="masivo-status" style="font-size:12px;color:#555"></span></div></div>`:''}
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="date" value="${today}" onchange="window._ehFecha=this.value;renderEstadoHuespedes()" title="Día a mostrar / auditar" style="padding:6px;border:1px solid var(--gris-b);border-radius:8px;font-size:12px">
+        ${today!==TODAY?'<button onclick="window._ehFecha=null;renderEstadoHuespedes()" class="btn btn-outline btn-sm" title="Volver a hoy">📅 Hoy</button>':''}
         <button onclick="renderEstadoHuespedes()" class="btn btn-sm" style="background:var(--azul-m);color:#fff">↻ Actualizar</button>
         <button onclick="tablaEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">🖨️ Ver tabla / Imprimir</button>
         <button onclick="compartirEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
@@ -8551,7 +8553,8 @@ function _filasEstadoCompleto(rackHoy) {
 }
 
 async function compartirEstadoHuespedes() {
-  const { data: _rd } = await sb.from('rack').select('*').eq('fecha', TODAY);
+  const _d = window._ehFecha || TODAY;
+  const { data: _rd } = await sb.from('rack').select('*').eq('fecha', _d);
   const rows = _filasEstadoCompleto(_rd);
   // Conteos: solo unidades base (las A acompañan al titular y no suman)
   const base = rows.filter(r => !String(r.apto).endsWith('A'));
@@ -8562,15 +8565,15 @@ async function compartirEstadoHuespedes() {
   const ocupadas = base.length - libres;
   const _tot = EB().aptosBase.length;
   const txt = `🏢 *${EB().nombre} — Estado de Huéspedes*
-📅 ${fmtDate(TODAY)}
+📅 ${fmtDate(_d)}
 
 *Ocupación: ${ocupadas} de ${_tot} (${Math.round(ocupadas/_tot*100)}%)*
 🟢 Ocupados: ${ocu}   🔵 Check-in: ${cki}   🟠 Check-out: ${cko}   ⚪ Libres: ${libres}
 
-${rows.map(r=>{const est=(r.checkin||r.checkout)?` · 🗓 ${r.checkin?fmtDate(r.checkin):'—'} a ${r.checkout?fmtDate(r.checkout):'—'}`:'';return `*${r.apto}* · ${r.huesped||'—'} · ${r.estado}${est}${(function(){var sx=_paxStr(r);return sx?'\n    👥 '+sx:'';})()}${r.observaciones?'\n    '+r.observaciones:''}`;}).join('\n')}
+${rows.map(r=>{const est=(r.checkin||r.checkout)?` · 🗓 ${r.checkin?fmtDate(r.checkin):'—'} a ${r.checkout?fmtDate(r.checkout):'—'}`:'';return `*${r.apto}* · ${_titleCase(r.huesped)||'—'} · ${r.estado}${est}${(function(){var sx=_paxStr(r);return sx?'\n    👥 '+sx:'';})()}${r.observaciones?'\n    '+r.observaciones:''}`;}).join('\n')}
 
 _Sistema ${EB().nombre}_`;
-  compartirInforme('Estado de Huéspedes — ' + fmtDate(TODAY), txt);
+  compartirInforme('Estado de Huéspedes — ' + fmtDate(_d), txt);
 }
 
 async function compartirHK() {
