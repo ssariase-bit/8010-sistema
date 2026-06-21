@@ -3075,8 +3075,14 @@ async function renderHKForm() {
           <input type="text" id="hk-apto" placeholder="Ej: 301">
         </div>
         <div class="form-group"><label>Estado</label>
-          <select id="hk-est"><option>Limpio</option><option>Sucio</option><option>Pendiente repaso</option><option>En proceso</option><option>Declina limpieza</option><option>Revisión pendiente</option></select>
+          <select id="hk-est"><option>Limpio</option><option>Al día (no requiere hoy)</option><option>Sucio</option><option>Pendiente repaso</option><option>En proceso</option><option>Declina limpieza</option><option>Revisión pendiente</option></select>
         </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Frecuencia de repaso (apto)</label>
+          <select id="hk-frec"><option value="">— Sin definir —</option><option>Diario</option><option>Día de por medio</option><option>Solo a solicitud</option></select>
+        </div>
+        <div class="form-group"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Hora ingreso</label><input type="time" id="hk-in"></div>
@@ -3143,6 +3149,7 @@ async function enviarHK() {
     camarera: _cam,
     apto,
     estado: document.getElementById('hk-est').value,
+    frecuencia: (document.getElementById('hk-frec') && document.getElementById('hk-frec').value) || null,
     hora_ingreso: document.getElementById('hk-in').value || null,
     hora_salida: document.getElementById('hk-out').value || null,
     pausa_min: parseInt(document.getElementById('hk-pausa') && document.getElementById('hk-pausa').value) || 0,
@@ -3683,7 +3690,7 @@ async function renderHKList() {
                 <th onclick="window._hkOrden='camarera';renderHKList()" style="cursor:pointer" title="Ordenar por camarera">Camarera ${_ord==='camarera'?'▾':''}</th>
                 <th>Ingreso</th><th>Salida</th><th>⏱ Duración</th>
                 <th onclick="window._hkOrden='estado';renderHKList()" style="cursor:pointer" title="Ordenar por estado">Estado ${_ord==='estado'?'▾':''}</th>
-                <th>Observaciones</th><th></th></tr></thead>
+                <th>Frec.</th><th>Observaciones</th><th></th></tr></thead>
               <tbody>${_diaOrd.map(h => {
                 const mins = netMin(h);
                 const durColor = !mins ? '#999' : mins <= 30 ? 'var(--verde)' : mins <= 45 ? 'var(--naran)' : 'var(--rojo)';
@@ -3696,7 +3703,8 @@ async function renderHKList() {
                     : `<button onclick="registrarSalidaHK('${h.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Registrar salida</button>`
                   }</td>
                   <td style="font-weight:700;color:${durColor}">${fmtMin(mins)}${(Number(h.pausa_min)||0)>0?` <span style="color:#7A5C00;font-weight:400;font-size:10px" title="${h.pausa_detalle?String(h.pausa_detalle).replace(/"/g,'&quot;'):'Pausa'}">(−${h.pausa_min}m pausa)</span>`:''}</td>
-                  <td><span class="badge b-${h.estado==='Limpio'?'resuelto':h.estado==='Declina limpieza'?'alta':'proceso'}">${h.estado||'-'}</span></td>
+                  <td><span class="badge b-${(h.estado==='Limpio'||String(h.estado||'').indexOf('Al día')===0)?'resuelto':h.estado==='Declina limpieza'?'alta':'proceso'}">${h.estado||'-'}</span></td>
+                  <td style="font-size:11px;white-space:nowrap">${h.frecuencia||'-'}</td>
                   <td style="max-width:140px;font-size:11px">${h.observaciones||'-'}</td>
                   <td style="white-space:nowrap">${_btnsEdit('housekeeping', h.id)}</td>
                 </tr>`;
