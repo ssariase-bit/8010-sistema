@@ -490,6 +490,8 @@ const EDIFICIOS = {
     metrajes: { '01': {privado:96, total:132}, '02': {privado:90, total:126} },
     cajas: ['OT (8010 SAS)','LTM3 (LTM3 SAS)','PH (Propiedad Horizontal)'],
     facturarA: ['LTM3 SAS','8010 SAS','Particular','Otra'],
+    // Restaurante del edificio (impuesto YA incluido en el precio -> se extrae). Magnifique factura impoconsumo 8%.
+    restaurante: { nombre:'Magnifique', impuesto:'Impoconsumo', tasa:0.08, servicio:0, domicilio:0.15 },
     // Camareras + combinaciones de apoyo (Jaqueline apoya a la que necesite)
     camareras: ['Guillermina Sanabria','Liliana Navarro','Maria Duran','Martha Oyola','Jaqueline Bautista',
                 'Guillermina Sanabria + Jaqueline','Liliana Navarro + Jaqueline','Maria Duran + Jaqueline','Martha Oyola + Jaqueline'],
@@ -510,6 +512,8 @@ const EDIFICIOS = {
     metrajes: {'201':100,'202':29,'203':56,'204':42,'204A':37,'301':100,'302':29,'303':56,'304':42,'304A':37,'401':100,'402':29,'403':56,'404':42,'404A':37,'501':100,'502':29,'503':56,'504':42,'504A':37,'601':100,'602':29,'603':56,'604':42,'604A':37,'701':100,'702':29,'703':56,'704':42,'704A':37,'801':100,'802':29,'803':56,'804':42,'804A':37,'901':100,'902':29,'903':56,'904':42,'904A':37,'PH1':130,'PH2':113},
     cajas: ['8I8 (8i8 Operadora SAS)'],
     facturarA: ['8i8 Operadora SAS','Particular','Otra'],
+    // Restaurante del edificio (impuesto YA incluido en el precio -> se extrae). Bagatelle factura IVA 19% + servicio 10%.
+    restaurante: { nombre:'Bagatelle', impuesto:'IVA', tasa:0.19, servicio:0.10, domicilio:0.15 },
     wifi: { red:'HUESPEDES_KL', clave:'kubik8i8' },
     camareras: ['Yolimar Manzanillo','Luz Dary Rodríguez','Ángela Díaz'],
     jornadas: { 'Administrador':540, 'Camarera':500, 'Mantenimiento':540, 'Otro':540 },
@@ -4566,12 +4570,12 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     const _vc=document.getElementById('gf-valor_comanda'), _dm=document.getElementById('gf-domicilio'), _vr=document.getElementById('gf-valor_recibo'), _vd=document.getElementById('gf-valor_domicilio'), _ci=document.getElementById('gf-iva'), _pp=document.getElementById('gf-propina'), _ct=document.getElementById('gf-total');
     // IMPUESTO YA INCLUIDO en el precio del producto -> se EXTRAE, no se suma.
     // Tasa por edificio: 8010 (Magnifique) impoconsumo 8% · Kubik (Bagatelle) IVA 19%.
-    const _rate = (((EB&&EB().nombre)||'').indexOf('8010')>-1) ? 0.08 : 0.19;
+    const _rcfg = (EB&&EB().restaurante) || { nombre:'', tasa:0.19, servicio:0.10, domicilio:0.15 };
+    const _rate = _rcfg.tasa;                                  // impuesto incluido por edificio (8010 8%, Kubik 19%)
     const _baseSin = b => _r2((b||0)/(1+_rate));               // base sin impuesto
-    // Servicio automatico: 8010 (Magnifique) NO lleva (el 15% solo si es a solicitud, via opcion domicilio); Kubik (Bagatelle) 10%.
-    const _propRate = (((EB&&EB().nombre)||'').indexOf('8010')>-1) ? 0 : 0.10;
+    const _propRate = _rcfg.servicio;                          // servicio automatico por edificio (Kubik 10%, 8010 0%)
     const _propVal=(b)=>Math.round(_baseSin(b)*_propRate);     // propina/servicio sobre base sin impuesto
-    const _recalc=()=>{const com=parseFloat(_vc&&_vc.value)||0;const aplica=_dm&&/15/.test(_dm.value);const dom=aplica?_r2(com*0.15):0;const base=_r2(com+dom);if(_vd)_vd.value=dom;if(_vr)_vr.value=base;const imp=_r2(base-_baseSin(base));if(_ci)_ci.value=imp;const prop=_propVal(base);if(_pp)_pp.value=prop;if(_ct)_ct.value=_r2(base+prop);};
+    const _recalc=()=>{const com=parseFloat(_vc&&_vc.value)||0;const aplica=_dm&&/15/.test(_dm.value);const dom=aplica?_r2(com*(_rcfg.domicilio||0.15)):0;const base=_r2(com+dom);if(_vd)_vd.value=dom;if(_vr)_vr.value=base;const imp=_r2(base-_baseSin(base));if(_ci)_ci.value=imp;const prop=_propVal(base);if(_pp)_pp.value=prop;if(_ct)_ct.value=_r2(base+prop);};
     const _fromVr=()=>{const base=parseFloat(_vr&&_vr.value)||0;const imp=_r2(base-_baseSin(base));if(_ci)_ci.value=imp;const prop=_propVal(base);if(_pp)_pp.value=prop;if(_ct)_ct.value=_r2(base+prop);};
     const _fromIva=()=>{const base=parseFloat(_vr&&_vr.value)||0;const prop=parseFloat(_pp&&_pp.value)||0;if(_ct)_ct.value=_r2(base+prop);};
     const _fromProp=()=>{const base=parseFloat(_vr&&_vr.value)||0;const prop=parseFloat(_pp&&_pp.value)||0;if(_ct)_ct.value=_r2(base+prop);};
