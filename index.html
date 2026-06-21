@@ -652,6 +652,7 @@ const NAV_ITEMS = {
   gerente_general: [
     { section: 'Principal' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+    { id: 'informe-ejecutivo', icon: '📈', label: 'Informe Ejecutivo' },
     { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
     { section: 'Operación' },
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
@@ -712,6 +713,7 @@ const NAV_ITEMS = {
   gerencia_operativa: [
     { section: 'Principal' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+    { id: 'informe-ejecutivo', icon: '📈', label: 'Informe Ejecutivo' },
     { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
@@ -814,6 +816,7 @@ const NAV_ITEMS = {
   comercial: [
     { section: 'Principal' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+    { id: 'informe-ejecutivo', icon: '📈', label: 'Informe Ejecutivo' },
     { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
     { id: 'contratos-list', icon: '📄', label: 'Contratos' },
     { id: 'contratos-form', icon: '➕', label: 'Nuevo Contrato' },
@@ -1032,6 +1035,7 @@ async function loadView(view) {
   main.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div><p>Cargando...</p></div>';
   switch(view) {
     case 'dashboard':       await renderDashboard(); break;
+    case 'informe-ejecutivo': await renderInformeEjecutivo(); break;
     case 'rack':            await renderRack(); break;
     case 'nueva-reserva':   renderNuevaReserva(); break;
     case 'reservas':        await renderReservas(); break;
@@ -6648,6 +6652,89 @@ function anuncioMasivo(){
 function copiarTelefonos(){ var rows=(window._ehRows||[]).filter(function(r){ return r.huesped&&r.telefono; }); var seen={}; rows=rows.filter(function(r){ var k=(r.huesped||'').trim().toLowerCase(); if(!k||seen[k]) return false; seen[k]=1; return true; }); if(!rows.length){ alert('Ningún huésped en casa tiene WhatsApp guardado todavía.'); return; } var t=rows.map(function(r){ return '+'+normTel(r.telefono)+'  ('+(r.huesped||'')+' · Apto '+r.apto+')'; }).join('\n'); navigator.clipboard.writeText(t).then(function(){ showToast('📋 '+rows.length+' números copiados','success'); }); }
 function waAnuncio(nombreId){ var el=document.getElementById(nombreId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(nombreId); var body=(document.getElementById('anuncio-body')||{}).value||''; if(!body.trim()){ alert('Escribe el mensaje del anuncio primero.'); return; } var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var _trpA=trat?trat+' ':''; var msg=saludo+', '+_trpA+(nombre||'')+'.\n\n'+body+'\n\nCualquier duda o solicitud, comuníquese con nosotros por este medio — estamos disponibles 24/7. Mil gracias. 🙏\n*'+(((typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'))+'*'; window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
 function waBienvenida(codeId){ var el=document.getElementById(codeId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(codeId); var code=(el&&el.value)?el.value:'XXXX#'; var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var ed=(typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'; var _trpB=trat?trat+' ':''; var msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.\n'+'🔑 Código puerta: '+code; var _wf=(typeof EB==='function'&&EB().wifi)||null; if(_wf&&_wf.red){ msg+='\n📶 Red WiFi: '+_wf.red+' · Contraseña: '+(_wf.clave||''); } window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
+// ═══════════════════════════════════════════════════════════
+// INFORME EJECUTIVO — vista unica que jala toda la base + alertas
+// ═══════════════════════════════════════════════════════════
+async function renderInformeEjecutivo(){
+  const ed = EDIFICIO_ACTIVO;
+  const now = new Date();
+  const y = now.getFullYear(), mo = String(now.getMonth()+1).padStart(2,'0');
+  const mStart = y+'-'+mo+'-01';
+  const dim = new Date(y, now.getMonth()+1, 0).getDate();
+  const mEnd = y+'-'+mo+'-'+String(dim).padStart(2,'0');
+  document.getElementById('main-content').innerHTML = '<div class="page-title">📈 Informe Ejecutivo</div><div class="card"><p style="color:#888">Cargando datos…</p></div>';
+  const [rHoy, rMes, novR, mantR, salR, solR, conR] = await Promise.all([
+    sb.from('rack').select('*').eq('fecha',TODAY).eq('edificio',ed),
+    sb.from('rack').select('apto,estado,tarifa').eq('edificio',ed).gte('fecha',mStart).lte('fecha',mEnd),
+    sb.from('novedades').select('descripcion,apto,estado,area,created_at').in('estado',['Abierto','En proceso','Escalado']),
+    sb.from('mantenimiento').select('descripcion,apto,estado,fecha').in('estado',['Pendiente','En proceso']),
+    sb.from('saldos_aptos').select('apto,arrendatario,saldo_total,fecha').eq('edificio',ed),
+    sb.from('solicitudes').select('descripcion,prioridad,solicitante').eq('edificio',ed).eq('estado','Pendiente'),
+    sb.from('contratos').select('apto,arrendatario,fecha_vencimiento,otro_si_vigencia,tipo')
+  ]);
+  const k = (typeof calcKpisDia==='function') ? calcKpisDia(rHoy.data||[]) : {b21:{ocu:0,disp:1},cki:0,cko:0,ing:0,adr:0,pct21:0};
+  const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
+  const baseSet = new Set(EB().aptosBase);
+  const rmes = rMes.data||[];
+  const ocuMesN = rmes.filter(r=>baseSet.has(r.apto)&&OCU.includes(r.estado)).length;
+  const dispMes = Math.max(1, EB().aptosBase.length*dim);
+  const ocuMesPct = Math.round(ocuMesN/dispMes*100);
+  const ventasMes = rmes.filter(r=>OCU.includes(r.estado)&&Number(r.tarifa)>0).reduce((s,r)=>s+Number(r.tarifa),0);
+  const sal = salR.data||[]; const byApto={};
+  sal.forEach(s=>{ if(!byApto[s.apto] || String(s.fecha)>String(byApto[s.apto].fecha)) byApto[s.apto]=s; });
+  const carteraList = Object.values(byApto).filter(s=>Number(s.saldo_total)>0).sort((a,b)=>Number(b.saldo_total)-Number(a.saldo_total));
+  const cartera = carteraList.reduce((a,s)=>a+(Number(s.saldo_total)||0),0);
+  const novs = novR.data||[], ots = mantR.data||[], sols = solR.data||[];
+  const hoyISO = TODAY, en30 = new Date(Date.now()+30*864e5).toISOString().slice(0,10), hace7 = new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const porVencer = (conR.data||[]).map(c=>{ var fv=c.otro_si_vigencia||c.fecha_vencimiento; return fv?{a:c.apto,arr:c.arrendatario,fv:String(fv).slice(0,10)}:null; }).filter(c=>c&&c.fv>=hoyISO&&c.fv<=en30).sort((a,b)=>a.fv.localeCompare(b.fv));
+  const otsAtrasadas = ots.filter(o=>o.fecha && String(o.fecha).slice(0,10) < hace7);
+  const f$ = n=>'$'+Number(n||0).toLocaleString('es-CO');
+  const esc = s=>String(s==null?'':s).replace(/</g,'&lt;');
+  const kpi = (l,v,s,c)=>'<div style="flex:1;min-width:140px;background:#fff;border:1px solid var(--gris-b);border-radius:10px;padding:14px 16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+l+'</div><div style="font-size:21px;font-weight:800;color:'+(c||'var(--azul)')+';margin:3px 0;white-space:nowrap">'+v+'</div>'+(s?'<div style="font-size:11px;color:var(--gris-t)">'+s+'</div>':'')+'</div>';
+  const lista = (arr, fn, vacio)=> arr.length? '<ul style="margin:6px 0 0;padding-left:18px;font-size:13px;color:#333">'+arr.slice(0,8).map(fn).join('')+(arr.length>8?'<li style="color:#888">… y '+(arr.length-8)+' más</li>':'')+'</ul>' : '<div style="font-size:13px;color:#16a34a;margin-top:4px">✓ '+vacio+'</div>';
+  const card = (titulo, contenido)=>'<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:4px">'+titulo+'</div>'+contenido+'</div>';
+  const _mesN = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][now.getMonth()];
+  // Texto para compartir
+  window._ejecTxt = '📈 *Informe Ejecutivo — '+EB().nombre+'*\n'+fmtDate(TODAY)+'\n━━━━━━━━━━\n'
+    + 'Ocupación hoy: '+k.pct21+'% ('+k.b21.ocu+'/'+EB().aptosBase.length+')\n'
+    + 'Check-in: '+k.cki+' · Check-out: '+k.cko+'\n'
+    + 'Ingreso del día: '+f$(k.ing)+' · ADR: '+f$(k.adr)+'\n'
+    + 'Ocupación mes: '+ocuMesPct+'% · Ventas mes: '+f$(ventasMes)+'\n'
+    + 'Cartera por cobrar: '+f$(cartera)+'\n━━━━━━━━━━\n'
+    + '⚠️ Novedades abiertas: '+novs.length+'\n'
+    + '🔧 Mantenimiento pendiente: '+ots.length+(otsAtrasadas.length?(' ('+otsAtrasadas.length+' atrasadas +7d)'):'')+'\n'
+    + '📨 Solicitudes pendientes: '+sols.length+'\n'
+    + '📄 Contratos por vencer (30d): '+porVencer.length+'\n\n_Sistema '+EB().nombre+'_';
+  document.getElementById('main-content').innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    + '<div class="page-title" style="margin-bottom:0">📈 Informe Ejecutivo — '+EB().nombre+'</div>'
+    + '<div style="display:flex;gap:6px"><button onclick="renderInformeEjecutivo()" class="btn btn-sm" style="background:var(--azul-m);color:#fff">↻ Actualizar</button>'
+    + '<button onclick="compartirWA && (window.open(\'https://wa.me/?text=\'+encodeURIComponent(window._ejecTxt),\'_blank\'))" class="btn btn-outline btn-sm" style="color:#0E8A4F;border-color:#0E8A4F">📱 WhatsApp</button>'
+    + '<button onclick="enviarInformeCorreo(\'Informe Ejecutivo — \'+'+JSON.stringify(EB().nombre)+', window._ejecTxt, this)" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">✉️ Correo</button></div></div>'
+    + '<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Resumen del día · '+fmtDate(TODAY)+' · se arma solo desde la base del sistema</div>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">'
+      + kpi('Ocupación hoy', k.pct21+'%', k.b21.ocu+' de '+EB().aptosBase.length+' · CKI '+k.cki+' / CKO '+k.cko)
+      + kpi('Ingreso del día', f$(k.ing), 'ADR '+f$(k.adr), 'var(--verde)')
+      + kpi('Ocupación mes', ocuMesPct+'%', _mesN+' '+y)
+      + kpi('Ventas mes', f$(ventasMes), 'alojamiento', '#7C3AED')
+      + kpi('Cartera por cobrar', f$(cartera), carteraList.length+' aptos con saldo', cartera>0?'#B45309':'var(--verde)')
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">'
+      + card('🔴 Alertas — Arrendatarios',
+          '<div style="font-size:13px;margin-bottom:6px"><b>Contratos / otrosí por vencer (30 días): '+porVencer.length+'</b></div>'
+          + lista(porVencer, c=>'<li>Apto '+esc(c.a)+' — '+esc(c.arr||'')+' · vence '+fmtDate(c.fv)+'</li>', 'Sin vencimientos próximos')
+          + '<div style="font-size:13px;margin:10px 0 4px"><b>Saldos por cobrar: '+f$(cartera)+'</b></div>'
+          + lista(carteraList, s=>'<li>Apto '+esc(s.apto)+' — '+esc(s.arrendatario||'')+': '+f$(s.saldo_total)+'</li>', 'Sin cartera pendiente'))
+      + card('🔧 Alertas — Operación y Personal',
+          '<div style="font-size:13px;margin-bottom:6px"><b>Mantenimiento pendiente: '+ots.length+'</b>'+(otsAtrasadas.length?' <span style="color:#b91c1c">('+otsAtrasadas.length+' atrasadas +7 días)</span>':'')+'</div>'
+          + lista(ots, o=>'<li>Apto '+esc(o.apto||'-')+' — '+esc(o.descripcion||'')+' ('+esc(o.estado)+')</li>', 'Sin mantenimiento pendiente')
+          + '<div style="font-size:13px;margin:10px 0 4px"><b>Solicitudes pendientes: '+sols.length+'</b></div>'
+          + lista(sols, s=>'<li>['+esc(s.prioridad||'-')+'] '+esc(s.solicitante||'')+': '+esc(s.descripcion||'')+'</li>', 'Sin solicitudes pendientes'))
+      + card('⚠️ Novedades abiertas ('+novs.length+')',
+          lista(novs, n=>'<li>Apto '+esc(n.apto||'-')+' — '+esc(n.descripcion||'')+' ('+esc(n.estado)+')</li>', 'Sin novedades abiertas'))
+    + '</div>';
+}
+
 async function renderEstadoHuespedes() {
   // Auto-actualizar cada 60s para reflejar CKI/CKO recién hechos sin recargar
   clearTimeout(window._ehTimer);
