@@ -2428,7 +2428,7 @@ async function saveApto() {
     const addDay = s => { const [y,m,d] = s.split('-').map(Number); return new Date(Date.UTC(y, m-1, d+1)).toISOString().split('T')[0]; };
     const rows = []; let f = _rd;
     for (let i = 0; i < 400; i++) {
-      rows.push({ fecha: f, apto: aNum, estado: updates.estado, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      rows.push({ fecha: f, apto: aNum, estado: updates.estado, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
       if (f === _rh) break; f = addDay(f);
     }
     const rr = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
@@ -2446,7 +2446,7 @@ async function saveApto() {
     for (let i = 0; i < 400; i++) {
       // Estadías: patrón CKI → Ocupado → CKO. Bloqueos/Mantenimiento/etc: el mismo estado en todo el rango.
       const est = ocupacional ? (f === updates.checkin ? 'Check-in hoy' : (f === updates.checkout ? 'Check-out hoy' : 'Ocupado')) : updates.estado;
-      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
       if (f === updates.checkout) break;
       f = addDay(f);
     }
@@ -8961,7 +8961,8 @@ async function tablaNovedades(fechaSel) {
 
 // Vista en TABLA imprimible del estado de huéspedes (con estadía y acompañantes).
 async function tablaEstadoHuespedes() {
-  const { data: _rd } = await sb.from('rack').select('*').eq('fecha', TODAY);
+  const _d = window._ehFecha || TODAY;
+  const { data: _rd } = await sb.from('rack').select('*').eq('fecha', _d);
   const rows = _filasEstadoCompleto(_rd);  // incluye TODOS los aptos, también los Libres
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const tr = rows.map(r=>{
@@ -8978,7 +8979,7 @@ async function tablaEstadoHuespedes() {
       <td>${esc(r.estado||'')}</td>
     </tr>`;}).join('');
   const w = window.open('', '_blank');
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Estado de Huéspedes ${fmtDate(TODAY)}</title>
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Estado de Huéspedes ${fmtDate(_d)}</title>
   <style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}
   h2{color:#1D3461;margin:0 0 4px}.sub{color:#6b7280;font-size:13px;margin-bottom:14px}
   table{border-collapse:collapse;width:100%;font-size:12px}
@@ -8986,7 +8987,7 @@ async function tablaEstadoHuespedes() {
   th{background:#1F3864;color:#fff}@media print{.noprint{display:none}}
   .btn{background:#1D3461;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px}</style></head>
   <body><button class="btn noprint" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
-  <h2>${EB().nombre} — Estado de Huéspedes</h2><div class="sub">${fmtDate(TODAY)}</div>
+  <h2>${EB().nombre} — Estado de Huéspedes</h2><div class="sub">${fmtDate(_d)}</div>
   <table><thead><tr><th>Apto</th><th>Nombre</th><th>Apellido</th><th>2º Apellido</th><th>Acompañantes / Observaciones</th><th>Estadía</th><th>Estado</th></tr></thead>
   <tbody>${tr||'<tr><td colspan="7">Sin huéspedes</td></tr>'}</tbody></table>
   <p class="sub">Generado desde Sistema ${EB().nombre} · ${fmtFH12()}</p></body></html>`);
