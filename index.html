@@ -1382,6 +1382,7 @@ async function loadView(view) {
       {id:'empresa',label:'Empresa / Proveedor',type:'text',req:true},
       {id:'descripcion',label:'Descripción del gasto',type:'text',req:true},
       {id:'area',label:'Área',type:'select',opts:['Compras','Eventos','Cargo Apto.','Administrativo','Mantenimiento','Housekeeping','Recepción','Cocina','General']},
+      {id:'caja',label:'Caja (origen del efectivo)',type:'select',opts:['LTM3','80|10','PH']},
       {id:'valor',label:'Valor ($)',type:'money',req:true},
       {id:'entregado_por',label:'Entregado por',type:'text'},
       {id:'aprobado_por',label:'Aprobado por',type:'text'},
@@ -6452,6 +6453,7 @@ function _reembComprobanteHTML(r, scanUrl){
     + fila('Identificación', ((r.tipo?r.tipo+' ':'')+(r.numero||'')).trim())
     + fila('Descripción del gasto', r.descripcion)
     + fila('Área', r.area)
+    + fila('Caja (origen)', r.caja)
     + fila('Valor', '<b>'+_reembFmt(r.valor)+'</b>', true)
     + fila('Entregado por', r.entregado_por)
     + fila('Aprobado por', r.aprobado_por)
