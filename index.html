@@ -1317,6 +1317,7 @@ async function loadView(view) {
       {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'empresa',label:'Empresa',type:'text'},
+      {id:'apto_vacio',label:'Apto vacío',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
       {id:'facturar_a',label:'Facturar a',type:'select',opts:(EB().facturarA||['Particular','Otra'])},
       {id:'contrato_firmado',label:'Contrato firmado',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
       {id:'registro_ingreso',label:'Registro de ingreso',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
@@ -5833,6 +5834,8 @@ async function renderList(tabla, titulo, formView, cols, headers) {
       acciones = `<td style="white-space:nowrap"><button onclick="entregarPaquete('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--verde);border-color:var(--verde)">📦 Entregar</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else if (tabla === 'reembolsos') {
       acciones = `<td style="white-space:nowrap"><button onclick="previewReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px">👁 Ver</button> <button onclick="correoReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">✉️ Correo</button> ${_btnsEdit(tabla, r.id)}</td>`;
+    } else if (tabla === 'check_carpetas') {
+      acciones = `<td style="white-space:nowrap"><button onclick="imprimirRotuloCarpeta('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">🖨 Rótulo</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else {
       acciones = `<td style="white-space:nowrap">${_btnsEdit(tabla, r.id)}</td>`;
     }
@@ -6513,6 +6516,32 @@ async function _enviarReembolso(id){
     showToast('✅ Reembolso '+_reembNo(r)+' enviado','success');
     var ov=document.getElementById('reemb-correo-ov'); if(ov) ov.remove();
   }catch(e){ showToast('Error: '+(e&&e.message||e),'error'); rst(); }
+}
+
+// ════════ RÓTULO DE CARPETA (imprimible, sin correo/WSP) — solicitud Sebastián ════════
+async function imprimirRotuloCarpeta(id){
+  var res=await sb.from('check_carpetas').select('*').eq('id',id).single();
+  if(res.error||!res.data){ showToast('No se pudo cargar la carpeta','error'); return; }
+  var r=res.data;
+  var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||''; var accent=(nb.indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var ITEMS=['1 Página','Registro de ingreso','Copia de documentos','Información reserva','Inventario','Envío book de servicios','Contrato digitalizado','Otrosí digitalizado'];
+  var filas=ITEMS.map(function(it){ return '<tr><td style="border:1px solid #333;padding:9px 12px;font-size:13px">'+it+'</td><td style="border:1px solid #333;padding:9px;text-align:center;width:64px;font-size:14px">&#9744; SI</td><td style="border:1px solid #333;padding:9px;text-align:center;width:64px;font-size:14px">&#9744; NO</td></tr>'; }).join('');
+  var vacio=(r.apto_vacio===true||r.apto_vacio==='true');
+  var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Rótulo '+esc(r.apto||'')+'</title></head><body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:24px;color:#111">'
+    +'<button onclick="window.print()" style="position:fixed;top:14px;right:14px;background:#1F3864;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:700">🖨️ Imprimir</button>'
+    +'<div style="max-width:540px;margin:0 auto;border:3px solid '+accent+';border-radius:8px;padding:18px 22px">'
+    +'<div style="text-align:center;border-bottom:2px solid '+accent+';padding-bottom:8px;margin-bottom:12px;font-size:15px;font-weight:800;letter-spacing:1px">'+esc(nb)+' &mdash; CARPETA APTO</div>'
+    +'<div style="font-size:36px;font-weight:900;text-align:center;margin:6px 0">'+esc(r.apto||'—')+(vacio?' <span style="font-size:14px;color:#b91c1c;font-weight:700">(VACÍO)</span>':'')+'</div>'
+    +'<table style="width:100%;margin:8px 0 14px;border-collapse:collapse">'
+    +'<tr><td style="padding:6px 4px;font-size:13px;width:38%;color:#555">Arrendatario</td><td style="padding:6px 4px;font-size:16px;font-weight:700">'+esc(r.arrendatario||'—')+'</td></tr>'
+    +'<tr><td style="padding:6px 4px;font-size:13px;color:#555">Empresa</td><td style="padding:6px 4px;font-size:16px;font-weight:700">'+esc(r.empresa||'—')+'</td></tr>'
+    +'</table>'
+    +'<div style="font-size:12px;font-weight:700;color:'+accent+';margin-bottom:6px">CHECK LIST DE CARPETA (FO-SE-27)</div>'
+    +'<table style="width:100%;border-collapse:collapse">'+filas+'</table>'
+    +'<div style="font-size:10px;color:#888;margin-top:10px;text-align:right">Código: FO-SE-27</div>'
+    +'</div></body></html>';
+  var w=window.open('','_blank'); if(!w){ showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(html); w.document.close();
 }
 
 async function renderRevisionApto(){
