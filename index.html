@@ -7217,11 +7217,14 @@ async function renderIngresos(){
   const esMesActual = TODAY.slice(0,7) === mesSel;
   const corte = esMesActual ? Number(TODAY.slice(8,10)) : dim;
   const _mesesN = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  const [rkR, csR] = await Promise.all([
-    sb.from('rack').select('fecha,apto,estado,tarifa,canal,tipo,updated_at,created_at').gte('fecha',ini).lte('fecha',fin),
-    sb.from('consumos').select('fecha,apto,huesped,valor,pago').gte('fecha',ini).lte('fecha',fin)
+  const [rkR, csR, evR] = await Promise.all([
+    _rackRango('fecha,apto,estado,tarifa,canal,tipo,updated_at,created_at', ini, fin),
+    sb.from('consumos').select('fecha,apto,huesped,valor,pago').gte('fecha',ini).lte('fecha',fin),
+    sb.from('eventos').select('total,estado').eq('edificio',EDIFICIO_ACTIVO).gte('fecha_inicio',ini).lte('fecha_inicio',fin)
   ]);
   const rk = rkR.data || [], cs = csR.data || [];
+  const _evRows = (evR.data || []).filter(e=>Number(e.total)>0);
+  const totEventos = _evRows.reduce((s,e)=>s+(Number(e.total)||0), 0);
   const _PRI = {'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1};
   const map = {};
   rk.forEach(r => { const k = r.apto + '|' + r.fecha; const c = map[k];
@@ -7284,7 +7287,8 @@ async function renderIngresos(){
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
       ${_k('Alojamiento al corte', f$(alojaCorte), nochesVendCorte + ' noches vendidas · al ' + corte + ' de ' + _mesesN[M-1])}
       ${_k('Consumos', f$(totConsumos), 'registrados en CKO', '#B8963E')}
-      ${_k('Total ingresos', f$(alojaCorte + totConsumos), 'alojamiento + consumos', 'var(--verde)')}
+      ${_k('Eventos del mes', f$(totEventos), _evRows.length + ' evento' + (_evRows.length===1?'':'s') + ' confirmado' + (_evRows.length===1?'':'s'), '#7C3AED')}
+      ${_k('TOTAL GENERAL', f$(alojaCorte + totConsumos + totEventos), 'alojamiento + consumos + eventos', 'var(--verde)')}
       ${_k('Ocupación', pctMes + '%', 'promedio del mes al corte')}
       ${_k('Tarifa promedio', f$(tProm), 'por noche vendida')}
       ${esMesActual ? _k('Proyección alojamiento', f$(totAloja), nochesVendMes + ' noches con reservas futuras', '#7C3AED') : ''}
