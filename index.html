@@ -1440,6 +1440,18 @@ function calcKpisDia(registrosHoy){
 // ═══════════════════════════════════════════════════════════
 // INDICADORES DE OCUPACIÓN Y VENTAS (auto desde el rack)
 // ═══════════════════════════════════════════════════════════
+// Trae TODAS las filas del rack en un rango (pagina de a 1000; Supabase corta a 1000) — filtra por edificio
+async function _rackRango(cols, desde, hasta){
+  var all=[], from=0;
+  while(true){
+    var r=await sb.from('rack').select(cols).eq('edificio',EDIFICIO_ACTIVO).gte('fecha',desde).lte('fecha',hasta).order('fecha').range(from,from+999);
+    if(r.error) return {data:all, error:r.error};
+    all=all.concat(r.data||[]);
+    if(!r.data || r.data.length<1000) break;
+    from+=1000; if(from>500000) break;
+  }
+  return {data:all, error:null};
+}
 async function renderIndicadores(){
   const main = document.getElementById('main-content');
   const yr = window._indYear || new Date().getFullYear();
@@ -1449,8 +1461,8 @@ async function renderIndicadores(){
   const OCU = ['Ocupado','Check-in hoy','Completo','Sale de viaje'];
   main.innerHTML = '<div class="page-title">📊 Indicadores de Ocupación y Ventas</div><p style="color:var(--gris-t)">Cargando datos del rack…</p>';
   const [curR, prevR] = await Promise.all([
-    sb.from('rack').select('estado,tarifa,fecha').gte('fecha', yr+'-01-01').lte('fecha', yr+'-12-31'),
-    sb.from('rack').select('estado,tarifa,fecha').gte('fecha', (yr-1)+'-01-01').lte('fecha', (yr-1)+'-12-31')
+    _rackRango('estado,tarifa,fecha', yr+'-01-01', yr+'-12-31'),
+    _rackRango('estado,tarifa,fecha', (yr-1)+'-01-01', (yr-1)+'-12-31')
   ]);
   function agg(rows){
     const m = Array.from({length:12}, ()=>({noches:0,nTar:0,ventas:0}));
