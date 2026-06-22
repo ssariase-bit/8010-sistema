@@ -2105,7 +2105,16 @@ async function consultarDisponibilidad(){
   let g=0; const cur = new Date(ini);
   while (cur <= fin && g<400){ dias.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); g++; }
   if (!dias.length){ showToast('Rango inválido', 'error'); return; }
-  const { data, error } = await sb.from('rack').select('apto,fecha,estado,observaciones').gte('fecha', dias[0]).lte('fecha', dias[dias.length-1]);
+  // Paginar: Supabase corta a 1000 filas; un rango largo (varios meses) las supera y dejaba reservas fuera (falsos "disponible")
+  let data = []; let error = null; let _from = 0;
+  while (true) {
+    const _r = await sb.from('rack').select('apto,fecha,estado,observaciones').eq('edificio', EDIFICIO_ACTIVO).gte('fecha', dias[0]).lte('fecha', dias[dias.length-1]).order('fecha').order('apto').range(_from, _from + 999);
+    if (_r.error) { error = _r.error; break; }
+    data = data.concat(_r.data || []);
+    if (!_r.data || _r.data.length < 1000) break;
+    _from += 1000;
+    if (_from > 500000) break;
+  }
   if (error){ showToast('Error consultando: '+error.message, 'error'); return; }
   const NO_LIBRE = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje','Bloqueado','Mantenimiento','Limpieza'];
   const ocupado = {};
