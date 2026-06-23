@@ -704,6 +704,7 @@ const NAV_ITEMS = {
     { id: 'semana-resumen', icon: '📅', label: 'Semana en Curso' },
     { id: 'formato-huespedes', icon: '🏨', label: 'Formato Huéspedes' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
+    { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
     { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
     { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
@@ -767,6 +768,7 @@ const NAV_ITEMS = {
     { section: 'Auditoría' },
     { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
+    { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
   ],
   administrador: [
@@ -813,6 +815,7 @@ const NAV_ITEMS = {
     { section: 'Auditoría' },
     { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
+    { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
     { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
     { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
@@ -864,6 +867,7 @@ const NAV_ITEMS = {
     { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
+    { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
   ],
 rrhh: [
@@ -888,6 +892,7 @@ rrhh: [
     { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
+    { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
   ],
   recepcion: [
@@ -912,6 +917,7 @@ rrhh: [
     { section: 'Auditoría' },
     { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
+    { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
   ],
 };
@@ -983,6 +989,7 @@ const MENU_COMPLETO = [
   { id: 'cargos-form', icon: '➕', label: 'Registrar Cargo' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
   { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
+    { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
   { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
   { section: 'Comercial' },
   { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
@@ -1154,7 +1161,7 @@ async function loadView(view) {
     ]); break;
     case 'entrega-efectivos-form': renderGenForm('entrega_efectivos','💵 Entrega de Efectivos',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
-      {id:'turno',label:'Turno',type:'select',opts:['Mañana (6am-2pm)','Tarde (2pm-10pm)','Noche (10pm-6am)','Turno 12h Día (6am-6pm)','Turno 12h Noche (6pm-6am)']},
+      {id:'turno',label:'Turno',type:'select',opts:['Mañana (6am-2pm)','Tarde (2pm-10pm)','Noche (10pm-6am)','Noche (9:30pm-6:30am)','Turno 12h Día (6am-6pm)','Turno 12h Noche (6pm-6am)']},
       {id:'entregado_por',label:'Entregado por',type:'text',req:true},
       {id:'recibido_por',label:'Recibido por',type:'text',req:true},
       {id:'destino',label:'Destino de la entrega',type:'select',opts:['Entregado en persona','Dejado en cajilla de seguridad']},
@@ -1315,6 +1322,7 @@ async function loadView(view) {
     case 'check-carpetas-list': await renderList('check_carpetas','📂 Check List Carpetas','check-carpetas-form',
       ['fecha','apto','arrendatario','contrato_firmado','registro_ingreso','copia_documentos','carpeta_completa'],
       ['Fecha','Apto','Arrendatario','Contrato','Registro','Docs','Completa']); break;
+    case 'rotulos': await renderRotulos(); break;
     case 'check-carpetas-form': renderGenForm('check_carpetas','📂 Carpeta de Apto',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY},
       {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
@@ -2536,6 +2544,7 @@ function renderTurnoForm() {
               <option ${turnoAuto==='Mañana (6am-2pm)'?'selected':''}>Mañana (6am-2pm)</option>
               <option ${turnoAuto==='Tarde (2pm-10pm)'?'selected':''}>Tarde (2pm-10pm)</option>
               <option ${turnoAuto==='Noche (10pm-6am)'?'selected':''}>Noche (10pm-6am)</option>
+              <option ${turnoAuto==='Noche (9:30pm-6:30am)'?'selected':''}>Noche (9:30pm-6:30am)</option>
               <option ${turnoAuto==='Turno 12h Día (6am-6pm)'?'selected':''}>Turno 12h Día (6am-6pm)</option>
               <option ${turnoAuto==='Turno 12h Noche (6pm-6am)'?'selected':''}>Turno 12h Noche (6pm-6am)</option>
             </select>
@@ -2865,6 +2874,7 @@ async function renderNovedadForm() {
             <option ${turnoAuto==='Mañana'?'selected':''}>Mañana</option>
             <option ${turnoAuto==='Tarde'?'selected':''}>Tarde</option>
             <option ${turnoAuto==='Noche'?'selected':''}>Noche</option>
+            <option>Noche (9:30pm-6:30am)</option>
             <option>Turno 12h Día (6am-6pm)</option>
             <option>Turno 12h Noche (6pm-6am)</option>
           </select>
@@ -6574,6 +6584,48 @@ async function imprimirRotuloCarpeta(id){
     +'<div style="font-size:10px;color:#888;margin-top:10px;text-align:right">Código: FO-SE-27</div>'
     +'</div></body></html>';
   var w=window.open('','_blank'); if(!w){ showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(html); w.document.close();
+}
+
+// ════════ MÓDULO RÓTULOS (auditor CKI) — imprime rótulo desde apto/arrendatario/empresa ════════
+function imprimirRotulo(apto, arrendatario, empresa, vacio){
+  apto=decodeURIComponent(apto||''); arrendatario=decodeURIComponent(arrendatario||''); empresa=decodeURIComponent(empresa||'');
+  var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||''; var accent=(nb.indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var ITEMS=['1 Página','Registro de ingreso','Copia de documentos','Información reserva','Inventario','Envío book de servicios','Contrato digitalizado','Otrosí digitalizado'];
+  var filas=ITEMS.map(function(it){ return '<tr><td style="border:1px solid #333;padding:9px 12px;font-size:13px">'+it+'</td><td style="border:1px solid #333;padding:9px;text-align:center;width:64px;font-size:14px">&#9744; SI</td><td style="border:1px solid #333;padding:9px;text-align:center;width:64px;font-size:14px">&#9744; NO</td></tr>'; }).join('');
+  var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Rótulo '+esc(apto)+'</title></head><body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:24px;color:#111">'
+    +'<button onclick="window.print()" style="position:fixed;top:14px;right:14px;background:#1F3864;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:700">🖨️ Imprimir</button>'
+    +'<div style="max-width:540px;margin:0 auto;border:3px solid '+accent+';border-radius:8px;padding:18px 22px">'
+    +'<div style="text-align:center;border-bottom:2px solid '+accent+';padding-bottom:8px;margin-bottom:12px;font-size:15px;font-weight:800;letter-spacing:1px">'+esc(nb)+' &mdash; CARPETA APTO</div>'
+    +'<div style="font-size:36px;font-weight:900;text-align:center;margin:6px 0">'+esc(apto||'—')+(vacio?' <span style="font-size:14px;color:#b91c1c;font-weight:700">(VACÍO)</span>':'')+'</div>'
+    +'<table style="width:100%;margin:8px 0 14px;border-collapse:collapse">'
+    +'<tr><td style="padding:6px 4px;font-size:13px;width:38%;color:#555">Arrendatario</td><td style="padding:6px 4px;font-size:16px;font-weight:700">'+esc(arrendatario||'—')+'</td></tr>'
+    +'<tr><td style="padding:6px 4px;font-size:13px;color:#555">Empresa</td><td style="padding:6px 4px;font-size:16px;font-weight:700">'+esc(empresa||'—')+'</td></tr>'
+    +'</table>'
+    +'<div style="font-size:12px;font-weight:700;color:'+accent+';margin-bottom:6px">CHECK LIST DE CARPETA (FO-SE-27)</div>'
+    +'<table style="width:100%;border-collapse:collapse">'+filas+'</table>'
+    +'<div style="font-size:10px;color:#888;margin-top:10px;text-align:right">Código: FO-SE-27</div>'
+    +'</div></body></html>';
+  var w=window.open('','_blank'); if(!w){ showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(html); w.document.close();
+}
+async function renderRotulos(){
+  var fecha=window._rotFecha || (function(){ var d=new Date(TODAY+'T00:00:00'); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })();
+  window._rotFecha=fecha;
+  document.getElementById('main-content').innerHTML='<div class="page-title">🏷️ Rótulos de Carpetas</div><p style="color:var(--gris-t)">Cargando ingresos…</p>';
+  var r=await sb.from('rack').select('apto,huesped,empresa,estado,nombre,apellido1,apellido2').eq('edificio',EDIFICIO_ACTIVO).eq('fecha',fecha).eq('estado','Check-in hoy').order('apto');
+  var rows=(r.data||[]).filter(function(x){return (x.huesped||x.nombre);});
+  var esc=function(s){ return String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); };
+  var enc=function(s){ return encodeURIComponent(String(s==null?'':s)); };
+  var filas=rows.map(function(x){ var hu=x.huesped||[x.nombre,x.apellido1,x.apellido2].filter(Boolean).join(' '); return '<tr><td style="font-weight:700">'+esc(x.apto)+'</td><td>'+esc(hu)+'</td><td>'+esc(x.empresa||'—')+'</td><td><button class="btn btn-outline btn-sm" style="color:#1D3461;border-color:#1D3461" onclick="imprimirRotulo(\''+enc(x.apto)+'\',\''+enc(hu)+'\',\''+enc(x.empresa)+'\',false)">🖨 Rótulo</button></td></tr>'; }).join('');
+  document.getElementById('main-content').innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div class="page-title" style="margin-bottom:0">🏷️ Rótulos de Carpetas</div>'
+    +'<label style="font-size:13px;color:var(--gris-t)">Ingresos del día <input type="date" value="'+fecha+'" onchange="window._rotFecha=this.value;renderRotulos()" style="padding:6px;border:1px solid var(--gris-b);border-radius:8px"></label></div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Para que el auditor imprima los rótulos de las carpetas que ingresan (CKI). Por defecto muestra el día siguiente.</div>'
+    +'<div class="card" style="margin-bottom:16px"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Ingresos ('+rows.length+')</div>'
+    +(rows.length?('<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Apto</th><th>Huésped</th><th>Empresa</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div>'):'<div style="color:#999;font-size:13px;padding:8px">Sin check-in para esta fecha.</div>')+'</div>'
+    +'<div class="card" style="max-width:560px"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Rótulo manual</div>'
+    +'<div class="form-row col3"><div class="form-group"><label>Apto</label><input id="rot-apto" placeholder="Ej: 501"></div><div class="form-group"><label>Arrendatario</label><input id="rot-arr"></div><div class="form-group"><label>Empresa</label><input id="rot-emp"></div></div>'
+    +'<button class="btn" style="background:#1D3461;color:#fff" onclick="imprimirRotulo(encodeURIComponent(document.getElementById(\'rot-apto\').value),encodeURIComponent(document.getElementById(\'rot-arr\').value),encodeURIComponent(document.getElementById(\'rot-emp\').value),false)">🖨 Imprimir rótulo</button></div>';
 }
 
 async function renderRevisionApto(){
