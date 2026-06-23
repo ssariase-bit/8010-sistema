@@ -7751,11 +7751,13 @@ async function renderSemanaInfo(){
   const fS = d=>d.toISOString().split('T')[0];
   const ini=fS(lun), fin=fS(dom);
   const _ini = window._semDesde || ini; const _fin = window._semHasta || fin;
-  // 1) Derivar CKI/CKO del rango desde el rack (no pisa lo ya editado)
-  const { data: rk } = await sb.from('rack').select('fecha,apto,estado,huesped,canal').gte('fecha',_ini).lte('fecha',_fin).in('estado',['Check-in hoy','Check-out hoy']);
-  const vistos = {};
-  const derivados = (rk||[]).filter(r=>(r.huesped||'').trim()).filter(r=>{ const k=r.fecha+'|'+r.apto+'|'+r.estado; if(vistos[k]) return false; vistos[k]=1; return true; })
-    .map(r=>({ fecha:r.fecha, apto:r.apto, tipo: r.estado==='Check-in hoy'?'CKI':'CKO', huesped:r.huesped, pago:(((EB&&EB().nombre)||'').indexOf('8010')>-1?'80|10':'8i8'), observaciones: r.canal?('Reserva de '+r.canal+'.'):'', estado:'Pendiente', user_id:currentUser.id }));
+  // 1) Derivar CKI/CKO del rango desde el rack — por los campos checkin/checkout (robusto: NO depende de la etiqueta de estado, que una edición de rango puede pisar)
+  const _pagoDef = (((EB&&EB().nombre)||'').indexOf('8010')>-1?'80|10':'8i8');
+  const { data: _rkCki } = await sb.from('rack').select('apto,huesped,canal,checkin').gte('checkin',_ini).lte('checkin',_fin).not('huesped','is',null).limit(5000);
+  const { data: _rkCko } = await sb.from('rack').select('apto,huesped,canal,checkout').gte('checkout',_ini).lte('checkout',_fin).not('huesped','is',null).limit(5000);
+  const vistos = {}; const derivados = [];
+  (_rkCki||[]).forEach(r=>{ if(!(r.huesped||'').trim()||!r.checkin) return; const k=r.checkin+'|'+r.apto+'|CKI'; if(vistos[k])return; vistos[k]=1; derivados.push({ fecha:r.checkin, apto:r.apto, tipo:'CKI', huesped:r.huesped, pago:_pagoDef, observaciones:r.canal?('Reserva de '+r.canal+'.'):'', estado:'Pendiente', user_id:currentUser.id }); });
+  (_rkCko||[]).forEach(r=>{ if(!(r.huesped||'').trim()||!r.checkout) return; const k=r.checkout+'|'+r.apto+'|CKO'; if(vistos[k])return; vistos[k]=1; derivados.push({ fecha:r.checkout, apto:r.apto, tipo:'CKO', huesped:r.huesped, pago:_pagoDef, observaciones:r.canal?('Reserva de '+r.canal+'.'):'', estado:'Pendiente', user_id:currentUser.id }); });
   if(derivados.length){ const rr = await sb.from('semana_seguimiento').upsert(derivados, { onConflict:'fecha,apto,tipo,edificio', ignoreDuplicates:true }); if(rr.error) console.error('semana upsert:', rr.error); }
   // 2) Cargar y pintar
   const { data } = await sb.from('semana_seguimiento').select('*').gte('fecha',_ini).lte('fecha',_fin).order('fecha').order('apto');
