@@ -7470,7 +7470,7 @@ var FIN_MC=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','D
 function _finNum(n){ return Math.round(Number(n)||0).toLocaleString('es-CO'); }
 function _finParse(s){ var x=String(s).replace(/[^0-9-]/g,''); return parseInt(x,10)||0; }
 function _finGet(rows, entidad, cuenta, tipo){ // devuelve array de 12 para una entidad o consolidado
-  if(entidad==='CONSOLIDADO'){ var acc=new Array(12).fill(0); ['80-10','LTM3','PH'].forEach(function(e){ var a=_finGet(rows,e,cuenta,tipo); for(var i=0;i<12;i++)acc[i]+=a[i]; }); return acc; }
+  if(entidad==='TOTAL' && tipo==='real'){ var acc=new Array(12).fill(0); ['80-10','LTM3'].forEach(function(e){ var a=_finGet(rows,e,cuenta,'real'); for(var i=0;i<12;i++)acc[i]+=a[i]; }); return acc; }
   var r=rows.find(function(x){return x.entidad===entidad&&x.cuenta===cuenta&&x.tipo===tipo;});
   if(!r) return new Array(12).fill(0);
   var a=[]; for(var i=1;i<=12;i++)a.push(Number(r['m'+i])||0); return a;
@@ -7492,8 +7492,8 @@ async function renderFinanzas(){
   var q=await _finRAW('finanzas_pyg').select('*').eq('edificio','8010').eq('anio',st.anio);
   if(q.error){ document.getElementById('main-content').innerHTML='<div class="page-title">📊 Estado de Resultados</div><div class="card" style="max-width:620px"><p style="font-size:14px">⚠️ Falta crear la tabla <code>finanzas_pyg</code> en Supabase. Corre el script <strong>finanzas_pyg.sql</strong> en el SQL Editor y recarga.</p><p style="font-size:12px;color:var(--gris-t)">Detalle: '+(q.error.message||'')+'</p></div>'; return; }
   var rows=q.data||[]; window._finRows=rows;
-  var ents=[['80-10','80-10 Oper. Turístico'],['LTM3','LTM3 Arriendo'],['PH','Prop. Horizontal'],['CONSOLIDADO','Consolidado']];
-  var editable=(st.entidad!=='CONSOLIDADO');
+  var ents=[['80-10','80-10 Oper. Turístico'],['LTM3','LTM3 Arriendo'],['PH','Prop. Horizontal'],['TOTAL','TOTAL (80-10+LTM3) vs Ppto Original']];
+  var editable=(st.entidad!=='CONSOLIDADO' && st.entidad!=='TOTAL');
   var hoyM=(TODAY.slice(0,4)==String(st.anio))?(parseInt(TODAY.slice(5,7),10)):12;
   var f$=function(n){return '$'+_finNum(n);};
   // KPI band (mes actual + acumulado a hoyM) sobre RESULTADO e INGRESOS
@@ -7504,6 +7504,7 @@ async function renderFinanzas(){
   var pcol=function(p){return p>=100?'#1A7D3C':(p>=80?'#B8860B':'#C0392B');};
   var kpi=function(t,rv,pv,col){var p=pv?Math.round(rv/pv*100):0;return '<div style="flex:1;min-width:190px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:14px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div><div style="font-size:20px;font-weight:800;color:'+(col||'var(--azul)')+';white-space:nowrap">'+f$(rv)+'</div><div style="font-size:11px;color:var(--gris-t)">Ppto: '+f$(pv)+' · <span style="color:'+pcol(p)+';font-weight:700">'+p+'%</span></div></div>';};
   // selector + toggles
+  var anioSel='<select onchange="window._finState.anio=parseInt(this.value,10);renderFinanzas()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px;font-weight:700">'+[2025,2026].map(function(y){return '<option value="'+y+'" '+(y===st.anio?'selected':'')+'>'+y+(y===2025?' (definitivo)':'')+'</option>';}).join('')+'</select>';
   var entSel='<select onchange="window._finState.entidad=this.value;renderFinanzas()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px">'+ents.map(function(e){return '<option value="'+e[0]+'" '+(e[0]===st.entidad?'selected':'')+'>'+e[1]+'</option>';}).join('')+'</select>';
   var vistas=[['real','Real'],['ppto','Presupuesto'],['var','Variación']];
   var vSel='<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden">'+vistas.map(function(v){return '<button onclick="window._finState.vista=\''+v[0]+'\';renderFinanzas()" style="border:none;padding:7px 12px;font-size:12px;cursor:pointer;background:'+(v[0]===st.vista?'var(--azul)':'#fff')+';color:'+(v[0]===st.vista?'#fff':'var(--azul)')+'">'+v[1]+'</button>';}).join('')+'</div>';
@@ -7532,7 +7533,7 @@ async function renderFinanzas(){
     body+='<tr style="'+rowStyle+'">'+nameCell+cells+'<td style="text-align:right;font-weight:700;background:'+(isSub?'#eaf0ea':'#f3f6fb')+'">'+_finNum(totA)+'</td></tr>';
   });
   document.getElementById('main-content').innerHTML=
-    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">📊 Estado de Resultados — '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+entSel+vSel+hibrido+'</div></div>'
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">📊 Estado de Resultados — '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+anioSel+entSel+vSel+hibrido+'</div></div>'
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Gemelo de tu Excel — editable. Real ene–may cargado; jun–dic es presupuesto. Edita cualquier celda (Real o Presupuesto) y se guarda solo. Subtotales y consolidado se calculan automáticamente. Valores en pesos.</div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
     + kpi('Ingresos — '+FIN_MC[Math.min(hoyM,12)-1], ingR[Math.min(hoyM,12)-1], ingP[Math.min(hoyM,12)-1],'var(--azul)')
@@ -7541,7 +7542,7 @@ async function renderFinanzas(){
     + kpi('Resultado YTD', resYR, resYP,'#1A5C2E')
     +'</div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
-    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">'+(editable?'Celdas editables en modo Real/Presupuesto. ':'Consolidado = suma de 80-10 + LTM3 + PH (solo lectura). ')+'Columna naranja = mes en curso. Vista Variación = Real − Presupuesto (verde a favor).</p></div>';
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">'+(editable?'Celdas editables en modo Real/Presupuesto. ':'TOTAL: Real = suma 80-10 + LTM3 · Ppto = presupuesto Original (solo lectura). ')+'Columna naranja = mes en curso. Vista Variación = Real − Presupuesto (verde a favor).</p></div>';
 }
 async function finSet(inp){
   var cuenta=decodeURIComponent(inp.getAttribute('data-c')), tipo=inp.getAttribute('data-t'), m=inp.getAttribute('data-m');
