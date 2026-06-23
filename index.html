@@ -687,6 +687,7 @@ const NAV_ITEMS = {
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
     { section: 'Financiero / Admin' },
     { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
+    { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
     { id: 'nomina', icon: '💼', label: 'Nómina 8i8' },
     { id: 'caja-list', icon: '💰', label: 'Caja' },
     { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
@@ -962,6 +963,7 @@ const MENU_COMPLETO = [
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
   { section: 'Financiero / Admin' },
   { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
+    { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
   { id: 'indicadores', icon: '📊', label: 'Indicadores Ocup./Ventas' },
   { id: 'requisiciones-form', icon: '➕', label: 'Nueva Requisición' },
   { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
@@ -1357,6 +1359,7 @@ async function loadView(view) {
     case 'ocupacion': window._ocupVista='hoy'; await renderOcupacion(); break;
     case 'estado-huespedes': await renderEstadoHuespedes(); break;
     case 'ingresos': await renderIngresos(); break;
+    case 'resumen-ventas': await renderResumenVentas(); break;
     case 'indicadores': await renderIndicadores(); break;
     case 'nomina': await renderNomina(); break;
     case 'semana-info': window._ocupVista='semana'; await renderOcupacion(); break;
@@ -1441,10 +1444,10 @@ function calcKpisDia(registrosHoy){
 // INDICADORES DE OCUPACIÓN Y VENTAS (auto desde el rack)
 // ═══════════════════════════════════════════════════════════
 // Trae TODAS las filas del rack en un rango (pagina de a 1000; Supabase corta a 1000) — filtra por edificio
-async function _rackRango(cols, desde, hasta){
-  var all=[], from=0;
+async function _rackRango(cols, desde, hasta, edi){
+  var _edi = edi || EDIFICIO_ACTIVO; var all=[], from=0;
   while(true){
-    var r=await sb.from('rack').select(cols).eq('edificio',EDIFICIO_ACTIVO).gte('fecha',desde).lte('fecha',hasta).order('fecha').range(from,from+999);
+    var r=await sb.from('rack').select(cols).eq('edificio',_edi).gte('fecha',desde).lte('fecha',hasta).order('fecha').range(from,from+999);
     if(r.error) return {data:all, error:r.error};
     all=all.concat(r.data||[]);
     if(!r.data || r.data.length<1000) break;
@@ -5502,7 +5505,7 @@ window.renderReservas = async function(filtro){
   var res=await sb.from('reservas').select('*').eq('edificio',EDIFICIO_ACTIVO).order('checkin',{ascending:false}).limit(2000);
   var rows=res.data||[];
   var body=rows.map(function(r){
-    return '<tr><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">$'+(Number(r.tarifa)||0).toLocaleString('es-CO')+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="white-space:nowrap"><span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
+    return '<tr><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">'+((r.moneda==='USD')?('USD '+(Number(r.tarifa_usd)||Number(r.tarifa)||0).toLocaleString('es-CO')):('$'+(Number(r.tarifa)||0).toLocaleString('es-CO')))+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="white-space:nowrap"><span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
   }).join('');
   document.getElementById('main-content').innerHTML=
     '<div class="page-title">📋 Reservas</div>'+
@@ -7313,6 +7316,52 @@ async function renderIngresos(){
 }
 
 // ═══════════════════════════════════════════════════════════
+// ═══ RESUMEN DE VENTAS — consolidado compañía (8010 + Kubik) ═══
+function _alojaDe(rk){
+  var PRI={'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1};
+  var map={};
+  (rk||[]).forEach(function(r){ var k=r.apto+'|'+r.fecha; var c=map[k];
+    if(!c){map[k]=r;return;}
+    var pr=PRI[r.estado]||0, pc=PRI[c.estado]||0;
+    if(pr>pc) map[k]=r; else if(pr===pc){ var tr=r.updated_at||r.created_at||'', tc=c.updated_at||c.created_at||''; if(tr>tc) map[k]=r; }
+  });
+  var aloja=0, noches=0;
+  Object.keys(map).forEach(function(k){ var r=map[k]; var e=r.estado; var oc=(e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje'); if(!oc) return; var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto))); if(esPar) return; aloja+=(Number(r.tarifa)||0); noches++; });
+  return {aloja:aloja, noches:noches};
+}
+async function renderResumenVentas(){
+  var _rolOK = currentProfile && (currentProfile.rol==='gerente_general'||currentProfile.rol==='asesora');
+  if(!_rolOK){ document.getElementById('main-content').innerHTML='<div class="page-title">💵 Resumen de Ventas</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Solo gerencia.</p></div>'; return; }
+  var mesSel = window._resVentasMes || TODAY.slice(0,7); window._resVentasMes = mesSel;
+  var p=mesSel.split('-'); var Y=+p[0], M=+p[1]; var dim=new Date(Y,M,0).getDate();
+  var ini=mesSel+'-01', fin=mesSel+'-'+String(dim).padStart(2,'0');
+  var _mn=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][M-1]; var _MN=_mn.charAt(0).toUpperCase()+_mn.slice(1);
+  document.getElementById('main-content').innerHTML='<div class="page-title">💵 Resumen de Ventas — '+_MN+' '+Y+'</div><p style="color:var(--gris-t)">Cargando…</p>';
+  var edis=[{id:'8010',nom:'8010 Urban Living'},{id:'kubik',nom:'Kubik Living 8i8'}]; var rows=[];
+  for(var i=0;i<edis.length;i++){
+    var e=edis[i];
+    var rkR=await _rackRango('apto,fecha,estado,tarifa,tipo,updated_at,created_at', ini, fin, e.id);
+    var csR=await sb.from('consumos').select('valor').eq('edificio',e.id).gte('fecha',ini).lte('fecha',fin);
+    var evR = e.id==='8010' ? await sb.from('eventos').select('total').eq('edificio','8010').gte('fecha_inicio',ini).lte('fecha_inicio',fin) : {data:[]};
+    var aloj=_alojaDe(rkR.data||[]);
+    var cons=(csR.data||[]).reduce(function(s,c){return s+(Number(c.valor)||0);},0);
+    var evts=(evR.data||[]).reduce(function(s,x){return s+(Number(x.total)||0);},0);
+    rows.push({nom:e.nom, aloja:aloj.aloja, noches:aloj.noches, cons:cons, evts:evts, total:aloj.aloja+cons+evts});
+  }
+  var f$=function(n){return '$'+Math.round(n||0).toLocaleString('es-CO');};
+  var gA=0,gC=0,gE=0,gT=0; rows.forEach(function(r){gA+=r.aloja;gC+=r.cons;gE+=r.evts;gT+=r.total;});
+  var tr=rows.map(function(r){return '<tr><td style="font-weight:600">'+r.nom+'</td><td style="text-align:right">'+f$(r.aloja)+'<div style="font-size:10px;color:#999">'+r.noches+' noches</div></td><td style="text-align:right">'+(r.evts?f$(r.evts):'—')+'</td><td style="text-align:right">'+(r.cons?f$(r.cons):'—')+'</td><td style="text-align:right;font-weight:700;color:#1A5C2E">'+f$(r.total)+'</td></tr>';}).join('');
+  document.getElementById('main-content').innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px"><div class="page-title" style="margin-bottom:0">💵 Resumen de Ventas — '+_MN+' '+Y+'</div><input type="month" value="'+mesSel+'" onchange="window._resVentasMes=this.value;renderResumenVentas()" style="padding:8px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px"></div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">'
+    +'<div style="flex:1;min-width:170px;background:#fff;border:2px solid #1A5C2E;border-radius:10px;padding:16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">TOTAL COMPAÑÍA</div><div style="font-size:24px;font-weight:800;color:#1A5C2E;margin-top:4px;white-space:nowrap">'+f$(gT)+'</div><div style="font-size:11px;color:var(--gris-t)">8010 + Kubik</div></div>'
+    +'<div style="flex:1;min-width:140px;background:#fff;border:1px solid var(--gris-b);border-radius:10px;padding:16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Alojamiento</div><div style="font-size:20px;font-weight:800;color:var(--azul);margin-top:4px;white-space:nowrap">'+f$(gA)+'</div></div>'
+    +'<div style="flex:1;min-width:140px;background:#fff;border:1px solid var(--gris-b);border-radius:10px;padding:16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Eventos</div><div style="font-size:20px;font-weight:800;color:#7C3AED;margin-top:4px;white-space:nowrap">'+f$(gE)+'</div></div>'
+    +'<div style="flex:1;min-width:140px;background:#fff;border:1px solid var(--gris-b);border-radius:10px;padding:16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Consumos</div><div style="font-size:20px;font-weight:800;color:#B8963E;margin-top:4px;white-space:nowrap">'+f$(gC)+'</div></div>'
+    +'</div>'
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Edificio</th><th style="text-align:right">Alojamiento</th><th style="text-align:right">Eventos</th><th style="text-align:right">Consumos</th><th style="text-align:right">Total</th></tr></thead><tbody>'+tr
+    +'<tr style="background:var(--azul-c);font-weight:800"><td style="color:var(--azul)">TOTAL COMPAÑÍA</td><td style="text-align:right">'+f$(gA)+'</td><td style="text-align:right">'+f$(gE)+'</td><td style="text-align:right">'+f$(gC)+'</td><td style="text-align:right;color:#1A5C2E">'+f$(gT)+'</td></tr>'
+    +'</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:10px">Alojamiento = noches con tarifa del rack. Eventos solo 8010. Consumos registrados en CKO.</p></div>';
+}
 // INFORMACIÓN DE LA SEMANA (CKI / CKO) — ambos edificios
 // ═══════════════════════════════════════════════════════════
 async function renderSemanaInfo(){
