@@ -8537,7 +8537,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
     <div class="card" style="max-width:680px">
       <div class="form-row">
         <div class="form-group"><label>Apartamento *</label>
-          <select id="cki-apto">
+          <select id="cki-apto" onchange="ckiAutollenar()">
             ${EB().aptosFull.map(a=>`<option ${a===aptoPreload?'selected':''}>${a}</option>`).join('')}
           </select>
         </div>
@@ -8674,6 +8674,35 @@ function calcCKI() {
   set('cki-total', total);
 }
 
+async function ckiAutollenar(){
+  // Al elegir el apto, trae automáticamente la reserva que coincide con la fecha (nombre, fechas, canal, tarifa, empresa…)
+  try{
+    var apto=(document.getElementById('cki-apto')||{}).value||''; if(!apto) return;
+    var fecha=(document.getElementById('cki-fi')||{}).value||TODAY;
+    var set=function(id,v){ var el=document.getElementById(id); if(el && v!=null && String(v).trim()!=='') el.value=v; };
+    // 1) rack: registro de ese apto en esa fecha (la reserva activa)
+    var d=null;
+    var r=await sb.from('rack').select('huesped,nombre,apellido1,apellido2,checkin,checkout,canal,tarifa,tarifa_usd,moneda,empresa,tratamiento,telefono,estado').eq('edificio',EDIFICIO_ACTIVO).eq('apto',apto).eq('fecha',fecha).neq('estado','Libre').limit(1);
+    if(r.data&&r.data[0]) d=r.data[0];
+    // 2) fallback: reserva cuyo rango incluya la fecha
+    if(!d){ var rv=await sb.from('reservas').select('nombre,checkin,checkout,canal,tarifa,tarifa_usd,moneda,empresa').eq('edificio',EDIFICIO_ACTIVO).eq('apto',apto).lte('checkin',fecha).gte('checkout',fecha).order('checkin',{ascending:false}).limit(1); if(rv.data&&rv.data[0]){ d=rv.data[0]; d.huesped=d.nombre; } }
+    if(!d) return; // no hay reserva: no toca nada
+    var partes;
+    if(d.nombre!=null && (d.apellido1!==undefined)){ partes={nombre:d.nombre||'',apellido1:d.apellido1||'',apellido2:d.apellido2||''}; }
+    else { partes=(window._splitNombre? window._splitNombre(d.huesped||d.nombre||'') : {nombre:d.huesped||d.nombre||'',apellido1:'',apellido2:''}); }
+    set('cki-nombre', partes.nombre); set('cki-apellido1', partes.apellido1); set('cki-apellido2', partes.apellido2);
+    if(d.checkin) set('cki-fi', d.checkin);
+    if(d.checkout) set('cki-ff', d.checkout);
+    if(d.canal){ var cc=document.getElementById('cki-canal'); if(cc){ var ok=false; Array.from(cc.options).forEach(function(o){ if(o.value===d.canal||o.text===d.canal){ cc.value=o.value; ok=true; } }); } }
+    if(d.empresa) set('cki-empresa', d.empresa);
+    if(d.tratamiento){ var tr=document.getElementById('cki-tratamiento'); if(tr) tr.value=d.tratamiento; }
+    if(d.telefono) set('cki-tel', d.telefono);
+    var mEl=document.getElementById('cki-moneda'); if(mEl && d.moneda) mEl.value=d.moneda;
+    if(d.moneda==='USD' && d.tarifa_usd) set('cki-tarifa', d.tarifa_usd); else if(d.tarifa) set('cki-tarifa', d.tarifa);
+    if(typeof calcCKI==='function') calcCKI();
+    if(typeof showToast==='function') showToast('📋 Datos traídos de la reserva: '+(d.huesped||partes.nombre||apto),'success');
+  }catch(e){ /* silencioso */ }
+}
 function enviarBienvenidaCKI(){
   // Mismo mensaje que waBienvenida (Estado de Huéspedes), disparado desde el CKI.
   var apto=(document.getElementById('cki-apto')||{}).value||'';
