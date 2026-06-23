@@ -710,6 +710,7 @@ const NAV_ITEMS = {
     { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
   { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
     { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
+    { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
     { id: 'magnifique-form', icon: '➕', label: 'Nuevo Recibo' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
@@ -821,6 +822,7 @@ const NAV_ITEMS = {
     { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
   { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
     { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
+    { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
     { section: 'Comercial' },
@@ -982,6 +984,7 @@ const MENU_COMPLETO = [
   { id: 'personal-list', icon: '👤', label: 'Personal / RRHH' },
   { id: 'cuadro-extras', icon: '⏲️', label: 'Cuadro Horas Extra' },
   { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
+    { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
   { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
   { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
   { id: 'magnifique-form', icon: '➕', label: 'Nuevo Recibo' },
@@ -1389,6 +1392,7 @@ async function loadView(view) {
     case 'reembolsos-list': await renderList('reembolsos','💸 Reembolsos','reembolsos-form',
       ['consecutivo','fecha','recibo_no','empresa','descripcion','area','valor','estado'],
       ['#','Fecha','Recibo','Empresa','Descripción','Área','Valor','Estado']); break;
+    case 'reembolsos-lote': renderReembolsoLote(); break;
     case 'reembolsos-form': renderGenForm('reembolsos','💸 Registrar Reembolso',[
       {id:'fecha',label:'Fecha de creado (automática)',type:'date',default:TODAY,locked:true},
       {id:'fecha_factura',label:'Fecha del recibo',type:'date'},
@@ -6558,6 +6562,112 @@ async function _enviarReembolso(id){
     showToast('✅ Reembolso '+_reembNo(r)+' enviado','success');
     var ov=document.getElementById('reemb-correo-ov'); if(ov) ov.remove();
   }catch(e){ showToast('Error: '+(e&&e.message||e),'error'); rst(); }
+}
+
+// ════════ REEMBOLSO POR LOTES — varios recibos en un solo reembolso (solicitud Sebastián) ════════
+function renderReembolsoLote(){
+  var q=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'';
+  document.getElementById('main-content').innerHTML=
+    '<div class="page-title">💸 Reembolso por Lotes</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Agrupa varios recibos en UN solo reembolso (un número y un correo con todos los comprobantes). Llena la cabecera, añade los recibos y guarda.</div>'
+    +'<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Datos del reembolso</div>'
+    +'<div class="form-row col3">'
+      +'<div class="form-group"><label>Empresa / Proveedor *</label><input id="lt-empresa"></div>'
+      +'<div class="form-group"><label>Tipo ID</label><select id="lt-tipo"><option>NIT</option><option>CC</option><option>CE</option><option>Pasaporte</option><option>Otro</option></select></div>'
+      +'<div class="form-group"><label>Número ID</label><input id="lt-numero"></div>'
+    +'</div><div class="form-row col3">'
+      +'<div class="form-group"><label>Área</label><select id="lt-area"><option>Compras</option><option>Eventos</option><option>Cargo Apto.</option><option>Administrativo</option><option>Mantenimiento</option><option>Housekeeping</option><option>Recepción</option><option>Cocina</option><option>General</option></select></div>'
+      +'<div class="form-group"><label>Caja (origen)</label><select id="lt-caja"><option>LTM3</option><option>80|10</option><option>PH</option></select></div>'
+      +'<div class="form-group"><label>Fecha</label><input type="date" id="lt-fecha" value="'+TODAY+'"></div>'
+    +'</div><div class="form-row col3">'
+      +'<div class="form-group"><label>Entregado por</label><input id="lt-entregado"></div>'
+      +'<div class="form-group"><label>Aprobado por</label><input id="lt-aprobado" value="'+q.replace(/"/g,'&quot;')+'"></div>'
+      +'<div class="form-group"><label>Observaciones</label><input id="lt-obs"></div>'
+    +'</div></div>'
+    +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:700;color:var(--azul)">Recibos</div><button class="btn btn-outline btn-sm" onclick="_loteAddRow()">+ Añadir recibo</button></div>'
+    +'<div style="overflow-x:auto"><table class="tabla" id="lt-tabla"><thead><tr><th>Fecha recibo</th><th>No. Recibo</th><th>Descripción</th><th style="text-align:right">Valor ($)</th><th></th></tr></thead><tbody id="lt-rows"></tbody>'
+    +'<tfoot><tr style="background:var(--azul-c);font-weight:800"><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right" id="lt-total">$ 0</td><td></td></tr></tfoot></table></div></div>'
+    +'<div style="display:flex;gap:8px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="_loteGuardar(this)">💾 Guardar reembolso (lote)</button></div>';
+  window._loteRows=0; _loteAddRow(); _loteAddRow();
+}
+function _loteAddRow(){
+  var tb=document.getElementById('lt-rows'); if(!tb) return;
+  var tr=document.createElement('tr'); tr.className='lt-row';
+  tr.innerHTML='<td><input type="date" class="lt-fec" style="font-size:12px"></td>'
+    +'<td><input class="lt-rec" style="width:90px;font-size:12px"></td>'
+    +'<td><input class="lt-desc" style="width:100%;min-width:200px;font-size:12px"></td>'
+    +'<td><input type="number" class="lt-val" style="width:110px;font-size:12px;text-align:right" oninput="_loteTotal()" value="0"></td>'
+    +'<td><button class="btn btn-outline btn-sm" onclick="this.closest(\'tr\').remove();_loteTotal()" title="Quitar">🗑️</button></td>';
+  tb.appendChild(tr);
+}
+function _loteTotal(){
+  var t=0; document.querySelectorAll('#lt-rows .lt-val').forEach(function(i){ t+=Number(i.value)||0; });
+  var el=document.getElementById('lt-total'); if(el) el.textContent='$ '+t.toLocaleString('es-CO');
+  return t;
+}
+async function _loteGuardar(btn){
+  var empresa=document.getElementById('lt-empresa').value.trim();
+  if(!empresa){ showToast('Falta la empresa/proveedor','error'); return; }
+  var recibos=[];
+  document.querySelectorAll('#lt-rows .lt-row').forEach(function(tr){
+    var val=Number(tr.querySelector('.lt-val').value)||0;
+    var desc=tr.querySelector('.lt-desc').value.trim();
+    if(val>0 || desc){ recibos.push({ fecha_factura:tr.querySelector('.lt-fec').value||null, recibo_no:tr.querySelector('.lt-rec').value.trim()||null, descripcion:desc||'(sin descripción)', valor:val }); }
+  });
+  if(!recibos.length){ showToast('Añade al menos un recibo con valor','error'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+  // siguiente consecutivo
+  var mx=await sb.from('reembolsos').select('consecutivo').order('consecutivo',{ascending:false}).limit(1);
+  var consec=((mx.data&&mx.data[0]&&Number(mx.data[0].consecutivo))||0)+1;
+  var base={ empresa:empresa, tipo:document.getElementById('lt-tipo').value, numero:document.getElementById('lt-numero').value.trim()||null, area:document.getElementById('lt-area').value, caja:document.getElementById('lt-caja').value, fecha:document.getElementById('lt-fecha').value||TODAY, entregado_por:document.getElementById('lt-entregado').value.trim()||null, aprobado_por:document.getElementById('lt-aprobado').value.trim()||null, observaciones:document.getElementById('lt-obs').value.trim()||null, estado:'Pendiente', consecutivo:consec, edificio:EDIFICIO_ACTIVO, user_id:currentUser.id };
+  var rows=recibos.map(function(r){ return Object.assign({}, base, { fecha_factura:r.fecha_factura, recibo_no:r.recibo_no, descripcion:r.descripcion, valor:r.valor }); });
+  var resp=await sb.from('reembolsos').insert(rows);
+  if(btn){ btn.disabled=false; btn.textContent='💾 Guardar reembolso (lote)'; }
+  if(resp.error){ showToast('Error al guardar: '+resp.error.message,'error'); return; }
+  showToast('✅ Reembolso #'+consec+' guardado con '+rows.length+' recibo(s)','success');
+  comprobanteLote(consec);
+}
+function _loteComprobanteHTML(consec, rows){
+  var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||'';
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var fmt=function(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); };
+  var total=rows.reduce(function(s,r){return s+(Number(r.valor)||0);},0);
+  var h=rows[0]||{};
+  var filas=rows.map(function(r,i){ return '<tr><td style="border:1px solid #ccc;padding:6px;text-align:center">'+(i+1)+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.fecha_factura||'')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.recibo_no||'—')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.descripcion||'')+'</td><td style="border:1px solid #ccc;padding:6px;text-align:right">'+fmt(r.valor)+'</td></tr>'; }).join('');
+  return '<div style="font-family:Arial,Helvetica,sans-serif;max-width:680px;margin:0 auto;color:#111;border:2px solid #1F3864;border-radius:8px;padding:20px">'
+    +'<div style="text-align:center;font-size:16px;font-weight:800;color:#1F3864;border-bottom:2px solid #1F3864;padding-bottom:8px">'+esc(nb)+' — COMPROBANTE DE REEMBOLSO</div>'
+    +'<div style="display:flex;justify-content:space-between;margin:10px 0;font-size:13px"><div><b>Reembolso N°:</b> '+consec+'</div><div><b>Fecha:</b> '+esc(h.fecha||'')+'</div><div><b>Caja:</b> '+esc(h.caja||'')+'</div></div>'
+    +'<table style="width:100%;font-size:13px;margin-bottom:8px"><tr><td style="width:50%"><b>Empresa/Proveedor:</b> '+esc(h.empresa||'')+'</td><td><b>Área:</b> '+esc(h.area||'')+'</td></tr><tr><td><b>Entregado por:</b> '+esc(h.entregado_por||'—')+'</td><td><b>Aprobado por:</b> '+esc(h.aprobado_por||'—')+'</td></tr></table>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#1F3864;color:#fff"><th style="border:1px solid #ccc;padding:6px">#</th><th style="border:1px solid #ccc;padding:6px">Fecha</th><th style="border:1px solid #ccc;padding:6px">No. Recibo</th><th style="border:1px solid #ccc;padding:6px">Descripción</th><th style="border:1px solid #ccc;padding:6px">Valor</th></tr></thead><tbody>'+filas+'</tbody>'
+    +'<tfoot><tr style="font-weight:800;background:#eef3fb"><td colspan="4" style="border:1px solid #ccc;padding:6px;text-align:right">TOTAL REEMBOLSO</td><td style="border:1px solid #ccc;padding:6px;text-align:right;color:#1A5C2E">'+fmt(total)+'</td></tr></tfoot></table>'
+    +(h.observaciones?('<div style="margin-top:10px;font-size:12px"><b>Obs:</b> '+esc(h.observaciones)+'</div>'):'')
+    +'</div>';
+}
+async function comprobanteLote(consec){
+  var res=await sb.from('reembolsos').select('*').eq('edificio',EDIFICIO_ACTIVO).eq('consecutivo',consec).order('created_at');
+  var rows=res.data||[]; if(!rows.length){ showToast('No se encontró el reembolso','error'); return; }
+  var dest=(typeof _REEMB_DEST!=='undefined'&&(_REEMB_DEST[EDIFICIO_ACTIVO]||_REEMB_DEST['8010']))||{to:[],cc:[]};
+  var comp=_loteComprobanteHTML(consec, rows);
+  var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reembolso '+consec+'</title></head><body style="background:#f4f5f7;margin:0;padding:20px">'
+    +'<div style="max-width:680px;margin:0 auto 12px;display:flex;gap:8px;justify-content:flex-end">'
+    +'<button onclick="window.print()" style="background:#1F3864;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:700">🖨️ Imprimir / PDF</button>'
+    +'<button onclick="window.opener&&window.opener.correoLote&&window.opener.correoLote('+consec+');" style="background:#1A5C2E;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:700">📧 Enviar correo</button></div>'
+    +comp+'</body></html>';
+  var w=window.open('','_blank'); if(!w){ showToast('Permite ventanas emergentes','error'); return; } w.document.write(html); w.document.close();
+}
+async function correoLote(consec){
+  var res=await sb.from('reembolsos').select('*').eq('edificio',EDIFICIO_ACTIVO).eq('consecutivo',consec).order('created_at');
+  var rows=res.data||[]; if(!rows.length){ showToast('No se encontró el reembolso','error'); return; }
+  var dest=(typeof _REEMB_DEST!=='undefined'&&(_REEMB_DEST[EDIFICIO_ACTIVO]||_REEMB_DEST['8010']))||{to:[],cc:[]};
+  var total=rows.reduce(function(s,r){return s+(Number(r.valor)||0);},0);
+  var body=_loteComprobanteHTML(consec, rows);
+  var to=dest.to||[], cc=dest.cc||[];
+  var subject='Reembolso N° '+consec+' - '+(rows[0].empresa||'')+' $'+Math.round(total).toLocaleString('es-CO');
+  try{
+    var resp=await _comEnviarCorreo(to, subject, body, cc);
+    if(resp && resp.error){ showToast('Error al enviar: '+(resp.error.message||resp.error),'error'); return; }
+    showToast('✅ Reembolso #'+consec+' enviado','success');
+  }catch(e){ showToast('Error: '+(e&&e.message||e),'error'); }
 }
 
 // ════════ RÓTULO DE CARPETA (imprimible, sin correo/WSP) — solicitud Sebastián ════════
