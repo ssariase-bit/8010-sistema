@@ -688,6 +688,7 @@ const NAV_ITEMS = {
     { section: 'Financiero / Admin' },
     { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
     { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
+    { id: 'ventas-ppto', icon: '🎯', label: 'Ventas vs Presupuesto' },
     { id: 'nomina', icon: '💼', label: 'Nómina 8i8' },
     { id: 'caja-list', icon: '💰', label: 'Caja' },
     { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
@@ -964,6 +965,7 @@ const MENU_COMPLETO = [
   { section: 'Financiero / Admin' },
   { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
     { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
+    { id: 'ventas-ppto', icon: '🎯', label: 'Ventas vs Presupuesto' },
   { id: 'indicadores', icon: '📊', label: 'Indicadores Ocup./Ventas' },
   { id: 'requisiciones-form', icon: '➕', label: 'Nueva Requisición' },
   { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
@@ -1360,6 +1362,7 @@ async function loadView(view) {
     case 'estado-huespedes': await renderEstadoHuespedes(); break;
     case 'ingresos': await renderIngresos(); break;
     case 'resumen-ventas': await renderResumenVentas(); break;
+    case 'ventas-ppto': await renderVentasPpto(); break;
     case 'indicadores': await renderIndicadores(); break;
     case 'nomina': await renderNomina(); break;
     case 'semana-info': window._ocupVista='semana'; await renderOcupacion(); break;
@@ -7361,6 +7364,76 @@ async function renderResumenVentas(){
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Edificio</th><th style="text-align:right">Alojamiento</th><th style="text-align:right">Eventos</th><th style="text-align:right">Consumos</th><th style="text-align:right">Total</th></tr></thead><tbody>'+tr
     +'<tr style="background:var(--azul-c);font-weight:800"><td style="color:var(--azul)">TOTAL COMPAÑÍA</td><td style="text-align:right">'+f$(gA)+'</td><td style="text-align:right">'+f$(gE)+'</td><td style="text-align:right">'+f$(gC)+'</td><td style="text-align:right;color:#1A5C2E">'+f$(gT)+'</td></tr>'
     +'</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:10px">Alojamiento = noches con tarifa del rack. Eventos solo 8010. Consumos registrados en CKO.</p></div>';
+}
+// ═══════════════════════════════════════════════════════════
+// ═══ VENTAS vs PRESUPUESTO 2026 — 8010 (Aptos / Eventos / Total) ═══
+async function renderVentasPpto(){
+  var _rolOK = currentProfile && (currentProfile.rol==='gerente_general'||currentProfile.rol==='asesora');
+  if(!_rolOK){ document.getElementById('main-content').innerHTML='<div class="page-title">🎯 Ventas vs Presupuesto</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Solo gerencia.</p></div>'; return; }
+  var Y=2026;
+  var MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var MC=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  // Presupuesto 2026 (Excel "60% MAYO 2026"): Aptos = TOTAL ingresos (80-10 oper. turistico + LTM3 arriendo); EvCo = LTM3 "TOTAL EVENTOS Y CONSUMOS"
+  var PPTO_APTOS=[371615407,452161143,419408742,329120350,544395498,563011120,602257512,607432512,587920720,609432512,612018560,541793672];
+  var PPTO_EVCO=[35364386,38881754,38042672,33521241,50859600,104369000,112725000,116900000,116900000,116900000,133600000,75150000];
+  document.getElementById('main-content').innerHTML='<div class="page-title">🎯 Ventas vs Presupuesto '+Y+'</div><p style="color:var(--gris-t)">Cargando datos del rack, consumos y eventos…</p>';
+  var rkR=await _rackRango('apto,fecha,estado,tarifa,tipo,updated_at', Y+'-01-01', Y+'-12-31', '8010');
+  var csR=await sb.from('consumos').select('fecha,valor').eq('edificio','8010').gte('fecha',Y+'-01-01').lte('fecha',Y+'-12-31');
+  var evR=await sb.from('eventos').select('fecha_inicio,total').eq('edificio','8010').gte('fecha_inicio',Y+'-01-01').lte('fecha_inicio',Y+'-12-31');
+  var PRI={'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1};
+  var map={}; (rkR.data||[]).forEach(function(r){var k=r.apto+'|'+r.fecha;var c=map[k]; if(!c){map[k]=r;return;} var pr=PRI[r.estado]||0,pc=PRI[c.estado]||0; if(pr>pc)map[k]=r; else if(pr===pc){var tr=r.updated_at||'',tc=c.updated_at||''; if(tr>tc)map[k]=r;}});
+  var aloja=new Array(12).fill(0), noches=new Array(12).fill(0);
+  Object.keys(map).forEach(function(k){var r=map[k]; var e=r.estado; var oc=(e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje'); if(!oc)return; var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto))); if(esPar)return; var m=parseInt(r.fecha.slice(5,7),10)-1; if(m>=0&&m<12){aloja[m]+=(Number(r.tarifa)||0); noches[m]++;} });
+  var cons=new Array(12).fill(0); (csR.data||[]).forEach(function(c){var m=parseInt(String(c.fecha).slice(5,7),10)-1; if(m>=0&&m<12) cons[m]+=(Number(c.valor)||0);});
+  var evt=new Array(12).fill(0); (evR.data||[]).forEach(function(x){ if(!(Number(x.total)>0))return; var m=parseInt(String(x.fecha_inicio).slice(5,7),10)-1; if(m>=0&&m<12) evt[m]+=(Number(x.total)||0);});
+  var realA=aloja.slice();
+  var realE=evt.map(function(v,i){return v+cons[i];});
+  var realT=realA.map(function(v,i){return v+realE[i];});
+  var pptoT=PPTO_APTOS.map(function(v,i){return v+PPTO_EVCO[i];});
+  var curM=(TODAY.slice(0,4)==String(Y))?(parseInt(TODAY.slice(5,7),10)-1):11;
+  var diaMes=(TODAY.slice(0,4)==String(Y))?parseInt(TODAY.slice(8,10),10):31;
+  var dim=new Date(Y,curM+1,0).getDate();
+  var f$=function(n){return '$'+Math.round(n||0).toLocaleString('es-CO');};
+  var fM=function(n){return '$'+(Math.round((n||0)/100000)/10).toLocaleString('es-CO')+'M';};
+  var pcol=function(p){return p>=100?'#1A7D3C':(p>=80?'#B8860B':'#C0392B');};
+  // KPI card mes actual
+  var kpi=function(tit,real,ppto,sub,col){var p=ppto>0?Math.round(real/ppto*100):0; var dif=real-ppto; return '<div style="flex:1;min-width:200px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:16px"><div style="font-size:11px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+tit+'</div><div style="font-size:23px;font-weight:800;color:'+(col||'var(--azul)')+';margin:4px 0;white-space:nowrap">'+f$(real)+'</div><div style="font-size:12px;color:var(--gris-t)">Ppto: '+f$(ppto)+'</div><div style="margin-top:6px;display:flex;align-items:center;gap:8px"><span style="font-size:18px;font-weight:800;color:'+pcol(p)+'">'+p+'%</span><span style="font-size:11px;color:'+(dif>=0?'#1A7D3C':'#C0392B')+'">'+(dif>=0?'▲ +':'▼ ')+f$(Math.abs(dif))+'</span></div>'+(sub?'<div style="font-size:10px;color:var(--gris-t);margin-top:4px">'+sub+'</div>':'')+'</div>';};
+  var notaMes=(curM<5?'mes cerrado':'mes en curso — día '+diaMes+' de '+dim);
+  // YTD: meses cerrados (0..curM-1 completos) + curM parcial; comparamos acumulado hasta curM
+  var ytdRA=0,ytdRE=0,ytdRT=0,ytdPA=0,ytdPE=0,ytdPT=0; for(var i=0;i<=curM;i++){ytdRA+=realA[i];ytdRE+=realE[i];ytdRT+=realT[i];ytdPA+=PPTO_APTOS[i];ytdPE+=PPTO_EVCO[i];ytdPT+=pptoT[i];}
+  // tabla año
+  var filas='';
+  for(var m=0;m<12;m++){
+    var pA=PPTO_APTOS[m]?Math.round(realA[m]/PPTO_APTOS[m]*100):0;
+    var pE=PPTO_EVCO[m]?Math.round(realE[m]/PPTO_EVCO[m]*100):0;
+    var pT=pptoT[m]?Math.round(realT[m]/pptoT[m]*100):0;
+    var esCur=(m===curM), futuro=(m>curM);
+    var bg=esCur?'background:var(--azul-c);font-weight:700':(futuro?'color:#9CA3AF':'');
+    filas+='<tr style="'+bg+'"><td style="white-space:nowrap">'+MC[m]+(esCur?' · actual':'')+'</td>'
+      +'<td style="text-align:right">'+fM(realA[m])+'</td><td style="text-align:right;color:var(--gris-t)">'+fM(PPTO_APTOS[m])+'</td><td style="text-align:center;color:'+pcol(pA)+';font-weight:700">'+(futuro?'-':pA+'%')+'</td>'
+      +'<td style="text-align:right">'+fM(realE[m])+'</td><td style="text-align:right;color:var(--gris-t)">'+fM(PPTO_EVCO[m])+'</td><td style="text-align:center;color:'+pcol(pE)+';font-weight:700">'+(futuro?'-':pE+'%')+'</td>'
+      +'<td style="text-align:right;font-weight:700">'+fM(realT[m])+'</td><td style="text-align:right;color:var(--gris-t)">'+fM(pptoT[m])+'</td><td style="text-align:center;color:'+pcol(pT)+';font-weight:800">'+(futuro?'-':pT+'%')+'</td></tr>';
+  }
+  var pYtdT=ytdPT?Math.round(ytdRT/ytdPT*100):0;
+  document.getElementById('main-content').innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">🎯 Ventas vs Presupuesto — '+Y+'</div>'+barraCompartir()+'</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:14px">Real del sistema (rack + consumos + eventos, solo 8010) contra el <strong>presupuesto 2026 al 60%</strong>. Aptos vs ingreso presupuestado total (operador 80-10 + arriendo LTM3); Eventos incluye consumos (línea "Eventos y Consumos" del Ppto).</div>'
+    +'<h3 style="font-size:14px;color:var(--azul);margin:0 0 8px">'+MN[curM]+' '+Y+' <span style="font-size:11px;color:var(--gris-t);font-weight:400">('+notaMes+')</span></h3>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">'
+    + kpi('Aptos (alojamiento)', realA[curM], PPTO_APTOS[curM], noches[curM]+' noches', 'var(--azul)')
+    + kpi('Eventos + Consumos', realE[curM], PPTO_EVCO[curM], 'eventos + CKO', '#7C3AED')
+    + kpi('TOTAL', realT[curM], pptoT[curM], 'aptos + eventos + consumos', '#1A5C2E')
+    +'</div>'
+    +'<div class="card" style="margin-bottom:16px;border:2px solid #1A5C2E"><div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center"><div><div style="font-size:11px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">Año corrido (ene–'+MC[curM]+')</div><div style="font-size:26px;font-weight:800;color:#1A5C2E">'+f$(ytdRT)+'</div><div style="font-size:12px;color:var(--gris-t)">Ppto acumulado: '+f$(ytdPT)+'</div></div>'
+    +'<div style="font-size:34px;font-weight:800;color:'+pcol(pYtdT)+'">'+pYtdT+'%</div>'
+    +'<div style="font-size:13px;color:'+((ytdRT-ytdPT)>=0?'#1A7D3C':'#C0392B')+'">'+((ytdRT-ytdPT)>=0?'▲ Sobre presupuesto +':'▼ Bajo presupuesto ')+f$(Math.abs(ytdRT-ytdPT))+'</div></div>'
+    +'<div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--gris-t)"><span>Aptos YTD: <strong style="color:#111">'+fM(ytdRA)+'</strong> / '+fM(ytdPA)+' ('+(ytdPA?Math.round(ytdRA/ytdPA*100):0)+'%)</span><span>Eventos+Consumos YTD: <strong style="color:#111">'+fM(ytdRE)+'</strong> / '+fM(ytdPE)+' ('+(ytdPE?Math.round(ytdRE/ytdPE*100):0)+'%)</span></div></div>'
+    +'<div class="card"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Detalle mensual — Real vs Presupuesto</div><div style="overflow-x:auto"><table class="tabla"><thead>'
+    +'<tr><th rowspan="2" style="vertical-align:bottom">Mes</th><th colspan="3" style="text-align:center;background:#eef3fb">APTOS</th><th colspan="3" style="text-align:center;background:#f3eefb">EVENTOS + CONSUMOS</th><th colspan="3" style="text-align:center;background:#eefbf2">TOTAL</th></tr>'
+    +'<tr><th style="text-align:right">Real</th><th style="text-align:right">Ppto</th><th style="text-align:center">%</th><th style="text-align:right">Real</th><th style="text-align:right">Ppto</th><th style="text-align:center">%</th><th style="text-align:right">Real</th><th style="text-align:right">Ppto</th><th style="text-align:center">%</th></tr>'
+    +'</thead><tbody>'+filas
+    +'<tr style="background:#1A5C2E;color:#fff;font-weight:800"><td>AÑO CORRIDO</td><td style="text-align:right">'+fM(ytdRA)+'</td><td style="text-align:right">'+fM(ytdPA)+'</td><td style="text-align:center">'+(ytdPA?Math.round(ytdRA/ytdPA*100):0)+'%</td><td style="text-align:right">'+fM(ytdRE)+'</td><td style="text-align:right">'+fM(ytdPE)+'</td><td style="text-align:center">'+(ytdPE?Math.round(ytdRE/ytdPE*100):0)+'%</td><td style="text-align:right">'+fM(ytdRT)+'</td><td style="text-align:right">'+fM(ytdPT)+'</td><td style="text-align:center">'+pYtdT+'%</td></tr>'
+    +'</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:10px">Valores en millones COP. % = Real ÷ Presupuesto. Meses futuros sin % (presupuesto pendiente de ejecutar). El mes en curso es parcial. Tarifas en USD ya normalizadas a COP.</p></div>';
 }
 // INFORMACIÓN DE LA SEMANA (CKI / CKO) — ambos edificios
 // ═══════════════════════════════════════════════════════════
