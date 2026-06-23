@@ -1132,8 +1132,8 @@ async function loadView(view) {
 
     // Listado General de Cargos
     case 'cargos-list': await renderList('listado_cargos','📋 Listado General de Cargos','cargos-form',
-      ['fecha','semana','apto','arrendatario','num_comanda','transporte','lavanderia','minibar','varios','total'],
-      ['Fecha','Semana','Apto','Arrendatario','Comanda','Transporte','Lavandería','Minibar','Varios','Total']); break;
+      ['fecha','semana','apto','arrendatario','num_comanda','transporte','lavanderia','minibar','varios','salas','iva','total'],
+      ['Fecha','Semana','Apto','Arrendatario','Comanda','Transporte','Lavandería','Minibar','Varios','Salas','IVA','Total']); break;
     case 'cargos-form': renderGenForm('listado_cargos','📋 Registrar Cargo',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'semana',label:'Semana (ej: 25 MAY - 31 MAY)',type:'text'},
@@ -1147,6 +1147,8 @@ async function loadView(view) {
       {id:'minibar',label:'Minibar ($)',type:'number',default:'0'},
       {id:'utilidad_minibar',label:'Utilidad minibar ($)',type:'number',default:'0'},
       {id:'varios',label:'Varios ($)',type:'number',default:'0'},
+      {id:'salas',label:'Salas ($)',type:'number',default:'0'},
+      {id:'iva',label:'IVA',type:'select',opts:['19%','8%','5%']},
       {id:'total',label:'Total ($)',type:'number',default:'0'},
       {id:'observaciones',label:'Observaciones',type:'text'},
     ]); break;
@@ -2352,7 +2354,7 @@ async function openAptoModal(id, num) {
   var _sa=function(id,v){ var e=document.getElementById(id); if(e) e.value=(v!=null?v:''); };
   _sa('m-pax-ad', data&&data.pax_adultos); _sa('m-pax-me', data&&data.pax_menores); _sa('m-pax-in', data&&data.pax_infantes);
   if(document.getElementById('m-pax')) document.getElementById('m-pax').value = (data&&data.pax!=null)?data.pax:'';
-  var _ac=(data&&data.acompanante)?String(data.acompanante).split(',').map(function(s){return s.trim();}):[];
+  var _ac=(data&&(data.acompanantes||data.acompanante))?String(data.acompanantes||data.acompanante).split(',').map(function(s){return s.trim();}):[];
   document.querySelectorAll('.m-acomp').forEach(function(c){ c.checked=_ac.indexOf(c.value)>-1; });
   document.getElementById('m-obs').value     = data?.observaciones || '';
   document.getElementById('m-iva').value     = data?.iva || 'incluido';
@@ -2452,7 +2454,7 @@ async function saveApto() {
     pax_adultos: (document.getElementById('m-pax-ad') && document.getElementById('m-pax-ad').value!=='') ? Number(document.getElementById('m-pax-ad').value) : null,
     pax_menores: (document.getElementById('m-pax-me') && document.getElementById('m-pax-me').value!=='') ? Number(document.getElementById('m-pax-me').value) : null,
     pax_infantes: (document.getElementById('m-pax-in') && document.getElementById('m-pax-in').value!=='') ? Number(document.getElementById('m-pax-in').value) : null,
-    acompanante: (function(){ var a=[]; document.querySelectorAll('.m-acomp:checked').forEach(function(c){a.push(c.value);}); return a.length?a.join(', '):null; })(),
+    acompanantes: (function(){ var a=[]; document.querySelectorAll('.m-acomp:checked').forEach(function(c){a.push(c.value);}); return a.length?a.join(', '):null; })(),
     observaciones: document.getElementById('m-obs').value,
     iva: document.getElementById('m-iva')?.value || 'incluido',
     empresa: document.getElementById('m-empresa')?.value.trim() || null,
@@ -2468,7 +2470,7 @@ async function saveApto() {
     const addDay = s => { const [y,m,d] = s.split('-').map(Number); return new Date(Date.UTC(y, m-1, d+1)).toISOString().split('T')[0]; };
     const rows = []; let f = _rd;
     for (let i = 0; i < 400; i++) {
-      rows.push({ fecha: f, apto: aNum, estado: updates.estado, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      rows.push({ fecha: f, apto: aNum, estado: updates.estado, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, acompanantes: updates.acompanantes, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
       if (f === _rh) break; f = addDay(f);
     }
     const rr = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
@@ -2486,7 +2488,7 @@ async function saveApto() {
     for (let i = 0; i < 400; i++) {
       // Estadías: patrón CKI → Ocupado → CKO. Bloqueos/Mantenimiento/etc: el mismo estado en todo el rango.
       const est = ocupacional ? (f === updates.checkin ? 'Check-in hoy' : (f === updates.checkout ? 'Check-out hoy' : 'Ocupado')) : updates.estado;
-      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, acompanantes: updates.acompanantes, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
       if (f === updates.checkout) break;
       f = addDay(f);
     }
@@ -7094,7 +7096,7 @@ async function renderEventos(){
     </div>`;
 }
 function enviarAgendaEventos(btn){
-  var dest={ to:['natalia.munoz@8010urbanliving.com','cristina.cervino@8010urbanliving.com'], cc:['santiago.arias@8010urbanliving.com','gerencia@8010urbanliving.com','fabio.malaver@8010urbanliving.com','mantenimiento@8010urbanliving.com','compras@8010urbanliving.com','administrativo@8010urbanliving.com','zareth.varela@8010urbanliving.com'] };
+  var dest={ to:['natalia.munoz@8010urbanliving.com','cristina.cervino@8010urbanliving.com'], cc:['santiago.arias@8010urbanliving.com','gerencia@8010urbanliving.com','fabio.malaver@8010urbanliving.com','mantenimiento@8010urbanliving.com','compras@8010urbanliving.com','administrativo@8010urbanliving.com','zareth.varela@8010urbanliving.com','cocina@8010urbanliving.com','migue22more@gmail.com'] };
   return enviarInformeCorreo('Agenda de Eventos · '+(window._evAgWeek||''), window._evAgTxt||'Sin eventos.', btn, null, dest);
 }
 async function renderEventosAgenda(){
