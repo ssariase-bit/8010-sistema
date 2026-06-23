@@ -5528,7 +5528,7 @@ window.renderReservas = async function(filtro){
   var res=await sb.from('reservas').select('*').eq('edificio',EDIFICIO_ACTIVO).order('checkin',{ascending:false}).limit(2000);
   var rows=res.data||[];
   var body=rows.map(function(r){
-    return '<tr><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">'+((r.moneda==='USD')?('USD '+(Number(r.tarifa_usd)||Number(r.tarifa)||0).toLocaleString('es-CO')):('$'+(Number(r.tarifa)||0).toLocaleString('es-CO')))+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="white-space:nowrap"><span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
+    return '<tr><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">'+((r.moneda==='USD')?('USD '+(Number(r.tarifa_usd)||Number(r.tarifa)||0).toLocaleString('es-CO')):('$'+(Number(r.tarifa)||0).toLocaleString('es-CO')))+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="white-space:nowrap"><span title="Hacer Check-In (CKI)" style="cursor:pointer;font-size:13px" onclick="ckiDesdeReserva(\''+r.id+'\')">🟢</span> <span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
   }).join('');
   document.getElementById('main-content').innerHTML=
     '<div class="page-title">📋 Reservas</div>'+
@@ -8646,6 +8646,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
       </div>
     </div>`;
   (async()=>{ try{ const a=document.getElementById('cki-apto')?.value; if(!a) return; const {data}=await sb.from('rack').select('telefono').eq('fecha',TODAY).eq('apto',a).eq('edificio',EDIFICIO_ACTIVO).limit(1); if(data&&data[0]&&data[0].telefono){ const el=document.getElementById('cki-tel'); if(el&&!el.value) el.value=data[0].telefono; } }catch(e){} })();
+  if(aptoPreload){ setTimeout(function(){ try{ ckiAutollenar(); }catch(e){} }, 60); }
 }
 
 function _nochesCKI(fi, ff){
@@ -9429,6 +9430,14 @@ function abrirInformeCKO() {
   renderInformeCKO(apto, huesped, canal);
 }
 
+async function ckiDesdeReserva(id){
+  try{
+    var r=(await sb.from('reservas').select('*').eq('id',id).single()).data;
+    if(!r){ if(typeof showToast==='function') showToast('No se encontró la reserva','error'); return; }
+    var tarifa=(r.moneda==='USD'&&r.tarifa_usd)?r.tarifa_usd:(r.tarifa||'');
+    renderInformeCKI(r.apto, r.nombre||'', r.canal||'', tarifa, r.empresa||'', r.tratamiento||'');
+  }catch(e){ if(typeof showToast==='function') showToast('Error: '+(e&&e.message||e),'error'); }
+}
 function abrirInformeCKI() {
   const apto = document.getElementById('modal-apto-num').textContent;
   const huesped = _aptoData?.huesped || '';
