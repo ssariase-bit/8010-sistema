@@ -532,6 +532,7 @@ const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitant
   'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes','consumos','semana_seguimiento','checklist_turnos']);
 (function(){
   const _from = sb.from.bind(sb);
+  window._sbFromRaw = _from; // acceso al from sin filtro de edificio (para vistas multi-edificio o de un edificio fijo)
   sb.from = function(tabla){
     const qb = _from(tabla);
     if (!TABLAS_POR_EDIFICIO.has(tabla)) return qb;
@@ -7377,9 +7378,13 @@ async function renderVentasPpto(){
   var PPTO_APTOS=[371615407,452161143,419408742,329120350,544395498,563011120,602257512,607432512,587920720,609432512,612018560,541793672];
   var PPTO_EVCO=[35364386,38881754,38042672,33521241,50859600,104369000,112725000,116900000,116900000,116900000,133600000,75150000];
   document.getElementById('main-content').innerHTML='<div class="page-title">🎯 Ventas vs Presupuesto '+Y+'</div><p style="color:var(--gris-t)">Cargando datos del rack, consumos y eventos…</p>';
-  var rkR=await _rackRango('apto,fecha,estado,tarifa,tipo,updated_at', Y+'-01-01', Y+'-12-31', '8010');
-  var csR=await sb.from('consumos').select('fecha,valor').eq('edificio','8010').gte('fecha',Y+'-01-01').lte('fecha',Y+'-12-31');
-  var evR=await sb.from('eventos').select('fecha_inicio,total').eq('edificio','8010').gte('fecha_inicio',Y+'-01-01').lte('fecha_inicio',Y+'-12-31');
+  // Esta vista es fija de 8010: usamos el from "crudo" para no chocar con el filtro de edificio activo (rack y consumos lo aplican)
+  var _RAW=(typeof window._sbFromRaw==='function')?window._sbFromRaw:function(t){return sb.from(t);};
+  var rkData=[],_pg=0;
+  while(true){ var _rr=await _RAW('rack').select('apto,fecha,estado,tarifa,tipo,updated_at').eq('edificio','8010').gte('fecha',Y+'-01-01').lte('fecha',Y+'-12-31').order('fecha').range(_pg,_pg+999); if(_rr.error)break; rkData=rkData.concat(_rr.data||[]); if(!_rr.data||_rr.data.length<1000)break; _pg+=1000; }
+  var rkR={data:rkData};
+  var csR=await _RAW('consumos').select('fecha,valor').eq('edificio','8010').gte('fecha',Y+'-01-01').lte('fecha',Y+'-12-31');
+  var evR=await _RAW('eventos').select('fecha_inicio,total').eq('edificio','8010').gte('fecha_inicio',Y+'-01-01').lte('fecha_inicio',Y+'-12-31');
   var PRI={'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1};
   var map={}; (rkR.data||[]).forEach(function(r){var k=r.apto+'|'+r.fecha;var c=map[k]; if(!c){map[k]=r;return;} var pr=PRI[r.estado]||0,pc=PRI[c.estado]||0; if(pr>pc)map[k]=r; else if(pr===pc){var tr=r.updated_at||'',tc=c.updated_at||''; if(tr>tc)map[k]=r;}});
   var aloja=new Array(12).fill(0), noches=new Array(12).fill(0);
