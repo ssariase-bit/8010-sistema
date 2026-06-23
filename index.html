@@ -8579,6 +8579,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
       </div>
       <div class="form-row">
         <div class="form-group"><label>📱 WhatsApp del huésped</label><input type="tel" id="cki-tel" placeholder="+57 300 000 0000"></div>
+        <div class="form-group"><label>🔑 Código de puerta</label><input type="text" id="cki-clave" placeholder="Clave para entrar al apto (ej: 1234#)"></div>
       </div>
       <div class="form-row col3">
         <div class="form-group"><label>Fecha aloj. inicio</label><input type="date" id="cki-fi" value="${TODAY}" onchange="calcCKI()"></div>
@@ -8640,6 +8641,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
       <div class="form-group"><label>Observaciones adicionales</label><textarea id="cki-obs" placeholder="Detalles adicionales..." style="min-height:60px"></textarea></div>
       <div class="form-actions">
         <button class="btn btn-outline btn-sm" onclick="loadView(window._currentView||'dashboard')">Cancelar</button>
+        <button class="btn" style="background:#25D366;color:#fff;min-width:220px" onclick="enviarBienvenidaCKI()">📲 Bienvenida al arrendatario</button>
         <button class="btn btn-success" onclick="generarMsgCKI()" style="min-width:200px">📤 Generar Informe CKI</button>
       </div>
     </div>`;
@@ -8672,6 +8674,23 @@ function calcCKI() {
   set('cki-total', total);
 }
 
+function enviarBienvenidaCKI(){
+  // Mismo mensaje que waBienvenida (Estado de Huéspedes), disparado desde el CKI.
+  var apto=(document.getElementById('cki-apto')||{}).value||'';
+  var nombre=((document.getElementById('cki-nombre')||{}).value||'').trim();
+  var trat=(document.getElementById('cki-tratamiento')||{}).value||'';
+  var tel=String(((document.getElementById('cki-tel')||{}).value||'')).replace(/[^0-9]/g,'');
+  var code=((document.getElementById('cki-clave')||{}).value||'').trim()||'XXXX#';
+  if(!apto){ showToast('Selecciona el apartamento','error'); return; }
+  if(!((document.getElementById('cki-clave')||{}).value||'').trim()){ showToast('Escribe la clave de acceso al apto','error'); return; }
+  var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
+  var ed=(typeof EB==='function'&&EB().nombre)||'';
+  var _trpB=trat?trat+' ':'';
+  var msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.\n'+'🔑 Código puerta: '+code;
+  var _wf=(typeof EB==='function'&&EB().wifi)||null; if(_wf&&_wf.red){ msg+='\n📶 Red WiFi: '+_wf.red+' · Contraseña: '+(_wf.clave||''); }
+  if(!tel){ if(typeof navigator!=='undefined'&&navigator.clipboard){ navigator.clipboard.writeText(msg); } showToast('Sin WhatsApp del huésped — mensaje copiado','info'); return; }
+  window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
+}
 function generarMsgCKI() {
   const apto = document.getElementById('cki-apto').value;
   const _ckiNom = document.getElementById('cki-nombre')?.value.trim()||'';
