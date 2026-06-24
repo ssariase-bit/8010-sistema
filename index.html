@@ -7748,7 +7748,15 @@ async function finTraerIngresos(){
 // NÓMINA — costo real por persona (factor prestacional, editable)
 // ═══════════════════════════════════════════════════════════
 var NOM_SMMLV=1750905, NOM_AUX=249095; // 2026
-var NOM_JKEY={salario:'sal_json',extras:'ext_json',comisiones:'com_json'};
+var NOM_JKEY={salario:'sal_json',extras:'ext_json',comisiones:'com_json',ventas:'vtas_json'};
+// Tablas de comisión por tramos de ventas del mes [desde, hasta, %]
+var COM_TABLAS={
+  comercial:[[201960000,320760000,1.00],[320760001,415800000,1.50],[415800001,510400000,1.80],[510400001,660000000,1.95]],
+  gerencia:[[163941750,218589000,1.30],[218589001,273237250,1.70],[273237251,327883500,2.12],[327883501,382530750,2.55],[382530751,437178000,2.97],[437178001,491825250,3.39],[491825251,546425250,3.82],[546425251,693000000,4.24]]
+};
+var COM_LABEL={comercial:'Comercial',gerencia:'Gerencia'};
+function _comPct(esq, vtas){ var t=COM_TABLAS[esq]; if(!t||!vtas) return 0; if(vtas<t[0][0]) return 0; for(var i=0;i<t.length;i++){ if(vtas>=t[i][0] && vtas<=t[i][1]) return t[i][2]; } return t[t.length-1][2]; }
+function _comCalc(esq, vtas){ var p=_comPct(esq,vtas); return {pct:p, com:Math.round((Number(vtas)||0)*p/100)}; }
 function _nomVal(p, campo, mes){ // resuelve salario/extras/comisiones del mes (override mensual o base)
   var base=Number(p[campo])||0;
   if(!mes) return base;
@@ -7814,7 +7822,7 @@ async function renderNomina8010(){
         +'<td style="text-align:center;background:'+ENT_BG[pe]+'"><select data-id="'+p.id+'" data-f="entidad" onchange="nomSet(this)" style="border:1px solid '+ENT_COL[pe]+';color:'+ENT_COL[pe]+';font-weight:700;border-radius:5px;padding:3px;font-size:11px;background:#fff">'+ENTS_N.map(function(e){return '<option value="'+e+'" '+(pe===e?'selected':'')+'>'+e+'</option>';}).join('')+'</select></td>'
         +'<td style="text-align:right">'+inp('salario',_finNum(c.salario),92)+'</td>'
         +'<td style="text-align:right">'+inp('extras',(c.extras?_finNum(c.extras):''),78)+'</td>'
-        +'<td style="text-align:right">'+inp('comisiones',(c.comisiones?_finNum(c.comisiones):''),82)+'</td>'
+        +'<td style="text-align:right">'+(p.esquema_comision?('<span title="Calculada por ventas — '+(COM_LABEL[p.esquema_comision]||'')+'" style="font-size:11px;color:#1A5C2E;font-weight:700">'+(c.comisiones?_finNum(c.comisiones):'·')+' 🧮</span>'):inp('comisiones',(c.comisiones?_finNum(c.comisiones):''),82))+'</td>'
         +'<td style="text-align:center">'+chk('integral',p.integral)+'</td>'
         +'<td style="text-align:center">'+chk('aux_transporte',p.aux_transporte)+'</td>'
         +'<td style="text-align:center">'+chk('exento_paraf',p.exento_paraf)+'</td>'
@@ -7847,6 +7855,17 @@ async function renderNomina8010(){
     + ENTS_N.map(function(e){var t=TENT[e];var ppe={LTM3:143180376,'80-10':3149711,PH:8840543}[e];var pct=T.total?Math.round(t.total/T.total*100):0;return '<tr><td style="padding:5px;font-weight:700;border-left:5px solid '+ENT_COL[e]+'"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+ENT_COL[e]+';margin-right:6px"></span>'+e+'</td><td style="text-align:center">'+t.n+'</td><td style="text-align:right">'+f$(t.base)+'</td><td style="text-align:right">'+_finNum(t.total-t.base)+'</td><td style="text-align:right;font-weight:700">'+f$(t.total)+'</td><td style="text-align:right">'+pct+'%</td><td style="text-align:right;color:var(--gris-t)">'+f$(ppe)+'</td></tr>';}).join('')
     + '<tr style="background:#eef3fb;font-weight:800"><td style="padding:5px">TOTAL</td><td style="text-align:center">'+T.n+'</td><td style="text-align:right">'+f$(T.base)+'</td><td style="text-align:right">'+_finNum(T.total-T.base)+'</td><td style="text-align:right">'+f$(T.total)+'</td><td style="text-align:right">100%</td><td style="text-align:right">'+f$(155170630)+'</td></tr>'
     + '</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:6px">Asigna la entidad de cada persona en la columna <strong>Entidad</strong>. «Ppto Excel 2026» = reparto de tu presupuesto (enero) para comparar: LTM3 92% · PH 6% · 80-10 2%.</p></div>'
+    +(function(){
+      var comP=rows.filter(function(p){return p.esquema_comision && COM_TABLAS[p.esquema_comision];});
+      if(!comP.length) return '';
+      if(!mes) return '<div class="card" style="margin-bottom:14px;font-size:12px;color:var(--gris-t)">🧮 La <strong>calculadora de comisiones por ventas</strong> se usa eligiendo un mes (no en modo Base).</div>';
+      var h='<div class="card" style="margin-bottom:14px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">🧮 Comisiones por ventas — '+MESES_N[mes]+'</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr style="background:#f6f6f7"><th style="text-align:left;padding:6px">Persona</th><th>Tabla</th><th style="text-align:right">Ventas del mes</th><th style="text-align:center">% tramo</th><th style="text-align:right">Comisión</th></tr></thead><tbody>';
+      comP.forEach(function(p){ var vt=_nomVal(p,'ventas',mes); var cc=_comCalc(p.esquema_comision,vt);
+        h+='<tr><td style="padding:5px;font-weight:600">'+(p.nombre||'')+'</td><td>'+(COM_LABEL[p.esquema_comision]||'')+'</td><td style="text-align:right"><input value="'+(vt?_finNum(vt):'')+'" data-id="'+p.id+'" onchange="comVtaSet(this)" placeholder="ventas del mes $" style="width:140px;text-align:right;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:12px"></td><td style="text-align:center;font-weight:700;color:var(--azul)">'+(cc.pct?cc.pct.toFixed(2)+'%':'–')+'</td><td style="text-align:right;font-weight:800;color:#1A5C2E">'+f$(cc.com)+'</td></tr>';
+      });
+      h+='</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:6px">Metes las <strong>ventas del mes</strong> y la comisión se calcula sola (tramo → %) y entra a la columna Comisiones de esa persona. Base: <strong>Santiago</strong>=total ventas · <strong>Cristina</strong>=aptos+salas sin consumos.</p></div>';
+      return h;
+    })()
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead>'+th+'</thead><tbody>'+body
     +'<tr style="background:#1D3461;color:#fff;font-weight:800"><td style="padding:7px 8px" colspan="13">TOTAL NÓMINA / MES · '+T.n+' empleados</td><td style="text-align:right">'+f$(T.total)+'</td><td style="text-align:center">'+factG.toFixed(2)+'</td><td></td></tr>'
     +'</tbody></table></div>'
@@ -7910,6 +7929,17 @@ async function nomLlevarPyG(){
     Esc.push(tipo==='real'?'Real':'Presupuesto');
   }
   showToast('✓ De Personal actualizado mes a mes: '+Esc.join(' + '),'success');
+}
+async function comVtaSet(el){
+  var id=el.getAttribute('data-id'); var mes=window._nomMes||0; if(!mes){ showToast('Elige un mes','error'); return; }
+  var r=(window._nomRows||[]).find(function(x){return x.id===id;}); if(!r) return;
+  var vt=_finParse(el.value); var cc=_comCalc(r.esquema_comision, vt);
+  var vj=Object.assign({}, r.vtas_json||{}); vj[mes]=vt;
+  var cj=Object.assign({}, r.com_json||{}); cj[mes]=cc.com;
+  r.vtas_json=vj; r.com_json=cj;
+  var patch={vtas_json:vj, com_json:cj, updated_at:new Date().toISOString()}; try{patch.updated_by=currentUser.id;}catch(e){}
+  var resp=await _finRAW('nomina_personal').update(patch).eq('id',id);
+  if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓ Comisión $'+_finNum(cc.com)+' ('+cc.pct.toFixed(2)+'%)','success'); renderNomina8010(); }
 }
 async function nomDel(id){
   if(!confirm('¿Quitar esta persona de la nómina?')) return;
