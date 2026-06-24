@@ -7741,6 +7741,110 @@ async function finTraerIngresos(){
   else { resp=await _finRAW('finanzas_pyg').insert(Object.assign({edificio:'8010',entidad:'80-10',anio:Y,cuenta:'INGRESOS',grupo:'INGRESOS',tipo:'real'},patch)); }
   if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓ Ingresos de operación cargados','success'); renderFinanzas(); }
 }
+// ═══════════════════════════════════════════════════════════
+// NÓMINA — costo real por persona (factor prestacional, editable)
+// ═══════════════════════════════════════════════════════════
+var NOM_SMMLV=1750905, NOM_AUX=249095; // 2026
+function _nomCalc(p){
+  var s=Number(p.salario)||0, arl=(Number(p.arl_pct)||0)/100;
+  var exento=!!p.exento_paraf;
+  var r={base:s,aux:0,cesantias:0,intereses:0,prima:0,vacaciones:0,salud:0,pension:0,arl:0,caja:0,sena:0,icbf:0};
+  if(p.integral){
+    var ibc=s*0.7;
+    r.salud=exento?0:ibc*0.085; r.pension=ibc*0.12; r.arl=ibc*arl; r.caja=ibc*0.04; r.sena=exento?0:ibc*0.02; r.icbf=exento?0:ibc*0.03;
+  } else {
+    r.aux=(p.aux_transporte && s<=2*NOM_SMMLV)?NOM_AUX:0;
+    var bp=s+r.aux;
+    r.cesantias=bp*0.0833; r.intereses=bp*0.01; r.prima=bp*0.0833; r.vacaciones=s*0.0417;
+    r.salud=exento?0:s*0.085; r.pension=s*0.12; r.arl=s*arl; r.caja=s*0.04; r.sena=exento?0:s*0.02; r.icbf=exento?0:s*0.03;
+  }
+  r.prestaciones=r.cesantias+r.intereses+r.prima+r.vacaciones;
+  r.segsocial=r.salud+r.pension+r.arl;
+  r.parafiscales=r.caja+r.sena+r.icbf;
+  r.total=r.base+r.aux+r.prestaciones+r.segsocial+r.parafiscales;
+  r.factor=s>0?(r.total/s):0;
+  return r;
+}
+async function renderNomina(){
+  var _rolOK = currentProfile && (currentProfile.rol==='gerente_general'||currentProfile.rol==='asesora');
+  if(!_rolOK){ document.getElementById('main-content').innerHTML='<div class="page-title">💼 Nómina</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Solo gerencia.</p></div>'; return; }
+  document.getElementById('main-content').innerHTML='<div class="page-title">💼 Nómina — costo real</div><p style="color:var(--gris-t)">Cargando…</p>';
+  var q=await _finRAW('nomina_personal').select('*').eq('edificio','8010').eq('activo',true).order('orden');
+  if(q.error){ document.getElementById('main-content').innerHTML='<div class="page-title">💼 Nómina</div><div class="card" style="max-width:640px"><p style="font-size:14px">⚠️ Falta crear la tabla <code>nomina_personal</code> en Supabase. Corre <strong>nomina.sql</strong> en el SQL Editor y recarga.</p><p style="font-size:12px;color:var(--gris-t)">Detalle: '+(q.error.message||'')+'</p></div>'; return; }
+  var rows=q.data||[]; window._nomRows=rows;
+  var f$=function(n){return '$'+_finNum(n);};
+  var areas={}; rows.forEach(function(p){ (areas[p.area||'(Sin área)']=areas[p.area||'(Sin área)']||[]).push(p); });
+  var T={base:0,aux:0,prest:0,seg:0,para:0,total:0};
+  var th='<tr style="background:#1D3461;color:#fff"><th style="text-align:left;padding:7px;min-width:170px">Persona</th><th style="text-align:right">Salario base</th><th style="text-align:center">Integ.</th><th style="text-align:center">Aux</th><th style="text-align:center">Exento</th><th style="text-align:right">ARL%</th><th style="text-align:right">Aux.tte</th><th style="text-align:right">Prestac.</th><th style="text-align:right">Seg.Soc.</th><th style="text-align:right">Parafisc.</th><th style="text-align:right;background:#16284a">COSTO TOTAL</th><th style="text-align:center">Factor</th><th></th></tr>';
+  var body='';
+  Object.keys(areas).forEach(function(ar){
+    var sub={base:0,total:0};
+    body+='<tr style="background:#eef3fb;font-weight:700"><td colspan="13" style="padding:6px 8px;font-size:12px">'+ar+'</td></tr>';
+    areas[ar].forEach(function(p){
+      var c=_nomCalc(p);
+      T.base+=c.base;T.aux+=c.aux;T.prest+=c.prestaciones;T.seg+=c.segsocial;T.para+=c.parafiscales;T.total+=c.total;
+      sub.base+=c.base;sub.total+=c.total;
+      var inp=function(field,val,w){return '<input value="'+val+'" data-id="'+p.id+'" data-f="'+field+'" onchange="nomSet(this)" style="width:'+(w||78)+'px;border:1px solid #e3e6ea;border-radius:5px;padding:3px;font-size:11px;text-align:right">';};
+      var chk=function(field,on){return '<input type="checkbox" '+(on?'checked':'')+' data-id="'+p.id+'" data-f="'+field+'" onchange="nomSet(this)">';};
+      body+='<tr>'
+        +'<td style="padding:3px 6px;font-size:12px"><input value="'+(p.nombre||'').replace(/"/g,'&quot;')+'" data-id="'+p.id+'" data-f="nombre" onchange="nomSet(this)" style="width:160px;border:1px solid #eee;border-radius:5px;padding:3px;font-size:12px"></td>'
+        +'<td style="text-align:right">'+inp('salario',_finNum(c.base),92)+'</td>'
+        +'<td style="text-align:center">'+chk('integral',p.integral)+'</td>'
+        +'<td style="text-align:center">'+chk('aux_transporte',p.aux_transporte)+'</td>'
+        +'<td style="text-align:center">'+chk('exento_paraf',p.exento_paraf)+'</td>'
+        +'<td style="text-align:right">'+inp('arl_pct',(p.arl_pct!=null?p.arl_pct:''),52)+'</td>'
+        +'<td style="text-align:right;font-size:11px;color:var(--gris-t)">'+(c.aux?_finNum(c.aux):'·')+'</td>'
+        +'<td style="text-align:right;font-size:11px">'+_finNum(c.prestaciones)+'</td>'
+        +'<td style="text-align:right;font-size:11px">'+_finNum(c.segsocial)+'</td>'
+        +'<td style="text-align:right;font-size:11px">'+_finNum(c.parafiscales)+'</td>'
+        +'<td style="text-align:right;font-weight:800;background:#f3f6fb">'+f$(c.total)+'</td>'
+        +'<td style="text-align:center;font-size:11px;color:'+(c.factor>1.55?'#C0392B':'#1A5C2E')+';font-weight:700">'+(c.factor?c.factor.toFixed(2):'–')+'</td>'
+        +'<td style="text-align:center"><button onclick="nomDel(\''+p.id+'\')" title="Quitar" style="border:none;background:none;cursor:pointer;color:#C0392B">✕</button></td>'
+        +'</tr>';
+    });
+    body+='<tr style="background:#f6f6f7;font-weight:700"><td style="padding:4px 8px;font-size:11px;text-align:right" colspan="10">Subtotal '+ar+'</td><td style="text-align:right;background:#eaf0ea">'+f$(sub.total)+'</td><td colspan="2"></td></tr>';
+  });
+  var factG=T.base?(T.total/T.base):0;
+  var kpi=function(t,v,c){return '<div style="flex:1;min-width:150px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:13px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div><div style="font-size:19px;font-weight:800;color:'+(c||'var(--azul)')+';white-space:nowrap">'+v+'</div></div>';};
+  document.getElementById('main-content').innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💼 Nómina — costo real con todo lo de ley</div><button class="btn btn-outline btn-sm" onclick="nomAdd()">+ Agregar persona</button></div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Pones el <strong>salario base</strong> y se calcula solo el costo real (prestaciones + seguridad social + parafiscales). Todo editable. <strong>Integ.</strong>=salario integral (IBC 70%, sin prestaciones). <strong>Aux</strong>=auxilio de transporte ($'+_finNum(NOM_AUX)+', salarios ≤2 SMMLV). <strong>Exento</strong>=sin salud/SENA/ICBF (Ley 1607, &lt;10 SMMLV). SMMLV 2026 $'+_finNum(NOM_SMMLV)+'.</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
+    + kpi('Salarios base (mes)', f$(T.base))
+    + kpi('Cargas de ley (mes)', f$(T.total-T.base),'#B8860B')
+    + kpi('COSTO TOTAL NÓMINA (mes)', f$(T.total),'#1A5C2E')
+    + kpi('Factor promedio', factG.toFixed(2),(factG>1.55?'#C0392B':'#1A5C2E'))
+    +'</div>'
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead>'+th+'</thead><tbody>'+body
+    +'<tr style="background:#1D3461;color:#fff;font-weight:800"><td style="padding:7px 8px" colspan="10">TOTAL NÓMINA / MES</td><td style="text-align:right">'+f$(T.total)+'</td><td style="text-align:center">'+factG.toFixed(2)+'</td><td></td></tr>'
+    +'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Cesantías 8,33% · Intereses 1% · Prima 8,33% · Vacaciones 4,17% · Pensión 12% · Salud 8,5% · Caja 4% · SENA 2% · ICBF 3% · ARL editable por persona. Anual ≈ <strong>'+f$(T.total*12)+'</strong>. Este total alimenta la línea <strong>De Personal</strong> del P&amp;L.</p></div>';
+}
+async function nomSet(el){
+  var id=el.getAttribute('data-id'), f=el.getAttribute('data-f');
+  var val; if(el.type==='checkbox') val=el.checked;
+  else if(f==='salario') val=_finParse(el.value);
+  else if(f==='arl_pct') val=parseFloat(String(el.value).replace(',','.'))||0;
+  else val=el.value;
+  var patch={updated_at:new Date().toISOString()}; patch[f]=val; try{patch.updated_by=currentUser.id;}catch(e){}
+  var r=(window._nomRows||[]).find(function(x){return x.id===id;}); if(r)r[f]=val;
+  var resp=await _finRAW('nomina_personal').update(patch).eq('id',id);
+  if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓','success'); renderNomina(); }
+}
+async function nomAdd(){
+  var nombre=prompt('Nombre de la persona:'); if(!nombre) return;
+  var area=prompt('Área (Gerencia, Ventas, Servicios Generales, Mantenimiento, Catering, Portería / Recepción, Administración):','Administración')||'(Sin área)';
+  var sal=_finParse(prompt('Salario base mensual:','0')||'0');
+  var ord=((window._nomRows||[]).reduce(function(m,x){return Math.max(m,x.orden||0);},0))+1;
+  var ins={edificio:'8010',area:area,nombre:nombre,salario:sal,integral:false,aux_transporte:true,arl_pct:0.522,exento_paraf:true,orden:ord,activo:true};
+  var resp=await _finRAW('nomina_personal').insert(ins);
+  if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓ Agregada','success'); renderNomina(); }
+}
+async function nomDel(id){
+  if(!confirm('¿Quitar esta persona de la nómina?')) return;
+  var resp=await _finRAW('nomina_personal').update({activo:false,updated_at:new Date().toISOString()}).eq('id',id);
+  if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓ Quitada','success'); renderNomina(); }
+}
 // INFORMACIÓN DE LA SEMANA (CKI / CKO) — ambos edificios
 // ═══════════════════════════════════════════════════════════
 async function renderSemanaInfo(){
