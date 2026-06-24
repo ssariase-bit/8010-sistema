@@ -7693,6 +7693,7 @@ async function renderFinanzas(){
   var q=await _finRAW('finanzas_pyg').select('*').eq('edificio','8010').eq('anio',st.anio);
   if(q.error){ document.getElementById('main-content').innerHTML='<div class="page-title">📊 Estado de Resultados</div><div class="card" style="max-width:620px"><p style="font-size:14px">⚠️ Falta crear la tabla <code>finanzas_pyg</code> en Supabase. Corre el script <strong>finanzas_pyg.sql</strong> en el SQL Editor y recarga.</p><p style="font-size:12px;color:var(--gris-t)">Detalle: '+(q.error.message||'')+'</p></div>'; return; }
   var rows=q.data||[]; window._finRows=rows;
+  var nq=await _finRAW('finanzas_notas').select('*').eq('edificio','8010').eq('anio',st.anio); var _notas={}; ((nq&&nq.data)||[]).forEach(function(n){ _notas[n.entidad+'|'+n.cuenta]=n.nota; }); window._finNotas=_notas;
   var ents=[['80-10','80-10 Oper. Turístico'],['LTM3','LTM3 Arriendo'],['PH','Prop. Horizontal'],['TOTAL','TOTAL (80-10+LTM3) vs Ppto Original']];
   var editable=(st.entidad!=='CONSOLIDADO') && (st.entidad!=='TOTAL' || st.vista==='ppto');
   var hoyM=(TODAY.slice(0,4)==String(st.anio))?(parseInt(TODAY.slice(5,7),10)):12;
@@ -7719,7 +7720,9 @@ async function renderFinanzas(){
     var serie = st.vista==='ppto'?serieP : st.vista==='var'? serieR.map(function(v,i){return v-serieP[i];}) : serieR;
     var totA=serie.reduce(function(s,v){return s+v;},0);
     var rowStyle = isSub? (def.sub==='UTILIDAD / RESULTADO OPERACIONAL'?'background:#eefbf2;font-weight:800':(def.sub==='UTILIDAD BRUTA EN VENTAS'?'background:#eef3fb;font-weight:700':'background:#f6f6f7;font-weight:700')) : '';
-    var nameCell='<td style="position:sticky;left:0;background:'+(isSub?(def.sub.indexOf('RESULTADO')>=0?'#eefbf2':(def.sub.indexOf('BRUTA')>=0?'#eef3fb':'#f6f6f7')):'#fff')+';text-align:left;font-size:12px;'+(isSub?'font-weight:700':'')+'">'+nombre+'</td>';
+    var _ntxt=(!isSub && window._finNotas && window._finNotas[st.entidad+'|'+def.cuenta])||'';
+    var _nico=isSub?'':' <span onclick="finNota(\''+encodeURIComponent(def.cuenta)+'\')" title="'+(_ntxt?String(_ntxt).replace(/"/g,'&quot;'):'Agregar comentario')+'" style="cursor:pointer;font-size:11px;opacity:'+(_ntxt?'1':'0.3')+'">💬</span>';
+    var nameCell='<td style="position:sticky;left:0;background:'+(isSub?(def.sub.indexOf('RESULTADO')>=0?'#eefbf2':(def.sub.indexOf('BRUTA')>=0?'#eef3fb':'#f6f6f7')):'#fff')+';text-align:left;font-size:12px;'+(isSub?'font-weight:700':'')+'">'+nombre+_nico+(_ntxt?'<div style="font-size:10px;color:#B8860B;font-style:italic;margin-top:1px">↳ '+String(_ntxt).replace(/</g,'&lt;')+'</div>':'')+'</td>';
     var cells='';
     for(var m=0;m<12;m++){
       if(isSub || st.vista==='var' || !editable){
@@ -7744,6 +7747,16 @@ async function renderFinanzas(){
     +'</div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
     +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">'+(editable?'Celdas editables en modo Real/Presupuesto. ':'TOTAL: el Real es la suma automática de 80-10 + LTM3. El Presupuesto (Original) SÍ es editable celda por celda. ')+'Columna naranja = mes en curso. Vista Variación = Real − Presupuesto (verde a favor).</p></div>';
+}
+async function finNota(cuentaEnc){
+  var cuenta=decodeURIComponent(cuentaEnc); var ent=window._finState.entidad, anio=window._finState.anio;
+  var actual=(window._finNotas&&window._finNotas[ent+'|'+cuenta])||'';
+  var txt=prompt('💬 Comentario para "'+cuenta+'" ('+ent+' · '+anio+'):\nExplica lo que los números no dicen. (Déjalo vacío para borrar)', actual);
+  if(txt===null) return; txt=String(txt).trim();
+  var patch={edificio:'8010',anio:anio,entidad:ent,cuenta:cuenta,nota:txt,updated_at:new Date().toISOString()}; try{patch.updated_by=currentUser.id;}catch(e){}
+  var resp=await _finRAW('finanzas_notas').upsert(patch,{onConflict:'edificio,anio,entidad,cuenta'});
+  if(resp&&resp.error){ showToast('Error al guardar nota: '+resp.error.message,'error'); return; }
+  showToast(txt?'💬 Comentario guardado':'Comentario borrado','success'); renderFinanzas();
 }
 async function finSet(inp){
   var cuenta=decodeURIComponent(inp.getAttribute('data-c')), tipo=inp.getAttribute('data-t'), m=inp.getAttribute('data-m');
