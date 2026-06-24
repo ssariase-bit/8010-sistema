@@ -7775,19 +7775,23 @@ async function renderNomina(){
   var f$=function(n){return '$'+_finNum(n);};
   var areas={}; rows.forEach(function(p){ (areas[p.area||'(Sin área)']=areas[p.area||'(Sin área)']||[]).push(p); });
   var T={base:0,aux:0,prest:0,seg:0,para:0,total:0};
-  var th='<tr style="background:#1D3461;color:#fff"><th style="text-align:left;padding:7px;min-width:170px">Persona</th><th style="text-align:right">Salario base</th><th style="text-align:center">Integ.</th><th style="text-align:center">Aux</th><th style="text-align:center">Exento</th><th style="text-align:right">ARL%</th><th style="text-align:right">Aux.tte</th><th style="text-align:right">Prestac.</th><th style="text-align:right">Seg.Soc.</th><th style="text-align:right">Parafisc.</th><th style="text-align:right;background:#16284a">COSTO TOTAL</th><th style="text-align:center">Factor</th><th></th></tr>';
+  var ENTS_N=['LTM3','80-10','PH'];
+  var TENT={LTM3:{base:0,total:0},'80-10':{base:0,total:0},PH:{base:0,total:0}};
+  var th='<tr style="background:#1D3461;color:#fff"><th style="text-align:left;padding:7px;min-width:160px">Persona</th><th style="text-align:center;min-width:78px">Entidad</th><th style="text-align:right">Salario base</th><th style="text-align:center">Integ.</th><th style="text-align:center">Aux</th><th style="text-align:center">Exento</th><th style="text-align:right">ARL%</th><th style="text-align:right">Aux.tte</th><th style="text-align:right">Prestac.</th><th style="text-align:right">Seg.Soc.</th><th style="text-align:right">Parafisc.</th><th style="text-align:right;background:#16284a">COSTO TOTAL</th><th style="text-align:center">Factor</th><th></th></tr>';
   var body='';
   Object.keys(areas).forEach(function(ar){
     var sub={base:0,total:0};
-    body+='<tr style="background:#eef3fb;font-weight:700"><td colspan="13" style="padding:6px 8px;font-size:12px">'+ar+'</td></tr>';
+    body+='<tr style="background:#eef3fb;font-weight:700"><td colspan="14" style="padding:6px 8px;font-size:12px">'+ar+'</td></tr>';
     areas[ar].forEach(function(p){
       var c=_nomCalc(p);
       T.base+=c.base;T.aux+=c.aux;T.prest+=c.prestaciones;T.seg+=c.segsocial;T.para+=c.parafiscales;T.total+=c.total;
       sub.base+=c.base;sub.total+=c.total;
+      var pe=(p.entidad&&TENT[p.entidad])?p.entidad:'LTM3'; TENT[pe].base+=c.base; TENT[pe].total+=c.total;
       var inp=function(field,val,w){return '<input value="'+val+'" data-id="'+p.id+'" data-f="'+field+'" onchange="nomSet(this)" style="width:'+(w||78)+'px;border:1px solid #e3e6ea;border-radius:5px;padding:3px;font-size:11px;text-align:right">';};
       var chk=function(field,on){return '<input type="checkbox" '+(on?'checked':'')+' data-id="'+p.id+'" data-f="'+field+'" onchange="nomSet(this)">';};
       body+='<tr>'
-        +'<td style="padding:3px 6px;font-size:12px"><input value="'+(p.nombre||'').replace(/"/g,'&quot;')+'" data-id="'+p.id+'" data-f="nombre" onchange="nomSet(this)" style="width:160px;border:1px solid #eee;border-radius:5px;padding:3px;font-size:12px"></td>'
+        +'<td style="padding:3px 6px;font-size:12px"><input value="'+(p.nombre||'').replace(/"/g,'&quot;')+'" data-id="'+p.id+'" data-f="nombre" onchange="nomSet(this)" style="width:150px;border:1px solid #eee;border-radius:5px;padding:3px;font-size:12px"></td>'
+        +'<td style="text-align:center"><select data-id="'+p.id+'" data-f="entidad" onchange="nomSet(this)" style="border:1px solid #e3e6ea;border-radius:5px;padding:3px;font-size:11px">'+ENTS_N.map(function(e){return '<option value="'+e+'" '+(pe===e?'selected':'')+'>'+e+'</option>';}).join('')+'</select></td>'
         +'<td style="text-align:right">'+inp('salario',_finNum(c.base),92)+'</td>'
         +'<td style="text-align:center">'+chk('integral',p.integral)+'</td>'
         +'<td style="text-align:center">'+chk('aux_transporte',p.aux_transporte)+'</td>'
@@ -7802,7 +7806,7 @@ async function renderNomina(){
         +'<td style="text-align:center"><button onclick="nomDel(\''+p.id+'\')" title="Quitar" style="border:none;background:none;cursor:pointer;color:#C0392B">✕</button></td>'
         +'</tr>';
     });
-    body+='<tr style="background:#f6f6f7;font-weight:700"><td style="padding:4px 8px;font-size:11px;text-align:right" colspan="10">Subtotal '+ar+'</td><td style="text-align:right;background:#eaf0ea">'+f$(sub.total)+'</td><td colspan="2"></td></tr>';
+    body+='<tr style="background:#f6f6f7;font-weight:700"><td style="padding:4px 8px;font-size:11px;text-align:right" colspan="11">Subtotal '+ar+'</td><td style="text-align:right;background:#eaf0ea">'+f$(sub.total)+'</td><td colspan="2"></td></tr>';
   });
   var factG=T.base?(T.total/T.base):0;
   var kpi=function(t,v,c){return '<div style="flex:1;min-width:150px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:13px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div><div style="font-size:19px;font-weight:800;color:'+(c||'var(--azul)')+';white-space:nowrap">'+v+'</div></div>';};
@@ -7815,8 +7819,12 @@ async function renderNomina(){
     + kpi('COSTO TOTAL NÓMINA (mes)', f$(T.total),'#1A5C2E')
     + kpi('Factor promedio', factG.toFixed(2),(factG>1.55?'#C0392B':'#1A5C2E'))
     +'</div>'
+    +'<div class="card" style="margin-bottom:14px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">🏢 Discriminado por entidad (mes)</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr style="background:#f6f6f7"><th style="text-align:left;padding:6px">Entidad</th><th style="text-align:right">Salario base</th><th style="text-align:right">Cargas de ley</th><th style="text-align:right">Costo total</th><th style="text-align:right">% nómina</th><th style="text-align:right">Ppto Excel 2026</th></tr></thead><tbody>'
+    + ENTS_N.map(function(e){var t=TENT[e];var ppe={LTM3:143180376,'80-10':3149711,PH:8840543}[e];var pct=T.total?Math.round(t.total/T.total*100):0;return '<tr><td style="padding:5px;font-weight:700">'+e+'</td><td style="text-align:right">'+f$(t.base)+'</td><td style="text-align:right">'+_finNum(t.total-t.base)+'</td><td style="text-align:right;font-weight:700">'+f$(t.total)+'</td><td style="text-align:right">'+pct+'%</td><td style="text-align:right;color:var(--gris-t)">'+f$(ppe)+'</td></tr>';}).join('')
+    + '<tr style="background:#eef3fb;font-weight:800"><td style="padding:5px">TOTAL</td><td style="text-align:right">'+f$(T.base)+'</td><td style="text-align:right">'+_finNum(T.total-T.base)+'</td><td style="text-align:right">'+f$(T.total)+'</td><td style="text-align:right">100%</td><td style="text-align:right">'+f$(155170630)+'</td></tr>'
+    + '</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:6px">Asigna la entidad de cada persona en la columna <strong>Entidad</strong>. «Ppto Excel 2026» = reparto de tu presupuesto (enero) para comparar: LTM3 92% · PH 6% · 80-10 2%.</p></div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead>'+th+'</thead><tbody>'+body
-    +'<tr style="background:#1D3461;color:#fff;font-weight:800"><td style="padding:7px 8px" colspan="10">TOTAL NÓMINA / MES</td><td style="text-align:right">'+f$(T.total)+'</td><td style="text-align:center">'+factG.toFixed(2)+'</td><td></td></tr>'
+    +'<tr style="background:#1D3461;color:#fff;font-weight:800"><td style="padding:7px 8px" colspan="11">TOTAL NÓMINA / MES</td><td style="text-align:right">'+f$(T.total)+'</td><td style="text-align:center">'+factG.toFixed(2)+'</td><td></td></tr>'
     +'</tbody></table></div>'
     +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Cesantías 8,33% · Intereses 1% · Prima 8,33% · Vacaciones 4,17% · Pensión 12% · Salud 8,5% · Caja 4% · SENA 2% · ICBF 3% · ARL editable por persona. Anual ≈ <strong>'+f$(T.total*12)+'</strong>. Este total alimenta la línea <strong>De Personal</strong> del P&amp;L.</p></div>';
 }
