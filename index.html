@@ -7756,7 +7756,8 @@ var COM_TABLAS={
 };
 var COM_LABEL={comercial:'Comercial',gerencia:'Gerencia'};
 function _comPct(esq, vtas){ var t=COM_TABLAS[esq]; if(!t||!vtas) return 0; if(vtas<t[0][0]) return 0; for(var i=0;i<t.length;i++){ if(vtas>=t[i][0] && vtas<=t[i][1]) return t[i][2]; } return t[t.length-1][2]; }
-function _comCalc(esq, vtas){ var p=_comPct(esq,vtas); return {pct:p, com:Math.round((Number(vtas)||0)*p/100)}; }
+var COM_FIJO_ABR={comercial:2.0, gerencia:1.0}; // desde abril: % fijo
+function _comCalc(esq, vtas, mes){ var p; if(mes && mes>=4){ p=COM_FIJO_ABR[esq]||0; } else { p=_comPct(esq,vtas); } return {pct:p, com:Math.round((Number(vtas)||0)*p/100)}; }
 function _nomVal(p, campo, mes){ // resuelve salario/extras/comisiones del mes (override mensual o base)
   var base=Number(p[campo])||0;
   if(!mes) return base;
@@ -7860,10 +7861,10 @@ async function renderNomina8010(){
       if(!comP.length) return '';
       if(!mes) return '<div class="card" style="margin-bottom:14px;font-size:12px;color:var(--gris-t)">🧮 La <strong>calculadora de comisiones por ventas</strong> se usa eligiendo un mes (no en modo Base).</div>';
       var h='<div class="card" style="margin-bottom:14px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">🧮 Comisiones por ventas — '+MESES_N[mes]+'</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr style="background:#f6f6f7"><th style="text-align:left;padding:6px">Persona</th><th>Tabla</th><th style="text-align:right">Ventas del mes</th><th style="text-align:center">% tramo</th><th style="text-align:right">Comisión</th></tr></thead><tbody>';
-      comP.forEach(function(p){ var vt=_nomVal(p,'ventas',mes); var cc=_comCalc(p.esquema_comision,vt);
+      comP.forEach(function(p){ var vt=_nomVal(p,'ventas',mes); var cc=_comCalc(p.esquema_comision,vt,mes);
         h+='<tr><td style="padding:5px;font-weight:600">'+(p.nombre||'')+'</td><td>'+(COM_LABEL[p.esquema_comision]||'')+'</td><td style="text-align:right"><input value="'+(vt?_finNum(vt):'')+'" data-id="'+p.id+'" onchange="comVtaSet(this)" placeholder="ventas del mes $" style="width:140px;text-align:right;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:12px"></td><td style="text-align:center;font-weight:700;color:var(--azul)">'+(cc.pct?cc.pct.toFixed(2)+'%':'–')+'</td><td style="text-align:right;font-weight:800;color:#1A5C2E">'+f$(cc.com)+'</td></tr>';
       });
-      h+='</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:6px">Metes las <strong>ventas del mes</strong> y la comisión se calcula sola (tramo → %) y entra a la columna Comisiones de esa persona. Base: <strong>Santiago</strong>=total ventas · <strong>Cristina</strong>=aptos+salas sin consumos.</p></div>';
+      h+='</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:6px">Metes las <strong>ventas del mes</strong> y la comisión se calcula sola. <strong>Ene–Mar</strong>: por tramos. <strong>Abr–Dic</strong>: Comercial 2% fijo · Gerencia 1% fijo. Base: <strong>Santiago</strong>=total ventas (incluye consumos) · <strong>Cristina</strong>=aptos+salas sin consumos.</p></div>';
       return h;
     })()
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead>'+th+'</thead><tbody>'+body
@@ -7933,7 +7934,7 @@ async function nomLlevarPyG(){
 async function comVtaSet(el){
   var id=el.getAttribute('data-id'); var mes=window._nomMes||0; if(!mes){ showToast('Elige un mes','error'); return; }
   var r=(window._nomRows||[]).find(function(x){return x.id===id;}); if(!r) return;
-  var vt=_finParse(el.value); var cc=_comCalc(r.esquema_comision, vt);
+  var vt=_finParse(el.value); var cc=_comCalc(r.esquema_comision, vt, mes);
   var vj=Object.assign({}, r.vtas_json||{}); vj[mes]=vt;
   var cj=Object.assign({}, r.com_json||{}); cj[mes]=cc.com;
   r.vtas_json=vj; r.com_json=cj;
