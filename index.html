@@ -7777,7 +7777,10 @@ function _nomCalc(p, mes){
 async function renderNomina8010(){
   var _rolOK = currentProfile && (currentProfile.rol==='gerente_general'||currentProfile.rol==='asesora');
   if(!_rolOK){ document.getElementById('main-content').innerHTML='<div class="page-title">💼 Nómina</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Solo gerencia.</p></div>'; return; }
-  document.getElementById('main-content').innerHTML='<div class="page-title">💼 Nómina — costo real</div><p style="color:var(--gris-t)">Cargando…</p>';
+  var _mc=document.getElementById('main-content');
+  var _sc=_mc; while(_sc&&_sc!==document.body){var _oy=getComputedStyle(_sc).overflowY; if(_oy==='auto'||_oy==='scroll')break; _sc=_sc.parentElement;}
+  var _savedTop=(_sc&&_sc!==document.body)?_sc.scrollTop:(window.scrollY||window.pageYOffset||0);
+  if(!window._nomRows){ _mc.innerHTML='<div class="page-title">💼 Nómina — costo real</div><p style="color:var(--gris-t)">Cargando…</p>'; }
   var q=await _finRAW('nomina_personal').select('*').eq('edificio','8010').eq('activo',true).order('orden');
   if(q.error){ document.getElementById('main-content').innerHTML='<div class="page-title">💼 Nómina</div><div class="card" style="max-width:640px"><p style="font-size:14px">⚠️ Falta crear la tabla <code>nomina_personal</code> en Supabase. Corre <strong>nomina.sql</strong> en el SQL Editor y recarga.</p><p style="font-size:12px;color:var(--gris-t)">Detalle: '+(q.error.message||'')+'</p></div>'; return; }
   var rows=q.data||[]; window._nomRows=rows;
@@ -7787,21 +7790,21 @@ async function renderNomina8010(){
   var mesSel='<select onchange="window._nomMes=parseInt(this.value,10);renderNomina8010()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px;font-weight:700">'+MESES_N.map(function(n,i){return '<option value="'+i+'" '+(i===mes?'selected':'')+'>'+(i===0?'📋 ':'')+n+'</option>';}).join('')+'</select>';
   var f$=function(n){return '$'+_finNum(n);};
   var areas={}; rows.forEach(function(p){ (areas[p.area||'(Sin área)']=areas[p.area||'(Sin área)']||[]).push(p); });
-  var T={base:0,aux:0,prest:0,seg:0,para:0,total:0};
+  var T={base:0,aux:0,prest:0,seg:0,para:0,total:0,n:0};
   var ENTS_N=['LTM3','80-10','PH'];
   var ENT_COL={LTM3:'#1D3461','80-10':'#1A7D3C',PH:'#7A3FA0'};
   var ENT_BG={LTM3:'#e9eef7','80-10':'#e7f4ec',PH:'#f2e9f8'};
-  var TENT={LTM3:{base:0,total:0},'80-10':{base:0,total:0},PH:{base:0,total:0}};
+  var TENT={LTM3:{base:0,total:0,n:0},'80-10':{base:0,total:0,n:0},PH:{base:0,total:0,n:0}};
   var th='<tr style="background:#1D3461;color:#fff"><th style="text-align:left;padding:7px;min-width:160px">Persona</th><th style="text-align:center;min-width:78px">Entidad</th><th style="text-align:right">Salario base</th><th style="text-align:right">Extras/mes</th><th style="text-align:center">Integ.</th><th style="text-align:center">Aux</th><th style="text-align:center">Exento</th><th style="text-align:right">ARL%</th><th style="text-align:right">Aux.tte</th><th style="text-align:right">Prestac.</th><th style="text-align:right">Seg.Soc.</th><th style="text-align:right">Parafisc.</th><th style="text-align:right;background:#16284a">COSTO TOTAL</th><th style="text-align:center">Factor</th><th></th></tr>';
   var body='';
   Object.keys(areas).forEach(function(ar){
-    var sub={base:0,total:0};
+    var sub={base:0,total:0,n:0};
     body+='<tr style="background:#eef3fb;font-weight:700"><td colspan="15" style="padding:6px 8px;font-size:12px">'+ar+'</td></tr>';
     areas[ar].forEach(function(p){
-      var c=_nomCalc(p, mes);
-      T.base+=c.base;T.aux+=c.aux;T.prest+=c.prestaciones;T.seg+=c.segsocial;T.para+=c.parafiscales;T.total+=c.total;
-      sub.base+=c.base;sub.total+=c.total;
-      var pe=(p.entidad&&TENT[p.entidad])?p.entidad:'LTM3'; TENT[pe].base+=c.base; TENT[pe].total+=c.total;
+      var c=_nomCalc(p, mes); var act=(c.salario>0)?1:0;
+      T.base+=c.base;T.aux+=c.aux;T.prest+=c.prestaciones;T.seg+=c.segsocial;T.para+=c.parafiscales;T.total+=c.total;T.n+=act;
+      sub.base+=c.base;sub.total+=c.total;sub.n+=act;
+      var pe=(p.entidad&&TENT[p.entidad])?p.entidad:'LTM3'; TENT[pe].base+=c.base; TENT[pe].total+=c.total; TENT[pe].n+=act;
       var _ov=function(campo){ return (mes && p[campo==='salario'?'sal_json':'ext_json'] && p[campo==='salario'?'sal_json':'ext_json'][mes]!=null); };
       var inp=function(field,val,w){var ov=(field==='salario'||field==='extras')&&_ov(field);return '<input value="'+val+'" title="'+(ov?'Valor propio de '+MESES_N[mes]:(mes?'Hereda del Base':''))+'" data-id="'+p.id+'" data-f="'+field+'" onchange="nomSet(this)" style="width:'+(w||78)+'px;border:1px solid '+(ov?'#B8860B':'#e3e6ea')+';background:'+(ov?'#fff7e6':'#fff')+';border-radius:5px;padding:3px;font-size:11px;text-align:right">';};
       var chk=function(field,on){return '<input type="checkbox" '+(on?'checked':'')+' data-id="'+p.id+'" data-f="'+field+'" onchange="nomSet(this)">';};
@@ -7823,7 +7826,7 @@ async function renderNomina8010(){
         +'<td style="text-align:center"><button onclick="nomDel(\''+p.id+'\')" title="Quitar" style="border:none;background:none;cursor:pointer;color:#C0392B">✕</button></td>'
         +'</tr>';
     });
-    body+='<tr style="background:#f6f6f7;font-weight:700"><td style="padding:4px 8px;font-size:11px;text-align:right" colspan="12">Subtotal '+ar+'</td><td style="text-align:right;background:#eaf0ea">'+f$(sub.total)+'</td><td colspan="2"></td></tr>';
+    body+='<tr style="background:#f6f6f7;font-weight:700"><td style="padding:4px 8px;font-size:11px;text-align:right" colspan="12">Subtotal '+ar+' · <span style="color:var(--azul)">'+sub.n+' empl.</span></td><td style="text-align:right;background:#eaf0ea">'+f$(sub.total)+'</td><td colspan="2"></td></tr>';
   });
   window._nomEnt=TENT;
   var factG=T.base?(T.total/T.base):0;
@@ -7832,19 +7835,21 @@ async function renderNomina8010(){
     '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💼 Nómina — costo real ('+(mes?MESES_N[mes]+' 2026':'Base / plantilla')+')</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+mesSel+'<button class="btn btn-outline btn-sm" onclick="nomAdd()">+ Agregar persona</button><button class="btn btn-sm" style="background:#1A5C2E;color:#fff;border:none" onclick="nomLlevarPyG()" title="Lleva el costo de nómina mes a mes por entidad a la línea De Personal del P&L">↑ Llevar a P&L</button></div></div>'
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">'+(mes?'Editando <strong>'+MESES_N[mes]+'</strong>: lo que cambies en salario/extras aplica <strong>solo a ese mes</strong> (celda ámbar = valor propio del mes; blanca = hereda del Base). ':'Modo <strong>Base</strong>: el salario/extras que pongas aquí aplica a <strong>todos los meses</strong> que no tengan un valor propio. ')+'Para alguien que entró o salió a mitad de año, pon su salario del mes en <strong>0</strong> en los meses que no estuvo. <strong>Integ.</strong>=integral (IBC 70%). <strong>Aux</strong>=auxilio transporte ($'+_finNum(NOM_AUX)+'). <strong>Exento</strong>=sin salud/SENA/ICBF (Ley 1607). SMMLV 2026 $'+_finNum(NOM_SMMLV)+'.</div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
+    + kpi('# Empleados ('+(mes?MESES_N[mes]:'Base')+')', String(T.n))
     + kpi('Salarios base (mes)', f$(T.base))
     + kpi('Cargas de ley + extras (mes)', f$(T.total-T.base),'#B8860B')
     + kpi('COSTO TOTAL NÓMINA (mes)', f$(T.total),'#1A5C2E')
     + kpi('Factor promedio', factG.toFixed(2),(factG>1.55?'#C0392B':'#1A5C2E'))
     +'</div>'
-    +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div style="font-weight:700;font-size:13px">🏢 Discriminado por entidad (mes)</div><div style="font-size:11px">'+ENTS_N.map(function(e){return '<span style="display:inline-flex;align-items:center;margin-left:10px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+ENT_COL[e]+';margin-right:4px"></span>'+e+'</span>';}).join('')+'</div></div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr style="background:#f6f6f7"><th style="text-align:left;padding:6px">Entidad</th><th style="text-align:right">Salario base</th><th style="text-align:right">Cargas de ley</th><th style="text-align:right">Costo total</th><th style="text-align:right">% nómina</th><th style="text-align:right">Ppto Excel 2026</th></tr></thead><tbody>'
-    + ENTS_N.map(function(e){var t=TENT[e];var ppe={LTM3:143180376,'80-10':3149711,PH:8840543}[e];var pct=T.total?Math.round(t.total/T.total*100):0;return '<tr><td style="padding:5px;font-weight:700;border-left:5px solid '+ENT_COL[e]+'"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+ENT_COL[e]+';margin-right:6px"></span>'+e+'</td><td style="text-align:right">'+f$(t.base)+'</td><td style="text-align:right">'+_finNum(t.total-t.base)+'</td><td style="text-align:right;font-weight:700">'+f$(t.total)+'</td><td style="text-align:right">'+pct+'%</td><td style="text-align:right;color:var(--gris-t)">'+f$(ppe)+'</td></tr>';}).join('')
-    + '<tr style="background:#eef3fb;font-weight:800"><td style="padding:5px">TOTAL</td><td style="text-align:right">'+f$(T.base)+'</td><td style="text-align:right">'+_finNum(T.total-T.base)+'</td><td style="text-align:right">'+f$(T.total)+'</td><td style="text-align:right">100%</td><td style="text-align:right">'+f$(155170630)+'</td></tr>'
+    +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div style="font-weight:700;font-size:13px">🏢 Discriminado por entidad (mes)</div><div style="font-size:11px">'+ENTS_N.map(function(e){return '<span style="display:inline-flex;align-items:center;margin-left:10px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+ENT_COL[e]+';margin-right:4px"></span>'+e+'</span>';}).join('')+'</div></div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr style="background:#f6f6f7"><th style="text-align:left;padding:6px">Entidad</th><th style="text-align:center"># Empl.</th><th style="text-align:right">Salario base</th><th style="text-align:right">Cargas de ley</th><th style="text-align:right">Costo total</th><th style="text-align:right">% nómina</th><th style="text-align:right">Ppto Excel 2026</th></tr></thead><tbody>'
+    + ENTS_N.map(function(e){var t=TENT[e];var ppe={LTM3:143180376,'80-10':3149711,PH:8840543}[e];var pct=T.total?Math.round(t.total/T.total*100):0;return '<tr><td style="padding:5px;font-weight:700;border-left:5px solid '+ENT_COL[e]+'"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+ENT_COL[e]+';margin-right:6px"></span>'+e+'</td><td style="text-align:center">'+t.n+'</td><td style="text-align:right">'+f$(t.base)+'</td><td style="text-align:right">'+_finNum(t.total-t.base)+'</td><td style="text-align:right;font-weight:700">'+f$(t.total)+'</td><td style="text-align:right">'+pct+'%</td><td style="text-align:right;color:var(--gris-t)">'+f$(ppe)+'</td></tr>';}).join('')
+    + '<tr style="background:#eef3fb;font-weight:800"><td style="padding:5px">TOTAL</td><td style="text-align:center">'+T.n+'</td><td style="text-align:right">'+f$(T.base)+'</td><td style="text-align:right">'+_finNum(T.total-T.base)+'</td><td style="text-align:right">'+f$(T.total)+'</td><td style="text-align:right">100%</td><td style="text-align:right">'+f$(155170630)+'</td></tr>'
     + '</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:6px">Asigna la entidad de cada persona en la columna <strong>Entidad</strong>. «Ppto Excel 2026» = reparto de tu presupuesto (enero) para comparar: LTM3 92% · PH 6% · 80-10 2%.</p></div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead>'+th+'</thead><tbody>'+body
-    +'<tr style="background:#1D3461;color:#fff;font-weight:800"><td style="padding:7px 8px" colspan="12">TOTAL NÓMINA / MES</td><td style="text-align:right">'+f$(T.total)+'</td><td style="text-align:center">'+factG.toFixed(2)+'</td><td></td></tr>'
+    +'<tr style="background:#1D3461;color:#fff;font-weight:800"><td style="padding:7px 8px" colspan="12">TOTAL NÓMINA / MES · '+T.n+' empleados</td><td style="text-align:right">'+f$(T.total)+'</td><td style="text-align:center">'+factG.toFixed(2)+'</td><td></td></tr>'
     +'</tbody></table></div>'
     +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Cesantías 8,33% · Intereses 1% · Prima 8,33% · Vacaciones 4,17% · Pensión 12% · Salud 8,5% · Caja 4% · SENA 2% · ICBF 3% · ARL editable por persona. Las cifras son del <strong>'+(mes?MESES_N[mes]:'Base')+'</strong>. El botón <strong>↑ Llevar a P&amp;L</strong> calcula cada mes con su propio valor y alimenta la línea <strong>De Personal</strong> mes a mes.</p></div>';
+  try{ requestAnimationFrame(function(){ if(_sc&&_sc!==document.body)_sc.scrollTop=_savedTop; else window.scrollTo(0,_savedTop); }); }catch(e){}
 }
 async function nomSet(el){
   var id=el.getAttribute('data-id'), f=el.getAttribute('data-f');
