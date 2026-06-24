@@ -976,7 +976,10 @@ const MENU_COMPLETO = [
   { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
     { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
     { id: 'ventas-ppto', icon: '🎯', label: 'Ventas vs Presupuesto' },
-    { id: 'finanzas', icon: '📊', label: 'Estado de Resultados' },
+    ...(EDIFICIO_ACTIVO==='8010' ? [
+      { id: 'finanzas', icon: '📊', label: 'Estado de Resultados' },
+      { id: 'nomina', icon: '💼', label: 'Nómina' },
+    ] : []),
   { id: 'indicadores', icon: '📊', label: 'Indicadores Ocup./Ventas' },
   { id: 'requisiciones-form', icon: '➕', label: 'Nueva Requisición' },
   { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
