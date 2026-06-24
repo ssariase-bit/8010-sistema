@@ -691,7 +691,7 @@ const NAV_ITEMS = {
     { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
     { id: 'ventas-ppto', icon: '🎯', label: 'Ventas vs Presupuesto' },
     { id: 'finanzas', icon: '📊', label: 'Estado de Resultados' },
-    { id: 'nomina', icon: '💼', label: 'Nómina 8010' },
+    { id: 'nomina', icon: '💼', label: 'Nómina' },
     { id: 'caja-list', icon: '💰', label: 'Caja' },
     { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
   { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
@@ -1381,7 +1381,7 @@ async function loadView(view) {
     case 'ventas-ppto': await renderVentasPpto(); break;
     case 'finanzas': await renderFinanzas(); break;
     case 'indicadores': await renderIndicadores(); break;
-    case 'nomina': await renderNomina(); break;
+    case 'nomina': await (EDIFICIO_ACTIVO==='kubik' ? renderNomina() : renderNomina8010()); break;
     case 'semana-info': window._ocupVista='semana'; await renderOcupacion(); break;
     case 'checklist-turnos': await renderChecklistTurnos(); break;
     case 'novedades-diarias':  await renderNovedadesDiarias(); break;
@@ -7765,7 +7765,7 @@ function _nomCalc(p){
   r.factor=sb>0?(r.total/sb):0;
   return r;
 }
-async function renderNomina(){
+async function renderNomina8010(){
   var _rolOK = currentProfile && (currentProfile.rol==='gerente_general'||currentProfile.rol==='asesora');
   if(!_rolOK){ document.getElementById('main-content').innerHTML='<div class="page-title">💼 Nómina</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Solo gerencia.</p></div>'; return; }
   document.getElementById('main-content').innerHTML='<div class="page-title">💼 Nómina — costo real</div><p style="color:var(--gris-t)">Cargando…</p>';
@@ -7841,7 +7841,7 @@ async function nomSet(el){
   var patch={updated_at:new Date().toISOString()}; patch[f]=val; try{patch.updated_by=currentUser.id;}catch(e){}
   var r=(window._nomRows||[]).find(function(x){return x.id===id;}); if(r)r[f]=val;
   var resp=await _finRAW('nomina_personal').update(patch).eq('id',id);
-  if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓','success'); renderNomina(); }
+  if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓','success'); renderNomina8010(); }
 }
 async function nomAdd(){
   var nombre=prompt('Nombre de la persona:'); if(!nombre) return;
@@ -7850,7 +7850,7 @@ async function nomAdd(){
   var ord=((window._nomRows||[]).reduce(function(m,x){return Math.max(m,x.orden||0);},0))+1;
   var ins={edificio:'8010',area:area,nombre:nombre,salario:sal,integral:false,aux_transporte:true,arl_pct:0.522,exento_paraf:true,orden:ord,activo:true};
   var resp=await _finRAW('nomina_personal').insert(ins);
-  if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓ Agregada','success'); renderNomina(); }
+  if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓ Agregada','success'); renderNomina8010(); }
 }
 async function nomLlevarPyG(){
   var ent=window._nomEnt; if(!ent){ showToast('Abre Nómina primero','error'); return; }
@@ -7880,7 +7880,7 @@ async function nomLlevarPyG(){
 async function nomDel(id){
   if(!confirm('¿Quitar esta persona de la nómina?')) return;
   var resp=await _finRAW('nomina_personal').update({activo:false,updated_at:new Date().toISOString()}).eq('id',id);
-  if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓ Quitada','success'); renderNomina(); }
+  if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓ Quitada','success'); renderNomina8010(); }
 }
 // INFORMACIÓN DE LA SEMANA (CKI / CKO) — ambos edificios
 // ═══════════════════════════════════════════════════════════
