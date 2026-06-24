@@ -7767,6 +7767,7 @@ function _nomVal(p, campo, mes){ // resuelve salario/extras/comisiones del mes (
 function _nomCalc(p, mes){
   var enHon=!!(p.honorario_desde && mes && mes>=p.honorario_desde); // desde su mes de honorarios sale de nómina
   var sb=enHon?0:_nomVal(p,'salario',mes), ex=enHon?0:_nomVal(p,'extras',mes), co=enHon?0:_nomVal(p,'comisiones',mes), s=sb+ex+co, arl=(Number(p.arl_pct)||0)/100;
+  if(p.area==='Horas Extras'){ return {enHon:false,esExtra:true,salario:0,extras:ex,comisiones:0,base:0,salBase:ex,aux:0,cesantias:0,intereses:0,prima:0,vacaciones:0,salud:0,pension:0,arl:0,caja:0,sena:0,icbf:0,prestaciones:0,segsocial:0,parafiscales:0,total:ex,factor:0}; }
   var exento=!!p.exento_paraf;
   var r={enHon:enHon,salario:sb,extras:ex,comisiones:co,base:sb,salBase:s,aux:0,cesantias:0,intereses:0,prima:0,vacaciones:0,salud:0,pension:0,arl:0,caja:0,sena:0,icbf:0};
   if(p.integral){
