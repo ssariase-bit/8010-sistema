@@ -7765,9 +7765,10 @@ function _nomVal(p, campo, mes){ // resuelve salario/extras/comisiones del mes (
   return (j[mes]!=null)?(Number(j[mes])||0):base;
 }
 function _nomCalc(p, mes){
-  var sb=_nomVal(p,'salario',mes), ex=_nomVal(p,'extras',mes), co=_nomVal(p,'comisiones',mes), s=sb+ex+co, arl=(Number(p.arl_pct)||0)/100;
+  var enHon=!!(p.honorario_desde && mes && mes>=p.honorario_desde); // desde su mes de honorarios sale de nómina
+  var sb=enHon?0:_nomVal(p,'salario',mes), ex=enHon?0:_nomVal(p,'extras',mes), co=enHon?0:_nomVal(p,'comisiones',mes), s=sb+ex+co, arl=(Number(p.arl_pct)||0)/100;
   var exento=!!p.exento_paraf;
-  var r={salario:sb,extras:ex,comisiones:co,base:sb,salBase:s,aux:0,cesantias:0,intereses:0,prima:0,vacaciones:0,salud:0,pension:0,arl:0,caja:0,sena:0,icbf:0};
+  var r={enHon:enHon,salario:sb,extras:ex,comisiones:co,base:sb,salBase:s,aux:0,cesantias:0,intereses:0,prima:0,vacaciones:0,salud:0,pension:0,arl:0,caja:0,sena:0,icbf:0};
   if(p.integral){
     var ibc=s*0.7;
     r.salud=exento?0:ibc*0.085; r.pension=ibc*0.12; r.arl=ibc*arl; r.caja=ibc*0.04; r.sena=exento?0:ibc*0.02; r.icbf=exento?0:ibc*0.03;
@@ -7860,11 +7861,13 @@ async function renderNomina8010(){
       var comP=rows.filter(function(p){return p.esquema_comision && COM_TABLAS[p.esquema_comision];});
       if(!comP.length) return '';
       if(!mes) return '<div class="card" style="margin-bottom:14px;font-size:12px;color:var(--gris-t)">🧮 La <strong>calculadora de comisiones por ventas</strong> se usa eligiendo un mes (no en modo Base).</div>';
-      var h='<div class="card" style="margin-bottom:14px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">🧮 Comisiones por ventas — '+MESES_N[mes]+'</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr style="background:#f6f6f7"><th style="text-align:left;padding:6px">Persona</th><th>Tabla</th><th style="text-align:right">Ventas del mes</th><th style="text-align:center">% tramo</th><th style="text-align:right">Comisión</th></tr></thead><tbody>';
+      var hon=comP.some(function(p){return p.honorario_desde && mes>=p.honorario_desde;});
+      var h='<div class="card" style="margin-bottom:14px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">🧮 Comisiones por ventas — '+MESES_N[mes]+(hon?' · 💼 Honorarios':'')+'</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr style="background:#f6f6f7"><th style="text-align:left;padding:6px">Persona</th><th>Esquema</th><th style="text-align:right">Ventas del mes</th><th style="text-align:center">%</th><th style="text-align:right">Comisión</th>'+(hon?'<th style="text-align:right">Honorario fijo</th><th style="text-align:right">TOTAL honorarios</th>':'')+'</tr></thead><tbody>';
       comP.forEach(function(p){ var vt=_nomVal(p,'ventas',mes); var cc=_comCalc(p.esquema_comision,vt,mes);
-        h+='<tr><td style="padding:5px;font-weight:600">'+(p.nombre||'')+'</td><td>'+(COM_LABEL[p.esquema_comision]||'')+'</td><td style="text-align:right"><input value="'+(vt?_finNum(vt):'')+'" data-id="'+p.id+'" onchange="comVtaSet(this)" placeholder="ventas del mes $" style="width:140px;text-align:right;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:12px"></td><td style="text-align:center;font-weight:700;color:var(--azul)">'+(cc.pct?cc.pct.toFixed(2)+'%':'–')+'</td><td style="text-align:right;font-weight:800;color:#1A5C2E">'+f$(cc.com)+'</td></tr>';
+        var enH=p.honorario_desde && mes>=p.honorario_desde; var fijo=enH?(Number(p.honorario_fijo)||0):0; var tot=fijo+cc.com;
+        h+='<tr><td style="padding:5px;font-weight:600">'+(p.nombre||'')+(enH?' <span style="font-size:10px;color:#7A3FA0;font-weight:700">HONORARIOS</span>':'')+'</td><td>'+(COM_LABEL[p.esquema_comision]||'')+'</td><td style="text-align:right"><input value="'+(vt?_finNum(vt):'')+'" data-id="'+p.id+'" onchange="comVtaSet(this)" placeholder="ventas del mes $" style="width:140px;text-align:right;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:12px"></td><td style="text-align:center;font-weight:700;color:var(--azul)">'+(cc.pct?cc.pct.toFixed(2)+'%':'–')+'</td><td style="text-align:right;font-weight:700;color:#1A5C2E">'+f$(cc.com)+'</td>'+(hon?('<td style="text-align:right">'+(fijo?f$(fijo):'·')+'</td><td style="text-align:right;font-weight:800;color:#7A3FA0">'+(enH?f$(tot):'·')+'</td>'):'')+'</tr>';
       });
-      h+='</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:6px">Metes las <strong>ventas del mes</strong> y la comisión se calcula sola. <strong>Ene–Mar</strong>: por tramos. <strong>Abr–Dic</strong>: Comercial 2% fijo · Gerencia 1% fijo. Base: <strong>Santiago</strong>=total ventas (incluye consumos) · <strong>Cristina</strong>=aptos+salas sin consumos.</p></div>';
+      h+='</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:6px">Metes las <strong>ventas del mes</strong> y la comisión se calcula sola. <strong>Ene–Mar</strong>: por tramos (sin tope arriba del último). <strong>Abr–Dic</strong>: Comercial 2% · Gerencia 1% · y ambos por <strong>Honorarios</strong> (fijo + comisión) → línea Honorarios del P&L, fuera de nómina. Base: <strong>Santiago</strong>=total ventas (incl. consumos) · <strong>Cristina</strong>=aptos+salas sin consumos.</p></div>';
       return h;
     })()
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead>'+th+'</thead><tbody>'+body
