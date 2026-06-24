@@ -1289,7 +1289,7 @@ async function loadView(view) {
       {id:'punto_inicio',label:'Punto de inicio',type:'text'},
       {id:'punto_final',label:'Punto final',type:'text'},
       {id:'valor',label:'Valor ($)',type:'money',req:true},
-      {id:'empresa',label:'Empresa',type:'select',opts:['LTM3 SAS','8010 SAS','Personal']},
+      {id:'empresa',label:'Empresa',type:'select',opts:['LTM3 SAS','8010 SAS','Personal','Uber','Didi','Taxi']},
     ]); break;
     case 'requisiciones-list': await renderList('requisiciones','🛒 Requisiciones de Compra','requisiciones-form',['fecha','area','solicitado_por','articulo','cantidad_solicitada','cantidad_recibida','estado'],['Fecha','Área','Solicitó','Artículo','Solicitado','Recibido','Estado']); break;
     case 'requisiciones-form': renderGenForm('requisiciones','🛒 Nueva Requisición de Compra',[
@@ -5187,13 +5187,15 @@ async function renderSeguimientosTurno(){
   const rows = data || [];
   const esc = s => String(s==null?'':s).replace(/</g,'&lt;');
   const badge = e => { const cl = e==='Resuelto'?'resuelto':(e==='En seguimiento'?'proceso':'alta'); return `<span class="badge b-${cl}">${esc(e||'Pendiente')}</span>`; };
+  const _hPersona = n => { n=String(n||'').trim().toLowerCase(); if(!n) return 0; let h=0; for(let i=0;i<n.length;i++) h=(h*31+n.charCodeAt(i))%360; return h; };
+  const chipResp = n => { if(!n||!String(n).trim()) return '-'; const h=_hPersona(n); return `<span title="Responsable del seguimiento" style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;background:hsl(${h},70%,90%);color:hsl(${h},75%,30%);border:1px solid hsl(${h},60%,75%);white-space:nowrap">${esc(n)}</span>`; };
   const filas = rows.map(r => `<tr>
     <td>${r.fecha?fmtDate(String(r.fecha).substring(0,10)):'-'}</td>
     <td>${esc(r.turno)||'-'}</td>
     <td>${esc(r.categoria)||'-'}</td>
     <td>${esc(r.apto)||'-'}</td>
     <td>${esc(r.detalle)}${r.observacion?('<div style="font-size:11px;color:var(--gris-t);margin-top:3px">↳ '+esc(r.observacion)+'</div>'):''}</td>
-    <td>${esc(r.responsable)||'-'}</td>
+    <td>${chipResp(r.responsable)}</td>
     <td><button onclick="cicloEstadoSeg('${r.id}','${esc(r.estado||'Pendiente')}')" style="border:none;background:none;cursor:pointer">${badge(r.estado)}</button></td>
     <td style="white-space:nowrap">${_btnsEdit('seguimientos_turno', r.id)}</td>
   </tr>`).join('');
@@ -5531,16 +5533,23 @@ window.verHistorialReserva = async function(id){
 };
 window.renderReservas = async function(filtro){
   var res=await sb.from('reservas').select('*').eq('edificio',EDIFICIO_ACTIVO).order('checkin',{ascending:false}).limit(2000);
-  var rows=res.data||[];
-  var body=rows.map(function(r){
+  var rows=res.data||[]; window._rvRows=rows;
+  window._rvRowHTML=function(r){
     return '<tr><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">'+((r.moneda==='USD')?('USD '+(Number(r.tarifa_usd)||Number(r.tarifa)||0).toLocaleString('es-CO')):('$'+(Number(r.tarifa)||0).toLocaleString('es-CO')))+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="white-space:nowrap"><span title="Hacer Check-In (CKI)" style="cursor:pointer;font-size:13px" onclick="ckiDesdeReserva(\''+r.id+'\')">🟢</span> <span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
-  }).join('');
+  };
+  var body=rows.map(window._rvRowHTML).join('');
   document.getElementById('main-content').innerHTML=
     '<div class="page-title">📋 Reservas</div>'+
-    '<div class="card"><div class="card-header"><div class="card-title">'+rows.length+' reservas</div>'+
-    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar por huésped, apto, canal..." style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">'+
+    '<div class="card"><div class="card-header"><div class="card-title" id="rv-count">'+rows.length+' reservas</div>'+
+    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><label style="font-size:11px;color:var(--gris-t)">Creadas el <input type="date" onchange="rvFiltrarCreadas(this.value)" title="Ver reservas creadas en esta fecha" style="padding:5px;border:1px solid #ddd;border-radius:8px"></label><button class="btn btn-outline btn-sm" onclick="rvFiltrarCreadas(\'\')" title="Quitar filtro de fecha">Todas</button><input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar por huésped, apto, canal..." style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">'+
     '<button class="btn btn-success btn-sm" onclick="loadView(\'nueva-reserva\')">+ Nueva Reserva</button></div></div>'+
-    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Apto ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Huésped ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Check-in ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Check-out ⇅</th><th>Noches</th><th>Tarifa</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Canal ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">A cargo de ⇅</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Apto ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Huésped ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Check-in ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Check-out ⇅</th><th>Noches</th><th>Tarifa</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Canal ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">A cargo de ⇅</th><th></th></tr></thead><tbody id="rv-tbody">'+body+'</tbody></table></div></div>';
+};
+window.rvFiltrarCreadas=function(fecha){
+  var rows=window._rvRows||[];
+  var filt = fecha ? rows.filter(function(r){ return String(r.created_at||'').slice(0,10)===fecha; }) : rows;
+  var tb=document.getElementById('rv-tbody'); if(tb) tb.innerHTML=filt.map(window._rvRowHTML).join('')||'<tr><td colspan="9" style="text-align:center;color:#999;padding:14px">Sin reservas creadas en esa fecha.</td></tr>';
+  var c=document.getElementById('rv-count'); if(c) c.textContent=filt.length+' reservas'+(fecha?(' · creadas el '+fecha):'');
 };
 
 window._solImg = null;
@@ -5883,6 +5892,8 @@ async function renderList(tabla, titulo, formView, cols, headers) {
       acciones = `<td style="white-space:nowrap"><button onclick="registrarSalidaVisita('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Salida</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else if (esPaquetes && r.estado !== 'Entregado') {
       acciones = `<td style="white-space:nowrap"><button onclick="entregarPaquete('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--verde);border-color:var(--verde)">📦 Entregar</button> ${_btnsEdit(tabla, r.id)}</td>`;
+    } else if (tabla === 'maletas' && r.estado === 'En bodega') {
+      acciones = `<td style="white-space:nowrap"><button onclick="entregarMaleta('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--verde);border-color:var(--verde)">🧳 Entregar</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else if (tabla === 'reembolsos') {
       acciones = `<td style="white-space:nowrap"><button onclick="previewReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px">👁 Ver</button> <button onclick="correoReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">✉️ Correo</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else if (tabla === 'check_carpetas') {
@@ -6585,8 +6596,8 @@ function renderReembolsoLote(){
       +'<div class="form-group"><label>Caja (origen)</label><select id="lt-caja"><option>LTM3</option><option>80|10</option><option>PH</option></select></div>'
       +'<div class="form-group"><label>Fecha</label><input type="date" id="lt-fecha" value="'+TODAY+'"></div>'
     +'</div><div class="form-row col3">'
-      +'<div class="form-group"><label>Entregado por</label><input id="lt-entregado"></div>'
-      +'<div class="form-group"><label>Aprobado por</label><input id="lt-aprobado" value="'+q.replace(/"/g,'&quot;')+'"></div>'
+      +'<div class="form-group"><label>Realiza / Entrega</label><input id="lt-entregado" value="'+q.replace(/"/g,'&quot;')+'"></div>'
+      +'<div class="form-group"><label>Aprobado por</label><input id="lt-aprobado"></div>'
       +'<div class="form-group"><label>Observaciones</label><input id="lt-obs"></div>'
     +'</div></div>'
     +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:700;color:var(--azul)">Recibos</div><button class="btn btn-outline btn-sm" onclick="_loteAddRow()">+ Añadir recibo</button></div>'
@@ -6723,12 +6734,33 @@ function imprimirRotulo(apto, arrendatario, empresa, vacio){
     +'</div></body></html>';
   var w=window.open('','_blank'); if(!w){ showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(html); w.document.close();
 }
+function imprimirRotulosLote(){
+  var rows=window._rotRows||[]; if(!rows.length){ showToast('No hay ingresos para imprimir','error'); return; }
+  var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||''; var accent=(nb.indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var ITEMS=['1 Página','Registro de ingreso','Copia de documentos','Información reserva','Inventario','Envío book de servicios','Contrato digitalizado','Otrosí digitalizado'];
+  var box=function(apto,hu,empresa){
+    var filas=ITEMS.map(function(it){ return '<tr><td style="border:1px solid #555;padding:2px 4px;font-size:8px">'+esc(it)+'</td><td style="border:1px solid #555;padding:2px;text-align:center;width:24px;font-size:8px">&#9744;SI</td><td style="border:1px solid #555;padding:2px;text-align:center;width:24px;font-size:8px">&#9744;NO</td></tr>'; }).join('');
+    return '<div style="border:2px solid '+accent+';border-radius:6px;padding:7px 9px;break-inside:avoid;page-break-inside:avoid;width:47%;box-sizing:border-box;margin:0 0.8% 9px">'
+      +'<div style="text-align:center;border-bottom:1px solid '+accent+';padding-bottom:3px;margin-bottom:4px;font-size:9px;font-weight:800;letter-spacing:.5px">'+esc(nb)+' &mdash; CARPETA APTO</div>'
+      +'<div style="font-size:22px;font-weight:900;text-align:center;margin:1px 0">'+esc(apto||'—')+'</div>'
+      +'<div style="font-size:10px;margin:2px 0"><b>Arrendatario:</b> '+esc(hu||'—')+'</div>'
+      +'<div style="font-size:10px;margin:2px 0 5px"><b>Empresa:</b> '+esc(empresa||'—')+'</div>'
+      +'<table style="width:100%;border-collapse:collapse">'+filas+'</table>'
+      +'<div style="font-size:7px;color:#888;text-align:right;margin-top:3px">FO-SE-27</div></div>';
+  };
+  var boxes=rows.map(function(x){ var hu=x.huesped||[x.nombre,x.apellido1,x.apellido2].filter(Boolean).join(' '); return box(x.apto,hu,x.empresa); }).join('');
+  var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Rótulos</title><style>@media print{.noprint{display:none}} @page{margin:10mm}</style></head><body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:10px;color:#111">'
+    +'<button class="noprint" onclick="window.print()" style="position:fixed;top:10px;right:10px;background:#1F3864;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-weight:700">🖨️ Imprimir / PDF</button>'
+    +'<div style="display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:flex-start">'+boxes+'</div></body></html>';
+  var w=window.open('','_blank'); if(!w){ showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(html); w.document.close();
+}
 async function renderRotulos(){
   var fecha=window._rotFecha || (function(){ var d=new Date(TODAY+'T00:00:00'); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })();
   window._rotFecha=fecha;
   document.getElementById('main-content').innerHTML='<div class="page-title">🏷️ Rótulos de Carpetas</div><p style="color:var(--gris-t)">Cargando ingresos…</p>';
   var r=await sb.from('rack').select('apto,huesped,empresa,estado,nombre,apellido1,apellido2').eq('edificio',EDIFICIO_ACTIVO).eq('fecha',fecha).eq('estado','Check-in hoy').order('apto');
-  var rows=(r.data||[]).filter(function(x){return (x.huesped||x.nombre);});
+  var rows=(r.data||[]).filter(function(x){return (x.huesped||x.nombre);}); window._rotRows=rows;
   var esc=function(s){ return String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); };
   var enc=function(s){ return encodeURIComponent(String(s==null?'':s)); };
   var filas=rows.map(function(x){ var hu=x.huesped||[x.nombre,x.apellido1,x.apellido2].filter(Boolean).join(' '); return '<tr><td style="font-weight:700">'+esc(x.apto)+'</td><td>'+esc(hu)+'</td><td>'+esc(x.empresa||'—')+'</td><td><button class="btn btn-outline btn-sm" style="color:#1D3461;border-color:#1D3461" onclick="imprimirRotulo(\''+enc(x.apto)+'\',\''+enc(hu)+'\',\''+enc(x.empresa)+'\',false)">🖨 Rótulo</button></td></tr>'; }).join('');
@@ -6736,7 +6768,7 @@ async function renderRotulos(){
     '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div class="page-title" style="margin-bottom:0">🏷️ Rótulos de Carpetas</div>'
     +'<label style="font-size:13px;color:var(--gris-t)">Ingresos del día <input type="date" value="'+fecha+'" onchange="window._rotFecha=this.value;renderRotulos()" style="padding:6px;border:1px solid var(--gris-b);border-radius:8px"></label></div>'
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Para que el auditor imprima los rótulos de las carpetas que ingresan (CKI). Por defecto muestra el día siguiente.</div>'
-    +'<div class="card" style="margin-bottom:16px"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Ingresos ('+rows.length+')</div>'
+    +'<div class="card" style="margin-bottom:16px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div style="font-weight:700;color:var(--azul)">Ingresos ('+rows.length+')</div>'+(rows.length?'<button class="btn btn-sm" style="background:#1D3461;color:#fff;border:none" onclick="imprimirRotulosLote()">🖨️ Imprimir todos (varios por hoja)</button>':'')+'</div>'
     +(rows.length?('<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Apto</th><th>Huésped</th><th>Empresa</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div>'):'<div style="color:#999;font-size:13px;padding:8px">Sin check-in para esta fecha.</div>')+'</div>'
     +'<div class="card" style="max-width:560px"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Rótulo manual</div>'
     +'<div class="form-row col3"><div class="form-group"><label>Apto</label><input id="rot-apto" placeholder="Ej: 501"></div><div class="form-group"><label>Arrendatario</label><input id="rot-arr"></div><div class="form-group"><label>Empresa</label><input id="rot-emp"></div></div>'
@@ -9727,6 +9759,14 @@ async function entregarPaquete(id) {
   if (error) { showToast('Error al entregar: ' + error.message, 'error'); return; }
   showToast('✅ Paquete entregado a ' + nombre.trim(), 'success');
   loadView('paquetes-list');
+}
+
+async function entregarMaleta(id) {
+  if (!confirm('¿Marcar esta maleta como Entregada?')) return;
+  const { error } = await sb.from('maletas').update({ estado: 'Entregada' }).eq('id', id).eq('edificio', EDIFICIO_ACTIVO);
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  showToast('🧳 Maleta entregada', 'success');
+  loadView('maletas-list');
 }
 
 async function registrarSalidaHK(id) {
