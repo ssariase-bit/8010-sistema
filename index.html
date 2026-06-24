@@ -1171,6 +1171,14 @@ async function loadView(view) {
       {id:'entregado_por',label:'Entregado por',type:'text',req:true},
       {id:'recibido_por',label:'Recibido por',type:'text',req:true},
       {id:'destino',label:'Destino de la entrega',type:'select',opts:['Entregado en persona','Dejado en cajilla de seguridad']},
+      ...(EDIFICIO_ACTIVO!=='kubik'
+        ? [{id:'apto',label:'Apto',type:'text',default:''},
+           {id:'arrendatario',label:'Arrendatario (a)',type:'text',default:''},
+           {id:'fv',label:'FV',type:'text',default:''},
+           {id:'valor',label:'Valor ($)',type:'money',default:''},
+           {id:'administrador_entrega',label:'Administrador que entrega',type:'select',opts:['Adriana Bernal','Jonathan Zambrano']},
+           {id:'fecha_entrega',label:'Fecha de entrega',type:'date',default:''}]
+        : []),
       ...(EDIFICIO_ACTIVO==='kubik'
         ? [{id:'total_efectivo',label:'Caja 8i8 ($)',type:'money',default:''}]
         : [{id:'caja_ltm3',label:'Caja LTM3 ($)',type:'money',default:''},
@@ -9384,10 +9392,11 @@ async function renderEntregaEfectivos() {
     <div class="card">
       ${rows.length===0?'<div class="empty"><div class="empty-icon">💵</div><p>Sin entregas registradas</p></div>':
       `<div style="overflow-x:auto"><table class="tabla">
-        <thead><tr><th>Fecha</th><th>Turno</th><th>Entrega</th><th>Recibe</th>${_kbk?'<th>8i8</th>':'<th>LTM3</th><th>OT</th><th>PH</th>'}<th>Total</th><th>USD</th><th>Destino</th><th>Obs.</th><th></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Turno</th><th>Entrega</th><th>Recibe</th>${_kbk?'':'<th>Apto</th><th>Arrendatario</th><th>FV</th><th>Valor</th><th>Admin. entrega</th><th>F. entrega</th>'}${_kbk?'<th>8i8</th>':'<th>LTM3</th><th>OT</th><th>PH</th>'}<th>Total</th><th>USD</th><th>Destino</th><th>Obs.</th><th></th></tr></thead>
         <tbody>${rows.map(r=>`<tr>
           <td>${fmtDate(r.fecha)}</td><td>${r.turno||'-'}</td>
           <td>${r.entregado_por||'-'}</td><td>${r.recibido_por||'-'}</td>
+          ${_kbk?'':`<td>${r.apto||'-'}</td><td style="font-size:11px">${r.arrendatario||'-'}</td><td>${r.fv||'-'}</td><td>${r.valor?'$'+fmtNum(r.valor):'-'}</td><td style="font-size:11px">${r.administrador_entrega||'-'}</td><td>${r.fecha_entrega?fmtDate(r.fecha_entrega):'-'}</td>`}
           ${_kbk?`<td>$${fmtNum(r.total_efectivo)}</td>`:`<td>$${fmtNum(r.caja_ltm3)}</td><td>$${fmtNum(r.caja_ot)}</td><td>$${fmtNum(r.caja_ph)}</td>`}
           <td><strong>$${fmtNum(r.total_efectivo)}</strong></td>
           <td>${r.efectivo_usd?'US$ '+fmtNum(r.efectivo_usd):'-'}</td>
