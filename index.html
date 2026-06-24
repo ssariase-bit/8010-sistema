@@ -1443,16 +1443,18 @@ function calcKpisDia(registrosHoy){
   const getRec = (a) => byApto[a];
   const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
   const FUERA = ['Bloqueado','Mantenimiento'];
+  const EN_CASA = ['Ocupado','Completo','Sale de viaje']; // ocupado real, sin CKI/CKO (esos tienen su propio contador)
   const calc = (lista) => {
-    let ocu=0, disp=0; const tar=[];
+    let ocu=0, disp=0, enCasa=0; const tar=[];
     lista.forEach(a=>{
       const r = getRec(a); const e = r?.estado||'Libre';
       const incluida = (r?.observaciones||'').includes('Apto completo'); // A de apto completo: fuera de inventario
       if (FUERA.includes(e) || incluida) return;
       disp++;
       if (OCU.includes(e)){ ocu++; if (r && r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa)); }
+      if (EN_CASA.includes(e)) enCasa++;
     });
-    return {ocu, disp, tar};
+    return {ocu, disp, tar, enCasa};
   };
   const b21 = calc(RACK_BASE21);
   const b33 = calc([...RACK_BASE21, ...RACK_AS]);
@@ -1609,7 +1611,7 @@ async function renderDashboard() {
   // ── KPIs DE HOY (cálculo unificado con el Rack) ──────────
   const _k = calcKpisDia(aptosHoy);
   const TOTAL_APTOS = EB().aptosBase.length; // 21 aptos base (los A son habitaciones secundarias adicionales)
-  const ocupados  = _k.b21.ocu;
+  const ocupados  = _k.b21.enCasa; // en casa (sin CKI/CKO, que tienen su propio KPI)
   const checkins  = _k.cki;
   const checkouts = _k.cko;
   // Listas de quiénes entran y salen hoy (se muestran al hacer clic en la tarjeta)
@@ -6620,7 +6622,7 @@ async function _loteGuardar(btn){
   if(!recibos.length){ showToast('Añade al menos un recibo con valor','error'); return; }
   if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
   // siguiente consecutivo
-  var mx=await sb.from('reembolsos').select('consecutivo').order('consecutivo',{ascending:false}).limit(1);
+  var mx=await sb.from('reembolsos').select('consecutivo').eq('edificio',EDIFICIO_ACTIVO).order('consecutivo',{ascending:false}).limit(1);
   var consec=((mx.data&&mx.data[0]&&Number(mx.data[0].consecutivo))||0)+1;
   var base={ empresa:empresa, tipo:document.getElementById('lt-tipo').value, numero:document.getElementById('lt-numero').value.trim()||null, area:document.getElementById('lt-area').value, caja:document.getElementById('lt-caja').value, fecha:document.getElementById('lt-fecha').value||TODAY, entregado_por:document.getElementById('lt-entregado').value.trim()||null, aprobado_por:document.getElementById('lt-aprobado').value.trim()||null, observaciones:document.getElementById('lt-obs').value.trim()||null, estado:'Pendiente', consecutivo:consec, edificio:EDIFICIO_ACTIVO, user_id:currentUser.id };
   var rows=recibos.map(function(r){ return Object.assign({}, base, { fecha_factura:r.fecha_factura, recibo_no:r.recibo_no, descripcion:r.descripcion, valor:r.valor }); });
@@ -7084,7 +7086,7 @@ async function renderOcupacion(){
 async function renderEstadoHuespedes() {
   // Auto-actualizar cada 60s para reflejar CKI/CKO recién hechos sin recargar
   clearTimeout(window._ehTimer);
-  window._ehTimer = setTimeout(() => { if (window._currentView === 'estado-huespedes') renderEstadoHuespedes(); else if (window._currentView === 'ocupacion' && (window._ocupVista||'hoy')==='hoy') renderOcupacion(); }, 60000);
+  window._ehTimer = setTimeout(function _ehTick(){ var ae=document.activeElement, mc=document.getElementById('main-content'); if(ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName) && mc && mc.contains(ae)){ window._ehTimer=setTimeout(_ehTick,60000); return; } if (window._currentView === 'estado-huespedes') renderEstadoHuespedes(); else if (window._currentView === 'ocupacion' && (window._ocupVista||'hoy')==='hoy') renderOcupacion(); }, 60000);
   const _esKL=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')===-1);
   const today = window._ehFecha || TODAY;
   const { data: rawData } = await sb.from('rack').select('*').eq('fecha', today);
