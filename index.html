@@ -7912,11 +7912,16 @@ async function nomLlevarPyG(){
   var EM={LTM3:new Array(13).fill(0),'80-10':new Array(13).fill(0),PH:new Array(13).fill(0)};
   rows.forEach(function(p){ var e=(p.entidad&&EM[p.entidad])?p.entidad:'LTM3'; for(var m=1;m<=12;m++){ EM[e][m]+=_nomCalc(p,m).total; } });
   var anualE={}; var resumen=ents.filter(function(e){var s=0;for(var m=1;m<=12;m++)s+=EM[e][m];anualE[e]=s;return s>0;}).map(function(e){return e+' $'+_finNum(anualE[e])+'/año';}).join(' · ');
-  if(!resumen){ showToast('No hay montos para llevar','error'); return; }
-  var d=prompt('¿A dónde llevar el costo de nómina MES A MES (línea "De Personal", por entidad)?\n\n'+resumen+'\n\nEscribe:\n  1 = Presupuesto\n  2 = Real\n  3 = Ambos\n\nNota: al elegir Real se reemplazan los 12 meses (incluye ene–may ya cargado).','1');
+  // matriz HONORARIOS (fijo + comisión) para quienes pasaron a honorarios, solo en sus meses
+  var HON={LTM3:new Array(13).fill(0),'80-10':new Array(13).fill(0),PH:new Array(13).fill(0)};
+  rows.forEach(function(p){ if(!p.honorario_desde)return; var e=(p.entidad&&HON[p.entidad])?p.entidad:'LTM3'; for(var m=p.honorario_desde;m<=12;m++){ var cc=_comCalc(p.esquema_comision,_nomVal(p,'ventas',m),m); HON[e][m]+=(Number(p.honorario_fijo)||0)+cc.com; } });
+  var honMeses={}, honAnual={}, hayHon=false; ents.forEach(function(e){ var s=0; for(var m=1;m<=12;m++){ if(HON[e][m]>0){(honMeses[e]=honMeses[e]||[]).push(m); s+=HON[e][m]; hayHon=true;} } if(s>0)honAnual[e]=s; });
+  var resHon=hayHon? Object.keys(honAnual).map(function(e){return e+' $'+_finNum(honAnual[e])+'/año';}).join(' · ') : '';
+  if(!resumen && !hayHon){ showToast('No hay montos para llevar','error'); return; }
+  var d=prompt('¿A dónde llevar al P&L MES A MES?\n\nDE PERSONAL: '+(resumen||'—')+(hayHon?('\nHONORARIOS (abr+): '+resHon):'')+'\n\nEscribe:\n  1 = Presupuesto\n  2 = Real\n  3 = Ambos\n\nNota: Real reemplaza los 12 meses. Honorarios solo se escribe en los meses con honorarios.','1');
   if(d===null) return; d=String(d).trim();
   var tipos = d==='2'?['real'] : d==='3'?['ppto','real'] : ['ppto'];
-  if(!confirm('Se actualizará "De Personal" MES A MES en: '+tipos.map(function(t){return t==='real'?'Real':'Presupuesto';}).join(' + ')+' (2026), por entidad:\n\n'+resumen+'\n\n¿Continuar?')) return;
+  if(!confirm('Se actualizará en '+tipos.map(function(t){return t==='real'?'Real':'Presupuesto';}).join(' + ')+':\n\n• De Personal: '+(resumen||'—')+(hayHon?('\n• Honorarios (abr+): '+resHon):'')+'\n\n¿Continuar?')) return;
   var Y=2026, Esc=[];
   for(var ti=0;ti<tipos.length;ti++){ var tipo=tipos[ti];
     var q=await _finRAW('finanzas_pyg').select('*').eq('edificio','8010').eq('anio',Y).eq('cuenta','DE PERSONAL').eq('tipo',tipo);
@@ -7930,9 +7935,23 @@ async function nomLlevarPyG(){
       else { resp=await _finRAW('finanzas_pyg').insert(Object.assign({edificio:'8010',entidad:e,anio:Y,cuenta:'DE PERSONAL',grupo:'GASTOS',tipo:tipo},patch)); }
       if(resp&&resp.error){ showToast('Error '+e+' ('+tipo+'): '+resp.error.message,'error'); return; }
     }
+    // HONORARIOS (solo meses con honorarios; preserva los demás)
+    if(hayHon){
+      var qh=await _finRAW('finanzas_pyg').select('*').eq('edificio','8010').eq('anio',Y).eq('cuenta','HONORARIOS').eq('tipo',tipo);
+      var exH=(qh&&qh.data)||[];
+      for(var kh=0;kh<ents.length;kh++){
+        var eh=ents[kh]; if(!honMeses[eh]) continue;
+        var patchH={updated_at:new Date().toISOString()}; try{patchH.updated_by=currentUser.id;}catch(_){}
+        for(var ih=1;ih<=12;ih++){ if(HON[eh][ih]>0) patchH['m'+ih]=Math.round(HON[eh][ih]); }
+        var rH=exH.find(function(x){return x.entidad===eh;}); var respH;
+        if(rH){ respH=await _finRAW('finanzas_pyg').update(patchH).eq('id',rH.id); }
+        else { respH=await _finRAW('finanzas_pyg').insert(Object.assign({edificio:'8010',entidad:eh,anio:Y,cuenta:'HONORARIOS',grupo:'GASTOS',tipo:tipo},patchH)); }
+        if(respH&&respH.error){ showToast('Error HONORARIOS '+eh+': '+respH.error.message,'error'); return; }
+      }
+    }
     Esc.push(tipo==='real'?'Real':'Presupuesto');
   }
-  showToast('✓ De Personal actualizado mes a mes: '+Esc.join(' + '),'success');
+  showToast('✓ Llevado a P&L ('+Esc.join(' + ')+'): De Personal'+(hayHon?' + Honorarios':''),'success');
 }
 async function comVtaSet(el){
   var id=el.getAttribute('data-id'); var mes=window._nomMes||0; if(!mes){ showToast('Elige un mes','error'); return; }
