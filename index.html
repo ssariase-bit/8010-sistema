@@ -7810,10 +7810,11 @@ async function renderNomina(){
     });
     body+='<tr style="background:#f6f6f7;font-weight:700"><td style="padding:4px 8px;font-size:11px;text-align:right" colspan="11">Subtotal '+ar+'</td><td style="text-align:right;background:#eaf0ea">'+f$(sub.total)+'</td><td colspan="2"></td></tr>';
   });
+  window._nomEnt=TENT;
   var factG=T.base?(T.total/T.base):0;
   var kpi=function(t,v,c){return '<div style="flex:1;min-width:150px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:13px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div><div style="font-size:19px;font-weight:800;color:'+(c||'var(--azul)')+';white-space:nowrap">'+v+'</div></div>';};
   document.getElementById('main-content').innerHTML=
-    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💼 Nómina — costo real con todo lo de ley</div><button class="btn btn-outline btn-sm" onclick="nomAdd()">+ Agregar persona</button></div>'
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💼 Nómina — costo real con todo lo de ley</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline btn-sm" onclick="nomAdd()">+ Agregar persona</button><button class="btn btn-sm" style="background:#1A5C2E;color:#fff;border:none" onclick="nomLlevarPyG()" title="Lleva el costo de nómina por entidad a la línea De Personal del Presupuesto del P&L">↑ Llevar a P&L</button></div></div>'
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Pones el <strong>salario base</strong> y se calcula solo el costo real (prestaciones + seguridad social + parafiscales). Todo editable. <strong>Integ.</strong>=salario integral (IBC 70%, sin prestaciones). <strong>Aux</strong>=auxilio de transporte ($'+_finNum(NOM_AUX)+', salarios ≤2 SMMLV). <strong>Exento</strong>=sin salud/SENA/ICBF (Ley 1607, &lt;10 SMMLV). SMMLV 2026 $'+_finNum(NOM_SMMLV)+'.</div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
     + kpi('Salarios base (mes)', f$(T.base))
@@ -7849,6 +7850,25 @@ async function nomAdd(){
   var ins={edificio:'8010',area:area,nombre:nombre,salario:sal,integral:false,aux_transporte:true,arl_pct:0.522,exento_paraf:true,orden:ord,activo:true};
   var resp=await _finRAW('nomina_personal').insert(ins);
   if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓ Agregada','success'); renderNomina(); }
+}
+async function nomLlevarPyG(){
+  var ent=window._nomEnt; if(!ent){ showToast('Abre Nómina primero','error'); return; }
+  var ents=['LTM3','80-10','PH']; var resumen=ents.filter(function(e){return (ent[e]&&ent[e].total>0);}).map(function(e){return e+' $'+_finNum(ent[e].total);}).join(' · ');
+  if(!resumen){ showToast('No hay montos para llevar','error'); return; }
+  if(!confirm('Lleva el costo mensual de nómina a la línea "De Personal" del PRESUPUESTO del P&L (12 meses, 2026), por entidad:\n\n'+resumen+'\n\nNo toca el Real (ene–may). Solo escribe entidades con monto. ¿Continuar?')) return;
+  var Y=2026;
+  var q=await _finRAW('finanzas_pyg').select('*').eq('edificio','8010').eq('anio',Y).eq('cuenta','DE PERSONAL').eq('tipo','ppto');
+  var existing=(q&&q.data)||[];
+  for(var k=0;k<ents.length;k++){
+    var e=ents[k]; var monto=Math.round((ent[e]||{total:0}).total); if(monto<=0) continue;
+    var patch={updated_at:new Date().toISOString()}; try{patch.updated_by=currentUser.id;}catch(_){}
+    for(var i=1;i<=12;i++)patch['m'+i]=monto;
+    var r=existing.find(function(x){return x.entidad===e;}); var resp;
+    if(r){ resp=await _finRAW('finanzas_pyg').update(patch).eq('id',r.id); }
+    else { resp=await _finRAW('finanzas_pyg').insert(Object.assign({edificio:'8010',entidad:e,anio:Y,cuenta:'DE PERSONAL',grupo:'GASTOS',tipo:'ppto'},patch)); }
+    if(resp&&resp.error){ showToast('Error '+e+': '+resp.error.message,'error'); return; }
+  }
+  showToast('✓ De Personal (Presupuesto) actualizado por entidad','success');
 }
 async function nomDel(id){
   if(!confirm('¿Quitar esta persona de la nómina?')) return;
