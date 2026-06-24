@@ -7660,7 +7660,7 @@ async function renderFinanzas(){
   if(q.error){ document.getElementById('main-content').innerHTML='<div class="page-title">📊 Estado de Resultados</div><div class="card" style="max-width:620px"><p style="font-size:14px">⚠️ Falta crear la tabla <code>finanzas_pyg</code> en Supabase. Corre el script <strong>finanzas_pyg.sql</strong> en el SQL Editor y recarga.</p><p style="font-size:12px;color:var(--gris-t)">Detalle: '+(q.error.message||'')+'</p></div>'; return; }
   var rows=q.data||[]; window._finRows=rows;
   var ents=[['80-10','80-10 Oper. Turístico'],['LTM3','LTM3 Arriendo'],['PH','Prop. Horizontal'],['TOTAL','TOTAL (80-10+LTM3) vs Ppto Original']];
-  var editable=(st.entidad!=='CONSOLIDADO' && st.entidad!=='TOTAL');
+  var editable=(st.entidad!=='CONSOLIDADO') && (st.entidad!=='TOTAL' || st.vista==='ppto');
   var hoyM=(TODAY.slice(0,4)==String(st.anio))?(parseInt(TODAY.slice(5,7),10)):12;
   var f$=function(n){return '$'+_finNum(n);};
   // KPI band (mes actual + acumulado a hoyM) sobre RESULTADO e INGRESOS
@@ -7709,7 +7709,7 @@ async function renderFinanzas(){
     + kpi('Resultado YTD', resYR, resYP,'#1A5C2E')
     +'</div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
-    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">'+(editable?'Celdas editables en modo Real/Presupuesto. ':'TOTAL: Real = suma 80-10 + LTM3 · Ppto = presupuesto Original (solo lectura). ')+'Columna naranja = mes en curso. Vista Variación = Real − Presupuesto (verde a favor).</p></div>';
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">'+(editable?'Celdas editables en modo Real/Presupuesto. ':'TOTAL: el Real es la suma automática de 80-10 + LTM3. El Presupuesto (Original) SÍ es editable celda por celda. ')+'Columna naranja = mes en curso. Vista Variación = Real − Presupuesto (verde a favor).</p></div>';
 }
 async function finSet(inp){
   var cuenta=decodeURIComponent(inp.getAttribute('data-c')), tipo=inp.getAttribute('data-t'), m=inp.getAttribute('data-m');
