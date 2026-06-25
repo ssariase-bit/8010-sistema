@@ -7292,6 +7292,7 @@ async function renderEventos(){
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button onclick="loadView('eventos-agenda')" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">📅 Agenda semanal</button>
         <button onclick="loadView('eventos-rack')" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">🗓️ Rack salones</button>
+        ${barraCompartir()}
         <button class="btn btn-success btn-sm" onclick="window._eventoEdit=null;loadView('evento-form')">+ Nuevo evento</button>
       </div>
     </div>
