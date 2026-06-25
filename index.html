@@ -2994,6 +2994,13 @@ async function enviarNovedad() {
   if(!_ned) _payload.user_id = currentUser.id;
   const { error } = _ned ? await sb.from('novedades').update(_payload).eq('id',_ned.id) : await sb.from('novedades').insert(_payload);
   if (error) { showToast('Error al guardar', 'error'); btn.innerHTML = _ned?'💾 Guardar cambios':'📤 Reportar novedad'; btn.disabled = false; return; }
+  // Enlace: si la novedad es de Mantenimiento (y es nueva), crea también una Orden de Mantenimiento
+  if(!_ned && document.getElementById('n-area').value==='Mantenimiento'){
+    try{ var _otr=await sb.from('mantenimiento').insert({ fecha: document.getElementById('n-fecha').value, area_apto: apto || 'Mantenimiento', descripcion: descFinal, prioridad: document.getElementById('n-prio').value, estado:'Pendiente', solicitado_por: document.getElementById('n-quien').value||null, user_id: currentUser.id });
+      if(_otr && _otr.error && /solicitado_por/.test(_otr.error.message||'')){ await sb.from('mantenimiento').insert({ fecha: document.getElementById('n-fecha').value, area_apto: apto || 'Mantenimiento', descripcion: 'Solicita: '+(document.getElementById('n-quien').value||'')+'\n'+descFinal, prioridad: document.getElementById('n-prio').value, estado:'Pendiente', user_id: currentUser.id }); }
+      showToast('🔧 También se creó una Orden de Mantenimiento','success');
+    }catch(e){}
+  }
   window._novedadEdit = null;
   if(_ned){ showToast('✅ Novedad actualizada', 'success'); loadView('novedades-list'); return; }
   showToast('✅ Novedad reportada', 'success');
