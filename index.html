@@ -7460,7 +7460,7 @@ function renderFacturaGen(){
    '<div class="page-title">🧾 Generar Factura (gemela interna)</div>'
   +'<div class="card" style="max-width:880px">'
   +'<div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:8px 12px;font-size:12px;color:#7c5e10;margin-bottom:14px">Documento interno de control — <strong>no reemplaza la factura legal DIAN</strong> (esa la emite NewHotel/BTW).</div>'
-  +'<div class="form-section"><div class="form-section-title">🏢 Entidad que factura</div><div class="form-group">'+perfilSel+'<div id="fac-perfil-info" style="font-size:11px;color:var(--gris-t);margin-top:4px"></div></div></div>'
+  +'<div class="form-section"><div class="form-section-title">🏢 Entidad que factura</div><div class="form-row"><div class="form-group">'+perfilSel+'<div id="fac-perfil-info" style="font-size:11px;color:var(--gris-t);margin-top:4px"></div></div><div class="form-group"><label>N° factura (manual, opcional)</label><input type="text" id="fac-num-manual" placeholder="Auto si lo dejas vacío · ej: UL 5690"><div style="font-size:11px;color:var(--gris-t);margin-top:2px">Si lo escribes, se usa ese número (y el consecutivo sigue desde ahí).</div></div></div></div>'
   +'<div class="form-section"><div class="form-section-title">👤 Cliente</div><div class="form-row">'
   +'<div class="form-group"><label>Titular / Razón social *</label><input type="text" id="fac-cli-nombre"></div>'
   +'<div class="form-group"><label>C.C / NIT</label><input type="text" id="fac-cli-nit"></div></div>'
@@ -7512,7 +7512,12 @@ async function facturaGuardar(conPDF){
     pax:(document.getElementById('fac-pax')||{}).value.trim()||null, forma_pago:(document.getElementById('fac-fpago')||{}).value, medio_pago:(document.getElementById('fac-mpago')||{}).value.trim()||null,
     lineas:lineas, subtotal:sub, impuestos:imp, total:sub+imp, abono:Number((document.getElementById('fac-abono')||{}).value)||0, observaciones:(document.getElementById('fac-obs')||{}).value.trim()||null, estado:'REALIZADA' };
   try{ fac.user_id=currentUser.id; }catch(e){}
-  if(!ed){ fac.numero=await getNextFactura(k); fac.fecha=TODAY; }
+  if(!ed){
+    var man=(document.getElementById('fac-num-manual')||{}).value.trim();
+    if(man){ fac.numero=man; var nn=parseInt((man.match(/\d+/g)||[]).pop()); if(nn){ try{ await sb.from('config').upsert({id:'ultima_factura_'+k,valor:String(nn),updated_at:new Date().toISOString()}); }catch(e){} } }
+    else { fac.numero=await getNextFactura(k); }
+    fac.fecha=TODAY;
+  }
   async function _facSave(){ return ed ? sb.from('facturas').update(fac).eq('id',ed.id).select().single() : sb.from('facturas').insert(fac).select().single(); }
   var r=await _facSave();
   if(r.error && /abono/i.test(r.error.message||'')){ delete fac.abono; r=await _facSave(); }
