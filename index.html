@@ -7439,7 +7439,7 @@ async function renderIngresos(){
   const [rkR, csR, evR] = await Promise.all([
     _rackRango('fecha,apto,estado,tarifa,canal,tipo,updated_at,created_at', ini, fin),
     sb.from('consumos').select('fecha,apto,huesped,valor,pago').gte('fecha',ini).lte('fecha',fin),
-    sb.from('eventos').select('total,estado').eq('edificio',EDIFICIO_ACTIVO).gte('fecha_inicio',ini).lte('fecha_inicio',fin)
+    sb.from('eventos').select('total,estado,fecha_inicio').eq('edificio',EDIFICIO_ACTIVO).gte('fecha_inicio',ini).lte('fecha_inicio',fin)
   ]);
   const rk = rkR.data || [], cs = csR.data || [];
   const _evRows = (evR.data || []).filter(e=>Number(e.total)>0);
@@ -7452,7 +7452,7 @@ async function renderIngresos(){
     if(pr > pc) map[k] = r;
     else if(pr === pc){ const tr = r.updated_at||r.created_at||'', tc = c.updated_at||c.created_at||''; if(tr > tc) map[k] = r; }
   });
-  const dias = {}; for(let d=1; d<=dim; d++) dias[d] = { noches:0, aloja:0, cons:0 };
+  const dias = {}; for(let d=1; d<=dim; d++) dias[d] = { noches:0, aloja:0, cons:0, ev:0 };
   let totAloja=0, nochesVendMes=0, alojaCorte=0, nochesVendCorte=0, nochesFisCorte=0, totConsumos=0;
   const canales = {};
   Object.values(map).forEach(r => {
@@ -7471,6 +7471,7 @@ async function renderIngresos(){
     }
   });
   cs.forEach(c => { const d = Number(String(c.fecha).slice(8,10)); const v = Number(c.valor)||0; if(dias[d]) dias[d].cons += v; totConsumos += v; });
+  _evRows.forEach(e => { const d = Number(String(e.fecha_inicio).slice(8,10)); const v = Number(e.total)||0; if(dias[d]) dias[d].ev += v; });
   const totalAptos = (EB().aptosFull||[]).length || 1;
   const pctMes = Math.round(nochesFisCorte/(totalAptos*corte)*100);
   const tProm = nochesVendCorte ? Math.round(alojaCorte/nochesVendCorte) : 0;
@@ -7483,13 +7484,14 @@ async function renderIngresos(){
     const fechaD = new Date(Y, M-1, d);
     const dn = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][fechaD.getDay()];
     const futuro = esMesActual && d > corte;
-    const tot = o.aloja + o.cons;
+    const tot = o.aloja + o.cons + o.ev;
     filas += `<tr style="${d===hoyDia?'background:var(--azul-c);font-weight:700':''}${futuro?'color:#9CA3AF':''}">
       <td>${String(d).padStart(2,'0')} ${dn}${d===hoyDia?' · HOY':''}</td>
       <td style="text-align:center">${o.noches}</td>
       <td style="text-align:center">${Math.round(o.noches/totalAptos*100)}%</td>
       <td style="text-align:right">${o.aloja?f$(o.aloja):'-'}</td>
       <td style="text-align:right">${o.cons?f$(o.cons):'-'}</td>
+      <td style="text-align:right">${o.ev?f$(o.ev):'-'}</td>
       <td style="text-align:right;font-weight:600">${tot?f$(tot):'-'}</td>
     </tr>`;
   }
@@ -7515,13 +7517,14 @@ async function renderIngresos(){
     <div class="card" style="margin-bottom:16px">
       <div style="font-weight:700;color:var(--azul);margin-bottom:8px">Detalle día a día</div>
       <div style="overflow-x:auto"><table class="tabla">
-        <thead><tr><th>Día</th><th>Aptos ocup.</th><th>% Ocup.</th><th>Alojamiento</th><th>Consumos</th><th>Total</th></tr></thead>
+        <thead><tr><th>Día</th><th>Aptos ocup.</th><th>% Ocup.</th><th>Alojamiento</th><th>Consumos</th><th>Eventos</th><th>Total</th></tr></thead>
         <tbody>${filas}
         <tr style="background:var(--azul-c);font-weight:800">
           <td colspan="3" style="color:var(--azul)">TOTAL MES${esMesActual?' (con reservas futuras)':''}</td>
           <td style="text-align:right">${f$(totAloja)}</td>
           <td style="text-align:right">${f$(totConsumos)}</td>
-          <td style="text-align:right;color:var(--verde)">${f$(totAloja + totConsumos)}</td>
+          <td style="text-align:right">${f$(totEventos)}</td>
+          <td style="text-align:right;color:var(--verde)">${f$(totAloja + totConsumos + totEventos)}</td>
         </tr></tbody>
       </table></div>
     </div>
@@ -8729,6 +8732,15 @@ async function renderFormatoHuespedes(yArg, mArg) {
         else if (est.indexOf('Bloqueado')>=0){
           if ((d.observaciones||'').indexOf('Apto completo')>=0){ tipo='completo'; label='Apto completo'; lock=true; }
           else { tipo='bloq'; label='Bloqueado'; }
+        }
+        else if (est==='Ocupado'||est==='Completo'||est.indexOf('Check-in')>=0||est.indexOf('Check-out')>=0||est.indexOf('Sale de viaje')>=0){
+          // Ocupación cargada sin nombre de arrendatario (p.ej. rack reconstruido): igual se pinta la barra
+          if (est.indexOf('Check-in')>=0) tipo='in';
+          else if (est.indexOf('Check-out')>=0 || est.indexOf('Sale')>=0) tipo='out';
+          else if (hoyDia>0 && j<hoyDia) tipo='hist';
+          else if (hoyDia>0 && i>hoyDia) tipo='reserva';
+          else tipo='casa';
+          label = est==='Completo' ? 'Completo' : 'Ocupado (sin nombre)';
         }
         else { i=j+1; continue; }
       } else {
