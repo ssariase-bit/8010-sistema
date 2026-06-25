@@ -1855,6 +1855,7 @@ async function renderRack() {
 
   const { data: rawRack, error: rackErr } = await sb.from('rack').select('*')
     .gte('fecha', monthStart).lte('fecha', monthEnd)
+    .or(`edificio.eq.${EDIFICIO_ACTIVO},edificio.is.null`) // evita mezclar aptos con el mismo número entre 8010 y Kubik
     .order('estado', { ascending: true }); // Libre < Ocupado → Ocupado gana en el map
   if (rackErr) { document.getElementById('main-content').innerHTML = `<div class="empty"><div class="empty-icon">❌</div><p>Error cargando rack: ${rackErr.message}</p></div>`; return; }
   let allRack = rawRack || [];
@@ -1867,9 +1868,9 @@ async function renderRack() {
     const aptosDehoy = allRack.filter(r => r.fecha === todayStr).map(r => r.apto);
     const faltanHoy = APTOS_DEFAULT.filter(a => !aptosDehoy.includes(a));
     if (faltanHoy.length > 0) {
-      const newRows = faltanHoy.map(a => ({ fecha: todayStr, apto: a, estado: 'Libre', updated_by: currentUser.id }));
+      const newRows = faltanHoy.map(a => ({ fecha: todayStr, apto: a, estado: 'Libre', edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id }));
       await sb.from('rack').upsert(newRows, { onConflict: 'fecha,apto,edificio', ignoreDuplicates: true });
-      const { data: refreshed } = await sb.from('rack').select('*').gte('fecha', monthStart).lte('fecha', monthEnd);
+      const { data: refreshed } = await sb.from('rack').select('*').gte('fecha', monthStart).lte('fecha', monthEnd).or(`edificio.eq.${EDIFICIO_ACTIVO},edificio.is.null`);
       if (refreshed) allRack = refreshed;
     }
   }
