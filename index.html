@@ -2456,7 +2456,7 @@ function _calcTarifaMoneda(idTar, idMon, idTrm){
 async function saveApto() {
   const aNum = document.getElementById('modal-apto-num').textContent;
   const fecha = _aptoData?.fecha || TODAY;
-  const esCompleto = document.getElementById('m-completo')?.checked || false;
+  const esCompleto = (document.getElementById('m-completo')?.checked || false) || (document.getElementById('m-estado')?.value === 'Completo');
   const varA = APTO_A_MAP[aNum];
 
   const _tm = _calcTarifaMoneda('m-tarifa','m-moneda','m-trm');
@@ -2521,7 +2521,7 @@ async function saveApto() {
     try{ var _om=window._aptoModalOldRange; if(_om && _om.checkin && _om.checkout){ var _dq=sb.from('rack').delete().eq('apto',aNum).eq('edificio',EDIFICIO_ACTIVO).gte('fecha',_om.checkin).lte('fecha',_om.checkout); if(_om.huesped) _dq=_dq.eq('huesped',_om.huesped); await _dq; } window._aptoModalOldRange=null; }catch(e){}
     const rr = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
     if (rr.error) { showToast('Error al aplicar el rango: ' + rr.error.message, 'error'); return; }
-    if (varA && ocupacional) await aplicarCompleto(aNum, fecha, updates.checkin, updates.checkout, updates.huesped, esCompleto);
+    if (varA && (ocupacional || updates.estado==='Completo')) await aplicarCompleto(aNum, fecha, updates.checkin, updates.checkout, updates.huesped, esCompleto);
     showToast(`✅ Apto ${aNum}: cambios aplicados a ${rows.length} día(s) (${fmtDate(updates.checkin)} a ${fmtDate(updates.checkout)})`, 'success');
     closeModal('modal-apto');
     renderRack();
@@ -2532,7 +2532,7 @@ async function saveApto() {
   if (error) { showToast('Error al guardar', 'error'); return; }
 
   // Apto completo: ocupar/liberar la variante A "de largo" durante la estadía
-  if (varA && ['Ocupado','Check-in hoy','Check-out hoy'].includes(updates.estado)) {
+  if (varA && ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'].includes(updates.estado)) {
     await aplicarCompleto(aNum, fecha, updates.checkin, updates.checkout, updates.huesped, esCompleto);
     showToast(esCompleto ? `✅ Apto ${aNum} guardado — ${varA} completo de largo` : '✅ Apartamento actualizado', 'success');
   } else {
@@ -7290,7 +7290,7 @@ async function renderEventos(){
   var esc=function(s){ return String(s==null?'':s).replace(/</g,'&lt;'); };
   var badge=function(e){ var c=e==='Confirmado'?'abierto':e==='Realizado'?'resuelto':e==='Cancelado'?'alta':'proceso'; return '<span class="badge b-'+c+'">'+esc(e)+'</span>'; };
   var totFact=filt.reduce(function(s,r){ return s+(Number(r.total)||0); },0);
-  var body=filt.map(function(r){ return '<tr><td style="white-space:nowrap">'+(r.fecha_inicio?fmtDate(r.fecha_inicio):'-')+(r.fecha_fin&&r.fecha_fin!==r.fecha_inicio?(' → '+fmtDate(r.fecha_fin)):'')+'</td><td><strong>'+esc(r.empresa)+'</strong></td><td>'+esc(r.sala||'-')+'</td><td style="text-align:center">'+(r.pax||'-')+'</td><td>'+badge(r.estado)+'</td><td style="white-space:nowrap;font-weight:600">'+_evMoney(r.total)+'</td><td style="white-space:nowrap"><span title="Editar" style="cursor:pointer" onclick="editarEvento(\''+r.id+'\')">✏️</span> <span title="Cotización" style="cursor:pointer" onclick="cotizacionEvento(\''+r.id+'\')">📄</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarEvento(\''+r.id+'\')">🗑️</span></td></tr>'; }).join('') || '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Sin eventos</td></tr>';
+  var body=filt.map(function(r){ return '<tr><td style="white-space:nowrap">'+(r.fecha_inicio?fmtDate(r.fecha_inicio):'-')+(r.fecha_fin&&r.fecha_fin!==r.fecha_inicio?(' → '+fmtDate(r.fecha_fin)):'')+'</td><td><strong>'+esc(r.empresa)+'</strong></td><td>'+esc(r.sala||'-')+'</td><td style="text-align:right">'+_evMoney(r.val_sala)+'</td><td style="text-align:right">'+_evMoney((Number(r.val_alimentacion)||0)+(Number(r.val_consumos)||0))+'</td><td style="text-align:center">'+(r.pax||'-')+'</td><td>'+badge(r.estado)+'</td><td style="white-space:nowrap;font-weight:600">'+_evMoney(r.total)+'</td><td style="white-space:nowrap"><span title="Editar" style="cursor:pointer" onclick="editarEvento(\''+r.id+'\')">✏️</span> <span title="Cotización" style="cursor:pointer" onclick="cotizacionEvento(\''+r.id+'\')">📄</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarEvento(\''+r.id+'\')">🗑️</span></td></tr>'; }).join('') || '<tr><td colspan="9" style="text-align:center;color:#999;padding:20px">Sin eventos</td></tr>';
   var meses=[...new Set(rows.map(function(r){ return String(r.fecha_inicio||'').slice(0,7); }).filter(Boolean))].sort().reverse();
   var optMes='<option value="">Todos los meses</option>'+meses.map(function(m){ return '<option'+(fm===m?' selected':'')+' value="'+m+'">'+m+'</option>'; }).join('');
   var optEst='<option value="">Todos los estados</option>'+_EV_ESTADOS.map(function(x){ return '<option'+(fe===x?' selected':'')+'>'+x+'</option>'; }).join('');
@@ -7308,7 +7308,7 @@ async function renderEventos(){
       <div class="card-header"><div class="card-title">${filt.length} eventos · Facturado: ${_evMoney(totFact)}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap"><select onchange="window._evFiltroMes=this.value;renderEventos()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">${optMes}</select><select onchange="window._evFiltroEstado=this.value;renderEventos()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">${optEst}</select></div>
       </div>
-      <div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Empresa</th><th>Sala</th><th>PAX</th><th>Estado</th><th>Total</th><th></th></tr></thead><tbody>${body}</tbody></table></div>
+      <div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Empresa</th><th>Sala</th><th style="text-align:right">Valor salón</th><th style="text-align:right">Valor consumos</th><th>PAX</th><th>Estado</th><th>Total</th><th></th></tr></thead><tbody>${body}</tbody></table></div>
     </div>`;
 }
 function enviarAgendaEventos(btn){
