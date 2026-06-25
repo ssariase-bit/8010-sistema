@@ -9426,8 +9426,18 @@ R/${quien}`;
     } catch(e) { console.error('CKI→rack:', e); }
   })();
 
-  // Registrar el informe en Novedades para que quede en el reporte del día
-  try { const _hN=new Date().getHours(); sb.from('novedades').insert({ fecha: TODAY, turno: _hN<14?'Mañana':(_hN<22?'Tarde':'Noche'), area: 'CKI — Apto ' + apto, prioridad: 'Baja', descripcion: msg, reportado_por: quien || currentProfile?.nombre || 'Recepción', estado: 'Resuelto', fecha_cierre: TODAY, user_id: currentUser.id }).then(function(r){ if (r.error) console.error('novedad CKI:', r.error); }); } catch(e) { console.error(e); }
+  // Registrar el informe en Novedades para que quede en el reporte del día (alineado al rediseño)
+  try {
+    const _hN=new Date().getHours();
+    const _qN = quien || currentProfile?.nombre || 'Recepción';
+    const _nov = { fecha: TODAY, turno: _hN<14?'Mañana':(_hN<22?'Tarde':'Noche'), area: 'Recepción', apto: apto,
+      prioridad: 'Baja', descripcion: '✅ Check-in realizado — Apto '+apto+(huesped?(' · '+huesped):'')+'\n\n'+msg,
+      reportado_por: _qN, gestionado_por: _qN, resuelto_por: _qN, estado: 'Resuelto', fecha_cierre: TODAY, user_id: currentUser.id };
+    sb.from('novedades').insert(_nov).then(function(r){
+      if (r.error && /resuelto_por/.test(r.error.message||'')){ delete _nov.resuelto_por; sb.from('novedades').insert(_nov); }
+      else if (r.error) console.error('novedad CKI:', r.error);
+    });
+  } catch(e) { console.error(e); }
   compartirInforme(`CKI — ${huesped} Apto ${apto}`, msg);
 }
 
