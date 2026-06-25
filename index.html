@@ -2900,14 +2900,14 @@ async function renderNovedadForm() {
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Área</label>
+        <div class="form-group"><label>Hacia qué área va / la resuelve *</label>
           <select id="n-area">
-            <option>Recepción</option><option>Apartamento</option><option>Actas</option><option>Mantenimiento</option>
-            <option>Housekeeping</option><option>Seguridad</option><option>Zonas comunes</option>
-            <option>Financiero</option><option>Huésped</option><option>General</option>
+            <option>Mantenimiento</option><option>Recepción</option><option>Housekeeping</option>
+            <option>Seguridad</option><option>Zonas comunes</option><option>Apartamento</option>
+            <option>Financiero</option><option>Administración</option><option>Gerencia</option><option>General</option>
           </select>
         </div>
-        <div class="form-group"><label>Apartamento (si aplica)</label>
+        <div class="form-group"><label>¿Dónde fue? (apto / ubicación)</label>
           <input type="text" id="n-apto" placeholder="Ej: 301, Lobby, Terraza...">
         </div>
       </div>
@@ -2923,34 +2923,18 @@ async function renderNovedadForm() {
           <select id="n-estado-ini"><option>Abierto</option><option>En proceso</option></select>
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label>Causa</label>
-          <input type="text" id="n-causa" placeholder="¿Qué originó la novedad?">
-        </div>
-        <div class="form-group"><label>Fuente</label>
-          <select id="n-fuente"><option value="">— Seleccionar —</option><option>Huésped</option><option>WhatsApp</option><option>Llamada</option><option>Correo</option><option>Inspección</option><option>Personal interno</option><option>Proveedor</option><option>Otro</option></select>
-        </div>
+      <div class="form-group"><label>¿Cuál fue la novedad? *</label>
+        <textarea id="n-desc" placeholder="Describe qué ocurrió, dónde exactamente y a qué hora..." style="min-height:120px"></textarea>
       </div>
-      <div class="form-group"><label>Descripción de la novedad *</label>
-        <textarea id="n-desc" placeholder="Describe con detalle: qué ocurrió, dónde exactamente, a qué hora, qué acción se tomó..." style="min-height:130px"></textarea>
-      </div>
-      <div class="form-group"><label>Tratamiento / plan de acción</label>
-        <textarea id="n-tratamiento" placeholder="¿Cómo se va a resolver? Pasos a seguir..." style="min-height:60px"></textarea>
+      <div class="form-group"><label>¿Qué acción se tomó?</label>
+        <textarea id="n-accion-tomada" placeholder="Qué se hizo para resolver o el plan a seguir..." style="min-height:80px"></textarea>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Reportado por (quien registra)</label>
+        <div class="form-group"><label>¿Quién la solicitó? *</label>
           <input type="text" id="n-quien" value="${currentProfile?.nombre || ''}">
         </div>
-        <div class="form-group"><label>Acción inmediata tomada</label>
-          <input type="text" id="n-accion" placeholder="¿Qué se hizo hasta ahora?">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>Gestionado por</label>
+        <div class="form-group"><label>¿Quién toma la solicitud?</label>
           <select id="n-gestor">${personasOpts}</select>
-        </div>
-        <div class="form-group"><label>Área del gestor</label>
-          <select id="n-area-gestor">${areaGestorOpts}</select>
         </div>
       </div>
       <div class="form-actions">
@@ -2961,8 +2945,8 @@ async function renderNovedadForm() {
   if(ed){
     var S=function(id,v){var e=document.getElementById(id); if(e!=null&&v!=null)e.value=v;};
     S('n-fecha',ed.fecha); S('n-turno',ed.turno); S('n-area',ed.area); S('n-apto',ed.apto); S('n-prio',ed.prioridad);
-    S('n-estado-ini',ed.estado); S('n-causa',ed.causa); S('n-fuente',ed.fuente); S('n-desc',ed.descripcion);
-    S('n-tratamiento',ed.tratamiento); S('n-quien',ed.reportado_por); S('n-gestor',ed.gestionado_por); S('n-area-gestor',ed.area_gestor);
+    S('n-estado-ini',ed.estado); S('n-desc',ed.descripcion);
+    S('n-accion-tomada',ed.tratamiento); S('n-quien',ed.reportado_por); S('n-gestor',ed.gestionado_por);
   }
 }
 
@@ -2971,10 +2955,8 @@ async function enviarNovedad() {
   if (!desc) { showToast('Describe la novedad antes de enviar', 'error'); return; }
   const btn = document.querySelector('.btn-success');
   btn.innerHTML = '<span class="spinner"></span>Guardando...'; btn.disabled = true;
-  const accion = document.getElementById('n-accion').value.trim();
+  const accion = document.getElementById('n-accion-tomada')?.value.trim() || '';
   const apto = document.getElementById('n-apto').value.trim();
-  let descFinal = desc;
-  if (accion) descFinal += `\n\n✅ Acción tomada: ${accion}`;
   var _ned = window._novedadEdit || null;
   var _payload = {
     fecha: document.getElementById('n-fecha').value,
@@ -2982,25 +2964,22 @@ async function enviarNovedad() {
     area: document.getElementById('n-area').value,
     apto: apto || null,
     prioridad: document.getElementById('n-prio').value,
-    descripcion: descFinal,
+    descripcion: desc,
     reportado_por: document.getElementById('n-quien').value,
     gestionado_por: document.getElementById('n-gestor')?.value || null,
-    area_gestor: document.getElementById('n-area-gestor')?.value || null,
-    causa: document.getElementById('n-causa')?.value?.trim() || null,
-    fuente: document.getElementById('n-fuente')?.value || null,
-    tratamiento: document.getElementById('n-tratamiento')?.value?.trim() || null,
+    tratamiento: accion || null,
     estado: document.getElementById('n-estado-ini').value,
   };
   if(!_ned) _payload.user_id = currentUser.id;
-  const { error } = _ned ? await sb.from('novedades').update(_payload).eq('id',_ned.id) : await sb.from('novedades').insert(_payload);
+  const _res = _ned ? await sb.from('novedades').update(_payload).eq('id',_ned.id).select().single() : await sb.from('novedades').insert(_payload).select().single();
+  const error = _res.error; const _row = _res.data;
   if (error) { showToast('Error al guardar', 'error'); btn.innerHTML = _ned?'💾 Guardar cambios':'📤 Reportar novedad'; btn.disabled = false; return; }
-  // Enlace: si la novedad es de Mantenimiento (y es nueva), crea también una Orden de Mantenimiento
-  if(!_ned && document.getElementById('n-area').value==='Mantenimiento'){
-    try{ var _otr=await sb.from('mantenimiento').insert({ fecha: document.getElementById('n-fecha').value, area_apto: apto || 'Mantenimiento', descripcion: descFinal, prioridad: document.getElementById('n-prio').value, estado:'Pendiente', solicitado_por: document.getElementById('n-quien').value||null, user_id: currentUser.id });
-      if(_otr && _otr.error && /solicitado_por/.test(_otr.error.message||'')){ await sb.from('mantenimiento').insert({ fecha: document.getElementById('n-fecha').value, area_apto: apto || 'Mantenimiento', descripcion: 'Solicita: '+(document.getElementById('n-quien').value||'')+'\n'+descFinal, prioridad: document.getElementById('n-prio').value, estado:'Pendiente', user_id: currentUser.id }); }
-      showToast('🔧 También se creó una Orden de Mantenimiento','success');
-    }catch(e){}
+  // Si es novedad NUEVA de Mantenimiento → enviar a tareas por apartamento (historial del apto)
+  if(!_ned && _payload.area==='Mantenimiento' && _row){
+    var _okM = await window._novToMantTask(_row);
+    if(_okM===true) showToast('🔧 Enviada a tareas de Mantenimiento (apto '+(_row.apto||'—')+')','success');
   }
+  var descFinal = desc + (accion ? `\n\n✅ Acción tomada: ${accion}` : '');
   window._novedadEdit = null;
   if(_ned){ showToast('✅ Novedad actualizada', 'success'); loadView('novedades-list'); return; }
   showToast('✅ Novedad reportada', 'success');
@@ -3313,7 +3292,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
       ${rows.length === 0
         ? '<div class="empty"><div class="empty-icon">✅</div><p>Sin novedades</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Fecha ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Hora ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Área ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Apto/Ubic. ⇅</th><th>Descripción</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Prioridad ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Estado ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Reportó ⇅</th><th>Acciones</th></tr></thead>
+            <thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Fecha ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Hora ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Área ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Apto/Ubic. ⇅</th><th>Descripción</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Prioridad ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Estado ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Solicitó ⇅</th><th>Acciones</th></tr></thead>
             <tbody>${rows.map(n => `<tr>
               <td>${fmtDate(n.fecha || (n.created_at ? n.created_at.split('T')[0] : null))}</td>
               <td style="white-space:nowrap;color:var(--gris-t);font-size:11px">${fmtHour(n.created_at)}</td>
@@ -3345,6 +3324,58 @@ async function borrarNovedad(id){
   showToast('✅ Novedad borrada','success');
   loadView('novedades-list');
 }
+// Trazabilidad de novedades: la acción inicial vive en tratamiento; los seguimientos se anexan con marcador 📋
+window._accionInicialNov = function(t){ return String(t||'').split('\n📋')[0].trim(); };
+window._renderTrazabilidadNov = function(n){
+  var entradas = [];
+  // 1) Reportada
+  entradas.push({ ic:'📝', t:'Reportada por '+(n.reportado_por||'—'), s: (n.created_at?fmtHour(n.created_at)+' · ':'')+fmtDate(n.fecha) });
+  // 2) Seguimientos anexados al campo de acción
+  var log = String(n.tratamiento||'');
+  var segs = log.split('\n📋 ').slice(1);
+  segs.forEach(function(s){ entradas.push({ ic:'📋', t:s.trim(), s:'' }); });
+  // 3) Cierre
+  if((n.estado==='Resuelto'||n.estado==='Cerrado') && n.fecha_cierre) entradas.push({ ic:'✅', t:'Resuelta', s:fmtDate(n.fecha_cierre) });
+  var filas = entradas.map(function(e){
+    return '<div style="position:relative;margin-bottom:12px">'+
+      '<div style="position:absolute;left:-19px;top:4px;width:11px;height:11px;border-radius:50%;background:var(--azul);border:2px solid #fff;box-shadow:0 0 0 1px var(--azul)"></div>'+
+      '<div style="font-size:13px;color:#1F2937;line-height:1.5">'+e.ic+' '+e.t+'</div>'+
+      (e.s?'<div style="font-size:11px;color:var(--gris-t)">'+e.s+'</div>':'')+
+    '</div>';
+  }).join('');
+  return '<div style="margin-bottom:16px">'+
+    '<div style="font-size:11px;font-weight:700;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">📋 Trazabilidad — todo lo que se realizó</div>'+
+    '<div style="position:relative;padding-left:22px">'+
+      '<div style="position:absolute;left:5px;top:2px;bottom:6px;width:2px;background:var(--gris-b)"></div>'+filas+
+    '</div></div>';
+};
+// Crea una tarea de Mantenimiento por apartamento a partir de una novedad (alimenta el historial del apto).
+// Resiliente a columnas faltantes (novedad_id, solicitado_por) y evita duplicar si ya existe el enlace.
+window._novToMantTask = async function(nov){
+  try{
+    var base = { fecha: nov.fecha||TODAY, area_apto: nov.apto || 'General', descripcion: nov.descripcion||'',
+      prioridad: (nov.prioridad==='Alta'?'Urgente':'Normal'), estado:'Pendiente',
+      solicitado_por: nov.reportado_por||null, user_id: currentUser.id };
+    if(nov.tratamiento){ var ai=window._accionInicialNov(nov.tratamiento); if(ai) base.descripcion += '\nAcción: '+ai; }
+    try{ var ex = await sb.from('mantenimiento').select('id').eq('novedad_id', nov.id).limit(1);
+      if(ex && !ex.error && ex.data && ex.data.length) return 'dup'; if(ex && !ex.error) base.novedad_id = nov.id; }catch(e){}
+    var r = await sb.from('mantenimiento').insert(base);
+    if(r.error && /novedad_id/.test(r.error.message||'')){ delete base.novedad_id; r = await sb.from('mantenimiento').insert(base); }
+    if(r.error && /solicitado_por/.test(r.error.message||'')){ delete base.solicitado_por; base.descripcion='Solicita: '+(nov.reportado_por||'')+'\n'+base.descripcion; r = await sb.from('mantenimiento').insert(base); }
+    return r.error ? false : true;
+  }catch(e){ return false; }
+};
+async function trasladarNovMant(id){
+  var nov = (await sb.from('novedades').select('*').eq('id',id).single()).data;
+  if(!nov){ showToast('No se encontró la novedad','error'); return; }
+  var seg = '\n📋 '+fmtFH12()+' — Trasladada a Mantenimiento'+(currentProfile?.nombre?(' por '+currentProfile.nombre):'');
+  var upd = await sb.from('novedades').update({ area:'Mantenimiento', estado:'En proceso', tratamiento:(nov.tratamiento||'')+seg }).eq('id', id);
+  if(upd.error){ showToast('Error al trasladar: '+upd.error.message,'error'); return; }
+  nov.area='Mantenimiento';
+  var ok = await window._novToMantTask(nov);
+  showToast(ok==='dup'?'🔧 Ya estaba en tareas de Mantenimiento':(ok?'🔧 Enviada a tareas de Mantenimiento (apto '+(nov.apto||'—')+')':'⚠️ Trasladada, pero no se pudo crear la tarea'), ok?'success':'error');
+  verNovedad(id);
+}
 async function verNovedad(id) {
   const { data: n } = await sb.from('novedades').select('*').eq('id', id).single();
   if (!n) return;
@@ -3355,18 +3386,24 @@ async function verNovedad(id) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
         <div><strong>Fecha:</strong> ${fmtDate(n.fecha)}</div>
         <div><strong>Turno:</strong> ${n.turno||'-'}</div>
-        <div><strong>Área:</strong> ${areaApto(n).area}</div>
+        <div><strong>Hacia área / resuelve:</strong> ${areaApto(n).area}</div>
         <div><strong>Apto/Ubic.:</strong> ${areaApto(n).apto||'-'}</div>
-        <div><strong>Reportó:</strong> ${n.reportado_por||'-'}</div>
-        <div><strong>Gestiona:</strong> ${n.gestionado_por||'— Sin asignar'}</div>
-        <div><strong>Área gestor:</strong> ${n.area_gestor||'-'}</div>
+        <div><strong>Solicitó:</strong> ${n.reportado_por||'-'}</div>
+        <div><strong>Toma la solicitud:</strong> ${n.gestionado_por||'— Sin asignar'}</div>
         <div><strong>Prioridad:</strong> <span class="badge b-${(n.prioridad||'').toLowerCase()}">${n.prioridad||'-'}</span></div>
         <div><strong>Estado:</strong> ${badgeEst(n.estado)}</div>
+        ${n.resuelto_por?`<div><strong>Resuelta por:</strong> ${n.resuelto_por}</div>`:''}
       </div>
       <div style="background:var(--gris);border-radius:8px;padding:14px;margin-bottom:16px">
-        <strong>Descripción:</strong>
-        <p style="margin-top:6px;line-height:1.6">${n.descripcion}</p>
+        <strong>¿Cuál fue la novedad?</strong>
+        <p style="margin-top:6px;line-height:1.6;white-space:pre-wrap">${n.descripcion}</p>
       </div>
+      ${window._accionInicialNov(n.tratamiento) ? `<div style="background:var(--verde-c,#eafaf1);border-radius:8px;padding:14px;margin-bottom:16px;border-left:3px solid var(--verde-m,#27ae60)">
+        <strong>✅ Acción tomada:</strong>
+        <p style="margin-top:6px;line-height:1.6;white-space:pre-wrap">${window._accionInicialNov(n.tratamiento)}</p>
+      </div>` : ''}
+      ${window._renderTrazabilidadNov(n)}
+      ${n.area!=='Mantenimiento' ? `<button class="btn btn-outline btn-sm" onclick="trasladarNovMant('${id}')" style="color:var(--azul);border-color:var(--azul);margin-bottom:12px">🔧 Trasladar a Mantenimiento</button>` : `<div style="font-size:12px;color:var(--azul);font-weight:600;margin-bottom:12px">🔧 Esta novedad está en la cola de Mantenimiento</div>`}
       ${n.fecha_cierre ? `<p><strong>Fecha cierre:</strong> ${fmtDate(n.fecha_cierre)}</p>` : ''}
 
       ${window._renderComentariosNov(n)}
@@ -3401,9 +3438,10 @@ async function actualizarNovedad(id) {
   const estado = document.getElementById('nov-nuevo-estado').value;
   const seg = document.getElementById('nov-seguimiento').value.trim();
   const updates = { estado };
-  if (estado === 'Resuelto') updates.fecha_cierre = TODAY;
-  if (seg) updates.descripcion = (await sb.from('novedades').select('descripcion').eq('id',id).single()).data?.descripcion + '\n\n📋 ' + fmtFH12() + ' — ' + seg;
-  const { error } = await sb.from('novedades').update(updates).eq('id', id);
+  if (estado === 'Resuelto'){ updates.fecha_cierre = TODAY; updates.resuelto_por = currentProfile?.nombre || null; }
+  if (seg) { const _pv=(await sb.from('novedades').select('tratamiento').eq('id',id).single()).data?.tratamiento || ''; updates.tratamiento = _pv + '\n📋 ' + fmtFH12() + ' — ' + seg + (currentProfile?.nombre?(' ('+currentProfile.nombre+')'):''); }
+  let { error } = await sb.from('novedades').update(updates).eq('id', id);
+  if (error && /resuelto_por/.test(error.message||'')){ delete updates.resuelto_por; ({ error } = await sb.from('novedades').update(updates).eq('id', id)); }
   if (error) { showToast('Error al actualizar', 'error'); return; }
   showToast(estado==='Resuelto' ? '✅ Novedad cerrada' : '✅ Estado actualizado', 'success');
   setTimeout(() => loadView('novedades-list'), 1200);
@@ -3411,8 +3449,13 @@ async function actualizarNovedad(id) {
 
 async function cambiarEstadoNov(id, estado) {
   const updates = { estado };
-  if (estado === 'Resuelto') updates.fecha_cierre = TODAY;
-  await sb.from('novedades').update(updates).eq('id', id);
+  if (estado === 'Resuelto'){
+    updates.fecha_cierre = TODAY; updates.resuelto_por = currentProfile?.nombre || null;
+    const _pv=(await sb.from('novedades').select('tratamiento').eq('id',id).single()).data?.tratamiento || '';
+    updates.tratamiento = _pv + '\n📋 ' + fmtFH12() + ' — ✅ Resuelta' + (currentProfile?.nombre?(' por '+currentProfile.nombre):'');
+  }
+  let r = await sb.from('novedades').update(updates).eq('id', id);
+  if (r.error && /resuelto_por/.test(r.error.message||'')){ delete updates.resuelto_por; await sb.from('novedades').update(updates).eq('id', id); }
   showToast(estado==='Resuelto' ? '✅ Novedad cerrada' : `Estado → ${estado}`, 'success');
   setTimeout(() => renderNovedadesList(), 800);
 }
