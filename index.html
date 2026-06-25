@@ -1006,6 +1006,7 @@ const MENU_COMPLETO = [
   { id: 'facturacion-list', icon: '🧾', label: 'Facturación' },
   { id: 'facturas-list', icon: '🧾', label: 'Facturas (gemela)' },
   { id: 'factura-gen', icon: '➕', label: 'Generar Factura' },
+  { id: 'facturas-composicion', icon: '📊', label: 'Composición de Ventas' },
   { section: 'Auditoría' },
   { id: 'novedades-diarias', icon: '📋', label: 'Novedades del Día' },
   { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
@@ -1090,6 +1091,7 @@ async function loadView(view) {
     ]); break;
     case 'factura-gen':   renderFacturaGen(); break;
     case 'facturas-list': await renderFacturasList(); break;
+    case 'facturas-composicion': await renderFacturasComposicion(); break;
 
     // Módulo Comercial (cotizaciones / leads)
     case 'comercial-list': await renderComercial(); break;
@@ -7438,7 +7440,10 @@ var FISCAL={
   '8i8':{razon:'8i8 OPERADORA SAS',nit:'902026873-8',dir:'CARRERA 14 # 88-49',ciudad:'BOGOTÁ',regimen:'RÉGIMEN COMÚN',resol:'FE 18764107923884 · vigencia 01 abril 2026 (2 años)',rango:'F8I8 1 a la F8I8 100000',prefijo:'F8I8',ciiu:'5512',ica:'13.8 *1000',banco:'(por confirmar)',conceptoAloja:'ALOJAMIENTO',tasaAloja:'19%'}
 };
 var FAC_TASAS={'Excluido':0,'Exento':0,'0%':0,'8%':0.08,'19%':0.19};
-var FAC_CONCEPTOS=['Alojamiento','Canon de arrendamiento','Restaurante / Alimentos','Minibar','Lavandería','Transporte','Varios / Cash Advance','Sala / Evento','Consumos adicionales','Otro'];
+var FAC_CONCEPTOS=['Alojamiento','Canon de arrendamiento','Restaurante / Alimentos','Minibar','Comunicaciones','Sala / Evento','Spa','Lavandería','Transporte','Varios / Cash Advance','Consumos adicionales','Otro'];
+// Mapea cada concepto a una categoría de composición de ventas (como el reporte de NewHotel)
+var FAC_CAT={'Alojamiento':'aloja','Canon de arrendamiento':'aloja','Restaurante / Alimentos':'fb','Minibar':'fb','Consumos adicionales':'fb','Comunicaciones':'com','Sala / Evento':'eventos','Spa':'spa','Lavandería':'otros','Transporte':'otros','Varios / Cash Advance':'otros','Otro':'otros'};
+function _facComp(f){ var c={aloja:0,fb:0,com:0,eventos:0,spa:0,otros:0,neto:0,imp:0}; (f.lineas||[]).forEach(function(l){ var k=FAC_CAT[l.concepto]||'otros'; c[k]+=Number(l.valor)||0; c.neto+=Number(l.valor)||0; c.imp+=Number(l.impuesto)||0; }); c.total=c.neto+c.imp; return c; }
 function _facPerfiles(){ return (typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')?['8i8']:['LTM3','80-10']; }
 async function getNextFactura(perfilKey){
   var p=FISCAL[perfilKey]; var key='ultima_factura_'+perfilKey;
@@ -7543,12 +7548,25 @@ async function renderFacturasList(){
   var rows=r.data||[]; var money=function(n){return '$'+Math.round(Number(n)||0).toLocaleString('es-CO');}; window._facRows=rows;
   var body=rows.map(function(f){ return '<tr><td><strong>'+(f.numero||'-')+'</strong></td><td>'+(f.fecha?fmtDate(f.fecha):'-')+'</td><td>'+(FISCAL[f.perfil]?f.perfil:'-')+'</td><td>'+(f.cliente||'-')+'</td><td>'+(f.apto||'-')+'</td><td style="text-align:right;font-weight:600">'+money(f.total)+'</td><td>'+(f.estado||'-')+'</td><td style="white-space:nowrap"><span style="cursor:pointer" title="PDF" onclick="facturaPDFById(\''+f.id+'\')">🖨️</span> <span style="cursor:pointer" title="Editar" onclick="facturaEditar(\''+f.id+'\')">✏️</span> <span style="cursor:pointer;color:#C0392B" title="Borrar" onclick="facturaBorrar(\''+f.id+'\')">🗑️</span></td></tr>'; }).join('')||'<tr><td colspan="8" style="text-align:center;color:#999;padding:18px">Sin facturas registradas</td></tr>';
   var tot=rows.reduce(function(s,f){return s+(Number(f.total)||0);},0);
-  document.getElementById('main-content').innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div class="page-title" style="margin-bottom:0">🧾 Facturas (gemelas internas)</div><div style="display:flex;gap:6px">'+barraCompartir()+'<button class="btn btn-success btn-sm" onclick="window._facEdit=null;loadView(\'factura-gen\')">+ Generar factura</button></div></div><div class="card"><div class="card-header"><div class="card-title">'+rows.length+' facturas · Total '+money(tot)+'</div></div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>N°</th><th>Fecha</th><th>Entidad</th><th>Cliente</th><th>Apto</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  document.getElementById('main-content').innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div class="page-title" style="margin-bottom:0">🧾 Facturas (gemelas internas)</div><div style="display:flex;gap:6px">'+barraCompartir()+'<button class="btn btn-outline btn-sm" onclick="loadView(\'facturas-composicion\')">📊 Composición</button><button class="btn btn-success btn-sm" onclick="window._facEdit=null;loadView(\'factura-gen\')">+ Generar factura</button></div></div><div class="card"><div class="card-header"><div class="card-title">'+rows.length+' facturas · Total '+money(tot)+'</div></div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>N°</th><th>Fecha</th><th>Entidad</th><th>Cliente</th><th>Apto</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 }
 function _facById(id){ return (window._facRows||[]).find(function(x){return x.id===id;}); }
 function facturaPDFById(id){ var f=_facById(id); if(f) generarFacturaPDF(f); }
 function facturaEditar(id){ var f=_facById(id); if(f){ window._facEdit=f; loadView('factura-gen'); } }
 async function facturaBorrar(id){ var f=_facById(id); if(!f) return; if(!confirm('¿Borrar la factura '+(f.numero||'')+' de '+(f.cliente||'')+'? Esta acción no se puede deshacer.')) return; var r=await sb.from('facturas').delete().eq('id',id); if(r&&r.error){ showToast('Error: '+r.error.message,'error'); return; } showToast('Factura borrada','success'); renderFacturasList(); }
+async function renderFacturasComposicion(){
+  var mes=window._facCompMes||TODAY.slice(0,7); window._facCompMes=mes;
+  var pp=mes.split('-'); var dim=new Date(+pp[0],+pp[1],0).getDate();
+  var ini=mes+'-01', fin=mes+'-'+String(dim).padStart(2,'0');
+  var r=await sb.from('facturas').select('*').eq('edificio',EDIFICIO_ACTIVO).gte('fecha',ini).lte('fecha',fin).order('fecha');
+  if(r.error){ document.getElementById('main-content').innerHTML='<div class="page-title">📊 Composición de Ventas</div><div class="card" style="max-width:560px"><p style="font-size:14px">'+(r.error.message||'')+'</p></div>'; return; }
+  var rows=r.data||[]; var m=function(n){return Math.round(Number(n)||0).toLocaleString('es-CO');};
+  var T={aloja:0,fb:0,com:0,eventos:0,spa:0,otros:0,neto:0,imp:0,total:0};
+  var body=rows.map(function(f){ var c=_facComp(f); ['aloja','fb','com','eventos','spa','otros','neto','imp','total'].forEach(function(k){T[k]+=c[k];});
+    return '<tr><td style="white-space:nowrap">'+(f.fecha?fmtDate(f.fecha):'-')+'</td><td><strong>'+(f.numero||'-')+'</strong></td><td>'+(f.apto||'-')+'</td><td style="white-space:nowrap">'+(f.checkin?fmtDate(f.checkin):'-')+'</td><td style="white-space:nowrap">'+(f.checkout?fmtDate(f.checkout):'-')+'</td><td>'+(f.cliente_nit||'-')+'</td><td>'+(f.cliente||'-')+'</td><td style="text-align:right">'+m(c.aloja)+'</td><td style="text-align:right">'+m(c.fb)+'</td><td style="text-align:right">'+m(c.com)+'</td><td style="text-align:right">'+m(c.eventos)+'</td><td style="text-align:right">'+m(c.spa)+'</td><td style="text-align:right">'+m(c.otros)+'</td><td style="text-align:right">'+m(c.neto)+'</td><td style="text-align:right">'+m(c.imp)+'</td><td style="text-align:right;font-weight:600">'+m(c.total)+'</td></tr>'; }).join('')||'<tr><td colspan="16" style="text-align:center;color:#999;padding:18px">Sin facturas en el mes</td></tr>';
+  var totRow=rows.length?('<tr style="background:var(--azul-c);font-weight:800"><td colspan="7" style="color:var(--azul)">TOTAL</td><td style="text-align:right">'+m(T.aloja)+'</td><td style="text-align:right">'+m(T.fb)+'</td><td style="text-align:right">'+m(T.com)+'</td><td style="text-align:right">'+m(T.eventos)+'</td><td style="text-align:right">'+m(T.spa)+'</td><td style="text-align:right">'+m(T.otros)+'</td><td style="text-align:right">'+m(T.neto)+'</td><td style="text-align:right">'+m(T.imp)+'</td><td style="text-align:right;color:var(--verde)">'+m(T.total)+'</td></tr>'):'';
+  document.getElementById('main-content').innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px"><div class="page-title" style="margin-bottom:0">📊 Facturas Emitidas y Composición de Ventas</div><div style="display:flex;gap:6px;align-items:center"><input type="month" value="'+mes+'" onchange="window._facCompMes=this.value;renderFacturasComposicion()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px">'+barraCompartir()+'</div></div><div class="card"><div class="card-header"><div class="card-title">'+rows.length+' facturas · Neto '+m(T.neto)+' · Total '+m(T.total)+'</div></div><div style="overflow-x:auto"><table class="tabla" style="font-size:11px"><thead><tr><th>Fecha</th><th>Número</th><th>Hab.</th><th>Llegada</th><th>Salida</th><th>NIT</th><th>Titular</th><th>Alojamiento</th><th>F&amp;B</th><th>Comunic.</th><th>Eventos</th><th>Spa</th><th>Otros</th><th>Neto</th><th>Impuestos</th><th>Total</th></tr></thead><tbody>'+body+totRow+'</tbody></table></div></div>';
+}
 
 async function renderIngresos(){
   const _rolOK = currentProfile?.rol === 'gerente_general' || currentProfile?.rol === 'asesora';
