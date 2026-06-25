@@ -7718,7 +7718,7 @@ async function renderFinanzas(){
   var entSel='<select onchange="window._finState.entidad=this.value;renderFinanzas()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px">'+ents.map(function(e){return '<option value="'+e[0]+'" '+(e[0]===st.entidad?'selected':'')+'>'+e[1]+'</option>';}).join('')+'</select>';
   var vistas=[['real','Real'],['ppto','Presupuesto'],['var','Variación']];
   var vSel='<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden">'+vistas.map(function(v){return '<button onclick="window._finState.vista=\''+v[0]+'\';renderFinanzas()" style="border:none;padding:7px 12px;font-size:12px;cursor:pointer;background:'+(v[0]===st.vista?'var(--azul)':'#fff')+';color:'+(v[0]===st.vista?'#fff':'var(--azul)')+'">'+v[1]+'</button>';}).join('')+'</div>';
-  var hibrido=(st.entidad==='80-10')?'<button class="btn btn-outline btn-sm" onclick="finTraerIngresos()" title="Sobrescribe Real de INGRESOS con alojamiento+eventos+consumos del rack 8010">↻ Traer ingresos de operación</button>':'';
+  var hibrido=(st.entidad==='80-10'||st.entidad==='LTM3'||st.entidad==='TOTAL'||st.entidad==='CONSOLIDADO')?'<button class="btn btn-outline btn-sm" onclick="finTraerIngresos()" title="Recalcula Real de INGRESOS desde el rack: 80-10 = cortas+consumos · LTM3 = largas+eventos (PH no se toca)">↻ Traer ingresos del rack</button>':'';
   // tabla
   var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:210px;z-index:2">Cuenta</th>'+FIN_MC.map(function(m){return '<th style="text-align:right;min-width:88px">'+m+'</th>';}).join('')+'<th style="text-align:right;min-width:100px;background:#16284a">Total Año</th>';
   var body='';
@@ -7778,26 +7778,51 @@ async function finSet(inp){
   else { var ins=Object.assign({edificio:'8010',entidad:ent,anio:window._finState.anio,cuenta:cuenta,tipo:tipo,grupo:(FIN_LINEAS.find(function(l){return l.cuenta===cuenta;})||{}).grupo||'GASTOS'},patch); resp=await _finRAW('finanzas_pyg').insert(ins); if(window._finRows)window._finRows.push(ins); }
   if(resp&&resp.error) showToast('Error al guardar: '+resp.error.message,'error'); else { showToast('✓ Guardado','success'); renderFinanzas(); }
 }
+var FIN_NOCHES_LARGA=30; // ≥ este nº de noches ocupadas = larga estadía (LTM3); menos = corta (80-10)
+var FIN_GAP_MERGE=3; // los inquilinos de largo plazo se facturan mes a mes (corte fin de mes con hueco 1-2 días); se fusionan segmentos con hueco ≤ este nº de días
 async function finTraerIngresos(){
-  if(window._finState.entidad!=='80-10'){ showToast('Solo aplica a 80-10','error'); return; }
-  if(!confirm('Esto sobrescribe la fila REAL de INGRESOS (80-10) con el alojamiento + eventos + consumos del rack 8010, mes a mes. ¿Continuar?')) return;
+  if(!confirm('Recalcula INGRESOS Real desde el rack 8010, separado por entidad:\n• 80-10 = cortas estadías (<'+FIN_NOCHES_LARGA+' noches) + consumos\n• LTM3 = largas estadías (≥'+FIN_NOCHES_LARGA+' noches) + eventos/salas\n(PH no se toca). ¿Continuar?')) return;
   var Y=window._finState.anio;
-  var rkR=await _finRAW('rack').select('apto,fecha,estado,tarifa,tipo,updated_at').eq('edificio','8010').gte('fecha',Y+'-01-01').lte('fecha',Y+'-12-31').order('fecha').range(0,9999);
+  // buffer: trae dic del año previo para medir bien estadías que cruzan el 1-ene (no se bucketea, solo cuenta noches)
+  var rkR=await _rackRango('apto,fecha,estado,tarifa,tipo,updated_at',(Y-1)+'-12-01',Y+'-12-31','8010');
   var cs=(await _finRAW('consumos').select('fecha,valor').eq('edificio','8010').gte('fecha',Y+'-01-01').lte('fecha',Y+'-12-31')).data||[];
   var ev=(await _finRAW('eventos').select('fecha_inicio,total').eq('edificio','8010').gte('fecha_inicio',Y+'-01-01').lte('fecha_inicio',Y+'-12-31')).data||[];
   var PRI={'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1};
   var map={}; (rkR.data||[]).forEach(function(r){var k=r.apto+'|'+r.fecha;var c=map[k];if(!c){map[k]=r;return;}var pr=PRI[r.estado]||0,pc=PRI[c.estado]||0;if(pr>pc)map[k]=r;else if(pr===pc&&(r.updated_at||'')>(c.updated_at||''))map[k]=r;});
-  var ing=new Array(12).fill(0);
-  Object.keys(map).forEach(function(k){var r=map[k];var oc=['Ocupado','Check-in hoy','Completo','Sale de viaje'].indexOf(r.estado)>=0;if(!oc)return;var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto)));if(esPar)return;var mi=parseInt(r.fecha.slice(5,7),10)-1;if(mi>=0&&mi<12)ing[mi]+=Number(r.tarifa)||0;});
-  cs.forEach(function(c){var mi=parseInt(String(c.fecha).slice(5,7),10)-1;if(mi>=0&&mi<12)ing[mi]+=Number(c.valor)||0;});
-  ev.forEach(function(x){if(!(Number(x.total)>0))return;var mi=parseInt(String(x.fecha_inicio).slice(5,7),10)-1;if(mi>=0&&mi<12)ing[mi]+=Number(x.total)||0;});
-  var patch={updated_at:new Date().toISOString()}; try{patch.updated_by=currentUser.id;}catch(e){}
-  for(var i=0;i<12;i++)patch['m'+(i+1)]=Math.round(ing[i]);
-  var r=(window._finRows||[]).find(function(x){return x.entidad==='80-10'&&x.cuenta==='INGRESOS'&&x.tipo==='real';});
-  var resp;
-  if(r){ resp=await _finRAW('finanzas_pyg').update(patch).eq('id',r.id); }
-  else { resp=await _finRAW('finanzas_pyg').insert(Object.assign({edificio:'8010',entidad:'80-10',anio:Y,cuenta:'INGRESOS',grupo:'INGRESOS',tipo:'real'},patch)); }
-  if(resp&&resp.error) showToast('Error: '+resp.error.message,'error'); else { showToast('✓ Ingresos de operación cargados','success'); renderFinanzas(); }
+  var OCU={'Ocupado':1,'Check-in hoy':1,'Completo':1,'Sale de viaje':1};
+  var porApto={};
+  Object.keys(map).forEach(function(k){var r=map[k];if(!OCU[r.estado])return;var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto)));if(esPar)return;(porApto[r.apto]=porApto[r.apto]||[]).push(r);});
+  var DAY=86400000; function dnum(f){var p=f.split('-');return Date.UTC(+p[0],+p[1]-1,+p[2])/DAY;}
+  var cortas=new Array(12).fill(0), largas=new Array(12).fill(0);
+  Object.keys(porApto).forEach(function(ap){
+    var rows=porApto[ap].sort(function(a,b){return a.fecha<b.fecha?-1:1;});
+    var i=0;
+    while(i<rows.length){
+      var j=i; while(j+1<rows.length && (dnum(rows[j+1].fecha)-dnum(rows[j].fecha))<=FIN_GAP_MERGE) j++;
+      var esLarga=(j-i+1)>=FIN_NOCHES_LARGA; // nº de noches ocupadas del bloque (fusionando cortes de facturación mensual)
+      for(var x=i;x<=j;x++){
+        var f=rows[x].fecha; if(f.slice(0,4)!==String(Y)) continue; // solo bucketea noches del año Y
+        var mi=parseInt(f.slice(5,7),10)-1, t=Number(rows[x].tarifa)||0;
+        if(esLarga) largas[mi]+=t; else cortas[mi]+=t;
+      }
+      i=j+1;
+    }
+  });
+  var consM=new Array(12).fill(0), evM=new Array(12).fill(0);
+  cs.forEach(function(c){if(String(c.fecha).slice(0,4)!==String(Y))return;var mi=parseInt(String(c.fecha).slice(5,7),10)-1;if(mi>=0&&mi<12)consM[mi]+=Number(c.valor)||0;});
+  ev.forEach(function(x){if(!(Number(x.total)>0))return;if(String(x.fecha_inicio).slice(0,4)!==String(Y))return;var mi=parseInt(String(x.fecha_inicio).slice(5,7),10)-1;if(mi>=0&&mi<12)evM[mi]+=Number(x.total)||0;});
+  var ent80=new Array(12), entLT=new Array(12);
+  for(var z=0;z<12;z++){ent80[z]=Math.round(cortas[z]+consM[z]);entLT[z]=Math.round(largas[z]+evM[z]);}
+  async function _wrIng(ent,arr){
+    var patch={updated_at:new Date().toISOString()}; try{patch.updated_by=currentUser.id;}catch(e){}
+    for(var i=0;i<12;i++)patch['m'+(i+1)]=arr[i];
+    var r=(window._finRows||[]).find(function(x){return x.entidad===ent&&x.cuenta==='INGRESOS'&&x.tipo==='real';});
+    if(r){ return _finRAW('finanzas_pyg').update(patch).eq('id',r.id); }
+    return _finRAW('finanzas_pyg').insert(Object.assign({edificio:'8010',entidad:ent,anio:Y,cuenta:'INGRESOS',grupo:'INGRESOS',tipo:'real'},patch));
+  }
+  var r1=await _wrIng('80-10',ent80), r2=await _wrIng('LTM3',entLT);
+  var er=(r1&&r1.error&&r1.error.message)||(r2&&r2.error&&r2.error.message);
+  if(er) showToast('Error: '+er,'error'); else { showToast('✓ Ingresos Real cargados · 80-10 (cortas+consumos) · LTM3 (largas+eventos)','success'); renderFinanzas(); }
 }
 // ═══════════════════════════════════════════════════════════
 // NÓMINA — costo real por persona (factor prestacional, editable)
