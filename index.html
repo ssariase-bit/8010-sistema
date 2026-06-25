@@ -7718,7 +7718,7 @@ async function renderFinanzas(){
   var entSel='<select onchange="window._finState.entidad=this.value;renderFinanzas()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px">'+ents.map(function(e){return '<option value="'+e[0]+'" '+(e[0]===st.entidad?'selected':'')+'>'+e[1]+'</option>';}).join('')+'</select>';
   var vistas=[['real','Real'],['ppto','Presupuesto'],['var','Variación']];
   var vSel='<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden">'+vistas.map(function(v){return '<button onclick="window._finState.vista=\''+v[0]+'\';renderFinanzas()" style="border:none;padding:7px 12px;font-size:12px;cursor:pointer;background:'+(v[0]===st.vista?'var(--azul)':'#fff')+';color:'+(v[0]===st.vista?'#fff':'var(--azul)')+'">'+v[1]+'</button>';}).join('')+'</div>';
-  var hibrido=(st.entidad==='80-10'||st.entidad==='LTM3'||st.entidad==='TOTAL'||st.entidad==='CONSOLIDADO')?'<button class="btn btn-outline btn-sm" onclick="finTraerIngresos()" title="Recalcula Real de INGRESOS desde el rack: 80-10 = cortas+consumos · LTM3 = largas+eventos (PH no se toca)">↻ Traer ingresos del rack</button>':'';
+  var hibrido=''; // Retirado: el rack no trae el tipo de contrato (vivienda/turístico) y no iguala la contabilidad. El Real de INGRESOS se carga del Excel mensual por entidad. finTraerIngresos() queda latente.
   // tabla
   var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:210px;z-index:2">Cuenta</th>'+FIN_MC.map(function(m){return '<th style="text-align:right;min-width:88px">'+m+'</th>';}).join('')+'<th style="text-align:right;min-width:100px;background:#16284a">Total Año</th>';
   var body='';
