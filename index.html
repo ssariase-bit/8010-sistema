@@ -1005,6 +1005,8 @@ const MENU_COMPLETO = [
   { id: 'eventos-rack', icon: '🗓️', label: 'Rack de Salones', roles: ['gerente_general','administrador','gerencia_operativa','comercial','eventos','recepcion'] },
   { id: 'facturacion-list', icon: '🧾', label: 'Facturación' },
   { id: 'facturacion-form', icon: '➕', label: 'Registrar Factura' },
+  { id: 'facturas-list', icon: '🧾', label: 'Facturas (gemela)' },
+  { id: 'factura-gen', icon: '➕', label: 'Generar Factura' },
   { section: 'Auditoría' },
   { id: 'novedades-diarias', icon: '📋', label: 'Novedades del Día' },
   { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
@@ -1087,6 +1089,8 @@ async function loadView(view) {
       {id:'estado',label:'Estado de facturación',type:'select',opts:['REALIZADA','PDTE','PDTE CONFIRMACIÓN','PDTE PAGO DE SALDO','ANULADA']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
+    case 'factura-gen':   renderFacturaGen(); break;
+    case 'facturas-list': await renderFacturasList(); break;
 
     // Módulo Comercial (cotizaciones / leads)
     case 'comercial-list': await renderComercial(); break;
@@ -7424,6 +7428,108 @@ async function cotizacionEvento(id){
   var fila=function(lbl,val){ return (val&&Number(val)!==0)?('<tr><td style="padding:6px 12px;border-bottom:1px solid #eee">'+lbl+'</td><td style="padding:6px 12px;border-bottom:1px solid #eee;text-align:right">'+money(val)+'</td></tr>'):''; };
   var html='<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Cotizacion Evento</title></head><body style="font-family:Helvetica,Arial,sans-serif;margin:0;background:#fff"><div style="max-width:680px;margin:auto;padding:24px"><div style="background:#0A0A0A;padding:18px 22px;border-radius:8px 8px 0 0"><span style="color:#fff;font-size:22px;font-weight:900;font-family:Georgia,serif">80<span style="color:#B8963E">|</span>10</span><div style="color:#B8963E;font-size:10px;letter-spacing:4px;margin-top:4px">URBAN LIVING · EVENTOS</div></div><div style="border:1px solid #DAD6D1;border-top:none;border-radius:0 0 8px 8px;padding:20px 22px"><div style="font-size:19px;font-weight:bold;color:#211D1E;margin-bottom:4px">Cotizacion de evento</div>'+(e.num_cotizacion?('<div style="font-size:12px;color:#6B7280">N&deg; '+esc(e.num_cotizacion)+'</div>'):'')+'<table style="width:100%;margin-top:14px;font-size:13px;border-collapse:collapse"><tr><td style="padding:5px 0;color:#6B7280;width:160px">Empresa / Cliente</td><td style="padding:5px 0;font-weight:600">'+esc(e.empresa)+'</td></tr><tr><td style="padding:5px 0;color:#6B7280">Sala / Lugar</td><td style="padding:5px 0">'+esc(e.sala||'-')+'</td></tr><tr><td style="padding:5px 0;color:#6B7280">Fecha</td><td style="padding:5px 0">'+(e.fecha_inicio?fmtDate(e.fecha_inicio):'-')+(e.fecha_fin&&e.fecha_fin!==e.fecha_inicio?(' al '+fmtDate(e.fecha_fin)):'')+(e.hora?(' &middot; '+esc(e.hora)):'')+'</td></tr><tr><td style="padding:5px 0;color:#6B7280">N&deg; PAX</td><td style="padding:5px 0">'+(e.pax||'-')+'</td></tr>'+(e.equipos?('<tr><td style="padding:5px 0;color:#6B7280">Equipos</td><td style="padding:5px 0">'+esc(e.equipos)+'</td></tr>'):'')+'<tr><td style="padding:5px 0;color:#6B7280">Estado</td><td style="padding:5px 0">'+esc(e.estado)+'</td></tr></table><div style="font-size:13px;font-weight:bold;color:#211D1E;margin:16px 0 6px">Desglose</div><table style="width:100%;font-size:13px;border-collapse:collapse">'+fila('Sala',e.val_sala)+fila('Alimentacion / Bebidas',e.val_alimentacion)+fila('Consumos adicionales',e.val_consumos)+fila('Personal de servicio',e.val_personal)+fila('Tasa de servicio 10%',_tasa)+'<tr><td style="padding:6px 12px;text-align:right;color:#6B7280">Base</td><td style="padding:6px 12px;text-align:right">'+money(base)+'</td></tr>'+(_impoc?('<tr><td style="padding:6px 12px;text-align:right;color:#6B7280">Impoconsumo 8%</td><td style="padding:6px 12px;text-align:right">'+money(_impoc)+'</td></tr>'):'')+(_ivaV?('<tr><td style="padding:6px 12px;text-align:right;color:#6B7280">IVA 19%</td><td style="padding:6px 12px;text-align:right">'+money(_ivaV)+'</td></tr>'):'')+'<tr><td style="padding:8px 12px;text-align:right;font-weight:700;background:#F5F3EE">TOTAL</td><td style="padding:8px 12px;text-align:right;font-weight:700;background:#F5F3EE;color:#1A5C2E">'+money(_totalCot)+'</td></tr></table>'+(e.observaciones?('<div style="margin-top:14px;font-size:12px;color:#4A463F"><strong>Observaciones:</strong> '+esc(e.observaciones)+'</div>'):'')+'<div style="margin-top:18px;font-size:10.5px;color:#9A938B;border-top:1px solid #E7E3E0;padding-top:10px">8010 Urban Living &middot; Generado '+new Date().toLocaleDateString('es-CO')+(e.vendedor?(' &middot; '+esc(e.vendedor)):'')+'</div></div></div><div style="max-width:680px;margin:8px auto;text-align:center" class="no-print"><button onclick="window.print()" style="background:#1D3461;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer">Imprimir / PDF</button></div><style>@media print{.no-print{display:none}}</style></body></html>';
   var w=window.open('','_blank'); if(w){ w.document.write(html); w.document.close(); } else { showToast('Permite ventanas emergentes','error'); }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ═══ FACTURA GEMELA INTERNA (no reemplaza la legal/DIAN) ═══
+// ═══════════════════════════════════════════════════════════
+var FISCAL={
+  'LTM3':{razon:'LTM3 S.A.S',nit:'900.361.992-4',dir:'CARRERA 10 #80-36',ciudad:'BOGOTÁ',regimen:'RÉGIMEN COMÚN',resol:'18764083741516 del 20 de Noviembre 2023',rango:'LT 1414 a la LT 5000',prefijo:'LT',ciiu:'5512',ica:'13.8 *1000',banco:'Helm Bank · Cta. corriente N° 013-40531-1',conceptoAloja:'CANON DE ARRENDAMIENTO',tasaAloja:'Excluido'},
+  '80-10':{razon:'8010 Ochenta Diez Urban Living SAS',nit:'900.683.855-5',dir:'CARRERA 10 #80-36',ciudad:'BOGOTÁ',regimen:'RÉGIMEN COMÚN',resol:'18764090799551 del 20 de Marzo 2025',rango:'UL 4104 a la UL 7000',prefijo:'UL',ciiu:'5512',ica:'13.8 *1000',banco:'Helm Bank · Cta. corriente N° 013-40531-1',conceptoAloja:'ALOJAMIENTO PLAN CORPORATIVO',tasaAloja:'Exento'},
+  '8i8':{razon:'8i8 OPERADORA SAS',nit:'902026873-8',dir:'CARRERA 14 # 88-49',ciudad:'BOGOTÁ',regimen:'RÉGIMEN COMÚN',resol:'FE 18764107923884 · vigencia 01 abril 2026 (2 años)',rango:'F8I8 1 a la F8I8 100000',prefijo:'F8I8',ciiu:'5512',ica:'13.8 *1000',banco:'(por confirmar)',conceptoAloja:'ALOJAMIENTO',tasaAloja:'19%'}
+};
+var FAC_TASAS={'Excluido':0,'Exento':0,'0%':0,'8%':0.08,'19%':0.19};
+var FAC_CONCEPTOS=['Alojamiento','Canon de arrendamiento','Restaurante / Alimentos','Minibar','Lavandería','Transporte','Varios / Cash Advance','Sala / Evento','Consumos adicionales','Otro'];
+function _facPerfiles(){ return (typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')?['8i8']:['LTM3','80-10']; }
+async function getNextFactura(perfilKey){
+  var p=FISCAL[perfilKey]; var key='ultima_factura_'+perfilKey;
+  try{ var q=await sb.from('config').select('valor').eq('id',key).single(); var base=perfilKey==='8i8'?0:(perfilKey==='LTM3'?1988:5639); var sig=parseInt((q.data&&q.data.valor)||String(base))+1; await sb.from('config').upsert({id:key,valor:String(sig),updated_at:new Date().toISOString()}); return p.prefijo+' '+sig; }catch(e){ return p.prefijo+' ?'; }
+}
+function _facLineaRow(c,v,t){ var co=FAC_CONCEPTOS.map(function(x){return '<option'+(x===c?' selected':'')+'>'+x+'</option>';}).join(''); var to=Object.keys(FAC_TASAS).map(function(x){return '<option'+(x===t?' selected':'')+'>'+x+'</option>';}).join('');
+  return '<tr><td><input type="date" class="fl-fecha" style="padding:5px;border:1px solid #ddd;border-radius:5px;font-size:12px"></td><td><select class="fl-concepto" style="padding:5px;border:1px solid #ddd;border-radius:5px;font-size:12px;min-width:150px">'+co+'</select></td><td><input type="text" class="fl-desc" placeholder="Detalle / descripción" style="padding:5px;border:1px solid #ddd;border-radius:5px;font-size:12px;min-width:160px"></td><td><input type="number" class="fl-valor" value="'+(v||'')+'" oninput="_facRecalc()" style="padding:5px;border:1px solid #ddd;border-radius:5px;font-size:12px;width:110px;text-align:right"></td><td><select class="fl-tasa" onchange="_facRecalc()" style="padding:5px;border:1px solid #ddd;border-radius:5px;font-size:12px">'+to+'</select></td><td style="text-align:right;font-size:12px" class="fl-imp">$ 0</td><td><span onclick="this.closest(\'tr\').remove();_facRecalc()" style="cursor:pointer;color:#C0392B">🗑️</span></td></tr>'; }
+function _facAddLinea(){ document.getElementById('fac-lineas').insertAdjacentHTML('beforeend',_facLineaRow('Alojamiento','','Exento')); }
+function _facRecalc(){ var sub=0,imp=0; document.querySelectorAll('#fac-lineas tr').forEach(function(tr){ var val=Number((tr.querySelector('.fl-valor')||{}).value)||0; var tasa=FAC_TASAS[(tr.querySelector('.fl-tasa')||{}).value]||0; var i=Math.round(val*tasa); sub+=val; imp+=i; var c=tr.querySelector('.fl-imp'); if(c)c.textContent='$ '+i.toLocaleString('es-CO'); });
+  var f=function(n){return '$ '+Math.round(n).toLocaleString('es-CO');}; var so=document.getElementById('fac-sub'),io=document.getElementById('fac-imp'),to=document.getElementById('fac-tot'); if(so)so.textContent=f(sub); if(io)io.textContent=f(imp); if(to)to.textContent=f(sub+imp); }
+function renderFacturaGen(){
+  var perfiles=_facPerfiles();
+  var perfilSel=perfiles.length>1?('<select id="fac-perfil" onchange="_facPerfilInfo()">'+perfiles.map(function(p){return '<option value="'+p+'">'+FISCAL[p].razon+'</option>';}).join('')+'</select>'):('<input type="hidden" id="fac-perfil" value="'+perfiles[0]+'"><strong>'+FISCAL[perfiles[0]].razon+'</strong>');
+  document.getElementById('main-content').innerHTML=
+   '<div class="page-title">🧾 Generar Factura (gemela interna)</div>'
+  +'<div class="card" style="max-width:880px">'
+  +'<div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:8px 12px;font-size:12px;color:#7c5e10;margin-bottom:14px">Documento interno de control — <strong>no reemplaza la factura legal DIAN</strong> (esa la emite NewHotel/BTW).</div>'
+  +'<div class="form-section"><div class="form-section-title">🏢 Entidad que factura</div><div class="form-group">'+perfilSel+'<div id="fac-perfil-info" style="font-size:11px;color:var(--gris-t);margin-top:4px"></div></div></div>'
+  +'<div class="form-section"><div class="form-section-title">👤 Cliente</div><div class="form-row">'
+  +'<div class="form-group"><label>Titular / Razón social *</label><input type="text" id="fac-cli-nombre"></div>'
+  +'<div class="form-group"><label>C.C / NIT</label><input type="text" id="fac-cli-nit"></div></div>'
+  +'<div class="form-row"><div class="form-group"><label>Dirección</label><input type="text" id="fac-cli-dir"></div>'
+  +'<div class="form-group"><label>Email</label><input type="text" id="fac-cli-email"></div>'
+  +'<div class="form-group"><label>Teléfono</label><input type="text" id="fac-cli-tel"></div></div></div>'
+  +'<div class="form-section"><div class="form-section-title">🛏️ Reserva</div><div class="form-row">'
+  +'<div class="form-group"><label>N° reserva</label><input type="text" id="fac-reserva" placeholder="Ej: 140/2026"></div>'
+  +'<div class="form-group"><label>Apartamento</label><input type="text" id="fac-apto"></div>'
+  +'<div class="form-group"><label>Huésped</label><input type="text" id="fac-huesped"></div></div>'
+  +'<div class="form-row"><div class="form-group"><label>Check-in</label><input type="date" id="fac-ci"></div>'
+  +'<div class="form-group"><label>Check-out</label><input type="date" id="fac-co"></div>'
+  +'<div class="form-group"><label>Pax</label><input type="text" id="fac-pax" placeholder="1 adulto"></div></div></div>'
+  +'<div class="form-section"><div class="form-section-title">💲 Conceptos (IVA por renglón)</div>'
+  +'<div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th>Fecha</th><th>Concepto</th><th>Descripción</th><th>Valor</th><th>Tasa</th><th>Impuesto</th><th></th></tr></thead><tbody id="fac-lineas"></tbody></table></div>'
+  +'<button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="_facAddLinea()">+ Agregar concepto</button>'
+  +'<div style="display:flex;gap:24px;justify-content:flex-end;padding:12px 4px;font-size:14px"><div>Subtotal: <strong id="fac-sub">$ 0</strong></div><div>Impuestos: <strong id="fac-imp">$ 0</strong></div><div>Total: <strong id="fac-tot" style="color:var(--verde)">$ 0</strong></div></div></div>'
+  +'<div class="form-section"><div class="form-section-title">💳 Pago y notas</div><div class="form-row">'
+  +'<div class="form-group"><label>Forma de pago</label><select id="fac-fpago"><option>Crédito</option><option>Contado</option><option>Tarjeta crédito</option><option>Transferencia</option><option>Efectivo</option></select></div>'
+  +'<div class="form-group"><label>Medio de pago</label><input type="text" id="fac-mpago" placeholder="Acuerdo mutuo, Helm Bank..."></div></div>'
+  +'<div class="form-group"><label>Observaciones (desglose USD × TRM, tramos, etc.)</label><textarea id="fac-obs" placeholder="Ej: ALOJ USD 230 * TRM ($3.572,85) = $821.756 / EXENTO RESIDENCIA"></textarea></div></div>'
+  +'<div class="form-actions"><button class="btn btn-success" onclick="facturaGuardar(true)">💾 Guardar y generar PDF</button> <button class="btn btn-outline" onclick="facturaGuardar(false)">Solo guardar</button></div>'
+  +'</div>';
+  _facAddLinea(); _facPerfilInfo();
+}
+function _facPerfilInfo(){ var k=(document.getElementById('fac-perfil')||{}).value; var p=FISCAL[k]; var e=document.getElementById('fac-perfil-info'); if(p&&e) e.textContent='NIT '+p.nit+' · '+p.dir+' · Resolución '+p.resol+' · Rango '+p.rango; }
+function _facLineasData(){ var out=[]; document.querySelectorAll('#fac-lineas tr').forEach(function(tr){ var val=Number((tr.querySelector('.fl-valor')||{}).value)||0; if(!val) return; var tasaL=(tr.querySelector('.fl-tasa')||{}).value; out.push({fecha:(tr.querySelector('.fl-fecha')||{}).value||'',concepto:(tr.querySelector('.fl-concepto')||{}).value,desc:(tr.querySelector('.fl-desc')||{}).value||'',valor:val,tasa:tasaL,impuesto:Math.round(val*(FAC_TASAS[tasaL]||0))}); }); return out; }
+async function facturaGuardar(conPDF){
+  var k=(document.getElementById('fac-perfil')||{}).value; if(!k){ showToast('Selecciona la entidad','error'); return; }
+  var nombre=(document.getElementById('fac-cli-nombre')||{}).value.trim(); if(!nombre){ showToast('Falta el titular/cliente','error'); return; }
+  var lineas=_facLineasData(); if(!lineas.length){ showToast('Agrega al menos un concepto con valor','error'); return; }
+  var sub=lineas.reduce(function(s,l){return s+l.valor;},0), imp=lineas.reduce(function(s,l){return s+l.impuesto;},0);
+  var numero=await getNextFactura(k);
+  var fac={ edificio:EDIFICIO_ACTIVO, perfil:k, numero:numero, fecha:TODAY,
+    cliente:nombre, cliente_nit:(document.getElementById('fac-cli-nit')||{}).value.trim()||null, cliente_dir:(document.getElementById('fac-cli-dir')||{}).value.trim()||null,
+    email:(document.getElementById('fac-cli-email')||{}).value.trim()||null, telefono:(document.getElementById('fac-cli-tel')||{}).value.trim()||null,
+    num_reserva:(document.getElementById('fac-reserva')||{}).value.trim()||null, apto:(document.getElementById('fac-apto')||{}).value.trim()||null,
+    huesped:(document.getElementById('fac-huesped')||{}).value.trim()||null, checkin:(document.getElementById('fac-ci')||{}).value||null, checkout:(document.getElementById('fac-co')||{}).value||null,
+    pax:(document.getElementById('fac-pax')||{}).value.trim()||null, forma_pago:(document.getElementById('fac-fpago')||{}).value, medio_pago:(document.getElementById('fac-mpago')||{}).value.trim()||null,
+    lineas:lineas, subtotal:sub, impuestos:imp, total:sub+imp, observaciones:(document.getElementById('fac-obs')||{}).value.trim()||null, estado:'REALIZADA' };
+  try{ fac.user_id=currentUser.id; }catch(e){}
+  var r=await sb.from('facturas').insert(fac).select().single();
+  if(r.error){ showToast('Error al guardar: '+r.error.message,'error'); return; }
+  showToast('✓ Factura '+numero+' guardada','success');
+  if(conPDF) generarFacturaPDF(r.data||fac);
+  else loadView('facturas-list');
+}
+function generarFacturaPDF(f){
+  var p=FISCAL[f.perfil]||{}; var money=function(n){return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO');}; var esc=function(s){return String(s==null?'':s).replace(/</g,'&lt;');};
+  var desg={}; (f.lineas||[]).forEach(function(l){ var t=l.tasa; if(!desg[t])desg[t]={base:0,imp:0}; desg[t].base+=l.valor; desg[t].imp+=l.impuesto; });
+  var filas=(f.lineas||[]).map(function(l){ return '<tr><td style="padding:5px 8px;border-bottom:1px solid #eee">'+(l.fecha?fmtDate(l.fecha):'')+'</td><td style="padding:5px 8px;border-bottom:1px solid #eee">'+esc(l.concepto)+(l.desc?(' — '+esc(l.desc)):'')+'</td><td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:center">'+esc(l.tasa)+'</td><td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right">'+money(l.valor)+'</td><td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right">'+money(l.impuesto)+'</td><td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;font-weight:600">'+money(l.valor+l.impuesto)+'</td></tr>'; }).join('');
+  var desgRows=Object.keys(desg).map(function(t){ return '<tr><td style="padding:3px 8px">'+esc(t)+'</td><td style="padding:3px 8px;text-align:right">'+money(desg[t].base)+'</td><td style="padding:3px 8px;text-align:right">'+money(desg[t].imp)+'</td></tr>'; }).join('');
+  var html='<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Factura '+esc(f.numero)+'</title></head><body style="font-family:Helvetica,Arial,sans-serif;margin:0;background:#fff"><div style="max-width:720px;margin:auto;padding:22px">'
+  +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1D3461;padding-bottom:10px"><div><div style="font-size:24px;font-weight:900;font-family:Georgia,serif">'+(f.perfil==='8i8'?'8i8':'80<span style="color:#B8963E">|</span>10')+'</div><div style="font-size:13px;font-weight:700;margin-top:4px">'+esc(p.razon)+'</div><div style="font-size:11px;color:#555">NIT '+esc(p.nit)+' · '+esc(p.dir)+' · '+esc(p.regimen)+'</div></div><div style="text-align:right"><div style="font-size:16px;font-weight:800">FACTURA DE VENTA</div><div style="font-size:18px;font-weight:900;color:#1D3461">N° '+esc(f.numero)+'</div><div style="font-size:11px;color:#555">Fecha: '+fmtDate(f.fecha)+'</div><div style="font-size:9px;color:#999;margin-top:4px;max-width:230px">Documento interno · no válido como factura electrónica DIAN</div></div></div>'
+  +'<div style="font-size:9.5px;color:#777;margin:6px 0">Resolución '+esc(p.resol)+' · Rango '+esc(p.rango)+' · CIIU '+esc(p.ciiu)+' · Tarifa ICA '+esc(p.ica)+'</div>'
+  +'<table style="width:100%;font-size:12px;margin-top:8px;border-collapse:collapse"><tr><td style="color:#6B7280;width:120px;padding:3px 0">Cliente</td><td style="font-weight:600">'+esc(f.cliente)+(f.cliente_nit?(' · NIT/CC '+esc(f.cliente_nit)):'')+'</td></tr>'+(f.cliente_dir?'<tr><td style="color:#6B7280;padding:3px 0">Dirección</td><td>'+esc(f.cliente_dir)+'</td></tr>':'')+(f.num_reserva?'<tr><td style="color:#6B7280;padding:3px 0">Reserva / Apto</td><td>'+esc(f.num_reserva)+(f.apto?(' · Apto '+esc(f.apto)):'')+'</td></tr>':'')+(f.huesped?'<tr><td style="color:#6B7280;padding:3px 0">Huésped</td><td>'+esc(f.huesped)+'</td></tr>':'')+((f.checkin||f.checkout)?'<tr><td style="color:#6B7280;padding:3px 0">Estadía</td><td>'+(f.checkin?fmtDate(f.checkin):'')+(f.checkout?(' al '+fmtDate(f.checkout)):'')+(f.pax?(' · '+esc(f.pax)):'')+'</td></tr>':'')+'<tr><td style="color:#6B7280;padding:3px 0">Forma de pago</td><td>'+esc(f.forma_pago||'')+(f.medio_pago?(' · '+esc(f.medio_pago)):'')+'</td></tr></table>'
+  +'<table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:14px"><thead><tr style="background:#1D3461;color:#fff"><th style="padding:6px 8px;text-align:left">Fecha</th><th style="padding:6px 8px;text-align:left">Concepto</th><th style="padding:6px 8px;text-align:center">Tasa</th><th style="padding:6px 8px;text-align:right">Valor</th><th style="padding:6px 8px;text-align:right">Impuesto</th><th style="padding:6px 8px;text-align:right">Total</th></tr></thead><tbody>'+filas+'</tbody></table>'
+  +'<div style="display:flex;justify-content:space-between;margin-top:14px;gap:20px"><div style="flex:1"><div style="font-size:11px;font-weight:700;color:#1D3461;margin-bottom:4px">Desglose de impuestos</div><table style="width:100%;font-size:11px;border-collapse:collapse"><tr style="color:#6B7280"><td style="padding:3px 8px">Tasa</td><td style="padding:3px 8px;text-align:right">Base</td><td style="padding:3px 8px;text-align:right">Impuesto</td></tr>'+desgRows+'</table></div>'
+  +'<div style="min-width:220px"><table style="width:100%;font-size:13px;border-collapse:collapse"><tr><td style="padding:4px 8px;text-align:right;color:#6B7280">Subtotal</td><td style="padding:4px 8px;text-align:right">'+money(f.subtotal)+'</td></tr><tr><td style="padding:4px 8px;text-align:right;color:#6B7280">Impuestos</td><td style="padding:4px 8px;text-align:right">'+money(f.impuestos)+'</td></tr><tr style="background:#F5F3EE"><td style="padding:7px 8px;text-align:right;font-weight:800">TOTAL</td><td style="padding:7px 8px;text-align:right;font-weight:800;color:#1A5C2E">'+money(f.total)+'</td></tr></table></div></div>'
+  +(f.observaciones?'<div style="margin-top:14px;font-size:11px;color:#4A463F;border-top:1px solid #eee;padding-top:8px"><strong>Observaciones:</strong> '+esc(f.observaciones)+'</div>':'')
+  +'<div style="margin-top:12px;font-size:10px;color:#888">Pago: '+esc(p.banco)+'</div>'
+  +'<div style="margin-top:16px;font-size:9px;color:#9A938B;border-top:1px solid #E7E3E0;padding-top:8px">Generado por el Sistema Operativo '+new Date().toLocaleDateString('es-CO')+' · Documento de control interno, no equivale a factura electrónica.</div>'
+  +'</div><div style="max-width:720px;margin:8px auto;text-align:center" class="no-print"><button onclick="window.print()" style="background:#1D3461;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer">Imprimir / PDF</button></div><style>@media print{.no-print{display:none}}</style></body></html>';
+  var w=window.open('','_blank'); if(w){ w.document.write(html); w.document.close(); } else { showToast('Permite ventanas emergentes','error'); }
+}
+async function renderFacturasList(){
+  var r=await sb.from('facturas').select('*').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(300);
+  if(r.error){ document.getElementById('main-content').innerHTML='<div class="page-title">🧾 Facturas</div><div class="card" style="max-width:560px"><p style="font-size:14px">⚠️ Falta crear la tabla <code>facturas</code> en Supabase. Detalle: '+(r.error.message||'')+'</p></div>'; return; }
+  var rows=r.data||[]; var money=function(n){return '$'+Math.round(Number(n)||0).toLocaleString('es-CO');};
+  var body=rows.map(function(f){ return '<tr><td><strong>'+(f.numero||'-')+'</strong></td><td>'+(f.fecha?fmtDate(f.fecha):'-')+'</td><td>'+(FISCAL[f.perfil]?f.perfil:'-')+'</td><td>'+(f.cliente||'-')+'</td><td>'+(f.apto||'-')+'</td><td style="text-align:right;font-weight:600">'+money(f.total)+'</td><td>'+(f.estado||'-')+'</td><td><span style="cursor:pointer" title="PDF" onclick=\'generarFacturaPDF('+JSON.stringify(f).replace(/'/g,"&#39;")+')\'>🖨️</span></td></tr>'; }).join('')||'<tr><td colspan="8" style="text-align:center;color:#999;padding:18px">Sin facturas registradas</td></tr>';
+  var tot=rows.reduce(function(s,f){return s+(Number(f.total)||0);},0);
+  document.getElementById('main-content').innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div class="page-title" style="margin-bottom:0">🧾 Facturas (gemelas internas)</div><div style="display:flex;gap:6px">'+barraCompartir()+'<button class="btn btn-success btn-sm" onclick="loadView(\'factura-gen\')">+ Generar factura</button></div></div><div class="card"><div class="card-header"><div class="card-title">'+rows.length+' facturas · Total '+money(tot)+'</div></div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>N°</th><th>Fecha</th><th>Entidad</th><th>Cliente</th><th>Apto</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 }
 
 async function renderIngresos(){
