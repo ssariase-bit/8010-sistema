@@ -2934,7 +2934,8 @@ async function renderNovedadForm() {
           <input type="text" id="n-quien" value="${currentProfile?.nombre || ''}">
         </div>
         <div class="form-group"><label>¿Quién toma la solicitud?</label>
-          <select id="n-gestor">${personasOpts}</select>
+          <input type="text" id="n-gestor" list="n-gestor-opts" placeholder="Escribe el nombre...">
+          <datalist id="n-gestor-opts">${personasOpts}</datalist>
         </div>
       </div>
       <div class="form-actions">
@@ -3306,7 +3307,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
                 <div style="display:inline-grid;gap:4px;width:104px">
                   <button class="btn btn-outline btn-xs" onclick="verNovedad('${n.id}')">Ver</button>
                   <button class="btn btn-outline btn-xs" onclick="editarNovedad('${n.id}')">✏️ Editar</button>
-                  ${n.estado!=='Resuelto' ? `<button class="btn btn-success btn-xs" onclick="cambiarEstadoNov('${n.id}','Resuelto')">✓ Cerrar</button>` : ''}
+                  ${n.estado!=='Resuelto' ? `<button class="btn btn-success btn-xs" onclick="verNovedad('${n.id}')">✓ Completar</button>` : ''}
                   ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-outline btn-xs" onclick="borrarNovedad('${n.id}')" style="color:#9A4A40;border-color:#E0C0BA">🗑 Borrar</button>` : ''}
                 </div>
               </td>
@@ -3407,31 +3408,65 @@ async function verNovedad(id) {
       ${n.fecha_cierre ? `<p><strong>Fecha cierre:</strong> ${fmtDate(n.fecha_cierre)}</p>` : ''}
 
       ${window._renderComentariosNov(n)}
+      ${n.estado!=='Resuelto' ? `
       <div class="form-section" style="margin-top:16px">
-        <div class="form-section-title">Actualizar estado</div>
+        <div class="form-section-title">Seguimiento</div>
         <div class="form-row">
           <div class="form-group">
-            <label>Nuevo estado</label>
+            <label>Agregar seguimiento (opcional)</label>
+            <input type="text" id="nov-seguimiento" placeholder="¿Qué avance hubo?">
+          </div>
+          <div class="form-group">
+            <label>Estado</label>
             <select id="nov-nuevo-estado">
               <option ${n.estado==='Abierto'?'selected':''}>Abierto</option>
               <option ${n.estado==='En proceso'?'selected':''}>En proceso</option>
               <option ${n.estado==='Escalado'?'selected':''}>Escalado</option>
-              <option ${n.estado==='Resuelto'?'selected':''}>Resuelto</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label>Seguimiento / Observación</label>
-            <input type="text" id="nov-seguimiento" placeholder="Describe la acción tomada...">
           </div>
         </div>
         <div class="form-actions">
-          <button class="btn btn-outline btn-sm" onclick="loadView('novedades-list')">← Volver</button>
-          <button class="btn btn-success btn-sm" onclick="actualizarNovedad('${id}')">💾 Guardar cambios</button>
+          <button class="btn btn-outline btn-sm" onclick="actualizarNovedad('${id}')">💾 Guardar seguimiento</button>
           ${n.estado!=='Escalado' ? `<button class="btn btn-danger btn-sm" onclick="cambiarEstadoNov('${id}','Escalado')" style="min-width:120px">🚨 Escalar a Gerencia</button>` : ''}
-          ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-outline btn-sm" onclick="borrarNovedad('${id}')" style="color:#9A4A40;border-color:#E0C0BA">🗑 Borrar</button>` : ''}
+        </div>
+        <div style="border-top:1px dashed var(--gris-b);margin:16px 0;padding-top:14px">
+          <div class="form-section-title" style="color:var(--verde)">✅ Completar / Cerrar novedad</div>
+          <div class="form-row">
+            <div class="form-group"><label>¿Quién la resolvió?</label>
+              <input type="text" id="nov-resuelve" value="${(currentProfile?.nombre||'').replace(/"/g,'&quot;')}" placeholder="Nombre de quien realizó">
+            </div>
+          </div>
+          <div class="form-group"><label>¿Cuál fue la acción de resolución?</label>
+            <textarea id="nov-accion-cierre" placeholder="Describe cómo se resolvió finalmente..." style="min-height:70px"></textarea>
+          </div>
+          <button class="btn btn-success" onclick="cerrarNovedad('${id}')" style="min-width:200px">✅ Completar novedad</button>
         </div>
       </div>
+      ` : `
+      <div class="form-section" style="margin-top:16px">
+        <div style="color:var(--verde);font-weight:700;font-size:14px">✅ Novedad resuelta${n.resuelto_por?(' por '+n.resuelto_por):''}${n.fecha_cierre?(' · '+fmtDate(n.fecha_cierre)):''}</div>
+        <button class="btn btn-outline btn-sm" onclick="cambiarEstadoNov('${id}','En proceso')" style="margin-top:12px">↩️ Reabrir novedad</button>
+      </div>
+      `}
+      <div class="form-actions" style="margin-top:14px">
+        <button class="btn btn-outline btn-sm" onclick="loadView('novedades-list')">← Volver</button>
+        ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-outline btn-sm" onclick="borrarNovedad('${id}')" style="color:#9A4A40;border-color:#E0C0BA">🗑 Borrar</button>` : ''}
+      </div>
     </div>`;
+}
+async function cerrarNovedad(id){
+  var resuelve = (document.getElementById('nov-resuelve')?.value||'').trim();
+  var accion = (document.getElementById('nov-accion-cierre')?.value||'').trim();
+  if(!accion){ showToast('Describe la acción de resolución antes de cerrar','error'); return; }
+  var btn=document.querySelector('.btn-success'); if(btn){ btn.innerHTML='<span class="spinner"></span>Cerrando...'; btn.disabled=true; }
+  var prev=(await sb.from('novedades').select('tratamiento').eq('id',id).single()).data?.tratamiento || '';
+  var log = prev + '\n📋 '+fmtFH12()+' — ✅ Resuelta'+(resuelve?(' por '+resuelve):'')+': '+accion;
+  var updates = { estado:'Resuelto', fecha_cierre:TODAY, resuelto_por: resuelve||null, tratamiento: log };
+  var r = await sb.from('novedades').update(updates).eq('id', id);
+  if(r.error && /resuelto_por/.test(r.error.message||'')){ delete updates.resuelto_por; r = await sb.from('novedades').update(updates).eq('id', id); }
+  if(r.error){ showToast('Error al cerrar: '+r.error.message,'error'); if(btn){btn.innerHTML='✅ Completar novedad'; btn.disabled=false;} return; }
+  showToast('✅ Novedad completada','success');
+  setTimeout(()=>loadView('novedades-list'), 900);
 }
 
 async function actualizarNovedad(id) {
