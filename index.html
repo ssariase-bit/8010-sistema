@@ -3318,11 +3318,14 @@ async function renderNovedadesList(filtro='', fechaSel='') {
 
 async function editarNovedad(id){ var r=await sb.from('novedades').select('*').eq('id',id).single(); if(r.error||!r.data){ showToast('No se encontró la novedad','error'); return; } window._novedadEdit=r.data; loadView('novedad-form'); }
 async function borrarNovedad(id){
-  if(!confirm('¿Borrar esta novedad de forma permanente? Esta acción no se puede deshacer.')) return;
+  if(!confirm('¿Borrar esta novedad de forma permanente? Si fue enviada a Mantenimiento, también se borrará su tarea. Esta acción no se puede deshacer.')) return;
+  // Cascada: borrar la tarea de Mantenimiento enlazada (si existe la columna novedad_id)
+  var _mant = 0;
+  try{ var del = await sb.from('mantenimiento').delete().eq('novedad_id', id).select(); if(del && !del.error && del.data) _mant = del.data.length; }catch(e){}
   const { data, error } = await sb.from('novedades').delete().eq('id', id).select();
   if(error){ showToast('Error al borrar: '+(error.message||error),'error'); return; }
   if(!data || !data.length){ showToast('No se borró (sin permiso o ya no existe)','error'); return; }
-  showToast('✅ Novedad borrada','success');
+  showToast(_mant? '✅ Novedad y su tarea de Mantenimiento borradas':'✅ Novedad borrada','success');
   loadView('novedades-list');
 }
 // Trazabilidad de novedades: la acción inicial vive en tratamiento; los seguimientos se anexan con marcador 📋
