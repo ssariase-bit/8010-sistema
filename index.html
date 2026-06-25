@@ -3552,6 +3552,7 @@ async function informeMantenimiento(filtroApto){
   document.body.appendChild(modal);
 }
 async function renderMantList(filtroApto='') {
+  window._mantFiltroApto = filtroApto;
   const q = sb.from('mantenimiento').select('*').order('created_at', { ascending: false }).limit(300);
   const { data } = await q;
   const rows = data || [];
@@ -3643,6 +3644,7 @@ async function renderMantList(filtroApto='') {
                     </select>
                     ${o.costo ? `<span style="font-size:13px;font-weight:700;color:var(--verde)">$${fmtNum(o.costo)}</span>` : ''}
                     ${o.fecha_cierre ? `<span style="font-size:10px;color:var(--gris-t)">Cerrado: ${fmtDate(o.fecha_cierre)}</span>` : ''}
+                    <div style="display:flex;gap:6px"><button onclick="editarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px">✏️</button><button onclick="borrarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px;color:#9A4A40;border-color:#E0C0BA">🗑</button></div>
                   </div>
                 </div>
               </div>
@@ -3681,7 +3683,7 @@ async function renderMantList(filtroApto='') {
                 </select>
               </td>
               <td style="white-space:nowrap">${o.costo ? '<strong>$'+fmtNum(o.costo)+'</strong>' : '-'}</td>
-              <td style="white-space:nowrap"><button onclick="editarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
+              <td style="white-space:nowrap"><button onclick="editarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button> <button onclick="borrarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:#9A4A40;border-color:#E0C0BA">🗑</button></td>
             </tr>`).join('')}
             </tbody>
            </table></div>`}
@@ -3695,6 +3697,14 @@ async function actualizarEstadoOT(id, estado) {
   const { error } = await sb.from('mantenimiento').update(updates).eq('id', id);
   if(error) { showToast('Error al actualizar', 'error'); return; }
   showToast('✅ Estado actualizado', 'success');
+}
+async function borrarOT(id){
+  if(!confirm('¿Borrar esta orden de mantenimiento de forma permanente? Esta acción no se puede deshacer.')) return;
+  const { data, error } = await sb.from('mantenimiento').delete().eq('id', id).select();
+  if(error){ showToast('Error al borrar: '+(error.message||error),'error'); return; }
+  if(!data || !data.length){ showToast('No se borró (sin permiso o ya no existe)','error'); return; }
+  showToast('✅ Orden borrada','success');
+  renderMantList(window._mantFiltroApto||'');
 }
 
 function _tiemposTabs(active){
