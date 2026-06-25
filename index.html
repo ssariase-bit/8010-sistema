@@ -935,7 +935,7 @@ const MENU_COMPLETO = [
     { id: 'comentarios', icon: '💬', label: 'Comentarios' },
   { section: 'Operación' },
   { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
-  { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
+  { id: 'turnos-list', icon: '📋', label: 'Turnos / Personal / Extra' },
   { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
   { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
   { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
@@ -945,7 +945,6 @@ const MENU_COMPLETO = [
   { id: 'hk-form', icon: '🧹', label: 'Registrar Limpieza' },
   { id: 'hk-list', icon: '🧹', label: 'Tiempos Camareras' },
   { id: 'control-personal-form', icon: '➕', label: 'Registrar Ingreso Personal' },
-  { id: 'control-personal-list', icon: '⏱', label: 'Control Personal' },
   { id: 'entrega-efectivos-form', icon: '➕', label: 'Nueva Entrega' },
   { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
   { id: 'transportes-form', icon: '🚗', label: 'Registrar Transporte' },
@@ -985,7 +984,6 @@ const MENU_COMPLETO = [
   { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
   { id: 'personal-form', icon: '➕', label: 'Nuevo Personal' },
   { id: 'personal-list', icon: '👤', label: 'Personal / RRHH' },
-  { id: 'cuadro-extras', icon: '⏲️', label: 'Cuadro Horas Extra' },
   { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
     { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
   { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
@@ -3598,10 +3596,15 @@ async function actualizarEstadoOT(id, estado) {
   showToast('✅ Estado actualizado', 'success');
 }
 
+function _tiemposTabs(active){
+  var t=[['turnos-list','📋 Turnos','turnos'],['control-personal-list','⏱ Control Personal','control'],['cuadro-extras','⏲️ Horas Extra','extras']];
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+t.map(function(x){var on=x[2]===active;return '<button onclick="loadView(\''+x[0]+'\')" class="btn btn-sm" style="border:1px solid '+(on?'var(--azul)':'var(--gris-b)')+';background:'+(on?'var(--azul)':'#fff')+';color:'+(on?'#fff':'var(--azul)')+';font-weight:'+(on?'700':'500')+';padding:7px 14px">'+x[1]+'</button>';}).join('')+'</div>';
+}
 async function renderTurnosList() {
   const { data } = await sb.from('turnos').select('*').order('created_at', { ascending: false }).limit(60);
   const rows = data || [];
   document.getElementById('main-content').innerHTML = `
+    ${_tiemposTabs('turnos')}
     <div class="page-title">📋 Informes de Turno</div>
     <div style="margin-bottom:14px">
       <button class="btn btn-success btn-sm" onclick="loadView('turno-form')" style="padding:10px 20px;font-size:13px">📝 + Nuevo Informe de Turno</button>
@@ -6235,6 +6238,7 @@ async function renderCuadroExtras(){
   }).join('');
 
   document.getElementById('main-content').innerHTML = `
+    ${_tiemposTabs('extras')}
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
       <div class="page-title" style="margin-bottom:0">⏲️ Cuadro de Horas Extra</div>
       <button onclick="window._ceMes=(${month}+11)%12;window._ceYear=${month===0?year-1:year};loadView('cuadro-extras')" class="btn btn-outline btn-sm">◀</button>
@@ -6946,6 +6950,7 @@ async function tablaSimplePersonal(){ var fIn=document.getElementById('cp-fecha-
   const fechas = Object.keys(porFecha).sort().reverse().slice(0,10);
 
   document.getElementById('main-content').innerHTML = `
+    ${_tiemposTabs('control')}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <div class="page-title" style="margin-bottom:0">⏱ Control de Ingreso Personal</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
