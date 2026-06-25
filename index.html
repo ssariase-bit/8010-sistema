@@ -7437,7 +7437,7 @@ async function renderIngresos(){
   const corte = esMesActual ? Number(TODAY.slice(8,10)) : dim;
   const _mesesN = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   const [rkR, csR, evR] = await Promise.all([
-    _rackRango('fecha,apto,estado,tarifa,canal,tipo,updated_at,created_at', ini, fin),
+    _rackRango('fecha,apto,estado,tarifa,canal,tipo,updated_at', ini, fin),
     sb.from('consumos').select('fecha,apto,huesped,valor,pago').gte('fecha',ini).lte('fecha',fin),
     sb.from('eventos').select('total,estado,fecha_inicio').eq('edificio',EDIFICIO_ACTIVO).gte('fecha_inicio',ini).lte('fecha_inicio',fin)
   ]);
@@ -7559,7 +7559,7 @@ async function renderResumenVentas(){
   var edis=[{id:'8010',nom:'8010 Urban Living'},{id:'kubik',nom:'Kubik Living 8i8'}]; var rows=[];
   for(var i=0;i<edis.length;i++){
     var e=edis[i];
-    var rkR=await _rackRango('apto,fecha,estado,tarifa,tipo,updated_at,created_at', ini, fin, e.id);
+    var rkR=await _rackRango('apto,fecha,estado,tarifa,tipo,updated_at', ini, fin, e.id);
     var csR=await sb.from('consumos').select('valor').eq('edificio',e.id).gte('fecha',ini).lte('fecha',fin);
     var evR = e.id==='8010' ? await sb.from('eventos').select('total').eq('edificio','8010').gte('fecha_inicio',ini).lte('fecha_inicio',fin) : {data:[]};
     var aloj=_alojaDe(rkR.data||[]);
