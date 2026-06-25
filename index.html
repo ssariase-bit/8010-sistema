@@ -437,7 +437,7 @@ textarea{resize:vertical;min-height:80px}
 
 <div class="toast" id="toast"></div>
 <!-- FAB — Reportar novedad rápida -->
-<button id="fab-novedad" onclick="loadView('novedad-form')" title="Reportar novedad"
+<button id="fab-novedad" onclick="window._novedadEdit=null;loadView('novedad-form')" title="Reportar novedad"
   style="display:none;position:fixed;bottom:28px;left:28px;width:52px;height:52px;border-radius:50%;background:var(--rojo);color:white;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(192,57,43,.5);z-index:9998;transition:transform .15s"
   onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">⚠️</button>
 
@@ -1748,7 +1748,7 @@ async function renderDashboard() {
         <div class="card-header">
           <div class="card-title">⚠️ Novedades abiertas</div>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-success btn-sm" onclick="loadView('novedad-form')">+ Nueva</button>
+            <button class="btn btn-success btn-sm" onclick="window._novedadEdit=null;loadView('novedad-form')">+ Nueva</button>
             <button class="btn btn-outline btn-sm" onclick="loadView('novedades-list')">Ver todas</button>
           </div>
         </div>
@@ -2874,6 +2874,7 @@ ${notas ? '\n*OBSERVACIONES:*\n' + notas : ''}`;
 // NOVEDAD RÁPIDA
 // ═══════════════════════════════════════════════════════════
 async function renderNovedadForm() {
+  const ed = window._novedadEdit || null;
   const h = new Date().getHours();
   const turnoAuto = h < 14 ? 'Mañana' : (h < 22 ? 'Tarde' : 'Noche');
   let personasOpts = '<option value="">— Sin asignar —</option>';
@@ -2883,7 +2884,7 @@ async function renderNovedadForm() {
   } catch(e) {}
   const areaGestorOpts = ['Recepción','Apartamento','Mantenimiento','Housekeeping','Seguridad','Zonas comunes','Financiero','Huésped','General'].map(a=>`<option>${a}</option>`).join('');
   document.getElementById('main-content').innerHTML = `
-    <div class="page-title">⚠️ Reportar Novedad</div>
+    <div class="page-title">⚠️ ${ed?'Editar Novedad':'Reportar Novedad'}</div>
     <div class="card" style="max-width:640px">
       <div class="form-row">
         <div class="form-group"><label>Fecha</label><input type="date" id="n-fecha" value="${TODAY}"></div>
@@ -2953,10 +2954,16 @@ async function renderNovedadForm() {
         </div>
       </div>
       <div class="form-actions">
-        <button class="btn btn-outline btn-sm" onclick="loadView('novedades-list')">Cancelar</button>
-        <button class="btn btn-success" onclick="enviarNovedad()" style="min-width:180px">📤 Reportar novedad</button>
+        <button class="btn btn-outline btn-sm" onclick="window._novedadEdit=null;loadView('novedades-list')">Cancelar</button>
+        <button class="btn btn-success" onclick="enviarNovedad()" style="min-width:180px">${ed?'💾 Guardar cambios':'📤 Reportar novedad'}</button>
       </div>
     </div>`;
+  if(ed){
+    var S=function(id,v){var e=document.getElementById(id); if(e!=null&&v!=null)e.value=v;};
+    S('n-fecha',ed.fecha); S('n-turno',ed.turno); S('n-area',ed.area); S('n-apto',ed.apto); S('n-prio',ed.prioridad);
+    S('n-estado-ini',ed.estado); S('n-causa',ed.causa); S('n-fuente',ed.fuente); S('n-desc',ed.descripcion);
+    S('n-tratamiento',ed.tratamiento); S('n-quien',ed.reportado_por); S('n-gestor',ed.gestionado_por); S('n-area-gestor',ed.area_gestor);
+  }
 }
 
 async function enviarNovedad() {
@@ -2968,7 +2975,8 @@ async function enviarNovedad() {
   const apto = document.getElementById('n-apto').value.trim();
   let descFinal = desc;
   if (accion) descFinal += `\n\n✅ Acción tomada: ${accion}`;
-  const { error } = await sb.from('novedades').insert({
+  var _ned = window._novedadEdit || null;
+  var _payload = {
     fecha: document.getElementById('n-fecha').value,
     turno: document.getElementById('n-turno').value,
     area: document.getElementById('n-area').value,
@@ -2982,9 +2990,12 @@ async function enviarNovedad() {
     fuente: document.getElementById('n-fuente')?.value || null,
     tratamiento: document.getElementById('n-tratamiento')?.value?.trim() || null,
     estado: document.getElementById('n-estado-ini').value,
-    user_id: currentUser.id,
-  });
-  if (error) { showToast('Error al guardar', 'error'); btn.innerHTML = '📤 Reportar novedad'; btn.disabled = false; return; }
+  };
+  if(!_ned) _payload.user_id = currentUser.id;
+  const { error } = _ned ? await sb.from('novedades').update(_payload).eq('id',_ned.id) : await sb.from('novedades').insert(_payload);
+  if (error) { showToast('Error al guardar', 'error'); btn.innerHTML = _ned?'💾 Guardar cambios':'📤 Reportar novedad'; btn.disabled = false; return; }
+  window._novedadEdit = null;
+  if(_ned){ showToast('✅ Novedad actualizada', 'success'); loadView('novedades-list'); return; }
   showToast('✅ Novedad reportada', 'success');
   const prio = document.getElementById('n-prio').value;
   if (prio === 'Alta') {
@@ -3282,7 +3293,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
   document.getElementById('main-content').innerHTML = `
     <div class="page-title">⚠️ Novedades</div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn btn-success btn-sm" onclick="loadView('novedad-form')">+ Nueva novedad</button>
+      <button class="btn btn-success btn-sm" onclick="window._novedadEdit=null;loadView('novedad-form')">+ Nueva novedad</button>
       <button class="btn btn-outline btn-sm" onclick="renderNovedadesList('abiertas')">Solo abiertas</button>
       <button class="btn btn-outline btn-sm" onclick="renderNovedadesList('')">Todas</button>
       <input type="date" value="${fechaSel}" onchange="renderNovedadesList('', this.value)" title="Ver solo las novedades de una fecha" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
@@ -3308,6 +3319,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
               <td>
                 <div style="display:inline-grid;gap:4px;width:104px">
                   <button class="btn btn-outline btn-xs" onclick="verNovedad('${n.id}')">Ver</button>
+                  <button class="btn btn-outline btn-xs" onclick="editarNovedad('${n.id}')">✏️ Editar</button>
                   ${n.estado!=='Resuelto' ? `<button class="btn btn-success btn-xs" onclick="cambiarEstadoNov('${n.id}','Resuelto')">✓ Cerrar</button>` : ''}
                   ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-outline btn-xs" onclick="borrarNovedad('${n.id}')" style="color:#9A4A40;border-color:#E0C0BA">🗑 Borrar</button>` : ''}
                 </div>
@@ -3317,6 +3329,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
     </div>`;
 }
 
+async function editarNovedad(id){ var r=await sb.from('novedades').select('*').eq('id',id).single(); if(r.error||!r.data){ showToast('No se encontró la novedad','error'); return; } window._novedadEdit=r.data; loadView('novedad-form'); }
 async function borrarNovedad(id){
   if(!confirm('¿Borrar esta novedad de forma permanente? Esta acción no se puede deshacer.')) return;
   const { data, error } = await sb.from('novedades').delete().eq('id', id).select();
