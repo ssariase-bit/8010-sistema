@@ -4277,7 +4277,7 @@ async function guardarReserva() {
   }, 800);
 }
 
-function previsualizarConfirmacion() {
+async function previsualizarConfirmacion() {
   const apto = document.getElementById('res-apto').value;
   const ci = document.getElementById('res-checkin').value;
   const co = document.getElementById('res-checkout').value;
@@ -4305,7 +4305,7 @@ function previsualizarConfirmacion() {
     obs: document.getElementById('res-obs').value,
     email: document.getElementById('res-email').value.trim(),
     tel: document.getElementById('res-tel').value.trim(),
-    numero: Math.floor(Math.random()*500)+400,
+    numero: await peekNumeroConfirmacion(),
     firmante: document.getElementById('res-firmante').value || currentProfile?.nombre || 'Fabio Malaver',
     cargo: document.getElementById('res-cargo').value || 'Jefe de Administradores',
   });
@@ -9772,18 +9772,26 @@ function abrirInformeCKI() {
   renderInformeCKI(apto, huesped, canal, tarifa, empresa, tratamiento);
 }
 
+// Contador de confirmación POR EDIFICIO (8010 y Kubik llevan secuencias separadas)
+function _numConfKey(){ return (typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO==='kubik') ? 'ultimo_numero_confirmacion_kubik' : 'ultimo_numero_confirmacion'; }
+function _numConfBase(){ return (typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO==='kubik') ? 59 : 423; }
+// Solo LEE el próximo número (no consume) — para la previsualización
+async function peekNumeroConfirmacion() {
+  try {
+    const { data } = await sb.from('config').select('valor').eq('id',_numConfKey()).single();
+    return parseInt(data?.valor || String(_numConfBase())) + 1;
+  } catch(e){ return _numConfBase()+1; }
+}
+// Consume el próximo número (incrementa y guarda) — para guardar la reserva
 async function getNextNumeroConfirmacion() {
   try {
-    // Leer número actual
-    const { data } = await sb.from('config').select('valor').eq('id','ultimo_numero_confirmacion').single();
-    const actual = parseInt(data?.valor || '423');
-    const siguiente = actual + 1;
-    // Actualizar a siguiente
-    await sb.from('config').upsert({ id: 'ultimo_numero_confirmacion', valor: String(siguiente), updated_at: new Date().toISOString() });
+    const key=_numConfKey();
+    const { data } = await sb.from('config').select('valor').eq('id',key).single();
+    const siguiente = parseInt(data?.valor || String(_numConfBase())) + 1;
+    await sb.from('config').upsert({ id: key, valor: String(siguiente), updated_at: new Date().toISOString() });
     return siguiente;
   } catch(e) {
-    // Fallback si falla
-    return Math.floor(Math.random()*50)+424;
+    return _numConfBase()+1;
   }
 }
 
