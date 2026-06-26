@@ -2307,6 +2307,7 @@ function toggleAptoCompleto(chk) {
 }
 
 function _paxSum(){ var g=function(id){ var e=document.getElementById(id); return (e&&e.value!=='')?(Number(e.value)||0):0; }; var t=g('m-pax-ad')+g('m-pax-me')+g('m-pax-in'); var p=document.getElementById('m-pax'); if(p) p.value=t; }
+function _resPaxSum(){ var g=function(id){ var e=document.getElementById(id); return (e&&e.value!=='')?(Number(e.value)||0):0; }; var a=g('res-pax-ad'), n=g('res-pax-me'), i=g('res-pax-in'); var t=a+n+i; var parts=[]; if(a) parts.push(a+' adulto'+(a>1?'s':'')); if(n) parts.push(n+' niño'+(n>1?'s':'')); if(i) parts.push(i+' infante'+(i>1?'s':'')); var pe=document.getElementById('res-personas'); if(pe) pe.value=parts.join(', ')||'1 adulto'; var px=document.getElementById('res-pax'); if(px) px.value=t||1; }
 // Mayúscula inicial: solo normaliza si el texto viene TODO en mayúsculas (no toca nombres ya bien escritos)
 function _titleCase(s){ s=String(s==null?'':s); if(!s) return s; if(/[a-záéíóúñü]/.test(s)) return s; return s.toLowerCase().replace(/(^|[\s'\-\/.])([a-záéíóúñü])/g, function(m,p,c){ return p+c.toUpperCase(); }); }
 async function cambiarAptoModal(){
@@ -4178,9 +4179,19 @@ function renderNuevaReserva() {
             <input type="text" id="res-num-reserva" placeholder="Ej: 424/2026">
           </div>
           <div class="form-group">
-            <label>N° de personas (pax)</label>
-            <input type="text" id="res-personas" value="1 adulto" placeholder="Ej: 2 adultos, 1 niño"></div><div class="form-group"><label>N° de PAX</label><input type="number" id="res-pax" min="1" step="1" value="1" placeholder="Ej: 2">
+            <label>Adultos</label>
+            <input type="number" id="res-pax-ad" min="0" step="1" value="1" placeholder="0" oninput="_resPaxSum()">
           </div>
+          <div class="form-group">
+            <label>Niños</label>
+            <input type="number" id="res-pax-me" min="0" step="1" value="0" placeholder="0" oninput="_resPaxSum()">
+          </div>
+          <div class="form-group">
+            <label>Infantes</label>
+            <input type="number" id="res-pax-in" min="0" step="1" value="0" placeholder="0" oninput="_resPaxSum()">
+          </div>
+          <input type="hidden" id="res-personas" value="1 adulto">
+          <input type="hidden" id="res-pax" value="1">
         </div>
         <div class="form-row" id="res-cxc-bloque">
           <div class="form-group">
