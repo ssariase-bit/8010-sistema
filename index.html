@@ -4089,7 +4089,7 @@ function renderNuevaReserva() {
           <div class="form-group">
             <label>IVA</label>
             <select id="res-iva" style="font-weight:600">
-              <option value="encima">IVA 19% (se suma)</option><option value="exento">Exento de IVA</option>
+              <option value="encima">IVA 19% (se suma)</option><option value="exento">Exento de IVA</option><option value="excluido">Excluido (canon de arrendamiento)</option>
             </select>
           </div>
           <div class="form-group">
@@ -4278,9 +4278,13 @@ function calcReserva() {
   if (ci && co) {
     const noches = Math.max(0, Math.round((new Date(co) - new Date(ci)) / 86400000));
     document.getElementById('res-noches').value = noches;
+    const _tipoT = document.getElementById('res-tipotarifa')?.value || 'TxN';
+    const _porDia = _tipoT === 'TxD';
+    const _unid = _porDia ? (noches + 1) : noches; // por día cobra la noche de salida
+    const _uLbl = _porDia ? 'día' : 'noche';
     const porNoche = document.getElementById('res-pornoche-toggle')?.checked;
     if (porNoche) renderNochesTarifa();
-    let total = noches * tarifa;
+    let total = _unid * tarifa;
     if (porNoche) { total = 0; document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(inp=>{ total += Number(inp.value)||0; }); }
     document.getElementById('res-total').value = (moneda === 'USD') ? `USD ${total.toLocaleString('es-CO')}` : `$ ${total.toLocaleString('es-CO')}`;
     // Mostrar resumen
@@ -4290,7 +4294,7 @@ function calcReserva() {
       resumen.classList.remove('hidden');
       const fmtD = d => { const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; };
       document.getElementById('res-resumen-texto').innerHTML =
-        `Apto <strong>${apto}</strong> · ${noches} noche${noches>1?'s':''} · ${fmtD(ci)} → ${fmtD(co)} · ${porNoche ? 'Tarifa mixta' : 'Tarifa: $'+tarifa.toLocaleString('es-CO')+'/noche'} · <strong>Total: $${total.toLocaleString('es-CO')}</strong>`;
+        `Apto <strong>${apto}</strong> · ${_unid} ${_uLbl}${_unid>1?'s':''} · ${fmtD(ci)} → ${fmtD(co)} · ${porNoche ? 'Tarifa mixta' : 'Tarifa: $'+tarifa.toLocaleString('es-CO')+'/'+_uLbl} · <strong>Total: $${total.toLocaleString('es-CO')}</strong>`;
     }
   }
 }
@@ -4395,7 +4399,7 @@ async function guardarReserva() {
   showToast(`✅ Reserva registrada — ${nombre} en Apto ${apto} (${noches} noches)`, 'success');
 
   // Generar confirmación automáticamente
-  const _valorTotalCalc=(function(){ if(porNoche){ var t=0; for(var i=0;i<noches;i++){ var d=new Date(ci); d.setDate(d.getDate()+i); var fk=d.toISOString().split('T')[0]; t+=(tarifasNoche[fk]!=null?tarifasNoche[fk]:tarifa); } return t; } return tarifa*noches; })() || (parseInt(((document.getElementById('res-total')||{}).value||'').replace(/[^0-9]/g,''),10)||0);
+  const _valorTotalCalc=(function(){ if(porNoche){ var t=0; for(var i=0;i<noches;i++){ var d=new Date(ci); d.setDate(d.getDate()+i); var fk=d.toISOString().split('T')[0]; t+=(tarifasNoche[fk]!=null?tarifasNoche[fk]:tarifa); } return t; } var _u=((document.getElementById('res-tipotarifa')||{}).value==='TxD')?(noches+1):noches; return tarifa*_u; })() || (parseInt(((document.getElementById('res-total')||{}).value||'').replace(/[^0-9]/g,''),10)||0);
   const resData = {
     nombre, apto, noches, tarifa, valorTotal: _valorTotalCalc,
     checkin: ci, checkout: co,
@@ -4438,7 +4442,7 @@ async function previsualizarConfirmacion() {
   if (!apto || !ci || !nombre) { showToast('Completa apto, fechas y nombre primero', 'error'); return; }
   generarConfirmacion({
     nombre, apto, noches, tarifa,
-    valorTotal: (function(){ var pn=document.getElementById('res-pornoche-toggle')&&document.getElementById('res-pornoche-toggle').checked; var t=0; if(pn){ document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(function(inp){ t+=Number(inp.value)||0; }); } if(!(t>0)) t=tarifa*noches; if(!(t>0)) t=parseInt(((document.getElementById('res-total')||{}).value||'').replace(/[^0-9]/g,''),10)||0; return t; })(),
+    valorTotal: (function(){ var pn=document.getElementById('res-pornoche-toggle')&&document.getElementById('res-pornoche-toggle').checked; var t=0; if(pn){ document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(function(inp){ t+=Number(inp.value)||0; }); } if(!(t>0)){ var _u=((document.getElementById('res-tipotarifa')||{}).value==='TxD')?(noches+1):noches; t=tarifa*_u; } if(!(t>0)) t=parseInt(((document.getElementById('res-total')||{}).value||'').replace(/[^0-9]/g,''),10)||0; return t; })(),
     config: document.getElementById('res-config')?.value || 'completo',
     moneda: document.getElementById('res-moneda')?.value || 'COP',
     tipoAptoManual: document.getElementById('res-tipo-manual')?.value || '',
@@ -4555,7 +4559,7 @@ function generarConfirmacion(r) {
   const iva = esExento ? 0 : Math.round(r.tarifa * ivaPct);
   const tarifaConIva = esExento ? r.tarifa : r.tarifa + iva;
   const totalConIva = tarifaConIva * r.noches;
-  const conIVA = !/LTM3/i.test(r.cxcRazon||'') && r.iva !== 'exento' && r.iva !== 'no_aplica';
+  const conIVA = !/LTM3/i.test(r.cxcRazon||'') && r.iva !== 'exento' && r.iva !== 'no_aplica' && r.iva !== 'excluido';
   const tratamiento = r.nombre.split(' ')[0].toLowerCase().endsWith('a') ? 'SRA.' : 'SR.';
     const _accent = (((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
     const _es8010c=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1); const _larga=(Number(r.noches)||0)>30; const _razon=_es8010c?(_larga?'LTM3 SAS':'8010 SAS'):'8i8 Operadora SAS'; const _nit=_es8010c?(_larga?'900.361.992-4':'900.683.855-5'):'902.026.873-8'; const _email=_es8010c?'recepcion@8010urbanliving.com':'gmercadeo@8i8op.com'; const _firmaNom=_es8010c?'Fabio Malaver':'Cristina Cerviño'; const _firmaCargo=_es8010c?'Jefe de Administradores':'Gerente Mercadeo';
@@ -4692,7 +4696,7 @@ function generarConfirmacion(r) {
   const _edN = (window.EB && EB().nombre) || '8010 Urban Living';
   const _esKLc = _edN.indexOf('8010') === -1;
   const _telC = normTel(r.tel);
-  const confirmMsg = `Estimado/a ${r.nombre},%0A%0AConfirmamos su reserva en ${_edN}:%0A%0AApartamento: ${r.apto}%0ACheck-in: ${r.checkin}%0ACheck-out: ${r.checkout}%0ANoches: ${r.noches}%0ATarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}%0ATotal: $${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':'%0A%0APor favor revise la Guía de Comportamiento adjunta.'}%0A%0A${_edN}`;
+  const confirmMsg = `Estimado/a ${r.nombre},%0A%0AConfirmamos su reserva en ${_edN}:%0A%0AApartamento: ${r.apto}%0ACheck-in: ${r.checkin}%0ACheck-out: ${r.checkout}%0A${r.tipoTarifa==='TxD'?('Días: '+(Number(r.noches)+1)):('Noches: '+r.noches)}%0ATarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel} /${r.tipoTarifa==='TxD'?'día':'noche'}${conIVA?' + IVA':''}%0ATotal: $${((r.valorTotal>0?r.valorTotal:r.tarifa*((r.tipoTarifa==='TxD')?(Number(r.noches)+1):Number(r.noches)))).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':'%0A%0APor favor revise la Guía de Comportamiento adjunta.'}%0A%0A${_edN}`;
   const waMsg = encodeURIComponent(`🏢 *${_edN} — Confirmación de Reserva*\n\nEstimado/a ${r.nombre},\n\nSu reserva está confirmada:\n▪️ Apto: ${r.apto}\n▪️ Check-in: ${r.checkin}\n▪️ Check-out: ${r.checkout}\n▪️ Noches: ${r.noches}\n▪️ Tarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n▪️ Total: $${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':`\n\n📋 Guía de Comportamiento: ${guiaUrl}`}\n\n_${_edN}_`);
   const emailDest = r.email ? encodeURIComponent(r.email) : '';
 
@@ -5641,11 +5645,11 @@ window.onModalidadReserva = function(){
   if(sel && sel.value==='COMP'){
     var iva=document.getElementById('res-iva'); if(iva){ iva.value='no_aplica'; }
     var tar=document.getElementById('res-tarifa'); if(tar){ tar.value='0'; }
-    if(typeof calcReserva==='function') calcReserva();
   }
+  if(typeof calcReserva==='function') calcReserva(); // recalcular total al cambiar por noche/por día
 };
 
-window._ivaCalc = function(aloja, modo){ aloja=Number(aloja)||0; var f=function(n){return '$'+Math.round(n).toLocaleString('es-CO');}; if(modo==='exento') return {tag:'Exento', msg:'Exento de IVA'}; if(modo==='no_aplica') return {tag:'Cortesía', msg:'Cortesía - IVA no aplica'}; if(modo==='encima'){ var iva=Math.round(aloja*0.19); return {tag:'+IVA 19%', msg:'Base '+f(aloja)+' + IVA 19% '+f(iva)+' = '+f(aloja+iva)+' (con IVA)'}; } var base=Math.round(aloja/1.19); var ivaI=aloja-base; return {tag:'IVA incl.', msg:'IVA 19% incluido - base '+f(base)+' + IVA '+f(ivaI)+' = '+f(aloja)}; };
+window._ivaCalc = function(aloja, modo){ aloja=Number(aloja)||0; var f=function(n){return '$'+Math.round(n).toLocaleString('es-CO');}; if(modo==='excluido') return {tag:'Excluido', msg:'Excluido de IVA (canon de arrendamiento)'}; if(modo==='exento') return {tag:'Exento', msg:'Exento de IVA'}; if(modo==='no_aplica') return {tag:'Cortesía', msg:'Cortesía - IVA no aplica'}; if(modo==='encima'){ var iva=Math.round(aloja*0.19); return {tag:'+IVA 19%', msg:'Base '+f(aloja)+' + IVA 19% '+f(iva)+' = '+f(aloja+iva)+' (con IVA)'}; } var base=Math.round(aloja/1.19); var ivaI=aloja-base; return {tag:'IVA incl.', msg:'IVA 19% incluido - base '+f(base)+' + IVA '+f(ivaI)+' = '+f(aloja)}; };
 window._ivaTag = function(modo){ var c={ 'exento':['#e0e7ff','#3730a3'], 'no_aplica':['#f3f4f6','#6b7280'], 'encima':['#fef3c7','#92400e'], 'incluido':['#dcfce7','#166534'] }; var t=(window._ivaCalc?window._ivaCalc(0,modo||'incluido').tag:''); var col=c[modo||'incluido']||c['incluido']; return ' <span style="background:'+col[0]+';color:'+col[1]+';font-size:10px;padding:1px 6px;border-radius:6px;white-space:nowrap">'+t+'</span>'; };
 
 window._rvFmtD = function(iso){ if(!iso) return '-'; var p=String(iso).split('T')[0].split('-'); return p.length<3?iso:p[2]+'/'+p[1]+'/'+p[0].slice(2); };
@@ -5711,7 +5715,8 @@ window.renderReservas = async function(filtro){
   window._rvRowHTML=function(r){
     var _usd=(r.moneda==='USD');
     var _tn=_usd?(Number(r.tarifa_usd)||Number(r.tarifa)||0):(Number(r.tarifa)||0);
-    var _tt=(Number(r.valor_total)>0?Number(r.valor_total):(Number(r.valorTotal)>0?Number(r.valorTotal):_tn*(Number(r.noches)||0)));
+    var _unidR=(String(r.tipo_tarifa)==='TxD')?((Number(r.noches)||0)+1):(Number(r.noches)||0);
+    var _tt=(Number(r.valor_total)>0?Number(r.valor_total):(Number(r.valorTotal)>0?Number(r.valorTotal):_tn*_unidR));
     var _tnStr=(_usd?'USD ':'$')+_tn.toLocaleString('es-CO');
     var _ttStr=(_usd?'USD ':'$')+Math.round(_tt).toLocaleString('es-CO');
     var _esMes=(Number(r.noches)||0)>=28; // estadía mensual / larga → aplica tarifa por mes
