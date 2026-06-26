@@ -459,7 +459,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-19-0710';
+const APP_VERSION = '2026-06-26-prereg';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4142,6 +4142,10 @@ function renderNuevaReserva() {
 
       <div class="form-section">
         <div class="form-section-title">👤 Datos del huésped</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <button type="button" class="btn btn-outline btn-sm" onclick="_pregSolicitar()">📲 Solicitar datos al huésped</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="_pregTraer()">📥 Traer datos del huésped</button>
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label>Nombre completo *</label>
@@ -10458,9 +10462,191 @@ async function guardarNuevaPwd() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// PRE-REGISTRO DE HUÉSPED  (token + formulario público + import)
+// ═══════════════════════════════════════════════════════════
+function _pregEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function _pregNuevoToken(){ return 'pr'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function _pregLink(token){ return location.origin + location.pathname + '?prereg=' + encodeURIComponent(token) + '&e=' + encodeURIComponent(EDIFICIO_ACTIVO); }
+function _pregMensaje(link){
+  var nombreEd = (EDIFICIOS[EDIFICIO_ACTIVO] && EDIFICIOS[EDIFICIO_ACTIVO].nombre) || '8010 Urban Living';
+  return '¡Hola! Le escribimos de ' + nombreEd + '. Para agilizar su reserva, por favor complete sus datos en el siguiente formulario (toma 1 minuto):\n\n' + link + '\n\n¡Gracias!';
+}
+
+// ── Botón "Solicitar datos al huésped" ──
+function _pregSolicitar(){
+  var token = _pregNuevoToken();
+  window._pregLastToken = token;
+  var link = _pregLink(token);
+  var msg  = _pregMensaje(link);
+  var ov = document.getElementById('_preg-ov'); if(ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = '_preg-ov';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:22px;box-shadow:0 12px 40px rgba(0,0,0,.3);font-family:inherit">' +
+      '<div style="font-size:17px;font-weight:700;margin-bottom:4px;color:#1a1a1a">📲 Solicitar datos al huésped</div>' +
+      '<div style="font-size:12px;color:#7F7F7F;margin-bottom:14px">Envíale el link por WhatsApp. Cuando lo complete, usa <strong>📥 Traer datos del huésped</strong> para cargarlos aquí.</div>' +
+      '<label style="font-size:12px;font-weight:600;color:#555">WhatsApp del huésped (con indicativo)</label>' +
+      '<input id="_preg-tel" type="tel" placeholder="573000000000" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;margin:4px 0 12px;font-size:14px">' +
+      '<button onclick="_pregEnviarWA()" style="width:100%;padding:11px;border:0;border-radius:8px;background:#25D366;color:#fff;font-weight:700;font-size:14px;cursor:pointer;margin-bottom:10px">Abrir WhatsApp con el mensaje</button>' +
+      '<label style="font-size:12px;font-weight:600;color:#555">O copia el link del formulario</label>' +
+      '<div style="display:flex;gap:6px;margin:4px 0 14px">' +
+        '<input id="_preg-link" readonly value="' + _pregEsc(link) + '" style="flex:1;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#FAFAF8">' +
+        '<button onclick="_pregCopiar()" style="padding:9px 12px;border:1px solid #B8963E;border-radius:8px;background:#fff;color:#B8963E;font-weight:700;cursor:pointer">Copiar</button>' +
+      '</div>' +
+      '<div style="text-align:right"><button onclick="(document.getElementById(\'_preg-ov\')||{}).remove&&document.getElementById(\'_preg-ov\').remove()" style="padding:9px 16px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#555;font-weight:600;cursor:pointer">Cerrar</button></div>' +
+    '</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+}
+function _pregEnviarWA(){
+  var tel = (document.getElementById('_preg-tel')||{}).value || '';
+  tel = tel.replace(/[^0-9]/g,'');
+  var link = (document.getElementById('_preg-link')||{}).value || '';
+  var msg = _pregMensaje(link);
+  var url = 'https://wa.me/' + (tel?tel:'') + '?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
+}
+function _pregCopiar(){
+  var el = document.getElementById('_preg-link'); if(!el) return;
+  el.select(); el.setSelectionRange(0,99999);
+  try{ navigator.clipboard.writeText(el.value); }catch(_){ try{ document.execCommand('copy'); }catch(__){} }
+  if(typeof showToast==='function') showToast('Link copiado','success');
+}
+
+// ── Botón "Traer datos del huésped" ──
+async function _pregTraer(){
+  var ov = document.getElementById('_preg-ov'); if(ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = '_preg-ov';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;padding:22px;box-shadow:0 12px 40px rgba(0,0,0,.3)"><div style="font-size:17px;font-weight:700;margin-bottom:10px">📥 Traer datos del huésped</div><div id="_preg-list" style="font-size:13px;color:#555">Cargando pre-registros…</div><div style="text-align:right;margin-top:14px"><button onclick="document.getElementById(\'_preg-ov\').remove()" style="padding:9px 16px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#555;font-weight:600;cursor:pointer">Cerrar</button></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+  var box = document.getElementById('_preg-list');
+  try{
+    var r = await sb.from('prereg').select('*').eq('edificio', EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(40);
+    if(r.error) throw r.error;
+    var rows = r.data||[];
+    if(!rows.length){ box.innerHTML = 'Aún no hay pre-registros completados para este edificio. Usa <strong>📲 Solicitar datos al huésped</strong> para enviar el formulario.'; return; }
+    window._pregRows = {};
+    var html = '<input id="_preg-buscar" placeholder="Buscar por nombre, teléfono o empresa…" oninput="_pregFiltrar()" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;margin-bottom:10px;font-size:13px">';
+    html += '<div id="_preg-rows" style="max-height:340px;overflow:auto">';
+    rows.forEach(function(x){
+      window._pregRows[x.id] = x;
+      var nom = [x.nombre,x.apellido1,x.apellido2].filter(Boolean).join(' ') || '(sin nombre)';
+      var meta = [x.telefono, x.empresa].filter(Boolean).join(' · ');
+      var fch = x.created_at ? new Date(x.created_at).toLocaleString('es-CO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+      var tag = (x.estado==='importado') ? ' <span style="font-size:10px;color:#999">(ya importado)</span>' : '';
+      html += '<div class="_preg-item" data-search="'+_pregEsc((nom+' '+meta).toLowerCase())+'" onclick="_pregUsar(\''+x.id+'\')" style="padding:10px;border:1px solid #eee;border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">'+
+        '<div><div style="font-weight:600;color:#1a1a1a">'+_pregEsc(nom)+tag+'</div><div style="font-size:11px;color:#888">'+_pregEsc(meta)+'</div></div>'+
+        '<div style="font-size:11px;color:#aaa">'+_pregEsc(fch)+'</div></div>';
+    });
+    html += '</div>';
+    box.innerHTML = html;
+  }catch(e){ box.innerHTML = '<span style="color:#c0392b">No se pudieron cargar los pre-registros: '+_pregEsc(e.message||e)+'</span>'; }
+}
+function _pregFiltrar(){
+  var q = ((document.getElementById('_preg-buscar')||{}).value||'').toLowerCase().trim();
+  document.querySelectorAll('#_preg-rows ._preg-item').forEach(function(it){
+    it.style.display = (!q || (it.getAttribute('data-search')||'').indexOf(q)>=0) ? '' : 'none';
+  });
+}
+function _pregUsar(id){
+  var x = (window._pregRows||{})[id]; if(!x) return;
+  var set = function(elid,val){ var e=document.getElementById(elid); if(e && val!=null && val!=='') e.value=val; };
+  set('res-nf', x.nombre); set('res-ap1', x.apellido1); set('res-ap2', x.apellido2);
+  set('res-doc', x.documento); set('res-tel', x.telefono); set('res-email', x.email); set('res-empresa', x.empresa);
+  if(x.pax_adultos!=null) set('res-pax-ad', x.pax_adultos);
+  if(x.pax_menores!=null) set('res-pax-me', x.pax_menores);
+  if(x.pax_infantes!=null) set('res-pax-in', x.pax_infantes);
+  try{ if(typeof combinarNombreReserva==='function') combinarNombreReserva(); }catch(_){}
+  try{ if(typeof _resPaxSum==='function') _resPaxSum(); }catch(_){}
+  try{ sb.from('prereg').update({estado:'importado'}).eq('id', id).then(function(){}); }catch(_){}
+  var ov=document.getElementById('_preg-ov'); if(ov) ov.remove();
+  if(typeof showToast==='function') showToast('Datos del huésped cargados','success');
+}
+
+// ── Formulario público (cuando la URL trae ?prereg=TOKEN) ──
+function _pregBootPublico(){
+  var qs = new URLSearchParams(location.search);
+  var token = qs.get('prereg');
+  if(!token) return false;
+  window._PREREG_MODE = true;
+  var ed = qs.get('e'); if(['8010','kubik'].indexOf(ed)<0) ed = '8010';
+  var nombreEd = (EDIFICIOS[ed] && EDIFICIOS[ed].nombre) || '8010 Urban Living';
+  var ls=document.getElementById('login-screen'); if(ls) ls.style.display='none';
+  var ap=document.getElementById('app'); if(ap) ap.style.display='none';
+  var wrap = document.createElement('div');
+  wrap.id='_preg-public';
+  wrap.style.cssText='position:fixed;inset:0;z-index:100000;background:#0f0f10;overflow:auto;padding:24px 16px;font-family:inherit;color:#eee';
+  wrap.innerHTML =
+    '<div style="max-width:460px;margin:0 auto">' +
+      '<div style="text-align:center;margin-bottom:18px">' +
+        '<div style="font-size:13px;letter-spacing:2px;color:#B8963E;font-weight:700">'+_pregEsc(nombreEd.toUpperCase())+'</div>' +
+        '<div style="font-size:11px;color:rgba(255,255,255,.35);letter-spacing:1px;margin-top:2px">PRE-REGISTRO DE HUÉSPED</div>' +
+      '</div>' +
+      '<div id="_pregp-card" style="background:#1b1b1d;border-radius:14px;padding:20px">' +
+        '<p style="font-size:13px;color:rgba(255,255,255,.6);margin:0 0 14px">Complete sus datos para agilizar su reserva. Toma menos de un minuto.</p>' +
+        _pregCampo('Nombre(s) *','_pregp-nf','text','') +
+        '<div style="display:flex;gap:8px">' +
+          '<div style="flex:1">'+_pregCampo('Primer apellido','_pregp-ap1','text','')+'</div>' +
+          '<div style="flex:1">'+_pregCampo('Segundo apellido','_pregp-ap2','text','')+'</div>' +
+        '</div>' +
+        _pregCampo('Documento (CC / Pasaporte / NIT)','_pregp-doc','text','') +
+        _pregCampo('Correo electrónico','_pregp-email','email','correo@email.com') +
+        _pregCampo('Teléfono / WhatsApp','_pregp-tel','tel','+57 300 000 0000') +
+        _pregCampo('Empresa (si aplica)','_pregp-emp','text','') +
+        '<div style="display:flex;gap:8px">' +
+          '<div style="flex:1">'+_pregCampo('Adultos','_pregp-pa','number','1')+'</div>' +
+          '<div style="flex:1">'+_pregCampo('Niños','_pregp-pn','number','0')+'</div>' +
+          '<div style="flex:1">'+_pregCampo('Infantes','_pregp-pi','number','0')+'</div>' +
+        '</div>' +
+        '<button id="_pregp-btn" onclick="_pregEnviarPublico(\''+_pregEsc(token)+'\',\''+ed+'\')" style="width:100%;padding:13px;border:0;border-radius:9px;background:#B8963E;color:#1a1a1a;font-weight:700;font-size:15px;cursor:pointer;margin-top:8px">Enviar mis datos</button>' +
+        '<p id="_pregp-msg" style="font-size:12px;color:#c0392b;margin:10px 0 0;display:none"></p>' +
+      '</div>' +
+      '<p style="text-align:center;font-size:10px;color:rgba(255,255,255,.25);margin-top:14px">Sus datos se usan únicamente para gestionar su reserva.</p>' +
+    '</div>';
+  document.body.appendChild(wrap);
+  return true;
+}
+function _pregCampo(label,id,type,ph){
+  var min = (type==='number') ? ' min="0" step="1"' : '';
+  var val = (type==='number') ? ' value="'+_pregEsc(ph)+'"' : '';
+  var pht = (type==='number') ? '' : ' placeholder="'+_pregEsc(ph)+'"';
+  return '<label style="display:block;font-size:11px;color:rgba(255,255,255,.45);margin:8px 0 3px">'+_pregEsc(label)+'</label>'+
+    '<input id="'+id+'" type="'+type+'"'+min+val+pht+' style="width:100%;padding:10px;border:1px solid #333;border-radius:8px;background:#101012;color:#eee;font-size:14px;box-sizing:border-box">';
+}
+async function _pregEnviarPublico(token, ed){
+  var g=function(id){ var e=document.getElementById(id); return e? e.value.trim() : ''; };
+  var gn=function(id){ var e=document.getElementById(id); return (e && e.value!=='')?(Number(e.value)||0):0; };
+  var msg=document.getElementById('_pregp-msg');
+  var nf=g('_pregp-nf');
+  if(!nf){ msg.style.display='block'; msg.textContent='Por favor ingrese su nombre.'; return; }
+  var btn=document.getElementById('_pregp-btn'); btn.disabled=true; btn.textContent='Enviando…';
+  var row={ token:token, edificio:ed, nombre:nf, apellido1:g('_pregp-ap1'), apellido2:g('_pregp-ap2'),
+    documento:g('_pregp-doc'), email:g('_pregp-email'), telefono:g('_pregp-tel'), empresa:g('_pregp-emp'),
+    pax_adultos:gn('_pregp-pa'), pax_menores:gn('_pregp-pn'), pax_infantes:gn('_pregp-pi'), estado:'completado' };
+  try{
+    var r = await sb.from('prereg').insert(row);
+    if(r.error) throw r.error;
+    document.getElementById('_pregp-card').innerHTML =
+      '<div style="text-align:center;padding:18px 6px">' +
+        '<div style="font-size:46px;margin-bottom:8px">✅</div>' +
+        '<div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px">¡Gracias, '+_pregEsc(nf)+'!</div>' +
+        '<div style="font-size:13px;color:rgba(255,255,255,.55)">Recibimos sus datos. En breve le enviaremos la confirmación de su reserva.</div>' +
+      '</div>';
+  }catch(e){
+    btn.disabled=false; btn.textContent='Enviar mis datos';
+    msg.style.display='block'; msg.textContent='No se pudo enviar: '+(e.message||e)+'. Intente de nuevo.';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // AUTO-LOGIN si hay sesión activa
 // ═══════════════════════════════════════════════════════════
 (async () => {
+  if (_pregBootPublico()) return;   // modo formulario público: no inicia sesión
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     currentUser = session.user;
