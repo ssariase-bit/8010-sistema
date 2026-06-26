@@ -4136,8 +4136,10 @@ function renderNuevaReserva() {
           </div>
         </div>
         <div class="form-group">
-          <label>Otros huéspedes en el apto (si son varios)</label>
-          <input type="text" id="res-huesp-extra" placeholder="Ej: Juan Becerra, Ana Pérez — separa con coma">
+          <label>Huéspedes adicionales (si son varios)</label>
+          <div id="res-huesp-list"></div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="_resAddHuesped()" style="margin-top:4px">+ Agregar huésped</button>
+          <input type="hidden" id="res-huesp-extra">
         </div>
         <div class="form-row col3">
           <div class="form-group">
@@ -4326,7 +4328,7 @@ function renderNochesTarifa(){
 
 async function guardarReserva() {
   const apto    = document.getElementById('res-apto').value;
-  const _he2    = document.getElementById('res-huesp-extra')?.value.trim() || null;
+  const _he2    = (typeof _resHuespExtra==='function' ? _resHuespExtra() : '') || null;
   const ci      = document.getElementById('res-checkin').value;
   const co      = document.getElementById('res-checkout').value;
   const nombre  = document.getElementById('res-nombre').value.trim();
@@ -5623,6 +5625,16 @@ window.combinarNombreReserva = function(){
   var full=[g('res-nf'),g('res-ap1'),g('res-ap2')].map(function(x){return (x||'').trim();}).filter(Boolean).join(' ');
   var h=document.getElementById('res-nombre'); if(h) h.value=full;
 };
+// Repetidor de huéspedes adicionales (Huésped 2, 3, ...)
+window._resAddHuesped = function(nombre, doc){
+  var box=document.getElementById('res-huesp-list'); if(!box) return;
+  var a=function(s){return String(s==null?'':s).replace(/"/g,'&quot;');};
+  var div=document.createElement('div'); div.className='rh-row'; div.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:6px';
+  div.innerHTML='<span class="rh-lbl" style="font-size:11px;color:#6B7280;min-width:66px">Huésped</span><input type="text" class="rh-nombre" placeholder="Nombre completo" value="'+a(nombre)+'" style="flex:2;padding:6px;border:1px solid #ddd;border-radius:8px"><input type="text" class="rh-doc" placeholder="Documento (opcional)" value="'+a(doc)+'" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:8px"><span onclick="this.closest(\'.rh-row\').remove();_resRenumHuesp()" title="Quitar" style="cursor:pointer;color:#C0392B">🗑️</span>';
+  box.appendChild(div); _resRenumHuesp();
+};
+window._resRenumHuesp = function(){ var rows=document.querySelectorAll('#res-huesp-list .rh-row'); rows.forEach(function(r,i){ var s=r.querySelector('.rh-lbl'); if(s) s.textContent='Huésped '+(i+2); }); };
+window._resHuespExtra = function(){ var arr=[]; document.querySelectorAll('#res-huesp-list .rh-row').forEach(function(r){ var nm=((r.querySelector('.rh-nombre')||{}).value||'').trim(); var dc=((r.querySelector('.rh-doc')||{}).value||'').trim(); if(nm) arr.push(nm+(dc?(' ('+dc+')'):'')); }); return arr.join(', '); };
 
 window.onModalidadReserva = function(){
   var sel=document.getElementById('res-tipotarifa');
@@ -5660,6 +5672,7 @@ window.editarReserva = async function(id){
     set('res-cargo',r.cargo); set('res-email',r.email); set('res-tel',r.tel); set('res-empresa',r.empresa); set('res-pax',r.pax);
     set('res-nf',r.nombre); set('res-ap1',''); set('res-ap2','');
     if(typeof combinarNombreReserva==='function') combinarNombreReserva();
+    try{ var _box=document.getElementById('res-huesp-list'); if(_box){ _box.innerHTML=''; (String(r.huespedes_extra||'').split(',')).map(function(s){return s.trim();}).filter(Boolean).forEach(function(item){ var mm=item.match(/^(.*?)\s*\(([^)]+)\)\s*$/); if(mm) _resAddHuesped(mm[1].trim(),mm[2].trim()); else _resAddHuesped(item,''); }); } }catch(e){}
     if(typeof showToast==='function') showToast('Editando reserva de '+(r.nombre||'')+' — ajusta y guarda','success');
   },500);
 };
