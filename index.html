@@ -6545,8 +6545,10 @@ async function tablaControlPersonal(fechaSel) {
   w.document.close();
 }
 
-function calcRecargos(){
+async function calcRecargos(){
   var hoy=new Date(); var D=(hoy>=new Date('2026-07-01'))?0.90:0.80;
+  var _pers=[]; try{ var _pr=await sb.from('personal').select('nombre,salario').order('nombre'); _pers=(_pr.data||[]).filter(function(p){return p.nombre;}); }catch(e){}
+  var _empOpts='<option value="0">— Selecciona empleado (carga su salario) —</option>'+_pers.map(function(p){return '<option value="'+(Number(p.salario)||0)+'">'+String(p.nombre).replace(/</g,'&lt;')+(Number(p.salario)>0?'':' (sin salario)')+'</option>';}).join('');
   var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes','error'); return; }
   var html=`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Calculadora de recargos</title>
   <style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937;max-width:780px}
@@ -6561,8 +6563,9 @@ function calcRecargos(){
   <body><h2>Calculadora de recargos y horas extra</h2>
   <div class="sub">Colombia · Ley 2466/2025 · vigente ${hoy.toLocaleDateString('es-CO')}</div>
   <div class="cfg">
-   <div><label>Valor hora ordinaria $</label><input type="number" id="vh" value="0" oninput="rc()"></div>
-   <div><label>o salario mensual ÷240</label><input type="number" id="sm" placeholder="0" oninput="var v=parseFloat(this.value)||0; if(v){document.getElementById('vh').value=Math.round(v/240);} rc();"></div>
+   <div><label>Empleado (carga salario automático)</label><select id="emp" style="width:230px;padding:5px;border:1px solid #cbd5e1;border-radius:5px;font-size:13px" onchange="var s=parseFloat(this.value)||0; document.getElementById('sm').value=s||''; document.getElementById('vh').value=s?Math.round(s/240):0; rc();">${_empOpts}</select></div>
+   <div><label>Salario mensual $</label><input type="number" id="sm" placeholder="0" oninput="var v=parseFloat(this.value)||0; if(v){document.getElementById('vh').value=Math.round(v/240);} rc();"></div>
+   <div><label>Valor hora ordinaria $ (auto = salario÷240)</label><input type="number" id="vh" value="0" oninput="rc()"></div>
    <div><label>% dominical/festivo (auto)</label><input type="number" id="dom" value="${Math.round(D*100)}" oninput="rc()"></div>
   </div>
   <table><thead><tr><th>Concepto</th><th>Factor</th><th>Horas</th><th class="r">Valor a pagar</th></tr></thead>
