@@ -4376,6 +4376,15 @@ async function guardarReserva() {
   const dco = new Date(co);
   for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Family Residence' : (_adjSel.length>0?'Combo':null)) });
 
+  // Guardia anti-borrado: avisar si esas fechas ya tienen una reserva de OTRO huésped (evita sobrescribir por error)
+  try{
+    var _ex = await sb.from('rack').select('huesped,estado').in('apto', _aptosW2).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO).neq('estado','Libre');
+    var _otros = [...new Set((_ex.data||[]).map(function(r){return (r.huesped||'').trim();}).filter(function(h){return h && h.toLowerCase()!==String(nombre||'').trim().toLowerCase();}))];
+    if(_otros.length){
+      var _ok = confirm('⚠️ ATENCIÓN: el Apto '+apto+' del '+fmtDate(ci)+' al '+fmtDate(co)+' YA tiene reserva de: '+_otros.join(', ')+'.\n\nSi continúas, esas fechas se SOBREESCRIBEN y se pierde esa reserva.\n\n¿Seguro que quieres continuar?');
+      if(!_ok){ showToast('Reserva NO guardada — se conservó la reserva existente','error'); var _b=document.querySelector('.btn-success'); if(_b){_b.innerHTML='📤 Registrar Reserva'; _b.disabled=false;} return; }
+    }
+  }catch(e){}
   // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
   await sb.from('rack').delete().in('apto', _aptosW2).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
   if(window._reservaEditOld && window._reservaEditOld.apto && window._reservaEditOld.checkin && window._reservaEditOld.checkout){ var _ro=window._reservaEditOld; try{ await sb.from('rack').delete().eq('apto',_ro.apto).gte('fecha',_ro.checkin).lte('fecha',_ro.checkout).eq('edificio',EDIFICIO_ACTIVO); }catch(e){} window._reservaEditOld=null; }
