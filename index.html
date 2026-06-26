@@ -281,6 +281,10 @@ textarea{resize:vertical;min-height:80px}
         <input type="text" id="m-apellido2" placeholder="Segundo apellido">
       </div>
     </div>
+    <div class="form-group">
+      <label>Otros huéspedes en el apto (si son varios)</label>
+      <input type="text" id="m-huesp-extra" placeholder="Ej: Juan Becerra, Ana Pérez — separa con coma">
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label>Tipo de apto</label>
@@ -2034,6 +2038,7 @@ async function renderRack() {
       </td>
       <td style="position:sticky;left:${APTO_W}px;background:${cmFila.bg};color:${cmFila.color};padding:4px 8px;font-size:11px;border:1px solid #ccc;white-space:nowrap;z-index:2;min-width:${HUES_W}px;max-width:${HUES_W}px;overflow:hidden;text-overflow:ellipsis" title="${_filaTitle}">
         <div style="font-weight:600">${huesHoy || (estHoy==='Libre' && !aIncluidaHoy ? '<span style="color:#aaa;font-style:italic">Libre</span>':'')}${aIncluidaHoy?' <span style="font-size:9px;font-style:italic">· completo</span>':''}</div>
+        ${_rHoy&&_rHoy.huespedes_extra?`<div style="font-size:9px;color:var(--gris-t)">+ ${_rHoy.huespedes_extra}</div>`:''}
         ${tarHoy && !aIncluidaHoy ? `<div style="font-size:9px;opacity:.7">$${Number(tarHoy).toLocaleString('es-CO')}/noche</div>` : ''}
         ${varADeEste && ['Ocupado','Check-in hoy','Check-out hoy'].includes(estHoy) && canEdit ? `<div style="margin-top:2px"><button onclick="marcarCompletoDirecto('${rack[apto]?.[todayDay]?.id}','${apto}')" style="font-size:8px;background:${aCompletaHoy?'#15401a':'var(--naran)'};color:white;border:none;border-radius:3px;padding:1px 7px;cursor:pointer">${aCompletaHoy?'🏠 Completo ✓':'🏠 Marcar completo'}</button></div>` : ''}
       </td>
@@ -2354,6 +2359,7 @@ async function openAptoModal(id, num) {
   window._mEstadoPrev = document.getElementById('m-estado').value;
   var _np = window._nombrePartes(data||{});
   if(document.getElementById('m-nombre')) document.getElementById('m-nombre').value = _np.nombre||'';
+  if(document.getElementById('m-huesp-extra')) document.getElementById('m-huesp-extra').value = (data&&data.huespedes_extra)||'';
   if(document.getElementById('m-apellido1')) document.getElementById('m-apellido1').value = _np.apellido1||'';
   if(document.getElementById('m-apellido2')) document.getElementById('m-apellido2').value = _np.apellido2||'';
   document.getElementById('m-tipo').value    = data?.tipo || '';
@@ -2469,9 +2475,11 @@ async function saveApto() {
   const _ap1 = _titleCase(document.getElementById('m-apellido1').value);
   const _ap2 = _titleCase(document.getElementById('m-apellido2').value);
   const _huespedFull = window._composeNombre(_nom,_ap1,_ap2);
+  const _he = document.getElementById('m-huesp-extra')?.value.trim() || null;
   const updates = {
     estado: document.getElementById('m-estado').value,
     huesped: _huespedFull,
+    huespedes_extra: _he,
     nombre: _nom||null, apellido1: _ap1||null, apellido2: _ap2||null,
     tipo: document.getElementById('m-tipo').value,
     canal: document.getElementById('m-canal').value,
@@ -2500,7 +2508,7 @@ async function saveApto() {
     const addDay = s => { const [y,m,d] = s.split('-').map(Number); return new Date(Date.UTC(y, m-1, d+1)).toISOString().split('T')[0]; };
     const rows = []; let f = _rd;
     for (let i = 0; i < 400; i++) {
-      rows.push({ fecha: f, apto: aNum, estado: updates.estado, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, acompanantes: updates.acompanantes, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      rows.push({ fecha: f, apto: aNum, estado: updates.estado, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, acompanantes: updates.acompanantes, huespedes_extra: updates.huespedes_extra, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
       if (f === _rh) break; f = addDay(f);
     }
     const rr = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
@@ -2518,7 +2526,7 @@ async function saveApto() {
     for (let i = 0; i < 400; i++) {
       // Estadías: patrón CKI → Ocupado → CKO. Bloqueos/Mantenimiento/etc: el mismo estado en todo el rango.
       const est = ocupacional ? (f === updates.checkin ? 'Check-in hoy' : (f === updates.checkout ? 'Check-out hoy' : 'Ocupado')) : updates.estado;
-      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, acompanantes: updates.acompanantes, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, acompanantes: updates.acompanantes, huespedes_extra: updates.huespedes_extra, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
       if (f === updates.checkout) break;
       f = addDay(f);
     }
@@ -4123,6 +4131,10 @@ function renderNuevaReserva() {
             <input type="text" id="res-doc" placeholder="CC / Pasaporte / NIT">
           </div>
         </div>
+        <div class="form-group">
+          <label>Otros huéspedes en el apto (si son varios)</label>
+          <input type="text" id="res-huesp-extra" placeholder="Ej: Juan Becerra, Ana Pérez — separa con coma">
+        </div>
         <div class="form-row col3">
           <div class="form-group">
             <label>Teléfono</label>
@@ -4310,6 +4322,7 @@ function renderNochesTarifa(){
 
 async function guardarReserva() {
   const apto    = document.getElementById('res-apto').value;
+  const _he2    = document.getElementById('res-huesp-extra')?.value.trim() || null;
   const ci      = document.getElementById('res-checkin').value;
   const co      = document.getElementById('res-checkout').value;
   const nombre  = document.getElementById('res-nombre').value.trim();
@@ -4347,11 +4360,11 @@ async function guardarReserva() {
     const fecha = d.toISOString().split('T')[0];
     const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
-    for (const _a of _aptosW2){ const _tA=(_adjSel.length>0 && _a!==apto)?null:(tNoche||null); rows.push({ fecha, apto:_a, estado, huesped: nombre, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Family Residence' : (_adjSel.length>0?'Combo':null)) }); }
+    for (const _a of _aptosW2){ const _tA=(_adjSel.length>0 && _a!==apto)?null:(tNoche||null); rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Family Residence' : (_adjSel.length>0?'Combo':null)) }); }
   }
   // Día de check-out
   const dco = new Date(co);
-  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Family Residence' : (_adjSel.length>0?'Combo':null)) });
+  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Family Residence' : (_adjSel.length>0?'Combo':null)) });
 
   // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
   await sb.from('rack').delete().in('apto', _aptosW2).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
@@ -4399,7 +4412,7 @@ async function guardarReserva() {
     numero: await getNextNumeroConfirmacion()
   };
   if (typeof _adjSel!=='undefined' && _adjSel.length>0) { resData.obs = (resData.obs?resData.obs+' | ':'') + 'Combo unido: ' + _aptosW2.join(' + '); }
-  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, apto: resData.apto, config: resData.config, moneda: resData.moneda, tarifa_usd: resData.tarifa_usd||null, trm: resData.trm||null, tipo_apto_manual: resData.tipoAptoManual||null, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, numero: resData.numero, empresa: resData.empresa, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insH=((await sb.from('reservas').insert(_rvRow).select('id').single()).data)||{}; if(_insH.id) await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); } } catch(_e){}
+  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, apto: resData.apto, config: resData.config, moneda: resData.moneda, tarifa_usd: resData.tarifa_usd||null, trm: resData.trm||null, tipo_apto_manual: resData.tipoAptoManual||null, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, huespedes_extra: _he2, numero: resData.numero, empresa: resData.empresa, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insH=((await sb.from('reservas').insert(_rvRow).select('id').single()).data)||{}; if(_insH.id) await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); } } catch(_e){}
   setTimeout(() => {
     if(confirm('¿Deseas generar la Confirmación de Reserva ahora?')) {
       generarConfirmacion(resData);
