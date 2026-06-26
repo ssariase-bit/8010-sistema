@@ -4093,17 +4093,20 @@ function renderNuevaReserva() {
             </select>
           </div>
           <div class="form-group">
-            <label>Tarifa por noche *</label>
+            <label id="res-tarifa-lbl">Tarifa por noche *</label>
             <div style="display:flex;gap:6px;align-items:center">
               <span id="res-moneda-sym" style="font-weight:700;color:var(--azul);font-size:13px">$</span>
-              <input type="number" id="res-tarifa" onchange="calcReserva()" placeholder="0" style="flex:1">
+              <input type="number" id="res-tarifa" oninput="calcReserva()" placeholder="0" style="flex:1">
             </div>
+            <div id="res-tarifa-hint" style="font-size:11px;color:#6B7280;margin-top:3px"></div>
           </div>
           <div class="form-group">
             <label>Modalidad de tarifa</label>
             <select id="res-tipotarifa" onchange="onModalidadReserva()">
               <option value="TxN">TxN — Por noche</option>
-              <option value="TxD">TxD — Por día (se cobra una noche adicional)</option><option value="COMP">Complementary (cortesía)</option>
+              <option value="TxD">TxD — Por día (se cobra una noche adicional)</option>
+              <option value="TxM">TxM — Por mes (canon ÷30)</option>
+              <option value="COMP">Complementary (cortesía)</option>
             </select>
           </div>
           <div class="form-group">
@@ -4280,11 +4283,16 @@ function calcReserva() {
     document.getElementById('res-noches').value = noches;
     const _tipoT = document.getElementById('res-tipotarifa')?.value || 'TxN';
     const _porDia = _tipoT === 'TxD';
+    const _esMes = _tipoT === 'TxM';
+    const _tarNoche = _esMes ? Math.round(tarifa/30) : tarifa; // canon mensual → valor noche
     const _unid = _porDia ? (noches + 1) : noches; // por día cobra la noche de salida
     const _uLbl = _porDia ? 'día' : 'noche';
+    // Etiqueta dinámica del campo de tarifa
+    var _lbl=document.getElementById('res-tarifa-lbl'); if(_lbl) _lbl.textContent=_esMes?'Canon mensual *':'Tarifa por noche *';
+    var _hint=document.getElementById('res-tarifa-hint'); if(_hint) _hint.textContent=_esMes&&tarifa>0?('= $'+_tarNoche.toLocaleString('es-CO')+'/noche (canon ÷ 30)'):'';
     const porNoche = document.getElementById('res-pornoche-toggle')?.checked;
     if (porNoche) renderNochesTarifa();
-    let total = _unid * tarifa;
+    let total = _unid * _tarNoche;
     if (porNoche) { total = 0; document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(inp=>{ total += Number(inp.value)||0; }); }
     document.getElementById('res-total').value = (moneda === 'USD') ? `USD ${total.toLocaleString('es-CO')}` : `$ ${total.toLocaleString('es-CO')}`;
     // Mostrar resumen
@@ -4294,7 +4302,7 @@ function calcReserva() {
       resumen.classList.remove('hidden');
       const fmtD = d => { const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; };
       document.getElementById('res-resumen-texto').innerHTML =
-        `Apto <strong>${apto}</strong> · ${_unid} ${_uLbl}${_unid>1?'s':''} · ${fmtD(ci)} → ${fmtD(co)} · ${porNoche ? 'Tarifa mixta' : 'Tarifa: $'+tarifa.toLocaleString('es-CO')+'/'+_uLbl} · <strong>Total: $${total.toLocaleString('es-CO')}</strong>`;
+        `Apto <strong>${apto}</strong> · ${_unid} ${_uLbl}${_unid>1?'s':''} · ${fmtD(ci)} → ${fmtD(co)} · ${porNoche ? 'Tarifa mixta' : 'Tarifa: $'+_tarNoche.toLocaleString('es-CO')+'/'+_uLbl+(_esMes?' (canon $'+tarifa.toLocaleString('es-CO')+'/mes)':'')} · <strong>Total: $${total.toLocaleString('es-CO')}</strong>`;
     }
   }
 }
@@ -4339,7 +4347,9 @@ async function guardarReserva() {
   const _rNom = (document.getElementById('res-nf')?.value||'').trim()||null;
   const _rAp1 = (document.getElementById('res-ap1')?.value||'').trim()||null;
   const _rAp2 = (document.getElementById('res-ap2')?.value||'').trim()||null;
-  const tarifa  = Number(document.getElementById('res-tarifa').value) || 0;
+  const _tarifaRaw = Number(document.getElementById('res-tarifa').value) || 0;
+  const _tipoTG = document.getElementById('res-tipotarifa')?.value || 'TxN';
+  const tarifa  = (_tipoTG==='TxM') ? Math.round(_tarifaRaw/30) : _tarifaRaw; // TxM: canon mensual → valor noche (÷30)
   const noches  = Number(document.getElementById('res-noches').value) || 0;
   const canal   = document.getElementById('res-canal').value;
   const iva     = document.getElementById('res-iva')?.value || 'incluido';
@@ -4446,7 +4456,8 @@ async function previsualizarConfirmacion() {
   const ci = document.getElementById('res-checkin').value;
   const co = document.getElementById('res-checkout').value;
   const nombre = document.getElementById('res-nombre').value.trim();
-  const tarifa = Number(document.getElementById('res-tarifa').value) || 0;
+  const _tarRawP = Number(document.getElementById('res-tarifa').value) || 0;
+  const tarifa = ((document.getElementById('res-tipotarifa')?.value||'TxN')==='TxM') ? Math.round(_tarRawP/30) : _tarRawP;
   const noches = Number(document.getElementById('res-noches').value) || 0;
   if (!apto || !ci || !nombre) { showToast('Completa apto, fechas y nombre primero', 'error'); return; }
   generarConfirmacion({
@@ -5684,6 +5695,8 @@ window.editarReserva = async function(id){
     set('res-personas',r.personas); set('res-obs',r.obs); set('res-firmante',r.firmante);
     set('res-cargo',r.cargo); set('res-email',r.email); set('res-tel',r.tel); set('res-empresa',r.empresa); set('res-pax',r.pax);
     set('res-nf',r.nombre); set('res-ap1',''); set('res-ap2','');
+    if(r.tipo_tarifa==='TxM' && Number(r.tarifa)>0){ set('res-tarifa', Math.round(Number(r.tarifa)*30)); } // mostrar el canon mensual
+    if(typeof calcReserva==='function') try{ calcReserva(); }catch(e){}
     if(typeof combinarNombreReserva==='function') combinarNombreReserva();
     try{ var _box=document.getElementById('res-huesp-list'); if(_box){ _box.innerHTML=''; (String(r.huespedes_extra||'').split(',')).map(function(s){return s.trim();}).filter(Boolean).forEach(function(item){ var mm=item.match(/^(.*?)\s*\(([^)]+)\)\s*$/); if(mm) _resAddHuesped(mm[1].trim(),mm[2].trim()); else _resAddHuesped(item,''); }); } }catch(e){}
     if(typeof showToast==='function') showToast('Editando reserva de '+(r.nombre||'')+' — ajusta y guarda','success');
