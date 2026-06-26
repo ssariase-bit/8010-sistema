@@ -2226,9 +2226,11 @@ async function aplicarCompleto(apto, fechaBase, checkin, checkout, huesped, acti
   }
   const fechas = rangoFechasRack(checkin || fechaBase, finStr);
   for (const f of fechas){
-    const { data: aRow } = await sb.from('rack').select('id').eq('fecha', f).eq('apto', varA).single();
+    // Buscar la fila A del edificio activo (evita el error de .single() cuando hay aptos homónimos entre edificios)
+    const { data: aRows } = await sb.from('rack').select('id,edificio').eq('fecha', f).eq('apto', varA).or(`edificio.eq.${EDIFICIO_ACTIVO},edificio.is.null`);
+    const aRow = (aRows && aRows[0]) || null;
     if (activar){
-      const upd = { estado:'Ocupado', huesped: huesped||null, tarifa:null, observaciones:`Apto completo — incluido en ${apto}`, updated_by:currentUser.id };
+      const upd = { estado:'Ocupado', huesped: huesped||null, tarifa:null, observaciones:`Apto completo — incluido en ${apto}`, edificio: EDIFICIO_ACTIVO, updated_by:currentUser.id };
       if (aRow) await sb.from('rack').update(upd).eq('id', aRow.id);
       else await sb.from('rack').insert({ fecha:f, apto:varA, ...upd });
     } else if (aRow){
@@ -2243,8 +2245,8 @@ async function marcarCompletoDirecto(id, apto){
   if (!varA){ showToast('Este apto no tiene habitación A', 'error'); return; }
   const { data: padre } = await sb.from('rack').select('fecha,checkin,checkout,huesped').eq('id', id).single();
   if (!padre){ showToast('No se encontró el registro', 'error'); return; }
-  const { data: aBase } = await sb.from('rack').select('observaciones').eq('fecha', padre.fecha).eq('apto', varA).single();
-  const yaCompleto = (aBase?.observaciones||'').includes('Apto completo');
+  const { data: aBaseRows } = await sb.from('rack').select('observaciones').eq('fecha', padre.fecha).eq('apto', varA).or(`edificio.eq.${EDIFICIO_ACTIVO},edificio.is.null`);
+  const yaCompleto = ((aBaseRows && aBaseRows[0] && aBaseRows[0].observaciones)||'').includes('Apto completo');
   await aplicarCompleto(apto, padre.fecha, padre.checkin, padre.checkout, padre.huesped, !yaCompleto);
   showToast(yaCompleto ? `Apto ${apto}: habitación ${varA} liberada` : `✅ Apto ${apto} completo — ${varA} ocupada de largo`, 'success');
   renderRack();
@@ -3163,9 +3165,9 @@ async function renderHKForm() {
         <div class="form-group"><label>Hora salida</label><input type="time" id="hk-out"></div>
       </div>
       <div class="form-group" style="flex:1 1 100%">
-        <label>Pausas (almuerzo u otras tareas) — el total se descuenta solo del tiempo</label>
+        <label>Pausas (desayuno, almuerzo, descansos u otras tareas) — el total se descuenta solo del tiempo</label>
         <div id="hk-pausas-box">
-          ${[0,1,2,3,4].map(function(i){return '<div class="hkp-row" style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><input type="time" class="hkp-ini" onchange="hkPausaCalc()" style="padding:4px"> <span style="font-size:12px;color:#888">a</span> <input type="time" class="hkp-fin" onchange="hkPausaCalc()" style="padding:4px"> <span class="hkp-dur" style="font-size:12px;color:#7A5C00;min-width:46px">—</span></div>';}).join('')}
+          ${[0,1,2,3,4].map(function(i){return '<div class="hkp-row" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap"><select class="hkp-mot" onchange="hkPausaCalc()" style="padding:4px;font-size:12px"><option value="">Motivo…</option><option>Desayuno</option><option>Almuerzo</option><option>Descanso</option><option>Otra tarea</option></select> <input type="time" class="hkp-ini" onchange="hkPausaCalc()" style="padding:4px"> <span style="font-size:12px;color:#888">a</span> <input type="time" class="hkp-fin" onchange="hkPausaCalc()" style="padding:4px"> <span class="hkp-dur" style="font-size:12px;color:#7A5C00;min-width:46px">—</span></div>';}).join('')}
         </div>
         <div style="font-size:13px;color:#7A5C00;margin-top:4px">Total pausa: <strong id="hk-pausa-total">0 min</strong></div>
         <input type="hidden" id="hk-pausa" value="0">
@@ -3194,7 +3196,8 @@ function hkPausaCalc(){
   var total=0, det=[];
   box.querySelectorAll('.hkp-row').forEach(function(rw){
     var i=rw.querySelector('.hkp-ini').value, f=rw.querySelector('.hkp-fin').value, dur=rw.querySelector('.hkp-dur');
-    if(i&&f){ var d=_hkMin(f)-_hkMin(i); if(d<0) d+=1440; total+=d; det.push(i+'–'+f+' ('+d+'m)'); dur.textContent=d+' min'; }
+    var motEl=rw.querySelector('.hkp-mot'); var mot=motEl?motEl.value:'';
+    if(i&&f){ var d=_hkMin(f)-_hkMin(i); if(d<0) d+=1440; total+=d; det.push((mot?mot+' ':'')+i+'–'+f+' ('+d+'m)'); dur.textContent=d+' min'; }
     else { dur.textContent='—'; }
   });
   var hp=document.getElementById('hk-pausa'); if(hp) hp.value=total;
