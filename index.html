@@ -2406,10 +2406,10 @@ async function openAptoModal(id, num) {
   const sec = document.getElementById('m-completo-section');
   if (varA && sec) {
     sec.style.display = 'block';
-    // Detectar si la A ya está bloqueada por este apto
+    // Detectar si la A ya está bloqueada por este apto — usar el rack en memoria (sin consulta de red que pueda colgar el modal)
     const fecha = data?.fecha || TODAY;
-    const { data: aData } = await sb.from('rack').select('estado,observaciones').eq('fecha', fecha).eq('apto', varA).single();
-    const yaCompleto = aData?.estado === 'Bloqueado' && aData?.observaciones?.includes('Apto completo');
+    let yaCompleto = false;
+    try{ var _dd=parseInt(String(fecha).split('-')[2],10); var _aRec=(window._rackData&&window._rackData[varA])?window._rackData[varA][_dd]:null; yaCompleto = !!(_aRec && _aRec.estado==='Bloqueado' && String(_aRec.observaciones||'').includes('Apto completo')); }catch(e){}
     document.getElementById('m-completo').checked = yaCompleto;
     const msg = sec.querySelector('div div:last-child');
     if (msg) msg.textContent = yaCompleto
