@@ -2351,7 +2351,10 @@ async function doCambiarApto(origen,destino,huesped,ci,co){
   }catch(e){ showToast('Error: '+(e&&e.message?e.message:e),'error'); }
 }
 async function openAptoModal(id, num) {
-  const { data } = await sb.from('rack').select('*').eq('id', id).single();
+  // Usar el dato ya cargado en el rack (instantáneo) en vez de re-consultar la BD
+  let data = null;
+  try{ var _rk=window._rackData||{}; for(var _ap in _rk){ var _days=_rk[_ap]; for(var _d in _days){ if(_days[_d] && _days[_d].id===id){ data=_days[_d]; break; } } if(data) break; } }catch(e){}
+  if(!data){ const _r = await sb.from('rack').select('*').eq('id', id).single(); data = _r.data; }
   _aptoData = data || {};
   currentAptoId = id;
   document.getElementById('modal-apto-num').textContent = String(num).split(' · ')[0].trim();
