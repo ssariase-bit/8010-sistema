@@ -350,12 +350,13 @@ textarea{resize:vertical;min-height:80px}
       <input type="number" id="m-pax" placeholder="0" min="0" readonly style="background:#eef1f5;font-weight:700">
     </div>
     <div class="form-group">
-      <label>Acompañante (servicio)</label>
+      <label>Acompañantes</label>
       <div style="display:flex;gap:16px;flex-wrap:wrap;padding-top:4px">
         <label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="m-acomp" value="Empleada"> Empleada</label>
         <label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="m-acomp" value="Enfermera"> Enfermera</label>
         <label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="m-acomp" value="Niñera"> Niñera</label>
       </div>
+      <input type="text" id="m-acomp-libre" placeholder="Otros acompañantes (ej: esposa e hijo, pareja…)" style="margin-top:6px;width:100%">
     </div>
 
     <!-- Toggle Apto Completo — solo para aptos con variante A -->
@@ -459,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-26-prereg';
+const APP_VERSION = '2026-06-26-sols';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1173,7 +1174,7 @@ async function loadView(view) {
     ]); break;
     case 'entrega-efectivos-form': renderGenForm('entrega_efectivos','💵 Entrega de Efectivos',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
-      {id:'turno',label:'Turno',type:'select',opts:['Mañana (6am-2pm)','Tarde (2pm-10pm)','Noche (10pm-6am)','Noche (9:30pm-6:30am)','Turno 12h Día (6am-6pm)','Turno 12h Noche (6pm-6am)']},
+      {id:'turno',label:'Turno',type:'select',opts:['Mañana (6am-2pm)','Día (6am-3pm)','Tarde (2pm-10pm)','Noche (10pm-6am)','Noche (9:30pm-6:30am)','Turno 12h Día (6am-6pm)','Turno 12h Noche (6pm-6am)']},
       {id:'entregado_por',label:'Entregado por',type:'text',req:true},
       {id:'recibido_por',label:'Recibido por',type:'text',req:true},
       {id:'destino',label:'Destino de la entrega',type:'select',opts:['Entregado en persona','Dejado en cajilla de seguridad']},
@@ -2405,8 +2406,10 @@ async function openAptoModal(id, num) {
   var _sa=function(id,v){ var e=document.getElementById(id); if(e) e.value=(v!=null?v:''); };
   _sa('m-pax-ad', data&&data.pax_adultos); _sa('m-pax-me', data&&data.pax_menores); _sa('m-pax-in', data&&data.pax_infantes);
   if(document.getElementById('m-pax')) document.getElementById('m-pax').value = (data&&data.pax!=null)?data.pax:'';
-  var _ac=(data&&(data.acompanantes||data.acompanante))?String(data.acompanantes||data.acompanante).split(',').map(function(s){return s.trim();}):[];
+  var _ac=(data&&(data.acompanantes||data.acompanante))?String(data.acompanantes||data.acompanante).split(',').map(function(s){return s.trim();}).filter(Boolean):[];
+  var _acKnown=['Empleada','Enfermera','Niñera'];
   document.querySelectorAll('.m-acomp').forEach(function(c){ c.checked=_ac.indexOf(c.value)>-1; });
+  if(document.getElementById('m-acomp-libre')) document.getElementById('m-acomp-libre').value = _ac.filter(function(v){return _acKnown.indexOf(v)<0;}).join(', ');
   document.getElementById('m-obs').value     = data?.observaciones || '';
   document.getElementById('m-iva').value     = data?.iva || 'incluido';
   document.getElementById('m-empresa').value = data?.empresa || '';
@@ -2507,7 +2510,7 @@ async function saveApto() {
     pax_adultos: (document.getElementById('m-pax-ad') && document.getElementById('m-pax-ad').value!=='') ? Number(document.getElementById('m-pax-ad').value) : null,
     pax_menores: (document.getElementById('m-pax-me') && document.getElementById('m-pax-me').value!=='') ? Number(document.getElementById('m-pax-me').value) : null,
     pax_infantes: (document.getElementById('m-pax-in') && document.getElementById('m-pax-in').value!=='') ? Number(document.getElementById('m-pax-in').value) : null,
-    acompanantes: (function(){ var a=[]; document.querySelectorAll('.m-acomp:checked').forEach(function(c){a.push(c.value);}); return a.length?a.join(', '):null; })(),
+    acompanantes: (function(){ var a=[]; document.querySelectorAll('.m-acomp:checked').forEach(function(c){a.push(c.value);}); var lib=(document.getElementById('m-acomp-libre')&&document.getElementById('m-acomp-libre').value.trim())||''; if(lib) lib.split(',').map(function(s){return s.trim();}).filter(Boolean).forEach(function(s){a.push(s);}); return a.length?a.join(', '):null; })(),
     observaciones: document.getElementById('m-obs').value,
     iva: document.getElementById('m-iva')?.value || 'incluido',
     empresa: document.getElementById('m-empresa')?.value.trim() || null,
@@ -2587,6 +2590,7 @@ function renderTurnoForm() {
           <div class="form-group"><label>Turno</label>
             <select id="t-turno">
               <option ${turnoAuto==='Mañana (6am-2pm)'?'selected':''}>Mañana (6am-2pm)</option>
+              <option ${turnoAuto==='Día (6am-3pm)'?'selected':''}>Día (6am-3pm)</option>
               <option ${turnoAuto==='Tarde (2pm-10pm)'?'selected':''}>Tarde (2pm-10pm)</option>
               <option ${turnoAuto==='Noche (10pm-6am)'?'selected':''}>Noche (10pm-6am)</option>
               <option ${turnoAuto==='Noche (9:30pm-6:30am)'?'selected':''}>Noche (9:30pm-6:30am)</option>
@@ -2918,6 +2922,7 @@ async function renderNovedadForm() {
         <div class="form-group"><label>Turno</label>
           <select id="n-turno">
             <option ${turnoAuto==='Mañana'?'selected':''}>Mañana</option>
+            <option ${turnoAuto==='Día (6am-3pm)'?'selected':''}>Día (6am-3pm)</option>
             <option ${turnoAuto==='Tarde'?'selected':''}>Tarde</option>
             <option ${turnoAuto==='Noche'?'selected':''}>Noche</option>
             <option>Noche (9:30pm-6:30am)</option>
@@ -3327,7 +3332,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
               <td style="white-space:nowrap;color:var(--gris-t);font-size:11px">${fmtHour(n.created_at)}</td>
               <td>${areaApto(n).area}</td>
               <td>${window._aptoConNombre(areaApto(n).apto)}</td>
-              <td style="max-width:280px">${n.descripcion}</td>
+              <td style="max-width:280px">${n.descripcion}${(function(){var a=window._accionInicialNov(n.tratamiento); if(!a) return ''; if(String(n.descripcion||'').includes('Acción tomada')) return ''; return `<div style="margin-top:6px;background:#eafaf1;border-left:3px solid #27ae60;border-radius:6px;padding:6px 8px;font-size:11px;line-height:1.5"><strong>✅ Acción tomada:</strong> ${a}</div>`;})()}</td>
               <td>${badgePrio(n.prioridad)}</td>
               <td>${badgeEst(n.estado)}</td>
               <td>${n.reportado_por||'-'}</td>
@@ -7259,7 +7264,7 @@ function anuncioMasivo(){
 }
 function copiarTelefonos(){ var rows=(window._ehRows||[]).filter(function(r){ return r.huesped&&r.telefono; }); var seen={}; rows=rows.filter(function(r){ var k=(r.huesped||'').trim().toLowerCase(); if(!k||seen[k]) return false; seen[k]=1; return true; }); if(!rows.length){ alert('Ningún huésped en casa tiene WhatsApp guardado todavía.'); return; } var t=rows.map(function(r){ return '+'+normTel(r.telefono)+'  ('+(r.huesped||'')+' · Apto '+r.apto+')'; }).join('\n'); navigator.clipboard.writeText(t).then(function(){ showToast('📋 '+rows.length+' números copiados','success'); }); }
 function waAnuncio(nombreId){ var el=document.getElementById(nombreId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(nombreId); var body=(document.getElementById('anuncio-body')||{}).value||''; if(!body.trim()){ alert('Escribe el mensaje del anuncio primero.'); return; } var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var _trpA=trat?trat+' ':''; var msg=saludo+', '+_trpA+(nombre||'')+'.\n\n'+body+'\n\nCualquier duda o solicitud, comuníquese con nosotros por este medio — estamos disponibles 24/7. Mil gracias. 🙏\n*'+(((typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'))+'*'; window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
-function waBienvenida(codeId){ var el=document.getElementById(codeId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(codeId); var code=(el&&el.value)?el.value:'XXXX#'; var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var ed=(typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'; var _trpB=trat?trat+' ':''; var msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.\n'+'Código de puerta: '+code; var _wf=(typeof EB==='function'&&EB().wifi)||null; if(_wf&&_wf.red){ msg+='\nRed WiFi: '+_wf.red+' · Contraseña: '+(_wf.clave||''); } window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
+function waBienvenida(codeId){ var el=document.getElementById(codeId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(codeId); var code=(el&&el.value)?el.value:'XXXX#'; var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var ed=(typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'; var _trpB=trat?trat+' ':''; var msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.'+(EDIFICIO_ACTIVO==='8010'?'':('\n'+'Código de puerta: '+code)); var _wf=(typeof EB==='function'&&EB().wifi)||null; if(_wf&&_wf.red){ msg+='\nRed WiFi: '+_wf.red+' · Contraseña: '+(_wf.clave||''); } window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
 // ═══════════════════════════════════════════════════════════
 // INFORME EJECUTIVO — vista unica que jala toda la base + alertas
 // ═══════════════════════════════════════════════════════════
@@ -9326,7 +9331,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
       </div>
       <div class="form-row">
         <div class="form-group"><label>📱 WhatsApp del huésped</label><input type="tel" id="cki-tel" placeholder="+57 300 000 0000"></div>
-        <div class="form-group"><label>🔑 Código de puerta</label><input type="text" id="cki-clave" placeholder="Clave para entrar al apto (ej: 1234#)"></div>
+        <div class="form-group" ${EDIFICIO_ACTIVO==='8010'?'style="display:none"':''}><label>🔑 Código de puerta</label><input type="text" id="cki-clave" placeholder="Clave para entrar al apto (ej: 1234#)"></div>
       </div>
       <div class="form-row col3">
         <div class="form-group"><label>Fecha aloj. inicio</label><input type="date" id="cki-fi" value="${TODAY}" onchange="calcCKI()"></div>
@@ -9459,11 +9464,11 @@ function enviarBienvenidaCKI(){
   var tel=String(((document.getElementById('cki-tel')||{}).value||'')).replace(/[^0-9]/g,'');
   var code=((document.getElementById('cki-clave')||{}).value||'').trim()||'XXXX#';
   if(!apto){ showToast('Selecciona el apartamento','error'); return; }
-  if(!((document.getElementById('cki-clave')||{}).value||'').trim()){ showToast('Escribe la clave de acceso al apto','error'); return; }
+  if(EDIFICIO_ACTIVO!=='8010' && !((document.getElementById('cki-clave')||{}).value||'').trim()){ showToast('Escribe la clave de acceso al apto','error'); return; }
   var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
   var ed=(typeof EB==='function'&&EB().nombre)||'';
   var _trpB=trat?trat+' ':'';
-  var msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.\n'+'Código de puerta: '+code;
+  var msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.'+(EDIFICIO_ACTIVO==='8010'?'':('\n'+'Código de puerta: '+code));
   var _wf=(typeof EB==='function'&&EB().wifi)||null; if(_wf&&_wf.red){ msg+='\nRed WiFi: '+_wf.red+' · Contraseña: '+(_wf.clave||''); }
   if(!tel){ if(typeof navigator!=='undefined'&&navigator.clipboard){ navigator.clipboard.writeText(msg); } showToast('Sin WhatsApp del huésped — mensaje copiado','info'); return; }
   window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
