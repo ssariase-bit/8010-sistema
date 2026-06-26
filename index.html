@@ -9630,12 +9630,12 @@ function generarMsgCKO() {
     if (_alojaOk) _p.push(`$${_alojaT.toLocaleString('es-CO')} alojamiento${_ivaModoT==='encima'?' (con IVA)':''}${nochesT?` (${nochesT} noche${nochesT===1?'':'s'})`:''}`);
     if (consumos>0) _p.push(`$${consumos.toLocaleString('es-CO')} consumos`);
     const _suma = (_alojaOk?_alojaT:0) + (consumos>0?consumos:0);
-    totalStr = `\n💰 Total estadía: ${_p.join(' + ')}${_p.length>1?` = $${_suma.toLocaleString('es-CO')}`:''}`;
+    totalStr = `\nTotal estadía: ${_p.join(' + ')}${_p.length>1?` = $${_suma.toLocaleString('es-CO')}`:''}`;
   }
   if (aloja>0 && !_alojaOk) {
     _alojaWarn = `\n⚠️ Revisar: el Total alojamiento ($${aloja.toLocaleString('es-CO')}) no parece válido${nochesT?` para ${nochesT} noche(s)`:''} — corrige el monto, o déjalo en 0 si es CxC.`;
   }
-  const _ivaModoCKO = (document.getElementById('cko-iva')||{}).value || 'incluido'; const _ivaLineaCKO = (_alojaOk && typeof _ivaCalc==='function') ? ('\n\ud83e\uddfe IVA: '+_ivaCalc(aloja, _ivaModoCKO).msg) : '';
+  const _ivaModoCKO = (document.getElementById('cko-iva')||{}).value || 'incluido'; const _ivaLineaCKO = (_alojaOk && typeof _ivaCalc==='function') ? ('\nIVA: '+_ivaCalc(aloja, _ivaModoCKO).msg) : '';
   const msg = `${h<12?'Buenos días':h<18?'Buenas tardes':'Buenas noches'}, ${_fh}
 Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${cobroStr}${consumosStr}${cobroObs?' ('+cobroObs+')':''}${fvStr}${mig}${enc}${actaStr}${acompStrCKO} y se actualiza estado de huéspedes${maletasStr}.${obs?'\n'+obs:''}${totalStr}${_ivaLineaCKO}${_alojaWarn}
 R/${quien}`;
@@ -9666,17 +9666,16 @@ R/${quien}`;
         </a>
         <div style="font-size:11px;color:#15803d;text-align:center;margin-top:2px">✓ Encuesta de satisfacción enviada por correo a ${correoH}</div>
         <a href="${_encWa}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#0E8A4F;color:white;padding:12px 16px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px">📨 Enviar encuesta al huésped por WhatsApp</a>
-        <button id="cko-libre-btn" onclick="marcarAptoCKOLibre('${apto}')"
-           style="background:#C0392B;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700">
-          ✅ Confirmar salida — Apto ${apto} queda SUCIO (por limpiar)
-        </button>
+        <div style="font-size:12px;color:#15803d;text-align:center;font-weight:600">✅ Rack actualizado: Apto ${apto} quedó SUCIO (por limpiar)</div>
         <button onclick="document.body.removeChild(this.closest('[style*=fixed]'))"
-           style="background:transparent;border:none;padding:6px;cursor:pointer;font-size:12px;color:#9CA3AF">
-          Cerrar sin actualizar rack
+           style="background:#1D3461;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700">
+          Cerrar
         </button>
       </div>
     </div>`;
   document.body.appendChild(modal);
+  // Actualizar el rack automáticamente (el apto queda SUCIO / días futuros liberados) sin esperar clic
+  _ckoAplicarRack(apto).then(function(lib){ showToast('📅 Rack actualizado: Apto '+apto+' marcado SUCIO (salida)'+(lib?' · '+lib+' día(s) liberados':''),'success'); if(window._currentView==='rack') renderRack(); if(window._currentView==='estado-huespedes') renderEstadoHuespedes(); else if(window._currentView==='ocupacion') renderOcupacion(); }).catch(function(){});
 }
 
 // Anula un bloqueo o estadía completa: pone Libre todas las fechas del rango del apto
@@ -9699,28 +9698,32 @@ async function liberarRangoApto() {
   if (window._currentView === 'rack') renderRack();
 }
 
-async function marcarAptoCKOLibre(apto) {
+// Aplica el CKO al rack: hoy queda SUCIO y libera los días futuros de la estadía. Devuelve # días liberados.
+async function _ckoAplicarRack(apto) {
   const ed = EDIFICIO_ACTIVO;
   const hForm = (window._ckoHuesped || '').trim();
   // 1) La fila de HOY queda como 'Sucio' (salió el huésped, pendiente de limpieza).
-  //    Quién salió queda en observaciones. Si no existe fila para hoy, se crea.
-  const { data: hoyD } = await sb.from('rack').select('huesped,tarifa,canal').eq('fecha', TODAY).eq('apto', apto).limit(1);
+  const { data: hoyD } = await sb.from('rack').select('huesped,tarifa,canal').eq('fecha', TODAY).eq('apto', apto).eq('edificio', ed).limit(1);
   const hoy = (hoyD && hoyD[0]) || null;
   const huesped = (hoy && hoy.huesped) || hForm || null;
   const _hrCKO = fmtHora12();
   const { error } = await sb.from('rack').upsert([{ fecha: TODAY, apto, estado: 'Sucio', huesped: null, telefono: null, tarifa: null, canal: null, observaciones: `CKO ${_hrCKO}${huesped ? ' — ' + huesped : ''} · pendiente limpieza`, edificio: ed, updated_by: currentUser.id }], { onConflict: 'fecha,apto,edificio' });
-  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  if (error) { showToast('Error: ' + error.message, 'error'); return 0; }
   // 2) Liberar los días FUTUROS de la misma estadía (mismo huésped, mismo apto, solo este edificio)
   let liberados = 0;
   if (huesped) {
-    const { data: fut } = await sb.from('rack').select('id,huesped').eq('apto', apto).gt('fecha', TODAY).neq('estado', 'Libre');
+    const { data: fut } = await sb.from('rack').select('id,huesped').eq('apto', apto).eq('edificio', ed).gt('fecha', TODAY).neq('estado', 'Libre');
     const ids = (fut || []).filter(r => (r.huesped || '').trim().toLowerCase() === huesped.trim().toLowerCase()).map(r => r.id);
     if (ids.length) {
       const r2 = await sb.from('rack').update({ estado: 'Libre', huesped: null, telefono: null, tarifa: null, canal: null, observaciones: null, updated_by: currentUser.id }).in('id', ids).eq('edificio', ed);
       if (!r2.error) liberados = ids.length;
     }
   }
-  if (!window._ckoPair) { const _pm=/^([3-9])0([23])$/.exec(apto); if(_pm){ const _part=_pm[1]+'0'+(_pm[2]==='2'?'3':'2'); const _chk=await sb.from('rack').select('id').eq('apto',_part).eq('tipo','Two Residence').eq('edificio',ed).limit(1); if(_chk.data&&_chk.data.length){ window._ckoPair=true; try{ await marcarAptoCKOLibre(_part); }finally{ window._ckoPair=false; } } } }
+  if (!window._ckoPair) { const _pm=/^([3-9])0([23])$/.exec(apto); if(_pm){ const _part=_pm[1]+'0'+(_pm[2]==='2'?'3':'2'); const _chk=await sb.from('rack').select('id').eq('apto',_part).eq('tipo','Two Residence').eq('edificio',ed).limit(1); if(_chk.data&&_chk.data.length){ window._ckoPair=true; try{ await _ckoAplicarRack(_part); }finally{ window._ckoPair=false; } } } }
+  return liberados;
+}
+async function marcarAptoCKOLibre(apto) {
+  const liberados = await _ckoAplicarRack(apto);
   // Cerrar modal
   const m = document.querySelector('[style*="position:fixed"][style*="inset:0"]');
   if (m) document.body.removeChild(m);
