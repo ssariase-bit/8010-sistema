@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-27-detalle-reserva';
+const APP_VERSION = '2026-06-27-com-grupos';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -5544,27 +5544,63 @@ window._revGerDest = function(tabla, r){
 };
 window._revGerComentar = async function(tabla, id){
   var prev=''; try{ var g=(await sb.from(tabla).select('comentario_gerencia').eq('id',id).single()).data; prev=(g&&g.comentario_gerencia)||''; }catch(e){}
-  var txt = prompt('Comentario de gerencia:', prev);
-  if(txt===null) return;
-  var r = await sb.from(tabla).update({ comentario_gerencia:(txt.trim()||null), revisado_por:(currentProfile&&currentProfile.nombre)||'Gerencia', revisado_at:new Date().toISOString() }).eq('id', id);
+  var row={}; try{ row=(await sb.from(tabla).select('*').eq('id',id).single()).data||{}; }catch(e){}
+  var d=window._revGerDest(tabla,row);
+  var defEmail=(d.nombre && typeof _dirEmail==='function')?_dirEmail(d.nombre):null;
+  window._revComCtx={tabla:tabla,id:id,ctx:d.ctx,destNombre:d.nombre};
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  var grupos=(_GRUPOS_CORREO[EDIFICIO_ACTIVO])||{};
+  var personas=(_DIRECTORIO[EDIFICIO_ACTIVO])||[];
+  var gHtml=Object.keys(grupos).map(function(g){ return '<label style="display:inline-flex;align-items:center;gap:6px;background:#EEF2F7;border:1px solid #d7dde6;border-radius:20px;padding:5px 12px;font-size:12.5px;cursor:pointer;margin:3px"><input type="checkbox" class="_rcGrp" value="'+esc(g)+'"> '+esc(g)+'</label>'; }).join('');
+  var pHtml=personas.map(function(p){ var chk=(defEmail && p.e===defEmail)?' checked':''; return '<label style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e3e6ea;border-radius:18px;padding:4px 10px;font-size:12px;cursor:pointer;margin:3px"><input type="checkbox" class="_rcPer" value="'+esc(p.e)+'"'+chk+'> '+esc(p.n)+'</label>'; }).join('');
+  var modal=document.createElement('div'); modal.id='modal-revcom';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px';
+  modal.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">'
+    +'<div style="background:#1D3461;color:#fff;padding:14px 18px"><div style="font-size:15px;font-weight:700">💬 Comentario de gerencia</div>'+(d.ctx?'<div style="font-size:11.5px;opacity:.85;margin-top:2px">Sobre '+esc(d.ctx)+'</div>':'')+'</div>'
+    +'<div style="padding:16px 18px;overflow:auto;flex:1">'
+    +'<textarea id="_rcTxt" spellcheck="true" lang="es" placeholder="Escribe tu comentario..." style="width:100%;min-height:90px;padding:10px;border:1px solid #d7dde6;border-radius:9px;font-size:13.5px;font-family:inherit;resize:vertical;box-sizing:border-box">'+esc(prev)+'</textarea>'
+    +'<div style="font-size:11px;font-weight:700;color:#1D3461;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 4px">Enviar a grupos</div><div style="display:flex;flex-wrap:wrap">'+(gHtml||'<span style="color:#999;font-size:12px">Sin grupos</span>')+'</div>'
+    +'<div style="font-size:11px;font-weight:700;color:#1D3461;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 4px">o personas</div><div style="display:flex;flex-wrap:wrap">'+(pHtml||'<span style="color:#999;font-size:12px">Sin personas</span>')+'</div>'
+    +'<div style="font-size:11px;color:#8b94a1;margin-top:10px">Santiago siempre recibe copia.</div>'
+    +'</div>'
+    +'<div style="padding:12px 16px;border-top:1px solid #eef0f2;display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button onclick="_revComEnviar(true)" style="flex:2;min-width:150px;background:#1D3461;color:#fff;border:none;border-radius:9px;padding:11px;font-size:13px;font-weight:600;cursor:pointer">Guardar y enviar</button>'
+    +'<button onclick="_revComEnviar(false)" style="flex:1;min-width:110px;background:#fff;color:#1D3461;border:1px solid #1D3461;border-radius:9px;padding:11px;font-size:12.5px;font-weight:600;cursor:pointer">Solo guardar</button>'
+    +'<button onclick="document.getElementById(\'modal-revcom\').remove()" style="flex:1;min-width:80px;background:#f3f4f6;color:#6B7280;border:none;border-radius:9px;padding:11px;font-size:12.5px;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  modal.addEventListener('click',function(e){ if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+  setTimeout(function(){ var t=document.getElementById('_rcTxt'); if(t) t.focus(); },50);
+};
+window._revComEnviar = async function(enviar){
+  var ctx=window._revComCtx||{}; if(!ctx.tabla) return;
+  var txt=(document.getElementById('_rcTxt')||{}).value||'';
+  var modal=document.getElementById('modal-revcom');
+  var emails={};
+  if(enviar){
+    var grupos=(_GRUPOS_CORREO[EDIFICIO_ACTIVO])||{};
+    [].forEach.call(document.querySelectorAll('._rcGrp:checked'),function(c){ (grupos[c.value]||[]).forEach(function(e){ emails[e]=1; }); });
+    [].forEach.call(document.querySelectorAll('._rcPer:checked'),function(c){ if(c.value) emails[c.value]=1; });
+  }
+  var lista=Object.keys(emails);
+  var r=await sb.from(ctx.tabla).update({ comentario_gerencia:(txt.trim()||null), revisado_por:(currentProfile&&currentProfile.nombre)||'Gerencia', revisado_at:new Date().toISOString() }).eq('id', ctx.id);
   if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
-  // ── Alerta por correo a la persona relacionada ──
-  try{
-    if(txt.trim()){
-      var row=(await sb.from(tabla).select('*').eq('id',id).single()).data||{};
-      var d=window._revGerDest(tabla,row);
-      var email=(d.nombre && typeof _dirEmail==='function')?_dirEmail(d.nombre):null;
-      if(email){
-        var ger=(currentProfile&&currentProfile.nombre)||'Gerencia';
-        var nb=(typeof EB==='function'&&EB().nombre)||'Sistema Operativo';
-        var html='<div style="font-family:Arial,Helvetica,sans-serif;color:#222;font-size:14px;line-height:1.6;max-width:560px"><p>Hola '+d.nombre+',</p><p><strong>'+ger+'</strong> (Gerencia) dejó un comentario sobre '+d.ctx+':</p><blockquote style="border-left:3px solid #B8963E;margin:10px 0;padding:8px 12px;background:#FEF9E7;border-radius:0 6px 6px 0">'+String(txt).replace(/</g,'&lt;')+'</blockquote><p>Por favor revísalo en el Sistema Operativo.</p><p style="font-size:11px;color:#999">'+nb+'</p></div>';
-        sb.functions.invoke('enviar-informe',{ body:{ edificio:EDIFICIO_ACTIVO, to:[email], cc:['santiago.arias@8010urbanliving.com'], subject:nb+' — Comentario de gerencia', html:html } }).then(function(){}).catch(function(){});
-        showToast('Comentario guardado y notificado a '+d.nombre,'success');
-      } else {
-        showToast('Comentario guardado'+(d.nombre?(' (sin correo de '+d.nombre+')'):''),'success');
-      }
-    } else { showToast('Comentario actualizado','success'); }
-  }catch(e){ showToast('Comentario guardado','success'); }
+  if(modal) modal.remove();
+  if(enviar && txt.trim() && lista.length){
+    try{
+      var SA='santiago.arias@8010urbanliving.com';
+      var ger=(currentProfile&&currentProfile.nombre)||'Gerencia';
+      var nb=(typeof EB==='function'&&EB().nombre)||'Sistema Operativo';
+      var html='<div style="font-family:Arial,Helvetica,sans-serif;color:#222;font-size:14px;line-height:1.6;max-width:560px"><p><strong>'+ger+'</strong> (Gerencia) dejó un comentario'+(ctx.ctx?(' sobre '+ctx.ctx):'')+':</p><blockquote style="border-left:3px solid #B8963E;margin:10px 0;padding:8px 12px;background:#FEF9E7;border-radius:0 6px 6px 0">'+String(txt).replace(/</g,'&lt;')+'</blockquote><p>Por favor revísalo en el Sistema Operativo.</p><p style="font-size:11px;color:#999">'+nb+'</p></div>';
+      var cc=(lista.indexOf(SA)>=0)?[]:[SA];
+      sb.functions.invoke('enviar-informe',{ body:{ edificio:EDIFICIO_ACTIVO, to:lista, cc:cc, subject:nb+' — Comentario de gerencia', html:html } }).then(function(){}).catch(function(){});
+      showToast('Comentario enviado a '+lista.length+' destinatario(s)','success');
+    }catch(e){ showToast('Comentario guardado (falló el envío)','error'); }
+  } else if(enviar && txt.trim() && !lista.length){
+    showToast('Comentario guardado — selecciona al menos un destinatario para enviar','info');
+  } else {
+    showToast('Comentario guardado','success');
+  }
   if(window._currentView && typeof loadView==='function') loadView(window._currentView);
 };
 function _pfRowHTML(piso){
@@ -6229,6 +6265,22 @@ const _DIRECTORIO = {
     {n:'Juanita Noguera', e:'admin1@8i8op.com'},
     {n:'Angélica Olaya', e:'aolaya@kubiklab.com'}
   ]
+};
+// Grupos de correo para dirigir comentarios de gerencia. Editable: av\u00edsame para ajustar miembros.
+const _GRUPOS_CORREO = {
+  '8010': {
+    'Administradores': ['sebastian.martinez@8010urbanliving.com','andres.parga@8010urbanliving.com','juan.martinez@8010urbanliving.com'],
+    'Operativo': ['recepcion@8010urbanliving.com','sebastian.martinez@8010urbanliving.com','andres.parga@8010urbanliving.com','juan.martinez@8010urbanliving.com','fernando.herrera@8010urbanliving.com'],
+    'Mantenimiento': ['mantenimiento@8010urbanliving.com','fernando.herrera@8010urbanliving.com'],
+    'Comercial / Eventos': ['cristina.cervino@8010urbanliving.com','natalia.munoz@8010urbanliving.com','maria.tosta@8010urbanliving.com'],
+    'Compras': ['compras@8010urbanliving.com']
+  },
+  'kubik': {
+    'Administradores': ['admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com'],
+    'Operativo': ['recepcion@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com'],
+    'Mantenimiento': ['admin2@8i8op.com'],
+    'Compras': ['compras@8010urbanliving.com']
+  }
 };
 function _normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\([^)]*\)/g,'').replace(/[^a-z ]/g,'').replace(/\s+/g,' ').trim(); }
 function _dirEmail(nombre){ var a=_DIRECTORIO[EDIFICIO_ACTIVO]||[]; var t=_normNom(nombre); if(!t) return null; var m=a.find(function(p){return _normNom(p.n)===t;}); if(m) return m.e; var tk=t.split(' ').filter(Boolean); var ap=tk[tk.length-1]; var byAp=a.filter(function(p){return _normNom(p.n).split(' ').indexOf(ap)>=0;}); if(byAp.length===1) return byAp[0].e; var byFn=a.filter(function(p){return _normNom(p.n).split(' ')[0]===tk[0];}); if(byFn.length===1) return byFn[0].e; return null; }
