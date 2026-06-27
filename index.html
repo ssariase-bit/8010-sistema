@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-27-com-grupos';
+const APP_VERSION = '2026-06-27-indicativos';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4226,7 +4226,7 @@ function renderNuevaReserva() {
         <div class="form-row col3">
           <div class="form-group">
             <label>Teléfono</label>
-            <input type="tel" id="res-tel" placeholder="+57 300 000 0000">
+            ${window._telCcInput('res-tel','57')}
           </div>
           <div class="form-group">
             <label>Email</label>
@@ -4432,7 +4432,7 @@ async function guardarReserva() {
   const noches  = Number(document.getElementById('res-noches').value) || 0;
   const canal   = document.getElementById('res-canal').value;
   const iva     = document.getElementById('res-iva')?.value || 'incluido';
-  const _telR   = normTel(document.getElementById('res-tel')?.value);
+  const _telR   = window._telFull('res-tel');
   const porNoche = document.getElementById('res-pornoche-toggle')?.checked;
   const tarifasNoche = {};
   if (porNoche) document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(inp=>{ tarifasNoche[inp.getAttribute('data-fecha')] = Number(inp.value)||0; });
@@ -4521,7 +4521,7 @@ async function guardarReserva() {
     firmante: document.getElementById('res-firmante').value || currentProfile?.nombre || 'Fabio Malaver',
     cargo: document.getElementById('res-cargo').value || 'Jefe de Administradores',
     email: document.getElementById('res-email').value.trim(),
-    tel: document.getElementById('res-tel').value.trim(),
+    tel: window._telFull('res-tel'),
     numero: await getNextNumeroConfirmacion()
   };
   if (typeof _adjSel!=='undefined' && _adjSel.length>0) { resData.obs = (resData.obs?resData.obs+' | ':'') + 'Combo unido: ' + _aptosW2.join(' + '); }
@@ -4563,7 +4563,7 @@ async function previsualizarConfirmacion() {
     personas: document.getElementById('res-personas')?.value || '1 adulto', pax: document.getElementById('res-pax')?.value || '1',
     obs: document.getElementById('res-obs').value,
     email: document.getElementById('res-email').value.trim(),
-    tel: document.getElementById('res-tel').value.trim(),
+    tel: window._telFull('res-tel'),
     numero: await peekNumeroConfirmacion(),
     firmante: document.getElementById('res-firmante').value || currentProfile?.nombre || 'Fabio Malaver',
     cargo: document.getElementById('res-cargo').value || 'Jefe de Administradores',
@@ -5897,7 +5897,7 @@ window.editarReserva = async function(id){
     set('res-tipotarifa',r.tipo_tarifa); set('res-pago',r.pago); set('res-estadopago',r.estado_pago);
     set('res-num-reserva',r.num_reserva); set('res-cxc-tipo',r.cxc_tipo); set('res-cxc-razon',r.cxc_razon);
     set('res-personas',r.personas); set('res-obs',r.obs); set('res-firmante',r.firmante);
-    set('res-cargo',r.cargo); set('res-email',r.email); set('res-tel',r.tel); set('res-empresa',r.empresa); set('res-pax',r.pax);
+    set('res-cargo',r.cargo); set('res-email',r.email); window._telSet('res-tel', r.tel); set('res-empresa',r.empresa); set('res-pax',r.pax);
     set('res-nf',r.nombre); set('res-ap1',''); set('res-ap2','');
     if(r.tipo_tarifa==='TxM' && Number(r.tarifa)>0){ set('res-tarifa', Math.round(Number(r.tarifa)*30)); } // mostrar el canon mensual
     if(typeof calcReserva==='function') try{ calcReserva(); }catch(e){}
@@ -7502,6 +7502,34 @@ async function registrarSalidaPersonal(id) {
 // ESTADO DE HUÉSPEDES (vista imprimible del rack del día)
 // ═══════════════════════════════════════════════════════════
 function normTel(t){ t=String(t==null?'':t).replace(/\D/g,''); if(!t) return ''; if(t.length===10&&t.charAt(0)==='3') t='57'+t; return t; }
+// ── Indicativos de país (selector al lado del teléfono) ──
+window._INDICATIVOS = [
+ {d:'57',n:'Colombia',f:'🇨🇴'},{d:'1',n:'EE.UU. / Canadá',f:'🇺🇸'},{d:'52',n:'México',f:'🇲🇽'},
+ {d:'34',n:'España',f:'🇪🇸'},{d:'54',n:'Argentina',f:'🇦🇷'},{d:'55',n:'Brasil',f:'🇧🇷'},
+ {d:'56',n:'Chile',f:'🇨🇱'},{d:'51',n:'Perú',f:'🇵🇪'},{d:'58',n:'Venezuela',f:'🇻🇪'},
+ {d:'593',n:'Ecuador',f:'🇪🇨'},{d:'591',n:'Bolivia',f:'🇧🇴'},{d:'595',n:'Paraguay',f:'🇵🇾'},
+ {d:'598',n:'Uruguay',f:'🇺🇾'},{d:'507',n:'Panamá',f:'🇵🇦'},{d:'506',n:'Costa Rica',f:'🇨🇷'},
+ {d:'502',n:'Guatemala',f:'🇬🇹'},{d:'503',n:'El Salvador',f:'🇸🇻'},{d:'504',n:'Honduras',f:'🇭🇳'},
+ {d:'505',n:'Nicaragua',f:'🇳🇮'},{d:'53',n:'Cuba',f:'🇨🇺'},{d:'44',n:'Reino Unido',f:'🇬🇧'},
+ {d:'33',n:'Francia',f:'🇫🇷'},{d:'49',n:'Alemania',f:'🇩🇪'},{d:'39',n:'Italia',f:'🇮🇹'},
+ {d:'351',n:'Portugal',f:'🇵🇹'},{d:'31',n:'Países Bajos',f:'🇳🇱'},{d:'32',n:'Bélgica',f:'🇧🇪'},
+ {d:'41',n:'Suiza',f:'🇨🇭'},{d:'43',n:'Austria',f:'🇦🇹'},{d:'46',n:'Suecia',f:'🇸🇪'},
+ {d:'47',n:'Noruega',f:'🇳🇴'},{d:'45',n:'Dinamarca',f:'🇩🇰'},{d:'358',n:'Finlandia',f:'🇫🇮'},
+ {d:'353',n:'Irlanda',f:'🇮🇪'},{d:'30',n:'Grecia',f:'🇬🇷'},{d:'48',n:'Polonia',f:'🇵🇱'},
+ {d:'7',n:'Rusia',f:'🇷🇺'},{d:'90',n:'Turquía',f:'🇹🇷'},{d:'972',n:'Israel',f:'🇮🇱'},
+ {d:'971',n:'Emiratos Árabes',f:'🇦🇪'},{d:'966',n:'Arabia Saudita',f:'🇸🇦'},{d:'212',n:'Marruecos',f:'🇲🇦'},
+ {d:'20',n:'Egipto',f:'🇪🇬'},{d:'27',n:'Sudáfrica',f:'🇿🇦'},{d:'91',n:'India',f:'🇮🇳'},
+ {d:'86',n:'China',f:'🇨🇳'},{d:'81',n:'Japón',f:'🇯🇵'},{d:'82',n:'Corea del Sur',f:'🇰🇷'},
+ {d:'65',n:'Singapur',f:'🇸🇬'},{d:'66',n:'Tailandia',f:'🇹🇭'},{d:'61',n:'Australia',f:'🇦🇺'},
+ {d:'64',n:'Nueva Zelanda',f:'🇳🇿'}
+];
+window._ccOptionsHTML = function(sel){ sel=String(sel||'57'); return window._INDICATIVOS.map(function(c){ return '<option value="'+c.d+'"'+(c.d===sel?' selected':'')+'>'+c.f+' +'+c.d+' '+c.n+'</option>'; }).join(''); };
+// HTML de selector indicativo + campo de número combinados
+window._telCcInput = function(inputId, sel, ph){ return '<div style="display:flex;gap:6px"><select id="'+inputId+'-cc" style="max-width:118px;padding:8px;border:1px solid var(--gris-b,#d7dde6);border-radius:8px;font-size:13px">'+window._ccOptionsHTML(sel)+'</select><input type="tel" id="'+inputId+'" placeholder="'+(ph||'300 000 0000')+'" style="flex:1"></div>'; };
+// Lee indicativo + número y devuelve el teléfono completo en dígitos
+window._telFull = function(inputId){ var inp=document.getElementById(inputId); var cc=document.getElementById(inputId+'-cc'); var num=String(inp?inp.value:'').replace(/\D/g,''); if(!num) return ''; if(!cc) return normTel(num); var dial=String(cc.value||''); if(dial && num.indexOf(dial)===0 && num.length>=dial.length+8) return num; return dial?(dial+num):normTel(num); };
+// Coloca un teléfono guardado en el selector + número (detecta el indicativo)
+window._telSet = function(inputId, stored){ var inp=document.getElementById(inputId); var cc=document.getElementById(inputId+'-cc'); var digits=String(stored||'').replace(/\D/g,''); if(!inp) return; if(!cc){ inp.value=(stored==null?'':stored); return; } if(!digits){ cc.value='57'; inp.value=''; return; } var dials=window._INDICATIVOS.map(function(c){return c.d;}).sort(function(a,b){return b.length-a.length;}); var found=''; for(var i=0;i<dials.length;i++){ if(digits.indexOf(dials[i])===0){ found=dials[i]; break; } } if(found){ cc.value=found; inp.value=digits.slice(found.length); } else { cc.value='57'; inp.value=digits; } };
 function _telDeFila(refId){ var suf=refId.replace(/^dc-/,'').replace(/^tel-/,''); var tEl=document.getElementById('tel-'+suf); if(tEl&&tEl.value) return normTel(tEl.value); var el=document.getElementById(refId); return normTel(el?(el.dataset.tel||''):''); }
 async function guardarNotaHuesped(id, apto, val){ var r=await sb.from('rack').select('huesped').eq('id', id).single(); var hu=(r.data&&r.data.huesped)||''; var d2=new Date(TODAY+'T00:00:00'); d2.setDate(d2.getDate()+400); var hasta=d2.toISOString().split('T')[0]; var q; if(hu){ q=await sb.from('rack').update({ observaciones: val||null }).eq('apto', apto).eq('edificio', EDIFICIO_ACTIVO).eq('huesped', hu).gte('fecha', TODAY).lte('fecha', hasta); } else { q=await sb.from('rack').update({ observaciones: val||null }).eq('id', id); } if(q.error) showToast('Error guardando nota: '+q.error.message,'error'); else showToast('📝 Nota guardada','success'); }
 async function guardarTelHuesped(id, apto, val){ var tel=normTel(val); var r=await sb.from('rack').select('huesped').eq('id', id).single(); var hu=(r.data&&r.data.huesped)||''; var d1=new Date(TODAY+'T00:00:00'); d1.setDate(d1.getDate()-60); var d2=new Date(TODAY+'T00:00:00'); d2.setDate(d2.getDate()+400); var desde=d1.toISOString().split('T')[0], hasta=d2.toISOString().split('T')[0]; var q; if(hu){ q=await sb.from('rack').update({ telefono: tel||null }).eq('apto', apto).eq('edificio', EDIFICIO_ACTIVO).eq('huesped', hu).gte('fecha', desde).lte('fecha', hasta); } else { q=await sb.from('rack').update({ telefono: tel||null }).eq('id', id); } if(q.error) showToast('Error guardando teléfono: '+q.error.message,'error'); else showToast('📱 WhatsApp guardado para toda la estadía','success'); }
@@ -9598,7 +9626,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>📱 WhatsApp del huésped</label><input type="tel" id="cki-tel" placeholder="+57 300 000 0000"></div>
+        <div class="form-group"><label>📱 WhatsApp del huésped</label>${window._telCcInput('cki-tel','57','300 000 0000')}</div>
         <div class="form-group" ${EDIFICIO_ACTIVO==='8010'?'style="display:none"':''}><label>🔑 Código de puerta</label><input type="text" id="cki-clave" placeholder="Clave para entrar al apto (ej: 1234#)"></div>
       </div>
       <div class="form-row col3">
@@ -9665,7 +9693,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
         <button class="btn btn-success" onclick="generarMsgCKI()" style="min-width:200px">📤 Generar Informe CKI</button>
       </div>
     </div>`;
-  (async()=>{ try{ const a=document.getElementById('cki-apto')?.value; if(!a) return; const {data}=await sb.from('rack').select('telefono').eq('fecha',TODAY).eq('apto',a).eq('edificio',EDIFICIO_ACTIVO).limit(1); if(data&&data[0]&&data[0].telefono){ const el=document.getElementById('cki-tel'); if(el&&!el.value) el.value=data[0].telefono; } }catch(e){} })();
+  (async()=>{ try{ const a=document.getElementById('cki-apto')?.value; if(!a) return; const {data}=await sb.from('rack').select('telefono').eq('fecha',TODAY).eq('apto',a).eq('edificio',EDIFICIO_ACTIVO).limit(1); if(data&&data[0]&&data[0].telefono){ const el=document.getElementById('cki-tel'); if(el&&!el.value) window._telSet('cki-tel', data[0].telefono); } }catch(e){} })();
   if(aptoPreload){ setTimeout(function(){ try{ ckiAutollenar(); }catch(e){} }, 60); }
 }
 
@@ -9717,7 +9745,7 @@ async function ckiAutollenar(){
     if(d.canal){ var cc=document.getElementById('cki-canal'); if(cc){ var ok=false; Array.from(cc.options).forEach(function(o){ if(o.value===d.canal||o.text===d.canal){ cc.value=o.value; ok=true; } }); } }
     if(d.empresa) set('cki-empresa', d.empresa);
     if(d.tratamiento){ var tr=document.getElementById('cki-tratamiento'); if(tr) tr.value=d.tratamiento; }
-    if(d.telefono) set('cki-tel', d.telefono);
+    if(d.telefono) window._telSet('cki-tel', d.telefono);
     var mEl=document.getElementById('cki-moneda'); if(mEl && d.moneda) mEl.value=d.moneda;
     if(d.moneda==='USD' && d.tarifa_usd) set('cki-tarifa', d.tarifa_usd); else if(d.tarifa) set('cki-tarifa', d.tarifa);
     if(typeof calcCKI==='function') calcCKI();
@@ -9729,7 +9757,7 @@ function enviarBienvenidaCKI(){
   var apto=(document.getElementById('cki-apto')||{}).value||'';
   var nombre=((document.getElementById('cki-nombre')||{}).value||'').trim();
   var trat=(document.getElementById('cki-tratamiento')||{}).value||'';
-  var tel=String(((document.getElementById('cki-tel')||{}).value||'')).replace(/[^0-9]/g,'');
+  var tel=window._telFull('cki-tel');
   var code=((document.getElementById('cki-clave')||{}).value||'').trim()||'XXXX#';
   if(!apto){ showToast('Selecciona el apartamento','error'); return; }
   if(EDIFICIO_ACTIVO!=='8010' && !((document.getElementById('cki-clave')||{}).value||'').trim()){ showToast('Escribe la clave de acceso al apto','error'); return; }
@@ -9813,7 +9841,7 @@ R/${quien}`;
       let f = fi;
       for (let i = 0; i < 400; i++) {
         const estado = f === fi ? 'Check-in hoy' : (f === ff_rack ? 'Check-out hoy' : 'Ocupado');
-        rows.push({ fecha: f, apto, estado, huesped, nombre: _ckiNom||null, apellido1: _ckiAp1||null, apellido2: _ckiAp2||null, telefono: normTel(document.getElementById('cki-tel')?.value) || null, tarifa: tarifa || null, canal, empresa: (document.getElementById('cki-empresa')?.value.trim() || null), tratamiento: (document.getElementById('cki-tratamiento')?.value || null), acompanantes: _acomp||null, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+        rows.push({ fecha: f, apto, estado, huesped, nombre: _ckiNom||null, apellido1: _ckiAp1||null, apellido2: _ckiAp2||null, telefono: window._telFull('cki-tel') || null, tarifa: tarifa || null, canal, empresa: (document.getElementById('cki-empresa')?.value.trim() || null), tratamiento: (document.getElementById('cki-tratamiento')?.value || null), acompanantes: _acomp||null, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
         if (f === ff_rack) break;
         f = addDay(f);
       }
@@ -10861,7 +10889,7 @@ function _pregUsar(id){
   var x = (window._pregRows||{})[id]; if(!x) return;
   var set = function(elid,val){ var e=document.getElementById(elid); if(e && val!=null && val!=='') e.value=val; };
   set('res-nf', x.nombre); set('res-ap1', x.apellido1); set('res-ap2', x.apellido2);
-  set('res-doc', x.documento); set('res-tel', x.telefono); set('res-email', x.email); set('res-empresa', x.empresa);
+  set('res-doc', x.documento); window._telSet('res-tel', x.telefono); set('res-email', x.email); set('res-empresa', x.empresa);
   if(x.pax_adultos!=null) set('res-pax-ad', x.pax_adultos);
   if(x.pax_menores!=null) set('res-pax-me', x.pax_menores);
   if(x.pax_infantes!=null) set('res-pax-in', x.pax_infantes);
