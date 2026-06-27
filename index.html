@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-26-revger2';
+const APP_VERSION = '2026-06-26-alertascorrector';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -5452,11 +5452,7 @@ async function renderSeguimientosTurno(){
   const _hPersona = n => { n=String(n||'').trim().toLowerCase(); if(!n) return 0; let h=0; for(let i=0;i<n.length;i++) h=(h*31+n.charCodeAt(i))%360; return h; };
   const chipResp = n => { if(!n||!String(n).trim()) return '-'; const h=_hPersona(n); return `<span title="Responsable del seguimiento" style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;background:hsl(${h},70%,90%);color:hsl(${h},75%,30%);border:1px solid hsl(${h},60%,75%);white-space:nowrap">${esc(n)}</span>`; };
   const _esGerente = ['gerente_general','gerencia_operativa'].includes(currentProfile?.rol);
-  const _celGerencia = r => `<td style="min-width:150px">
-      ${r.comentario_gerencia?`<div style="background:#FEF9E7;border-left:3px solid #B8963E;border-radius:6px;padding:5px 8px;font-size:11px;margin-bottom:4px;line-height:1.4"><strong>Gerencia:</strong> ${esc(r.comentario_gerencia)}</div>`:''}
-      ${r.revisado_por?`<div style="font-size:11px;color:#1F7A3D;font-weight:600">✔ Visto por ${esc(r.revisado_por)}${r.revisado_at?(' · '+fmtDate(String(r.revisado_at).substring(0,10))):''}</div>`:''}
-      ${_esGerente?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"><button onclick="_segRevisar('${r.id}',${r.revisado_por?'true':'false'})" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 7px">${r.revisado_por?'Quitar visto':'✔ Revisado'}</button><button onclick="_segComentar('${r.id}')" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 7px">💬 ${r.comentario_gerencia?'Editar nota':'Comentar'}</button></div>`:(!r.comentario_gerencia&&!r.revisado_por?'<span style="color:#c2c8d0;font-size:11px">—</span>':'')}
-    </td>`;
+  const _celGerencia = r => `<td style="min-width:150px">${window._revGerCell('seguimientos_turno', r)}</td>`;
   const filas = rows.map(r => `<tr>
     <td>${r.fecha?fmtDate(String(r.fecha).substring(0,10)):'-'}</td>
     <td>${esc(r.turno)||'-'}</td>
@@ -5522,13 +5518,38 @@ window._revGer = async function(tabla, id, ya){
   showToast(ya?'Visto retirado':'✔ Marcado como revisado','success');
   if(window._currentView && typeof loadView==='function') loadView(window._currentView);
 };
+// Destinatario de la alerta según el módulo
+window._revGerDest = function(tabla, r){
+  if(tabla==='novedades') return {nombre:(r.gestionado_por||r.reportado_por), ctx:'la novedad: '+String(r.descripcion||'').slice(0,90)};
+  if(tabla==='seguimientos_turno') return {nombre:r.responsable, ctx:'el seguimiento: '+String(r.detalle||'').slice(0,90)};
+  if(tabla==='solicitudes') return {nombre:(r.dirigido_a||r.solicitante), ctx:'la solicitud: '+String(r.descripcion||'').slice(0,90)};
+  if(tabla==='reservas') return {nombre:r.firmante, ctx:'la reserva de '+(r.nombre||'')+' (apto '+(r.apto||'')+')'};
+  if(tabla==='mantenimiento') return {nombre:(r.tecnico||r.solicitado_por), ctx:'la orden de trabajo: '+String(r.descripcion||'').slice(0,90)};
+  return {nombre:null, ctx:''};
+};
 window._revGerComentar = async function(tabla, id){
   var prev=''; try{ var g=(await sb.from(tabla).select('comentario_gerencia').eq('id',id).single()).data; prev=(g&&g.comentario_gerencia)||''; }catch(e){}
   var txt = prompt('Comentario de gerencia:', prev);
   if(txt===null) return;
   var r = await sb.from(tabla).update({ comentario_gerencia:(txt.trim()||null), revisado_por:(currentProfile&&currentProfile.nombre)||'Gerencia', revisado_at:new Date().toISOString() }).eq('id', id);
   if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
-  showToast('Comentario de gerencia guardado','success');
+  // ── Alerta por correo a la persona relacionada ──
+  try{
+    if(txt.trim()){
+      var row=(await sb.from(tabla).select('*').eq('id',id).single()).data||{};
+      var d=window._revGerDest(tabla,row);
+      var email=(d.nombre && typeof _dirEmail==='function')?_dirEmail(d.nombre):null;
+      if(email){
+        var ger=(currentProfile&&currentProfile.nombre)||'Gerencia';
+        var nb=(typeof EB==='function'&&EB().nombre)||'Sistema Operativo';
+        var html='<div style="font-family:Arial,Helvetica,sans-serif;color:#222;font-size:14px;line-height:1.6;max-width:560px"><p>Hola '+d.nombre+',</p><p><strong>'+ger+'</strong> (Gerencia) dejó un comentario sobre '+d.ctx+':</p><blockquote style="border-left:3px solid #B8963E;margin:10px 0;padding:8px 12px;background:#FEF9E7;border-radius:0 6px 6px 0">'+String(txt).replace(/</g,'&lt;')+'</blockquote><p>Por favor revísalo en el Sistema Operativo.</p><p style="font-size:11px;color:#999">'+nb+'</p></div>';
+        sb.functions.invoke('enviar-informe',{ body:{ edificio:EDIFICIO_ACTIVO, to:[email], cc:['santiago.arias@8010urbanliving.com'], subject:nb+' — Comentario de gerencia', html:html } }).then(function(){}).catch(function(){});
+        showToast('Comentario guardado y notificado a '+d.nombre,'success');
+      } else {
+        showToast('Comentario guardado'+(d.nombre?(' (sin correo de '+d.nombre+')'):''),'success');
+      }
+    } else { showToast('Comentario actualizado','success'); }
+  }catch(e){ showToast('Comentario guardado','success'); }
   if(window._currentView && typeof loadView==='function') loadView(window._currentView);
 };
 function _pfRowHTML(piso){
@@ -10755,6 +10776,30 @@ async function _pregEnviarPublico(token, ed){
     msg.style.display='block'; msg.textContent='No se pudo enviar: '+(e.message||e)+'. Intente de nuevo.';
   }
 }
+
+// ═══════════════════════════════════════════════════════════
+// CORRECTOR ORTOGRÁFICO NATIVO (español) en todos los campos de texto
+// ═══════════════════════════════════════════════════════════
+(function(){
+  try{ document.documentElement.lang='es'; }catch(_){}
+  var SEL='textarea, input[type="text"], input[type="search"], input:not([type]), [contenteditable=""], [contenteditable="true"]';
+  function aplicar(root){
+    try{
+      var nodos = (root && root.querySelectorAll) ? root.querySelectorAll(SEL) : [];
+      for(var i=0;i<nodos.length;i++){ var el=nodos[i]; if(el._scDone) continue; el._scDone=true; el.setAttribute('spellcheck','true'); el.setAttribute('lang','es'); }
+      // el propio nodo añadido también puede ser un campo
+      if(root && root.matches && root.matches(SEL) && !root._scDone){ root._scDone=true; root.setAttribute('spellcheck','true'); root.setAttribute('lang','es'); }
+    }catch(_){}
+  }
+  function init(){
+    aplicar(document);
+    try{
+      var mo=new MutationObserver(function(muts){ for(var j=0;j<muts.length;j++){ var an=muts[j].addedNodes; if(!an) continue; for(var k=0;k<an.length;k++){ if(an[k].nodeType===1) aplicar(an[k]); } } });
+      mo.observe(document.body,{childList:true,subtree:true});
+    }catch(_){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
 
 // ═══════════════════════════════════════════════════════════
 // AUTO-LOGIN si hay sesión activa
