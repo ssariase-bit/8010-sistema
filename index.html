@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-26-prestamos';
+const APP_VERSION = '2026-06-26-revgerencia';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -5449,6 +5449,12 @@ async function renderSeguimientosTurno(){
   const badge = e => { const cl = e==='Resuelto'?'resuelto':(e==='En seguimiento'?'proceso':'alta'); return `<span class="badge b-${cl}">${esc(e||'Pendiente')}</span>`; };
   const _hPersona = n => { n=String(n||'').trim().toLowerCase(); if(!n) return 0; let h=0; for(let i=0;i<n.length;i++) h=(h*31+n.charCodeAt(i))%360; return h; };
   const chipResp = n => { if(!n||!String(n).trim()) return '-'; const h=_hPersona(n); return `<span title="Responsable del seguimiento" style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;background:hsl(${h},70%,90%);color:hsl(${h},75%,30%);border:1px solid hsl(${h},60%,75%);white-space:nowrap">${esc(n)}</span>`; };
+  const _esGerente = ['gerente_general','gerencia_operativa'].includes(currentProfile?.rol);
+  const _celGerencia = r => `<td style="min-width:150px">
+      ${r.comentario_gerencia?`<div style="background:#FEF9E7;border-left:3px solid #B8963E;border-radius:6px;padding:5px 8px;font-size:11px;margin-bottom:4px;line-height:1.4"><strong>Gerencia:</strong> ${esc(r.comentario_gerencia)}</div>`:''}
+      ${r.revisado_por?`<div style="font-size:11px;color:#1F7A3D;font-weight:600">✔ Visto por ${esc(r.revisado_por)}${r.revisado_at?(' · '+fmtDate(String(r.revisado_at).substring(0,10))):''}</div>`:''}
+      ${_esGerente?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"><button onclick="_segRevisar('${r.id}',${r.revisado_por?'true':'false'})" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 7px">${r.revisado_por?'Quitar visto':'✔ Revisado'}</button><button onclick="_segComentar('${r.id}')" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 7px">💬 ${r.comentario_gerencia?'Editar nota':'Comentar'}</button></div>`:(!r.comentario_gerencia&&!r.revisado_por?'<span style="color:#c2c8d0;font-size:11px">—</span>':'')}
+    </td>`;
   const filas = rows.map(r => `<tr>
     <td>${r.fecha?fmtDate(String(r.fecha).substring(0,10)):'-'}</td>
     <td>${esc(r.turno)||'-'}</td>
@@ -5457,6 +5463,7 @@ async function renderSeguimientosTurno(){
     <td>${esc(r.detalle)}${r.observacion?('<div style="font-size:11px;color:var(--gris-t);margin-top:3px">↳ '+esc(r.observacion)+'</div>'):''}</td>
     <td>${chipResp(r.responsable)}</td>
     <td><button onclick="cicloEstadoSeg('${r.id}','${esc(r.estado||'Pendiente')}')" style="border:none;background:none;cursor:pointer">${badge(r.estado)}</button></td>
+    ${_celGerencia(r)}
     <td style="white-space:nowrap">${_btnsEdit('seguimientos_turno', r.id)}</td>
   </tr>`).join('');
   document.getElementById('main-content').innerHTML = `
@@ -5465,8 +5472,8 @@ async function renderSeguimientosTurno(){
       ${barraCompartir()}<button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('seguimientos-form')">+ Nuevo Seguimiento</button><button class="btn btn-outline btn-sm" onclick="window._segVerTodo=${verTodo?'false':'true'};renderSeguimientosTurno()">${verTodo?'📅 Solo esta semana':'🗂️ Ver historial'}</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=tr.querySelector('.b-resuelto')?'none':''})">Solo pendientes</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=''})">Todos</button>
     </div>
     <div class="card">
-      <table class="tabla"><thead><tr><th>Fecha</th><th>Turno</th><th>Categoría</th><th>Apto</th><th>Detalle</th><th>Responsable</th><th>Estado</th><th></th></tr></thead>
-      <tbody>${filas || '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px">Sin seguimientos. Crea uno con “+ Nuevo Seguimiento”.</td></tr>'}</tbody></table>
+      <table class="tabla"><thead><tr><th>Fecha</th><th>Turno</th><th>Categoría</th><th>Apto</th><th>Detalle</th><th>Responsable</th><th>Estado</th><th>Revisión Gerencia</th><th></th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="9" style="text-align:center;color:#999;padding:20px">Sin seguimientos. Crea uno con “+ Nuevo Seguimiento”.</td></tr>'}</tbody></table>
     </div>`;
 }
 async function cicloEstadoSeg(id, actual){
@@ -5476,6 +5483,24 @@ async function cicloEstadoSeg(id, actual){
   showToast('Estado: '+next,'success');
   renderSeguimientosTurno();
 }
+// ── Revisión de Gerencia sobre un seguimiento (check "revisado" + comentario) ──
+window._segRevisar = async function(id, ya){
+  var upd = ya ? { revisado_por:null, revisado_at:null } : { revisado_por:(currentProfile&&currentProfile.nombre)||'Gerencia', revisado_at:new Date().toISOString() };
+  var r = await sb.from('seguimientos_turno').update(upd).eq('id', id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast(ya?'Visto retirado':'✔ Marcado como revisado','success');
+  renderSeguimientosTurno();
+};
+window._segComentar = async function(id){
+  var prev='';
+  try{ var g=(await sb.from('seguimientos_turno').select('comentario_gerencia').eq('id',id).single()).data; prev=(g&&g.comentario_gerencia)||''; }catch(e){}
+  var txt = prompt('Comentario de gerencia para este seguimiento:', prev);
+  if(txt===null) return;
+  var r = await sb.from('seguimientos_turno').update({ comentario_gerencia:(txt.trim()||null), revisado_por:(currentProfile&&currentProfile.nombre)||'Gerencia', revisado_at:new Date().toISOString() }).eq('id', id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('Comentario de gerencia guardado','success');
+  renderSeguimientosTurno();
+};
 function _pfRowHTML(piso){
   const sel = c => `<select class="pf-${c}" style="padding:4px 6px;border:1px solid var(--gris-b);border-radius:6px"><option value="No">No</option><option value="Sí">Sí</option></select>`;
   return `<tr class="pf-row">
