@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-27-noshow-facfilt';
+const APP_VERSION = '2026-06-27-compras-viaje';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2593,7 +2593,7 @@ async function saveApto() {
   const _rango = document.getElementById('m-rango')?.checked && updates.checkin && updates.checkout && updates.checkin <= updates.checkout;
   if (_rango) {
     const addDay = s => { const [y,m,d] = s.split('-').map(Number); return new Date(Date.UTC(y, m-1, d+1)).toISOString().split('T')[0]; };
-    const ocupacional = ['Ocupado','Check-in hoy','Check-out hoy','Sale de viaje'].includes(updates.estado);
+    const ocupacional = ['Ocupado','Check-in hoy','Check-out hoy'].includes(updates.estado); // "Sale de viaje" se aplica tal cual en todo el rango (no se convierte en CKI/Ocupado/CKO)
     const rows = []; let f = updates.checkin;
     for (let i = 0; i < 400; i++) {
       // Estadías: patrón CKI → Ocupado → CKO. Bloqueos/Mantenimiento/etc: el mismo estado en todo el rango.
@@ -6163,7 +6163,7 @@ function _dirEmail(nombre){ var a=_DIRECTORIO[EDIFICIO_ACTIVO]||[]; var t=_normN
 // Departamento -> correo (direcciones confirmadas del ecosistema). Para dirigir solicitudes a un area.
 const _DEPTOS = {
   '8010': { 'recepcion':'recepcion@8010urbanliving.com', 'mantenimiento':'mantenimiento@8010urbanliving.com', 'compras':'compras@8010urbanliving.com', 'administracion':'administrativo@8010urbanliving.com', 'administrativo':'administrativo@8010urbanliving.com', 'gerencia':'santiago.arias@8010urbanliving.com', 'eventos':'natalia.munoz@8010urbanliving.com', 'comercial':'cristina.cervino@8010urbanliving.com' },
-  'kubik': { 'recepcion':'recepcion@8i8op.com', 'gerencia':'sariase@8i8op.com' }
+  'kubik': { 'recepcion':'recepcion@8i8op.com', 'gerencia':'sariase@8i8op.com', 'compras':'compras@8010urbanliving.com' }
 };
 function _depEmail(nombre){ var d=_DEPTOS[EDIFICIO_ACTIVO]||{}; var t=_normNom(nombre); return (t&&d[t])||null; }
 function _destinos(){
