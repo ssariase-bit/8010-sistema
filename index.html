@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-27-autoupdate';
+const APP_VERSION = '2026-06-27-kubik-combos';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4116,6 +4116,27 @@ async function renderDashServicios() {
 // ═══════════════════════════════════════════════════════════
 // NUEVA RESERVA
 // ═══════════════════════════════════════════════════════════
+// ── Kubik: nombres comerciales por unidad y combinaciones (pisos 2 al 9) ──
+const _KUBIK_UNID = { '01':{n:'Grand Residence',m2:100}, '02':{n:'Smart',m2:29}, '03':{n:'One Residence',m2:56}, '04':{n:'Suit Home',m2:42}, '04A':{n:'Deluxe',m2:37}, 'PH1':{n:'Pent House Mountain View'}, 'PH2':{n:'Pent House Park View'} };
+const _KUBIK_COMBOS = { 'FR':{n:'Famili Residence',m2:130,suf:['01','02']}, 'TR':{n:'Two Residence',m2:85,suf:['02','03']}, 'SD':{n:'Suite Deluxe',m2:79,suf:['04','04A']} };
+function _kubikUnidad(apto){ apto=String(apto||'').trim(); if(_KUBIK_UNID[apto]) return Object.assign({suf:apto},_KUBIK_UNID[apto]); var m=/^(\d)(\d{2}A?)$/.exec(apto); if(!m) return null; var b=_KUBIK_UNID[m[2]]; if(!b) return null; return {n:b.n,m2:b.m2,piso:m[1],suf:m[2]}; }
+// Nombre comercial para mostrar junto al código (ej: "201 · Grand Residence")
+function _kubikLabel(apto){ if((((EB&&EB().nombre)||'').indexOf('8010')>-1)) return apto; var c=/^(FR|TR|SD)(\d+)$/.exec(String(apto||'')); if(c){ var cc=_KUBIK_COMBOS[c[1]]; return cc?(cc.n+' '+c[2]+' ('+cc.suf.map(function(s){return c[2]+s;}).join('+')+')'):apto; } var u=_kubikUnidad(apto); return u?(apto+' · '+u.n):apto; }
+function _kubikAptoOptions(){
+  var ind='', comb='', ph='';
+  (EB().aptosFull||[]).forEach(function(a){
+    if(a==='PH1'||a==='PH2'){ var p=_KUBIK_UNID[a]; ph+='<option value="'+a+'">'+a+' · '+p.n+'</option>'; return; }
+    var u=_kubikUnidad(a);
+    ind+='<option value="'+a+'">'+a+(u?(' · '+u.n+' ('+u.m2+' m²)'):'')+'</option>';
+  });
+  for(var f=2; f<=9; f++){
+    ['FR','TR','SD'].forEach(function(c){
+      var cc=_KUBIK_COMBOS[c]; var us=cc.suf.map(function(s){return f+s;});
+      comb+='<option value="'+c+f+'">'+cc.n+' · Piso '+f+' ('+us.join('+')+', '+cc.m2+' m²)</option>';
+    });
+  }
+  return '<optgroup label="Individuales">'+ind+'</optgroup><optgroup label="Combinadas (ocupan 2 aptos)">'+comb+'</optgroup>'+(ph?'<optgroup label="Penthouses">'+ph+'</optgroup>':'');
+}
 function renderNuevaReserva() {
   document.getElementById('main-content').innerHTML = `
     <div class="page-title">➕ Nueva Reserva</div>
@@ -4128,7 +4149,7 @@ function renderNuevaReserva() {
             <label>Apartamento *</label>
             <select id="res-apto" onchange="calcReserva();actualizarConfigApto()">
               <option value="">— Seleccionar —</option>
-              ${EB().aptosFull.map(a=>`<option value="${a}">${a}</option>`).join('')}${(((EB&&EB().nombre)||'').indexOf('8010')===-1)?[3,4,5,6,7,8,9].map(_f=>`<option value="TR${_f}">Two Residence Piso ${_f} (${_f}02+${_f}03)</option><option value="FR${_f}">Family Residence Piso ${_f} (${_f}01+${_f}02)</option>`).join(''):''}
+              ${(((EB&&EB().nombre)||'').indexOf('8010')===-1) ? _kubikAptoOptions() : EB().aptosFull.map(a=>`<option value="${a}">${a}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
@@ -4458,7 +4479,8 @@ async function guardarReserva() {
   // Crear un registro en rack por cada día de la estadía
   const _trM = /^TR(\d+)$/.exec(apto);
   const _frM = /^FR(\d+)$/.exec(apto);
-  const _aptosW = _trM ? [_trM[1]+'02', _trM[1]+'03'] : (_frM ? [_frM[1]+'01', _frM[1]+'02'] : [apto]);
+  const _sdM = /^SD(\d+)$/.exec(apto);
+  const _aptosW = _trM ? [_trM[1]+'02', _trM[1]+'03'] : (_frM ? [_frM[1]+'01', _frM[1]+'02'] : (_sdM ? [_sdM[1]+'04', _sdM[1]+'04A'] : [apto]));
   const _adjSel = Array.from((document.getElementById('res-adjuntos')||{}).selectedOptions||[]).map(o=>o.value).filter(a=>a&&_aptosW.indexOf(a)<0);
   const _aptosW2 = [..._aptosW, ..._adjSel];
   const _nCombo = _aptosW2.length;
@@ -4469,11 +4491,11 @@ async function guardarReserva() {
     const fecha = d.toISOString().split('T')[0];
     const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
-    for (const _a of _aptosW2){ const _tA=(_adjSel.length>0 && _a!==apto)?null:(tNoche||null); rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Family Residence' : (_adjSel.length>0?'Combo':null)) }); }
+    for (const _a of _aptosW2){ const _tA=(_adjSel.length>0 && _a!==apto)?null:(tNoche||null); rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) }); }
   }
   // Día de check-out
   const dco = new Date(co);
-  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Family Residence' : (_adjSel.length>0?'Combo':null)) });
+  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) });
 
   // Guardia anti-borrado: avisar si esas fechas ya tienen una reserva de OTRO huésped (evita sobrescribir por error)
   try{
@@ -4496,7 +4518,7 @@ async function guardarReserva() {
 
   // La reserva ya quedó guardada en el rack → liberar el botón YA (evita el spinner colgado)
   _resetBtn();
-  showToast(`✅ Reserva registrada — ${nombre} en Apto ${apto} (${noches} noches)`, 'success');
+  showToast(`✅ Reserva registrada — ${nombre} en ${_kubikLabel(apto)} (${noches} noches)`, 'success');
 
   // Guardar también en contratos si tiene empresa (segundo plano: no bloquea ni cuelga la UI)
   const empresa = document.getElementById('res-empresa').value.trim();
