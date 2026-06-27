@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-26-txmfix';
+const APP_VERSION = '2026-06-26-prestamos';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -688,7 +688,7 @@ const NAV_ITEMS = {
     { id: 'maletas-list', icon: '🧳', label: 'Maletas Bodega' },
     { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
     { id: 'capsulas-list', icon: '🧴', label: 'Cápsulas Cortesía' },
-    { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tec.' },
+    { id: 'prestamos-list', icon: '📦', label: 'Préstamos' },
     { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
     { section: 'Financiero / Admin' },
@@ -756,7 +756,7 @@ const NAV_ITEMS = {
     { id: 'visitantes-form', icon: '➕', label: 'Registrar Visitante' },
     { id: 'maletas-list', icon: '🧳', label: 'Maletas en Bodega' },
     { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
-    { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tec.' },
+    { id: 'prestamos-list', icon: '📦', label: 'Préstamos' },
     { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
     { id: 'capsulas-list', icon: '🧴', label: 'Cápsulas Cortesía' },
@@ -811,7 +811,7 @@ const NAV_ITEMS = {
     { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
     { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
     { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
-    { id: 'prestamos-form', icon: '💻', label: 'Préstamo Tecnología' },
+    { id: 'prestamos-form', icon: '📦', label: 'Nuevo Préstamo' },
     { id: 'prestamos-list', icon: '💻', label: 'Préstamos' },
     { section: 'Consultar' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
@@ -973,8 +973,8 @@ const MENU_COMPLETO = [
   { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
   { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
   { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
-  { id: 'prestamos-form', icon: '💻', label: 'Préstamo Tecnología' },
-  { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tec.' },
+  { id: 'prestamos-form', icon: '📦', label: 'Nuevo Préstamo' },
+  { id: 'prestamos-list', icon: '📦', label: 'Préstamos' },
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
   { section: 'Financiero / Admin' },
   { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
@@ -1283,8 +1283,8 @@ async function loadView(view) {
       {id:'entregado_por',label:'Entregado por',type:'text'},
     ]); break;
     case 'prestamos-elem': await renderPrestamosElementos(); break;
-    case 'prestamos-list':     await renderList('prestamos_tec','💻 Préstamos Tecnología','prestamos-form',['fecha_prestamo','apto','arrendatario','articulo','cantidad','estado','fecha_devolucion'],['Fecha','Apto','Arrendatario','Artículo','Cant.','Estado','Devolución']); break;
-    case 'prestamos-form':     renderGenForm('prestamos_tec','💻 Registrar Préstamo de Tecnología',[
+    case 'prestamos-list':     await renderList('prestamos_tec','📦 Préstamos','prestamos-form',['fecha_prestamo','apto','arrendatario','articulo','cantidad','estado','fecha_devolucion'],['Fecha','Apto','Arrendatario','Artículo','Cant.','Estado','Devolución']); break;
+    case 'prestamos-form':     renderGenForm('prestamos_tec','📦 Registrar Préstamo',[
       {id:'fecha_prestamo',label:'Fecha préstamo',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento',type:'text',req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
