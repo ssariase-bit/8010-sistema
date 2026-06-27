@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-26-noemoji';
+const APP_VERSION = '2026-06-26-rackguard';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2416,6 +2416,7 @@ async function openAptoModal(id, num) {
   let data = null;
   try{ var _rk=window._rackData||{}; for(var _ap in _rk){ var _days=_rk[_ap]; for(var _d in _days){ if(_days[_d] && _days[_d].id===id){ data=_days[_d]; break; } } if(data) break; } }catch(e){}
   if(!data){ const _r = await sb.from('rack').select('*').eq('id', id).single(); data = _r.data; }
+  if(!data){ /* celda obsoleta (el rack cambió) -> auto-refrescar para no tener que recargar la página */ if(typeof renderRack==='function') renderRack(); if(typeof showToast==='function') showToast('Rack actualizado — toca de nuevo la celda','info'); return; }
   _aptoData = data || {};
   currentAptoId = id;
   document.getElementById('modal-apto-num').textContent = String(num).split(' · ')[0].trim();
