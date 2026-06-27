@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-27-kubik-combos';
+const APP_VERSION = '2026-06-27-sol-menu';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -949,7 +949,6 @@ const MENU_COMPLETO = [
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'comentarios', icon: '💬', label: 'Comentarios' },
   { section: 'Operación' },
-  { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
   { id: 'turnos-list', icon: '📋', label: 'Turnos / Personal / Extra' },
   { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
   { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
