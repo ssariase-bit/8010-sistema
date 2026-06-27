@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-26-alertascorrector';
+const APP_VERSION = '2026-06-27-sols3';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -7066,7 +7066,7 @@ async function imprimirRotuloCarpeta(id){
   var r=res.data;
   var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||''; var accent=(nb.indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
-  var ITEMS=['1 Página','Registro de ingreso','Copia de documentos','Información reserva','Inventario','Envío book de servicios','Contrato digitalizado','Otrosí digitalizado'];
+  var ITEMS=['Registro de ingreso','Copia de documentos','Información reserva','Inventario','Envío book de servicios','Contrato digitalizado','Otrosí digitalizado'];
   var filas=ITEMS.map(function(it){ return '<tr><td style="border:1px solid #333;padding:9px 12px;font-size:13px">'+it+'</td><td style="border:1px solid #333;padding:9px;text-align:center;width:64px;font-size:14px">&#9744; SI</td><td style="border:1px solid #333;padding:9px;text-align:center;width:64px;font-size:14px">&#9744; NO</td></tr>'; }).join('');
   var vacio=(r.apto_vacio===true||r.apto_vacio==='true');
   var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Rótulo '+esc(r.apto||'')+'</title></head><body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:24px;color:#111">'
@@ -7090,7 +7090,7 @@ function imprimirRotulo(apto, arrendatario, empresa, vacio){
   apto=decodeURIComponent(apto||''); arrendatario=decodeURIComponent(arrendatario||''); empresa=decodeURIComponent(empresa||'');
   var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||''; var accent=(nb.indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
-  var ITEMS=['1 Página','Registro de ingreso','Copia de documentos','Información reserva','Inventario','Envío book de servicios','Contrato digitalizado','Otrosí digitalizado'];
+  var ITEMS=['Registro de ingreso','Copia de documentos','Información reserva','Inventario','Envío book de servicios','Contrato digitalizado','Otrosí digitalizado'];
   var filas=ITEMS.map(function(it){ return '<tr><td style="border:1px solid #333;padding:9px 12px;font-size:13px">'+it+'</td><td style="border:1px solid #333;padding:9px;text-align:center;width:64px;font-size:14px">&#9744; SI</td><td style="border:1px solid #333;padding:9px;text-align:center;width:64px;font-size:14px">&#9744; NO</td></tr>'; }).join('');
   var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Rótulo '+esc(apto)+'</title></head><body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:24px;color:#111">'
     +'<button onclick="window.print()" style="position:fixed;top:14px;right:14px;background:#1F3864;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:700">🖨️ Imprimir</button>'
@@ -7111,7 +7111,7 @@ function imprimirRotulosLote(){
   var rows=window._rotRows||[]; if(!rows.length){ showToast('No hay ingresos para imprimir','error'); return; }
   var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||''; var accent=(nb.indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
-  var ITEMS=['1 Página','Registro de ingreso','Copia de documentos','Información reserva','Inventario','Envío book de servicios','Contrato digitalizado','Otrosí digitalizado'];
+  var ITEMS=['Registro de ingreso','Copia de documentos','Información reserva','Inventario','Envío book de servicios','Contrato digitalizado','Otrosí digitalizado'];
   var box=function(apto,hu,empresa){
     var filas=ITEMS.map(function(it){ return '<tr><td style="border:1px solid #555;padding:2px 4px;font-size:8px">'+esc(it)+'</td><td style="border:1px solid #555;padding:2px;text-align:center;width:24px;font-size:8px">&#9744;SI</td><td style="border:1px solid #555;padding:2px;text-align:center;width:24px;font-size:8px">&#9744;NO</td></tr>'; }).join('');
     return '<div style="border:2px solid '+accent+';border-radius:6px;padding:7px 9px;break-inside:avoid;page-break-inside:avoid;width:47%;box-sizing:border-box;margin:0 0.8% 9px">'
@@ -7801,7 +7801,7 @@ var FISCAL={
   '8i8':{razon:'8i8 OPERADORA SAS',nit:'902026873-8',dir:'CARRERA 14 # 88-49',ciudad:'BOGOTÁ',regimen:'RÉGIMEN COMÚN',resol:'FE 18764107923884 · vigencia 01 abril 2026 (2 años)',rango:'F8I8 1 a la F8I8 100000',prefijo:'F8I8',ciiu:'5512',ica:'13.8 *1000',banco:'(por confirmar)',conceptoAloja:'ALOJAMIENTO',tasaAloja:'19%'}
 };
 var FAC_TASAS={'Excluido':0,'Exento':0,'0%':0,'8%':0.08,'19%':0.19};
-var FAC_CONCEPTOS=['Alojamiento','Canon de arrendamiento','Restaurante / Alimentos','Minibar','Comunicaciones','Sala / Evento','Spa','Lavandería','Transporte','Varios / Cash Advance','Consumos adicionales','Otro'];
+var FAC_CONCEPTOS=['Alojamiento','Canon de arrendamiento','Alquiler de Parqueadero','Restaurante / Alimentos','Minibar','Comunicaciones','Sala / Evento','Spa','Lavandería','Transporte','Varios / Cash Advance','Consumos adicionales','Otro'];
 // Mapea cada concepto a una categoría de composición de ventas (como el reporte de NewHotel)
 var FAC_CAT={'Alojamiento':'aloja','Canon de arrendamiento':'aloja','Restaurante / Alimentos':'fb','Minibar':'fb','Consumos adicionales':'fb','Comunicaciones':'com','Sala / Evento':'eventos','Spa':'spa','Lavandería':'otros','Transporte':'otros','Varios / Cash Advance':'otros','Otro':'otros'};
 function _facComp(f){ var c={aloja:0,fb:0,com:0,eventos:0,spa:0,otros:0,neto:0,imp:0}; (f.lineas||[]).forEach(function(l){ var k=FAC_CAT[l.concepto]||'otros'; c[k]+=Number(l.valor)||0; c.neto+=Number(l.valor)||0; c.imp+=Number(l.impuesto)||0; }); c.total=c.neto+c.imp; return c; }
@@ -7848,7 +7848,7 @@ function renderFacturaGen(){
   +'<button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="_facAddLinea()">+ Agregar concepto</button>'
   +'<div style="display:flex;gap:24px;justify-content:flex-end;padding:12px 4px;font-size:14px"><div>Subtotal: <strong id="fac-sub">$ 0</strong></div><div>Impuestos: <strong id="fac-imp">$ 0</strong></div><div>Total: <strong id="fac-tot" style="color:var(--verde)">$ 0</strong></div></div></div>'
   +'<div class="form-section"><div class="form-section-title">💳 Pago y notas</div><div class="form-row">'
-  +'<div class="form-group"><label>Forma de pago</label><select id="fac-fpago"><option>Crédito</option><option>Contado</option><option>Tarjeta crédito</option><option>Transferencia</option><option>Efectivo</option></select></div>'
+  +'<div class="form-group"><label>Forma de pago</label><select id="fac-fpago"><option>Crédito</option><option>Contado</option><option>CxC (Cuentas por Cobrar)</option><option>Tarjeta crédito</option><option>Transferencia</option><option>Efectivo</option></select></div>'
   +'<div class="form-group"><label>Medio de pago</label><input type="text" id="fac-mpago" placeholder="Acuerdo mutuo, Helm Bank..."></div></div>'
   +'<div class="form-row"><div class="form-group"><label>Pago / abono recibido ($) <span style="color:#6B7280;font-size:11px">cruza con los conceptos (saldo)</span></label><input type="number" id="fac-abono" oninput="_facRecalc()" placeholder="0"></div><div class="form-group" style="align-self:flex-end"><div style="font-size:13px;padding:8px 0">Saldo pendiente: <strong id="fac-saldo">$ 0</strong></div></div></div>'
   +'<div class="form-group"><label>Observaciones (desglose USD × TRM, tramos, etc.)</label><textarea id="fac-obs" placeholder="Ej: ALOJ USD 230 * TRM ($3.572,85) = $821.756 / EXENTO RESIDENCIA"></textarea></div></div>'
