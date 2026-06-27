@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-27-personal-fit2';
+const APP_VERSION = '2026-06-27-autoupdate';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -470,11 +470,18 @@ async function checkAppVersion(force){
     if(!m) return;
     const sv = m[1];
     if(sv && sv !== APP_VERSION){
-      if(sessionStorage.getItem('_vreload') === sv) return;
-      sessionStorage.setItem('_vreload', sv);
-      if(!force){ try{ if(typeof showToast==='function') showToast('🔄 Hay una versión nueva. Recarga la página cuando termines.','success'); }catch(_){ } return; }
-      try{ if(typeof showToast==='function') showToast('🔄 Nueva versión — actualizando...','success'); }catch(_){ }
-      setTimeout(function(){ location.replace(location.pathname + '?v=' + encodeURIComponent(sv)); }, 900);
+      if(sessionStorage.getItem('_vreload') === sv) return; // evitar bucle de recarga
+      // ¿Es seguro recargar ahora? No interrumpir si hay un modal abierto o un campo con datos en edición
+      var modalOpen = document.querySelector('[id^="modal-"], div[style*="z-index:9999"]');
+      var ae = document.activeElement;
+      var editing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName||'') && String(ae.value||'').trim().length>0;
+      if(force || (!modalOpen && !editing)){
+        sessionStorage.setItem('_vreload', sv);
+        try{ if(typeof showToast==='function') showToast('🔄 Nueva versión — actualizando...','success'); }catch(_){ }
+        setTimeout(function(){ location.replace(location.pathname + '?v=' + encodeURIComponent(sv)); }, 900);
+      } else {
+        try{ if(typeof showToast==='function') showToast('🔄 Hay una versión nueva. Se actualizará sola al terminar lo que estás haciendo.','success'); }catch(_){ }
+      }
     }
   }catch(_){ }
 }
