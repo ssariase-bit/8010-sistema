@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-27-sol-menu';
+const APP_VERSION = '2026-06-27-scroll-pos';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -953,13 +953,11 @@ const MENU_COMPLETO = [
   { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
   { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
   { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
-  { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
   { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
   { id: 'mant-form', icon: '🔧', label: 'Orden Mantenimiento' },
   { id: 'mantenimiento-list', icon: '🔧', label: 'Ver Mantenimiento' },
   { id: 'hk-form', icon: '🧹', label: 'Registrar Limpieza' },
   { id: 'hk-list', icon: '🧹', label: 'Tiempos Camareras' },
-  { id: 'control-personal-form', icon: '➕', label: 'Registrar Ingreso Personal' },
   { id: 'entrega-efectivos-form', icon: '➕', label: 'Nueva Entrega' },
   { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
   { id: 'transportes-form', icon: '🚗', label: 'Registrar Transporte' },
@@ -983,7 +981,6 @@ const MENU_COMPLETO = [
   { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
   { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
   { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
-  { id: 'prestamos-form', icon: '📦', label: 'Nuevo Préstamo' },
   { id: 'prestamos-list', icon: '📦', label: 'Préstamos' },
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
   { section: 'Financiero / Admin' },
@@ -1063,6 +1060,10 @@ function cerrarSidebar() {
 
 async function loadView(view) {
   cerrarSidebar(); // cerrar el menú al elegir una opción (móvil)
+  // Si recargamos la MISMA vista (una acción), conservar la posición de scroll en vez de saltar arriba
+  const _samePage = (view === window._currentView);
+  let _savedScroll = 0, _scEl = null;
+  if(_samePage){ try{ var _mc0=document.getElementById('main-content'); var _s=_mc0; while(_s&&_s!==document.body){var _oy=getComputedStyle(_s).overflowY; if(_oy==='auto'||_oy==='scroll')break; _s=_s.parentElement;} _scEl=(_s&&_s!==document.body)?_s:null; _savedScroll=_scEl?_scEl.scrollTop:(window.scrollY||window.pageYOffset||0); }catch(e){} }
   // Guardar vista anterior para el botón Volver en formularios
   if (!view.endsWith('-form') && view !== 'dashboard') window._prevView = view;
   window._currentView = view;
@@ -1441,6 +1442,8 @@ async function loadView(view) {
 
     default: main.innerHTML = '<p>Vista no encontrada</p>';
   }
+  // Restaurar la posición de scroll si fue una recarga de la misma vista
+  if(_samePage && _savedScroll>0){ try{ requestAnimationFrame(function(){ if(_scEl) _scEl.scrollTop=_savedScroll; else window.scrollTo(0,_savedScroll); setTimeout(function(){ if(_scEl) _scEl.scrollTop=_savedScroll; else window.scrollTo(0,_savedScroll); },80); }); }catch(e){} }
 }
 
 // ═══════════════════════════════════════════════════════════
