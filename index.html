@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-26-revgerencia';
+const APP_VERSION = '2026-06-26-revger2';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3375,7 +3375,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
       ${rows.length === 0
         ? '<div class="empty"><div class="empty-icon">✅</div><p>Sin novedades</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Fecha ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Hora ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Área ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Apto/Ubic. ⇅</th><th>Descripción</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Prioridad ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Estado ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Solicitó ⇅</th><th>Acciones</th></tr></thead>
+            <thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Fecha ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Hora ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Área ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Apto/Ubic. ⇅</th><th>Descripción</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Prioridad ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Estado ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Solicitó ⇅</th><th>Revisión Gerencia</th><th>Acciones</th></tr></thead>
             <tbody>${rows.map(n => `<tr>
               <td>${fmtDate(n.fecha || (n.created_at ? n.created_at.split('T')[0] : null))}</td>
               <td style="white-space:nowrap;color:var(--gris-t);font-size:11px">${fmtHour(n.created_at)}</td>
@@ -3385,6 +3385,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
               <td>${badgePrio(n.prioridad)}</td>
               <td>${badgeEst(n.estado)}</td>
               <td>${n.reportado_por||'-'}</td>
+              <td style="min-width:150px">${window._revGerCell('novedades', n)}</td>
               <td>
                 <div style="display:inline-grid;gap:4px;width:104px">
                   <button class="btn btn-outline btn-xs" onclick="verNovedad('${n.id}')">Ver</button>
@@ -3732,6 +3733,7 @@ async function renderMantList(filtroApto='') {
                     <div style="display:flex;gap:6px"><button onclick="editarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px">✏️</button><button onclick="borrarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px;color:#9A4A40;border-color:#E0C0BA">🗑</button></div>
                   </div>
                 </div>
+                ${window._revGerCell('mantenimiento', o)?`<div style="border-top:1px solid #eef0f2;margin-top:10px;padding-top:8px">${window._revGerCell('mantenimiento', o)}</div>`:''}
               </div>
             </div>`;
           }).join('')}
@@ -5501,6 +5503,34 @@ window._segComentar = async function(id){
   showToast('Comentario de gerencia guardado','success');
   renderSeguimientosTurno();
 };
+// ── Revisión de Gerencia GENÉRICA (reutilizable en cualquier módulo/tabla) ──
+window._revGerCell = function(tabla, r){
+  var esGer = ['gerente_general','gerencia_operativa'].includes(currentProfile?.rol);
+  var esc = function(s){return String(s==null?'':s).replace(/</g,'&lt;');};
+  var com = r.comentario_gerencia, rev = r.revisado_por, revAt = r.revisado_at;
+  var html = '';
+  if(com) html += '<div style="background:#FEF9E7;border-left:3px solid #B8963E;border-radius:6px;padding:5px 8px;font-size:11px;margin-bottom:4px;line-height:1.4"><strong>Gerencia:</strong> '+esc(com)+'</div>';
+  if(rev) html += '<div style="font-size:11px;color:#1F7A3D;font-weight:600">✔ Visto por '+esc(rev)+(revAt?(' · '+fmtDate(String(revAt).substring(0,10))):'')+'</div>';
+  if(esGer) html += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"><button onclick="_revGer(\''+tabla+'\',\''+r.id+'\','+(rev?'true':'false')+')" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 7px">'+(rev?'Quitar visto':'✔ Revisado')+'</button><button onclick="_revGerComentar(\''+tabla+'\',\''+r.id+'\')" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 7px">💬 '+(com?'Editar':'Comentar')+'</button></div>';
+  else if(!com && !rev) html += '<span style="color:#c2c8d0;font-size:11px">—</span>';
+  return html;
+};
+window._revGer = async function(tabla, id, ya){
+  var upd = ya ? { revisado_por:null, revisado_at:null } : { revisado_por:(currentProfile&&currentProfile.nombre)||'Gerencia', revisado_at:new Date().toISOString() };
+  var r = await sb.from(tabla).update(upd).eq('id', id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast(ya?'Visto retirado':'✔ Marcado como revisado','success');
+  if(window._currentView && typeof loadView==='function') loadView(window._currentView);
+};
+window._revGerComentar = async function(tabla, id){
+  var prev=''; try{ var g=(await sb.from(tabla).select('comentario_gerencia').eq('id',id).single()).data; prev=(g&&g.comentario_gerencia)||''; }catch(e){}
+  var txt = prompt('Comentario de gerencia:', prev);
+  if(txt===null) return;
+  var r = await sb.from(tabla).update({ comentario_gerencia:(txt.trim()||null), revisado_por:(currentProfile&&currentProfile.nombre)||'Gerencia', revisado_at:new Date().toISOString() }).eq('id', id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('Comentario de gerencia guardado','success');
+  if(window._currentView && typeof loadView==='function') loadView(window._currentView);
+};
 function _pfRowHTML(piso){
   const sel = c => `<select class="pf-${c}" style="padding:4px 6px;border:1px solid var(--gris-b);border-radius:6px"><option value="No">No</option><option value="Sí">Sí</option></select>`;
   return `<tr class="pf-row">
@@ -5853,7 +5883,7 @@ window.renderReservas = async function(filtro){
     else { var _ocup=_rk && _OCU[_rk.estado]; var _hn=_rk?(_rk.huesped||((_rk.nombre||'')+' '+(_rk.apellido1||'')).trim()):''; var _match=_ocup && window._rvNameMatch(_hn, r.nombre);
       if(_match){ _enRack='<span style="color:#1A5C2E;font-weight:700" title="Coincide con el rack">✓</span>'; }
       else { _enRack='<span style="color:#C0392B;font-weight:700" title="No coincide con el rack de hoy'+(_hn?(' (rack: '+_hn+')'):' (apto libre)')+'">✗</span>'; _rowStyle=' style="background:#FDF3F2"'; } }
-    return '<tr'+_rowStyle+'><td style="white-space:nowrap"><strong>'+window._rvEsc(r.numero||r.num_reserva||'-')+'</strong></td><td style="white-space:nowrap;font-size:11px;color:#6B7280">'+window._rvFmtD(r.created_at)+'</td><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td>'+(r.empresa?window._rvEsc(r.empresa):'<span style="color:#bbb">—</span>')+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">'+_tnStr+'</td><td style="white-space:nowrap">'+_tmStr+'</td><td style="white-space:nowrap;font-weight:600">'+_ttStr+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="text-align:center">'+_enRack+'</td><td style="white-space:nowrap"><span title="Hacer Check-In (CKI)" style="cursor:pointer;font-size:13px" onclick="ckiDesdeReserva(\''+r.id+'\')">🟢</span> <span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
+    return '<tr'+_rowStyle+'><td style="white-space:nowrap"><strong>'+window._rvEsc(r.numero||r.num_reserva||'-')+'</strong></td><td style="white-space:nowrap;font-size:11px;color:#6B7280">'+window._rvFmtD(r.created_at)+'</td><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td>'+(r.empresa?window._rvEsc(r.empresa):'<span style="color:#bbb">—</span>')+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">'+_tnStr+'</td><td style="white-space:nowrap">'+_tmStr+'</td><td style="white-space:nowrap;font-weight:600">'+_ttStr+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="text-align:center">'+_enRack+'</td><td style="min-width:150px">'+window._revGerCell('reservas', r)+'</td><td style="white-space:nowrap"><span title="Hacer Check-In (CKI)" style="cursor:pointer;font-size:13px" onclick="ckiDesdeReserva(\''+r.id+'\')">🟢</span> <span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
   };
   var body=rows.map(window._rvRowHTML).join('');
   document.getElementById('main-content').innerHTML=
@@ -5861,7 +5891,7 @@ window.renderReservas = async function(filtro){
     '<div class="card"><div class="card-header"><div class="card-title" id="rv-count">'+rows.length+' reservas</div>'+
     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><label style="font-size:11px;color:var(--gris-t)">Creadas el <input type="date" onchange="rvFiltrarCreadas(this.value)" title="Ver reservas creadas en esta fecha" style="padding:5px;border:1px solid #ddd;border-radius:8px"></label><button class="btn btn-outline btn-sm" onclick="rvFiltrarCreadas(\'\')" title="Quitar filtro de fecha">Todas</button><input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar por huésped, apto, canal..." style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">'+
     '<button class="btn btn-success btn-sm" onclick="loadView(\'nueva-reserva\')">+ Nueva Reserva</button></div></div>'+
-    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Consec. ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Creada ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Apto ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Huésped ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Empresa ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Check-in ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Check-out ⇅</th><th>Noches</th><th>Tarifa/noche</th><th>Tarifa/mes</th><th>Total</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Canal ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">A cargo de ⇅</th><th title="Si la persona de la reserva está hoy ocupando el apto en el rack">En rack</th><th></th></tr></thead><tbody id="rv-tbody">'+body+'</tbody></table></div></div>';
+    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Consec. ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Creada ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Apto ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Huésped ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Empresa ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Check-in ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Check-out ⇅</th><th>Noches</th><th>Tarifa/noche</th><th>Tarifa/mes</th><th>Total</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Canal ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">A cargo de ⇅</th><th title="Si la persona de la reserva está hoy ocupando el apto en el rack">En rack</th><th>Revisión Gerencia</th><th></th></tr></thead><tbody id="rv-tbody">'+body+'</tbody></table></div></div>';
 };
 window.rvFiltrarCreadas=function(fecha){
   var rows=window._rvRows||[];
@@ -5933,7 +5963,7 @@ window.responderSolicitud = async function(id){
 window.eliminarSolicitud = async function(id){ if(!confirm('¿Eliminar esta solicitud?')) return; await sb.from('solicitudes').delete().eq('id',id); if(typeof showToast==='function') showToast('Eliminada','success'); renderSolicitudes(); };
 window.renderSolicitudes = async function(filtro){
   filtro=(filtro===undefined?(window._solFiltro||''):filtro); window._solFiltro=filtro;
-  var _cols='id,created_at,edificio,solicitante,dirigido_a,descripcion,prioridad,estado,tiene_imagen,adjuntos,respuesta,resuelto_at';
+  var _cols='id,created_at,edificio,solicitante,dirigido_a,descripcion,prioridad,estado,tiene_imagen,adjuntos,respuesta,resuelto_at,comentario_gerencia,revisado_por,revisado_at';
   var res=await sb.from('solicitudes').select(_cols).eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(2000);
   if(res.error && /dirigido_a/.test(res.error.message||'')){ res=await sb.from('solicitudes').select(_cols.replace(',dirigido_a','')).eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(2000); }
   var rows=(res.data||[]).filter(function(r){ if(filtro==='dirigidas') return !!(r.dirigido_a&&String(r.dirigido_a).trim()); return !filtro || r.estado===filtro; });
@@ -5947,7 +5977,7 @@ window.renderSolicitudes = async function(filtro){
     img=(img||_sadj)?(img+_sadj):'<span style="color:#bbb">—</span>';
     var resp=r.respuesta?('<span style="color:#166534">'+esc(r.respuesta)+'</span>'):'<span style="color:#bbb">—</span>';
     var _ds=!!(r.dirigido_a&&String(r.dirigido_a).trim()); var _dc=_ds?('<span style="background:#fde68a;color:#92400e;font-size:11px;padding:1px 8px;border-radius:8px;font-weight:600">⭐ → '+esc(r.dirigido_a)+'</span>'):'<span style="color:#bbb">—</span>';
-    return '<tr style="vertical-align:top'+(_ds?';background:#FFFBEB':'')+'"><td style="white-space:nowrap">'+fmtD(r.created_at)+'</td><td>'+esc(r.solicitante||'-')+'</td><td>'+_dc+'</td><td style="max-width:240px">'+esc(r.descripcion||'')+'</td><td><span style="background:'+priColor(r.prioridad)+';padding:1px 8px;border-radius:8px;font-size:11px">'+esc(r.prioridad||'')+'</span></td><td>'+img+'</td><td>'+estSel+'</td><td style="max-width:200px;font-size:12px">'+resp+'</td><td style="white-space:nowrap"><span title="Responder / qué se hizo" style="cursor:pointer" onclick="responderSolicitud(\''+r.id+'\')">✍️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarSolicitud(\''+r.id+'\')">🗑️</span></td></tr>';
+    return '<tr style="vertical-align:top'+(_ds?';background:#FFFBEB':'')+'"><td style="white-space:nowrap">'+fmtD(r.created_at)+'</td><td>'+esc(r.solicitante||'-')+'</td><td>'+_dc+'</td><td style="max-width:240px">'+esc(r.descripcion||'')+'</td><td><span style="background:'+priColor(r.prioridad)+';padding:1px 8px;border-radius:8px;font-size:11px">'+esc(r.prioridad||'')+'</span></td><td>'+img+'</td><td>'+estSel+'</td><td style="max-width:200px;font-size:12px">'+resp+'</td><td style="min-width:150px">'+window._revGerCell('solicitudes', r)+'</td><td style="white-space:nowrap"><span title="Responder / qué se hizo" style="cursor:pointer" onclick="responderSolicitud(\''+r.id+'\')">✍️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarSolicitud(\''+r.id+'\')">🗑️</span></td></tr>';
   }).join('');
   var fbtn=function(v,l){ var on=(window._solFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderSolicitudes(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML=
@@ -5961,7 +5991,7 @@ window.renderSolicitudes = async function(filtro){
     '<div class="form-group"><label>Adjuntos (varios: imágenes, PDF, Excel…)</label><input type="file" multiple id="sol-files"><div style="font-size:11px;color:#888;margin-top:3px">Puedes seleccionar varios. También puedes pegar un pantallazo con Ctrl+V en la descripción.</div><div id="sol-img-preview" style="margin-top:6px"></div></div>'+
     '<button class="btn btn-success" onclick="guardarSolicitud()">📨 Enviar solicitud</button></div>'+
     '<div class="card"><div class="card-header"><div class="card-title">'+rows.length+' solicitudes</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todas')+fbtn('dirigidas','⭐ Dirigidas')+fbtn('Pendiente','Pendientes')+fbtn('En proceso','En proceso')+fbtn('Hecho','Hechas')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar..." style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
-    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Quién</th><th>Dirigido a</th><th>Solicitud</th><th>Prioridad</th><th>Imagen</th><th>Estado</th><th>Respuesta</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Quién</th><th>Dirigido a</th><th>Solicitud</th><th>Prioridad</th><th>Imagen</th><th>Estado</th><th>Respuesta</th><th>Revisión Gerencia</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   setTimeout(function(){ var ta=document.getElementById('sol-desc'); if(ta&&!ta._ph){ ta._ph=true; ta.addEventListener('paste',function(e){ var items=(e.clipboardData||{}).items||[]; for(var i=0;i<items.length;i++){ if(items[i].type.indexOf('image')===0){ window._solHandleFile(items[i].getAsFile()); e.preventDefault(); break; } } }); } var pv=document.getElementById('sol-img-preview'); if(pv&&!window._solImg) pv.innerHTML=''; },100);
 };
 
