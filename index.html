@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-27-scroll-pos';
+const APP_VERSION = '2026-06-27-grupos8010';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -6300,10 +6300,11 @@ const _DIRECTORIO = {
 // Grupos de correo para dirigir comentarios de gerencia. Editable: av\u00edsame para ajustar miembros.
 const _GRUPOS_CORREO = {
   '8010': {
-    'Administradores': ['sebastian.martinez@8010urbanliving.com','andres.parga@8010urbanliving.com','juan.martinez@8010urbanliving.com'],
+    'Administradores': ['juan.martinez@8010urbanliving.com','andres.parga@8010urbanliving.com','sebastian.martinez@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
+    'Mercadeo': ['cristina.cervino@8010urbanliving.com','maria.tosta@8010urbanliving.com'],
+    'Administrativo': ['adriana.bernal@8010urbanliving.com','zareth.varela@8010urbanliving.com','cristina.cervino@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
+    'Mantenimiento': ['mantenimiento@8010urbanliving.com','fernando.herrera@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
     'Operativo': ['recepcion@8010urbanliving.com','sebastian.martinez@8010urbanliving.com','andres.parga@8010urbanliving.com','juan.martinez@8010urbanliving.com','fernando.herrera@8010urbanliving.com'],
-    'Mantenimiento': ['mantenimiento@8010urbanliving.com','fernando.herrera@8010urbanliving.com'],
-    'Comercial / Eventos': ['cristina.cervino@8010urbanliving.com','natalia.munoz@8010urbanliving.com','maria.tosta@8010urbanliving.com'],
     'Compras': ['compras@8010urbanliving.com']
   },
   'kubik': {
