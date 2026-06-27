@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-26-ventascat';
+const APP_VERSION = '2026-06-26-noemoji';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2872,31 +2872,31 @@ async function enviarTurno() {
 
   const _fmtFT = f => { try{ const p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]; }catch(_){ return ''; } };
   const _novParts = [];
-  novsToInsert.forEach(n => _novParts.push(`▪️ [${n.prioridad}] ${n.area && n.area!=='General' ? n.area+': ' : ''}${n.descripcion}`));
-  _novSel.forEach(n => _novParts.push(`▪️ [${n.prioridad||'-'}] ${n.apto?('Apto '+n.apto+' · '):''}${n.area && n.area!=='General' ? n.area+': ' : ''}${n.descripcion} (${_fmtFT(n.fecha)}) — ${n.estado}`));
-  const novResumen = _novParts.length ? _novParts.join('\n') : '▪️ Sin novedades ✓';
-  const _segTxt = _segSel.map(sg => `▪️ ${sg.apto?('Apto '+sg.apto+' · '):''}${sg.categoria?sg.categoria+': ':''}${sg.detalle}${sg.responsable?(' — Resp: '+sg.responsable):''} (${_fmtFT(sg.fecha)}) — ${sg.estado}`).join('\n');
-  const _pendResumen = [document.getElementById('t-pendientes').value.trim(), _segTxt].filter(x=>x && x.trim()).join('\n') || '▪️ Sin pendientes ✓';
+  novsToInsert.forEach(n => _novParts.push(`▪ [${n.prioridad}] ${n.area && n.area!=='General' ? n.area+': ' : ''}${n.descripcion}`));
+  _novSel.forEach(n => _novParts.push(`▪ [${n.prioridad||'-'}] ${n.apto?('Apto '+n.apto+' · '):''}${n.area && n.area!=='General' ? n.area+': ' : ''}${n.descripcion} (${_fmtFT(n.fecha)}) — ${n.estado}`));
+  const novResumen = _novParts.length ? _novParts.join('\n') : '▪ Sin novedades ✓';
+  const _segTxt = _segSel.map(sg => `▪ ${sg.apto?('Apto '+sg.apto+' · '):''}${sg.categoria?sg.categoria+': ':''}${sg.detalle}${sg.responsable?(' — Resp: '+sg.responsable):''} (${_fmtFT(sg.fecha)}) — ${sg.estado}`).join('\n');
+  const _pendResumen = [document.getElementById('t-pendientes').value.trim(), _segTxt].filter(x=>x && x.trim()).join('\n') || '▪ Sin pendientes ✓';
 
   // Guardar número WhatsApp para próxima vez
   const waPhone = document.getElementById('t-waphone')?.value.trim().replace(/\D/g,'') || '';
   if (waPhone) localStorage.setItem('wa_phone', waPhone);
 
-  const msgWA = `🏢 *${EDIFICIO_ACTIVO==='kubik'?'Kubik Living 8i8':'8010 Urban Living'} — Cierre de Turno*
-📅 Fecha: ${d}/${m}/${y}
-🕐 Turno: ${turno}
-👤 Entrega: ${entrega}
-👤 Recibe: ${recibe}
+  const msgWA = `*${EDIFICIO_ACTIVO==='kubik'?'Kubik Living 8i8':'8010 Urban Living'} — Cierre de Turno*
+▪ Fecha: ${d}/${m}/${y}
+▪ Turno: ${turno}
+▪ Entrega: ${entrega}
+▪ Recibe: ${recibe}
 
 *OCUPACIÓN:*
-▪️ Aptos ocupados: ${ocup} | Disponibles: ${disp}
-▪️ Check-ins: ${cki} | Check-outs: ${cko}
-${EDIFICIO_ACTIVO==='kubik' ? `▪️ Caja 8i8: $${cajaLTM3}` : `▪️ Caja LTM3: $${cajaLTM3} | OT: $${cajaOT} | PH: $${cajaPH}`}
-▪️ Total caja: $${caja}${(Number(llaves)||Number(sombDisp)||Number(sombPrest)) ? `
+▪ Aptos ocupados: ${ocup} | Disponibles: ${disp}
+▪ Check-ins: ${cki} | Check-outs: ${cko}
+${EDIFICIO_ACTIVO==='kubik' ? `▪ Caja 8i8: $${cajaLTM3}` : `▪ Caja LTM3: $${cajaLTM3} | OT: $${cajaOT} | PH: $${cajaPH}`}
+▪ Total caja: $${caja}${(Number(llaves)||Number(sombDisp)||Number(sombPrest)) ? `
 
 *ENTREGA DE TURNO:*
-▪️ Llaves de acceso: ${llaves}
-▪️ Sombrillas: ${sombDisp} disponibles | ${sombPrest} en préstamo` : ''}
+▪ Llaves de acceso: ${llaves}
+▪ Sombrillas: ${sombDisp} disponibles | ${sombPrest} en préstamo` : ''}
 
 *NOVEDADES:*
 ${novResumen}
@@ -4793,7 +4793,7 @@ function generarConfirmacion(r) {
   const _esKLc = _edN.indexOf('8010') === -1;
   const _telC = normTel(r.tel);
   const confirmMsg = `Estimado/a ${r.nombre},%0A%0AConfirmamos su reserva en ${_edN}:%0A%0AApartamento: ${r.apto}%0ACheck-in: ${r.checkin}%0ACheck-out: ${r.checkout}%0A${r.tipoTarifa==='TxD'?('Días: '+(Number(r.noches)+1)):('Noches: '+r.noches)}%0ATarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel} /${r.tipoTarifa==='TxD'?'día':'noche'}${conIVA?' + IVA':''}%0ATotal: $${((r.valorTotal>0?r.valorTotal:r.tarifa*((r.tipoTarifa==='TxD')?(Number(r.noches)+1):Number(r.noches)))).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':'%0A%0APor favor revise la Guía de Comportamiento adjunta.'}%0A%0A${_edN}`;
-  const waMsg = encodeURIComponent(`🏢 *${_edN} — Confirmación de Reserva*\n\nEstimado/a ${r.nombre},\n\nSu reserva está confirmada:\n▪️ Apto: ${r.apto}\n▪️ Check-in: ${r.checkin}\n▪️ Check-out: ${r.checkout}\n▪️ Noches: ${r.noches}\n▪️ Tarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n▪️ Total: $${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':`\n\n📋 Guía de Comportamiento: ${guiaUrl}`}\n\n_${_edN}_`);
+  const waMsg = encodeURIComponent(`*${_edN} — Confirmación de Reserva*\n\nEstimado/a ${r.nombre},\n\nSu reserva está confirmada:\n▪ Apto: ${r.apto}\n▪ Check-in: ${r.checkin}\n▪ Check-out: ${r.checkout}\n▪ Noches: ${r.noches}\n▪ Tarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n▪ Total: $${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':`\n\n▪ Guía de Comportamiento: ${guiaUrl}`}\n\n_${_edN}_`);
   const emailDest = r.email ? encodeURIComponent(r.email) : '';
 
   const botonesHTML = `
@@ -7310,13 +7310,13 @@ function anuncioMasivo(){
   if(window._masI>=window._masQ.length){ if(st) st.textContent='✅ Anuncio enviado a los '+window._masQ.length+' huéspedes en casa.'; window._masQ=null; window._masBody=null; return; }
   var r=window._masQ[window._masI]; window._masI++;
   var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
-  var _trat8=(r.tratamiento?r.tratamiento+' ':''); var msg=saludo+', '+_trat8+(r.huesped||'')+'.\n\n'+body+'\n\nCualquier duda o solicitud, comuníquese con nosotros por este medio — estamos disponibles 24/7. Mil gracias. 🙏\n*'+(((typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'))+'*';
+  var _trat8=(r.tratamiento?r.tratamiento+' ':''); var msg=saludo+', '+_trat8+(r.huesped||'')+'.\n\n'+body+'\n\nCualquier duda o solicitud, comuníquese con nosotros por este medio — estamos disponibles 24/7. Mil gracias.\n*'+(((typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'))+'*';
   var tel=normTel(r.telefono);
   window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
   if(st) st.textContent='📤 '+window._masI+' de '+window._masQ.length+' — '+(r.huesped||'')+' (Apto '+r.apto+')'+(tel?'':' ⚠️ sin número guardado')+(window._masI<window._masQ.length?' · Pulsa de nuevo para el siguiente':' · Pulsa de nuevo para terminar');
 }
 function copiarTelefonos(){ var rows=(window._ehRows||[]).filter(function(r){ return r.huesped&&r.telefono; }); var seen={}; rows=rows.filter(function(r){ var k=(r.huesped||'').trim().toLowerCase(); if(!k||seen[k]) return false; seen[k]=1; return true; }); if(!rows.length){ alert('Ningún huésped en casa tiene WhatsApp guardado todavía.'); return; } var t=rows.map(function(r){ return '+'+normTel(r.telefono)+'  ('+(r.huesped||'')+' · Apto '+r.apto+')'; }).join('\n'); navigator.clipboard.writeText(t).then(function(){ showToast('📋 '+rows.length+' números copiados','success'); }); }
-function waAnuncio(nombreId){ var el=document.getElementById(nombreId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(nombreId); var body=(document.getElementById('anuncio-body')||{}).value||''; if(!body.trim()){ alert('Escribe el mensaje del anuncio primero.'); return; } var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var _trpA=trat?trat+' ':''; var msg=saludo+', '+_trpA+(nombre||'')+'.\n\n'+body+'\n\nCualquier duda o solicitud, comuníquese con nosotros por este medio — estamos disponibles 24/7. Mil gracias. 🙏\n*'+(((typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'))+'*'; window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
+function waAnuncio(nombreId){ var el=document.getElementById(nombreId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(nombreId); var body=(document.getElementById('anuncio-body')||{}).value||''; if(!body.trim()){ alert('Escribe el mensaje del anuncio primero.'); return; } var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var _trpA=trat?trat+' ':''; var msg=saludo+', '+_trpA+(nombre||'')+'.\n\n'+body+'\n\nCualquier duda o solicitud, comuníquese con nosotros por este medio — estamos disponibles 24/7. Mil gracias.\n*'+(((typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'))+'*'; window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
 function waBienvenida(codeId){ var el=document.getElementById(codeId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(codeId); var code=(el&&el.value)?el.value:'XXXX#'; var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var ed=(typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'; var _trpB=trat?trat+' ':''; var msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.'+(EDIFICIO_ACTIVO==='8010'?'':('\n'+'Código de puerta: '+code)); var _wf=(typeof EB==='function'&&EB().wifi)||null; if(_wf&&_wf.red){ msg+='\nRed WiFi: '+_wf.red+' · Contraseña: '+(_wf.clave||''); } window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
 // ═══════════════════════════════════════════════════════════
 // INFORME EJECUTIVO — vista unica que jala toda la base + alertas
@@ -8612,7 +8612,7 @@ async function addSemanaFila(tipo){
 function compartirSemanaInfo(){
   const rows = window._semRows||[];
   const cki = rows.filter(r=>r.tipo==='CKI'), cko = rows.filter(r=>r.tipo==='CKO');
-  const lin = r => `▪️ *${r.huesped}*, Apto. ${r.apto} · ${fmtDate(r.fecha)} · Pago: ${r.pago||'-'}${r.ejecutiva?(' · Ejecutiva: '+r.ejecutiva):''}${r.comentarios_ejecutiva?('\n💬 Ejecutiva: '+r.comentarios_ejecutiva):''}\n${r.observaciones||'Sin observaciones'} — _${r.estado||'Pendiente'}_`;
+  const lin = r => `▪ *${r.huesped}*, Apto. ${r.apto} · ${fmtDate(r.fecha)} · Pago: ${r.pago||'-'}${r.ejecutiva?(' · Ejecutiva: '+r.ejecutiva):''}${r.comentarios_ejecutiva?('\n💬 Ejecutiva: '+r.comentarios_ejecutiva):''}\n${r.observaciones||'Sin observaciones'} — _${r.estado||'Pendiente'}_`;
   const txt = `📅 *${EB().nombre} — SEMANA DEL ${fmtDate(window._semIni)} al ${fmtDate(window._semFin)}*
 
 *CKI DE LA SEMANA: ${String(cki.length).padStart(2,'0')}*
@@ -8837,7 +8837,7 @@ function compartirNomina(){
   sb.from('nomina').select('*').eq('periodo', window._nomPeriodo).order('nombre').then(({data})=>{
     const rows=data||[]; const f$=n=>'$'+Math.round(Number(n)||0).toLocaleString('es-CO');
     let tot=0;
-    const lineas = rows.map(r=>{ const sp=Math.round((Number(r.sueldo_base)||0)*(Number(r.dias)||0)/30); const neto=sp+(Number(r.aux_transporte)||0)+(Number(r.valor_extras)||0)-(Number(r.deducciones)||0); tot+=neto; return `▪️ ${r.nombre} (${r.cargo||'-'}) · ${r.dias} días · Neto: ${f$(neto)}`; });
+    const lineas = rows.map(r=>{ const sp=Math.round((Number(r.sueldo_base)||0)*(Number(r.dias)||0)/30); const neto=sp+(Number(r.aux_transporte)||0)+(Number(r.valor_extras)||0)-(Number(r.deducciones)||0); tot+=neto; return `▪ ${r.nombre} (${r.cargo||'-'}) · ${r.dias} días · Neto: ${f$(neto)}`; });
     const txt = `💼 *8i8 Operadora SAS — Nómina ${window._nomPeriodo}*\n${rows.length} empleados\n\n${lineas.join('\n')}\n\n*TOTAL NETO: ${f$(tot)}*`;
     compartirInforme('Nómina 8i8 — '+window._nomPeriodo, txt);
   });
@@ -9000,9 +9000,9 @@ async function compartirNovedadesDiarias() {
 
 *TOTAL:* ${rows.length} | Abiertas: ${abiertas.length} | Resueltas: ${resueltas.length}
 
-${abiertas.length>0?'*⚠️ ABIERTAS:*\n'+abiertas.map(n=>`▪️ [${n.prioridad}] ${n.area||'-'}: ${n.descripcion?.substring(0,80)} (${n.estado})`).join('\n'):'✅ Sin novedades abiertas'}
+${abiertas.length>0?'*⚠️ ABIERTAS:*\n'+abiertas.map(n=>`▪ [${n.prioridad}] ${n.area||'-'}: ${n.descripcion?.substring(0,80)} (${n.estado})`).join('\n'):'✅ Sin novedades abiertas'}
 
-${resueltas.length>0?'*✅ RESUELTAS / CERRADAS HOY:*\n'+resueltas.map(n=>`▪️ [${n.prioridad}] ${n.area||'-'}: ${n.descripcion?.substring(0,120)}`).join('\n'):'— Ninguna resuelta hoy'}
+${resueltas.length>0?'*✅ RESUELTAS / CERRADAS HOY:*\n'+resueltas.map(n=>`▪ [${n.prioridad}] ${n.area||'-'}: ${n.descripcion?.substring(0,120)}`).join('\n'):'— Ninguna resuelta hoy'}
 
 _Reporte: ${new Date().toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true})} — Sistema ${EB().nombre}_`;
   compartirInforme('Novedades Diarias — ' + fmtDate(TODAY), txt);
