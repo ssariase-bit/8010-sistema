@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-26-rackguard';
+const APP_VERSION = '2026-06-26-txmfix';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4364,7 +4364,7 @@ function calcReserva() {
     var _hint=document.getElementById('res-tarifa-hint'); if(_hint) _hint.textContent=_esMes&&tarifa>0?('= $'+_tarNoche.toLocaleString('es-CO')+'/noche (canon ÷ 30)'):'';
     const porNoche = document.getElementById('res-pornoche-toggle')?.checked;
     if (porNoche) renderNochesTarifa();
-    let total = _unid * _tarNoche;
+    let total = _esMes ? Math.round(tarifa * _unid / 30) : (_unid * _tarNoche); // TxM: canon × noches ÷ 30 (sin redondear el valor/noche)
     if (porNoche) { total = 0; document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(inp=>{ total += Number(inp.value)||0; }); }
     document.getElementById('res-total').value = (moneda === 'USD') ? `USD ${total.toLocaleString('es-CO')}` : `$ ${total.toLocaleString('es-CO')}`;
     // Mostrar resumen
@@ -4421,7 +4421,7 @@ async function guardarReserva() {
   const _rAp2 = (document.getElementById('res-ap2')?.value||'').trim()||null;
   const _tarifaRaw = Number(document.getElementById('res-tarifa').value) || 0;
   const _tipoTG = document.getElementById('res-tipotarifa')?.value || 'TxN';
-  const tarifa  = (_tipoTG==='TxM') ? Math.round(_tarifaRaw/30) : _tarifaRaw; // TxM: canon mensual → valor noche (÷30)
+  const tarifa  = (_tipoTG==='TxM') ? (Math.round(_tarifaRaw/30*100)/100) : _tarifaRaw; // TxM: canon mensual → valor noche (÷30, con 2 decimales para no perder precisión)
   const noches  = Number(document.getElementById('res-noches').value) || 0;
   const canal   = document.getElementById('res-canal').value;
   const iva     = document.getElementById('res-iva')?.value || 'incluido';
@@ -4495,7 +4495,7 @@ async function guardarReserva() {
   }
 
   // Generar confirmación automáticamente
-  const _valorTotalCalc=(function(){ if(porNoche){ var t=0; for(var i=0;i<noches;i++){ var d=new Date(ci); d.setDate(d.getDate()+i); var fk=d.toISOString().split('T')[0]; t+=(tarifasNoche[fk]!=null?tarifasNoche[fk]:tarifa); } return t; } var _u=((document.getElementById('res-tipotarifa')||{}).value==='TxD')?(noches+1):noches; return tarifa*_u; })() || (parseInt(((document.getElementById('res-total')||{}).value||'').replace(/[^0-9]/g,''),10)||0);
+  const _valorTotalCalc=(function(){ if(porNoche){ var t=0; for(var i=0;i<noches;i++){ var d=new Date(ci); d.setDate(d.getDate()+i); var fk=d.toISOString().split('T')[0]; t+=(tarifasNoche[fk]!=null?tarifasNoche[fk]:tarifa); } return t; } var _u=((document.getElementById('res-tipotarifa')||{}).value==='TxD')?(noches+1):noches; return (_tipoTG==='TxM')?Math.round(_tarifaRaw*_u/30):(tarifa*_u); })() || (parseInt(((document.getElementById('res-total')||{}).value||'').replace(/[^0-9]/g,''),10)||0);
   const resData = {
     nombre, apto, noches, tarifa, valorTotal: _valorTotalCalc,
     checkin: ci, checkout: co,
@@ -4539,7 +4539,7 @@ async function previsualizarConfirmacion() {
   if (!apto || !ci || !nombre) { showToast('Completa apto, fechas y nombre primero', 'error'); return; }
   generarConfirmacion({
     nombre, apto, noches, tarifa,
-    valorTotal: (function(){ var pn=document.getElementById('res-pornoche-toggle')&&document.getElementById('res-pornoche-toggle').checked; var t=0; if(pn){ document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(function(inp){ t+=Number(inp.value)||0; }); } if(!(t>0)){ var _u=((document.getElementById('res-tipotarifa')||{}).value==='TxD')?(noches+1):noches; t=tarifa*_u; } if(!(t>0)) t=parseInt(((document.getElementById('res-total')||{}).value||'').replace(/[^0-9]/g,''),10)||0; return t; })(),
+    valorTotal: (function(){ var pn=document.getElementById('res-pornoche-toggle')&&document.getElementById('res-pornoche-toggle').checked; var t=0; if(pn){ document.querySelectorAll('#res-pornoche-list input[data-fecha]').forEach(function(inp){ t+=Number(inp.value)||0; }); } if(!(t>0)){ var _tpM=(document.getElementById('res-tipotarifa')||{}).value; var _u=(_tpM==='TxD')?(noches+1):noches; t=(_tpM==='TxM')?Math.round(_tarRawP*_u/30):(tarifa*_u); } if(!(t>0)) t=parseInt(((document.getElementById('res-total')||{}).value||'').replace(/[^0-9]/g,''),10)||0; return t; })(),
     config: document.getElementById('res-config')?.value || 'completo',
     moneda: document.getElementById('res-moneda')?.value || 'COP',
     tipoAptoManual: document.getElementById('res-tipo-manual')?.value || '',
