@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-27-sols3';
+const APP_VERSION = '2026-06-27-noshow-facfilt';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -673,6 +673,7 @@ const NAV_ITEMS = {
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
+    { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
     { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
     { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
@@ -741,6 +742,7 @@ const NAV_ITEMS = {
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
+    { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
     { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
     { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
@@ -788,6 +790,7 @@ const NAV_ITEMS = {
     { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
+    { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
     { section: 'Operación' },
     { id: 'mant-form', icon: '🔧', label: 'Orden Mantenimiento' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Ver Mantenimiento' },
@@ -943,6 +946,7 @@ const MENU_COMPLETO = [
   { id: 'turnos-list', icon: '📋', label: 'Turnos / Personal / Extra' },
   { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
   { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
+  { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
   { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
   { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
   { id: 'mant-form', icon: '🔧', label: 'Orden Mantenimiento' },
@@ -1069,6 +1073,7 @@ async function loadView(view) {
     case 'comentarios':     await renderComentariosGerencia(); break;
     case 'informe-cki':     renderInformeCKI(); break;
     case 'informe-cko':     renderInformeCKO(); break;
+    case 'informe-noshow':  await renderInformeNoShows(); break;
     case 'entrega-efectivos': await renderEntregaEfectivos(); break;
 
     // Facturación (seguimiento de facturas por reserva)
@@ -7925,10 +7930,19 @@ function generarFacturaPDF(f){
 async function renderFacturasList(){
   var r=await sb.from('facturas').select('*').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(300);
   if(r.error){ document.getElementById('main-content').innerHTML='<div class="page-title">🧾 Facturas</div><div class="card" style="max-width:560px"><p style="font-size:14px">⚠️ Falta crear la tabla <code>facturas</code> en Supabase. Detalle: '+(r.error.message||'')+'</p></div>'; return; }
-  var rows=r.data||[]; rows.sort(function(a,b){return _facNum(a.numero)-_facNum(b.numero);}); var money=function(n){return '$'+Math.round(Number(n)||0).toLocaleString('es-CO');}; window._facRows=rows;
+  var allRows=r.data||[]; window._facRows=allRows;
+  var _ff=window._facFiltro||{};
+  var _entOpts=[...new Set(allRows.map(function(f){return f.perfil;}).filter(Boolean))];
+  var rows=allRows.filter(function(f){
+    if(_ff.ini && (!f.fecha || String(f.fecha) < _ff.ini)) return false;
+    if(_ff.fin && (!f.fecha || String(f.fecha) > _ff.fin)) return false;
+    if(_ff.perfil && f.perfil !== _ff.perfil) return false;
+    return true;
+  });
+  rows.sort(function(a,b){return _facNum(a.numero)-_facNum(b.numero);}); var money=function(n){return '$'+Math.round(Number(n)||0).toLocaleString('es-CO');};
   var body=rows.map(function(f){ var _esNC=(f.tipo==='Nota Crédito'); return '<tr'+(_esNC?' style="background:#FDF3F2"':'')+'><td><strong>'+(f.numero||'-')+'</strong>'+(_esNC?' <span style="background:#C0392B;color:#fff;font-size:9px;padding:1px 5px;border-radius:4px">NC</span>':'')+'</td><td>'+(f.fecha?fmtDate(f.fecha):'-')+'</td><td>'+(FISCAL[f.perfil]?f.perfil:'-')+'</td><td>'+(f.cliente||'-')+(_esNC&&f.ref_factura?'<div style="font-size:10px;color:#C0392B">abona '+f.ref_factura+'</div>':'')+'</td><td>'+(f.apto||'-')+'</td><td style="text-align:right;font-weight:600'+(_esNC?';color:#C0392B':'')+'">'+money(f.total)+'</td><td>'+(f.estado||'-')+'</td><td style="white-space:nowrap"><span style="cursor:pointer" title="PDF" onclick="facturaPDFById(\''+f.id+'\')">🖨️</span> <span style="cursor:pointer" title="Editar" onclick="facturaEditar(\''+f.id+'\')">✏️</span> <span style="cursor:pointer;color:#C0392B" title="Borrar" onclick="facturaBorrar(\''+f.id+'\')">🗑️</span></td></tr>'; }).join('')||'<tr><td colspan="8" style="text-align:center;color:#999;padding:18px">Sin facturas registradas</td></tr>';
   var tot=rows.reduce(function(s,f){return s+(Number(f.total)||0);},0);
-  document.getElementById('main-content').innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div class="page-title" style="margin-bottom:0">🧾 Facturas (gemelas internas)</div><div style="display:flex;gap:6px">'+barraCompartir()+'<button class="btn btn-outline btn-sm" onclick="loadView(\'facturas-composicion\')">📊 Composición</button><button class="btn btn-outline btn-sm" onclick="loadView(\'facturacion-vs-rack\')">🔍 vs Rack</button><button class="btn btn-outline btn-sm" style="color:#C0392B;border-color:#E0C0BA" onclick="window._facEdit=null;window._facNC=null;loadView(\'nota-credito\')">↩️ Nota Crédito</button><button class="btn btn-success btn-sm" onclick="window._facEdit=null;window._facNC=null;loadView(\'factura-gen\')">+ Generar factura</button></div></div><div class="card"><div class="card-header"><div class="card-title">'+rows.length+' facturas · Total '+money(tot)+'</div></div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>N°</th><th>Fecha</th><th>Entidad</th><th>Cliente</th><th>Apto</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  document.getElementById('main-content').innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div class="page-title" style="margin-bottom:0">🧾 Facturas (gemelas internas)</div><div style="display:flex;gap:6px">'+barraCompartir()+'<button class="btn btn-outline btn-sm" onclick="loadView(\'facturas-composicion\')">📊 Composición</button><button class="btn btn-outline btn-sm" onclick="loadView(\'facturacion-vs-rack\')">🔍 vs Rack</button><button class="btn btn-outline btn-sm" style="color:#C0392B;border-color:#E0C0BA" onclick="window._facEdit=null;window._facNC=null;loadView(\'nota-credito\')">↩️ Nota Crédito</button><button class="btn btn-success btn-sm" onclick="window._facEdit=null;window._facNC=null;loadView(\'factura-gen\')">+ Generar factura</button></div></div><div class="card"><div class="card-header"><div class="card-title">'+rows.length+' facturas · Total '+money(tot)+'</div></div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 12px;border-bottom:1px solid #eee"><label style="font-size:12px;font-weight:600">Desde <input type="date" value="'+(_ff.ini||'')+'" onchange="window._facFiltro=Object.assign(window._facFiltro||{},{ini:this.value});renderFacturasList()" style="padding:5px;border:1px solid var(--gris-b);border-radius:6px"></label><label style="font-size:12px;font-weight:600">Hasta <input type="date" value="'+(_ff.fin||'')+'" onchange="window._facFiltro=Object.assign(window._facFiltro||{},{fin:this.value});renderFacturasList()" style="padding:5px;border:1px solid var(--gris-b);border-radius:6px"></label><label style="font-size:12px;font-weight:600">Entidad <select onchange="window._facFiltro=Object.assign(window._facFiltro||{},{perfil:this.value});renderFacturasList()" style="padding:5px;border:1px solid var(--gris-b);border-radius:6px"><option value="">Todas</option>'+_entOpts.map(function(e){return '<option'+(_ff.perfil===e?' selected':'')+'>'+e+'</option>';}).join('')+'</select></label>'+((_ff.ini||_ff.fin||_ff.perfil)?'<button class="btn btn-outline btn-sm" onclick="window._facFiltro=null;renderFacturasList()">✕ Limpiar filtros</button>':'')+'</div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>N°</th><th>Fecha</th><th>Entidad</th><th>Cliente</th><th>Apto</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 }
 function _facById(id){ return (window._facRows||[]).find(function(x){return x.id===id;}); }
 function facturaPDFById(id){ var f=_facById(id); if(f) generarFacturaPDF(f); }
@@ -9714,6 +9728,38 @@ R/${quien}`;
 // ═══════════════════════════════════════════════════════════
 // INFORME CKO — CHECK OUT
 // ═══════════════════════════════════════════════════════════
+// ════════ INFORME DE NO SHOWS (reservas que no se presentaron) ════════
+async function renderInformeNoShows(){
+  var hoy = TODAY;
+  var _ini = window._nsIni || (hoy.slice(0,8)+'01');
+  var _fin = window._nsFin || hoy;
+  var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  document.getElementById('main-content').innerHTML = '<div class="page-title">🟣 Informe de No Shows</div><p style="color:var(--gris-t)">Cargando…</p>';
+  var r = await window._sbFromRaw('rack').select('apto,fecha,huesped,canal,tarifa,observaciones,checkin,checkout')
+            .eq('edificio', EDIFICIO_ACTIVO).eq('estado','No Show')
+            .gte('fecha', _ini).lte('fecha', _fin).order('fecha',{ascending:false});
+  if(r.error){ document.getElementById('main-content').innerHTML='<div class="page-title">🟣 Informe de No Shows</div><div class="empty"><p>Error: '+esc(r.error.message)+'</p></div>'; return; }
+  var rows = r.data || [];
+  var _val = rows.reduce(function(s,x){ return s+(Number(x.tarifa)||0); },0);
+  var nb = (typeof EB==='function'&&EB().nombre)||'';
+  var filas = rows.map(function(x){
+    return '<tr><td style="white-space:nowrap">'+fmtDate(String(x.fecha).slice(0,10))+'</td><td><strong>'+esc(x.apto||'-')+'</strong></td><td>'+esc(x.huesped||'-')+'</td><td>'+esc(x.canal||'-')+'</td><td style="text-align:right;white-space:nowrap">'+(Number(x.tarifa)>0?('$'+Number(x.tarifa).toLocaleString('es-CO')):'-')+'</td><td style="font-size:12px;color:var(--gris-t)">'+esc(x.observaciones||'')+'</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:#999;padding:20px">Sin No Shows en este rango ✓</td></tr>';
+  // Texto para compartir
+  var lineas = rows.map(function(x){ return '- '+fmtDate(String(x.fecha).slice(0,10))+' · Apto '+(x.apto||'-')+' · '+(x.huesped||'-')+(x.canal?(' · '+x.canal):'')+(Number(x.tarifa)>0?(' · $'+Number(x.tarifa).toLocaleString('es-CO')):''); });
+  var txt = nb+' — Informe de No Shows\n'+fmtDate(_ini)+' al '+fmtDate(_fin)+' · '+rows.length+' No Show'+(rows.length===1?'':'s')+(_val>0?(' · $'+_val.toLocaleString('es-CO')):'')+'\n\n'+(lineas.join('\n')||'(sin registros)');
+  window._nsTxt = txt;
+  document.getElementById('main-content').innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px"><div class="page-title" style="margin-bottom:0">🟣 Informe de No Shows</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline btn-sm" onclick="window.open(\'https://wa.me/?text=\'+encodeURIComponent(window._nsTxt),\'_blank\')">📱 WhatsApp</button><button class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText(window._nsTxt);showToast(\'Texto copiado\',\'success\')">📋 Copiar</button></div></div>'
+    +'<div class="card" style="margin-bottom:14px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'
+    +'<label style="font-size:13px;font-weight:600">Desde <input type="date" value="'+_ini+'" onchange="window._nsIni=this.value;renderInformeNoShows()" style="padding:6px;border:1px solid var(--gris-b);border-radius:6px"></label>'
+    +'<label style="font-size:13px;font-weight:600">Hasta <input type="date" value="'+_fin+'" onchange="window._nsFin=this.value;renderInformeNoShows()" style="padding:6px;border:1px solid var(--gris-b);border-radius:6px"></label>'
+    +'<div style="margin-left:auto;display:flex;gap:18px"><div><div style="font-size:11px;color:var(--gris-t);text-transform:uppercase">No Shows</div><div style="font-size:24px;font-weight:800;color:#6A1B9A">'+rows.length+'</div></div>'
+    +'<div><div style="font-size:11px;color:var(--gris-t);text-transform:uppercase">Valor potencial perdido</div><div style="font-size:22px;font-weight:800;color:#C0392B">$'+_val.toLocaleString('es-CO')+'</div></div></div>'
+    +'</div></div>'
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Apto</th><th>Huésped</th><th>Canal</th><th>Tarifa</th><th>Observaciones</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
+}
 function renderInformeCKO(aptoPreload, huesped, canal) {
   const nombre = currentProfile?.nombre || '';
   const _hp = window._splitNombre(huesped||''); const _q = s => String(s||'').replace(/"/g,'&quot;');
