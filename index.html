@@ -460,7 +460,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-27-grupos8010';
+const APP_VERSION = '2026-06-27-grupos-kl2';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -6300,18 +6300,21 @@ const _DIRECTORIO = {
 // Grupos de correo para dirigir comentarios de gerencia. Editable: av\u00edsame para ajustar miembros.
 const _GRUPOS_CORREO = {
   '8010': {
-    'Administradores': ['juan.martinez@8010urbanliving.com','andres.parga@8010urbanliving.com','sebastian.martinez@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
+    'Administradores': ['juan.martinez@8010urbanliving.com','andres.parga@8010urbanliving.com','sebastian.martinez@8010urbanliving.com','fabio.malaver@8010urbanliving.com','recepcion@8010urbanliving.com'],
     'Mercadeo': ['cristina.cervino@8010urbanliving.com','maria.tosta@8010urbanliving.com'],
     'Administrativo': ['adriana.bernal@8010urbanliving.com','zareth.varela@8010urbanliving.com','cristina.cervino@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
     'Mantenimiento': ['mantenimiento@8010urbanliving.com','fernando.herrera@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
-    'Operativo': ['recepcion@8010urbanliving.com','sebastian.martinez@8010urbanliving.com','andres.parga@8010urbanliving.com','juan.martinez@8010urbanliving.com','fernando.herrera@8010urbanliving.com'],
+    'Sistemas': ['fernando.herrera@8010urbanliving.com','mantenimiento@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
     'Compras': ['compras@8010urbanliving.com']
   },
   'kubik': {
     'Administradores': ['admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com'],
-    'Operativo': ['recepcion@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com'],
-    'Mantenimiento': ['admin2@8i8op.com'],
-    'Compras': ['compras@8010urbanliving.com']
+    'Administrativo': ['admin.fin@8i8op.com','rrhh@8i8op.com'],
+    'Operativo': ['recepcion@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','operativo@8i8op.com','operativo.compras@8i8op.com'],
+    'Mantenimiento': ['admin2@8i8op.com','dir.mantenimiento@8i8op.com'],
+    'Financiero': ['admin.fin@8i8op.com','aolaya@kubiklab.com'],
+    'Contable': ['contador@8i8op.com','asist.con@8i8op.com','radicacionfacturas@8i8op.com'],
+    'Compras': ['operativo.compras@8i8op.com']
   }
 };
 function _normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\([^)]*\)/g,'').replace(/[^a-z ]/g,'').replace(/\s+/g,' ').trim(); }
