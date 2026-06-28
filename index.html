@@ -266,6 +266,10 @@ textarea{resize:vertical;min-height:80px}
       🏠 Actualizar Apartamento <span id="modal-apto-num" style="color:var(--azul-m)"></span>
       <button class="modal-close" onclick="closeModal('modal-apto')">✕</button>
     </div>
+    <div id="m-reserva-banner" style="display:none;margin:0 0 12px;padding:10px 12px;background:#EAF2FB;border:1px solid #9EC5F0;border-radius:8px;font-size:12.5px;color:#0C447C">
+      Esta celda pertenece a una <strong>reserva</strong>. Para cambiar fechas, nombre o check-in/out, edítala desde la reserva (el rack se actualiza solo).
+      <button type="button" onclick="_editarReservaDesdeRack()" style="margin-left:6px;background:var(--azul-m,#1D3461);color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600">✏️ Editar la reserva</button>
+    </div>
     <div class="form-group">
       <label>Estado</label>
       <select id="m-estado" onchange="_autoObsViaje(this.value)">
@@ -460,7 +464,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-27-grupos-kl2';
+const APP_VERSION = '2026-06-28-racksync';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2425,6 +2429,12 @@ async function doCambiarApto(origen,destino,huesped,ci,co){
     if(typeof loadView==='function') loadView('rack');
   }catch(e){ showToast('Error: '+(e&&e.message?e.message:e),'error'); }
 }
+function _editarReservaDesdeRack(){
+  var id=window._rackReservaId;
+  if(!id){ if(typeof showToast==='function') showToast('Esta celda no tiene reserva enlazada','info'); return; }
+  if(typeof closeModal==='function') closeModal('modal-apto');
+  if(typeof editarReserva==='function') editarReserva(id);
+}
 async function openAptoModal(id, num) {
   // Usar el dato ya cargado en el rack (instantáneo) en vez de re-consultar la BD
   let data = null;
@@ -2433,6 +2443,8 @@ async function openAptoModal(id, num) {
   if(!data){ /* celda obsoleta (el rack cambió) -> auto-refrescar para no tener que recargar la página */ if(typeof renderRack==='function') renderRack(); if(typeof showToast==='function') showToast('Rack actualizado — toca de nuevo la celda','info'); return; }
   _aptoData = data || {};
   currentAptoId = id;
+  // Híbrido rack↔reserva: si la celda pertenece a una reserva, ofrecer editarla desde la reserva
+  try{ var _rb=document.getElementById('m-reserva-banner'); if(_rb){ if(data && data.reserva_id){ window._rackReservaId=data.reserva_id; _rb.style.display='block'; } else { window._rackReservaId=null; _rb.style.display='none'; } } }catch(_e){}
   document.getElementById('modal-apto-num').textContent = String(num).split(' · ')[0].trim();
   document.getElementById('m-estado').value  = data?.estado || 'Libre';
   window._mEstadoPrev = document.getElementById('m-estado').value;
@@ -6647,16 +6659,17 @@ function calcExtraMin(cargo, horarioStr, ingreso, salida, baseOverride){
   const esTurno12h = (durHorario!=null && durHorario>=660) || /12\s*h|12 horas/i.test(horarioStr||'');
   let extra = 0;
   if (esTurno12h && total!=null){
-    // Turnos 12h: extra = total trabajado menos jornada base
-    const base = (Number(baseOverride)>0) ? Number(baseOverride) : (JORNADA_BASE[cargo] || 540);
+    // Turnos 12h: extra = todo lo trabajado por encima de la jornada ORDINARIA legal de 8h (480 min).
+    // Las horas 9.ª a 12.ª del turno son extra por ley y deben pagarse con recargo.
+    const base = (Number(baseOverride)>0) ? Number(baseOverride) : 480;
     extra = Math.max(0, total - base);
   } else if (h && h.fin!=null){
     // Turnos normales: extra = lo que se quedó DESPUÉS de su hora de salida pactada
     const salMin = _timeToMin(salida);
     if (salMin!=null){ let d = salMin - h.fin; if (d < -720) d += 1440; var _ingM = _timeToMin(ingreso); var _early = 0; if(_ingM!=null && h.inicio!=null){ _early = h.inicio - _ingM; if(_early < -720) _early += 1440; } extra = Math.max(0, d) + Math.max(0, _early); }
   } else if (total!=null){
-    // Sin horario válido: respaldo total menos base
-    const base = (Number(baseOverride)>0) ? Number(baseOverride) : (JORNADA_BASE[cargo] || 540);
+    // Sin horario válido: respaldo = total menos jornada ordinaria legal de 8h (480 min)
+    const base = (Number(baseOverride)>0) ? Number(baseOverride) : 480;
     extra = Math.max(0, total - base);
   }
   return { extra, total, esTurno12h };
