@@ -464,7 +464,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-28-racksync';
+const APP_VERSION = '2026-06-28-solic-kl';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3009,9 +3009,9 @@ async function renderNovedadForm() {
       <div class="form-row">
         <div class="form-group"><label>Hacia qué área va / la resuelve *</label>
           <select id="n-area">
-            <option>Mantenimiento</option><option>Recepción</option><option>Housekeeping</option>
+            <option ${EDIFICIO_ACTIVO==='kubik'?'':'selected'}>Mantenimiento</option><option>Recepción</option><option>Housekeeping</option>
             <option>Seguridad</option><option>Zonas comunes</option><option>Apartamento</option>
-            <option>Financiero</option><option>Administración</option><option>Gerencia</option><option>General</option>
+            <option>Financiero</option><option ${EDIFICIO_ACTIVO==='kubik'?'selected':''}>Administración</option><option>Gerencia</option><option>General</option>
           </select>
         </div>
         <div class="form-group"><label>¿Dónde fue? (apto / ubicación)</label>
@@ -7375,8 +7375,8 @@ async function cargarRevisionesApto(){
   var rows=(r.data)||[];
   var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
   var fmtF=function(f){if(!f)return '-';var p=String(f).slice(0,10).split('-');return p[2]+'/'+p[1]+'/'+p[0];};
-  var tr=rows.map(function(x){return '<tr><td>'+fmtF(x.fecha)+'</td><td><b>'+esc(x.apto)+'</b></td><td>'+esc(x.estado_apto||'')+'</td><td style="text-align:left">'+esc(x.cortesias||'')+'</td><td style="text-align:left">'+esc(x.observaciones||'')+'</td><td>'+esc(x.revisado_por||'')+'</td></tr>';}).join('')||'<tr><td colspan="6" style="text-align:center;color:#999;padding:16px">Sin revisiones registradas</td></tr>';
-  cont.innerHTML='<div class="card"><div class="card-title" style="margin-bottom:8px">Revisiones recientes</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th>Fecha</th><th>Apto</th><th>Estado</th><th>Cortesías</th><th>Observaciones</th><th>Revisó</th></tr></thead><tbody>'+tr+'</tbody></table></div></div>';
+  var tr=rows.map(function(x){return '<tr><td>'+fmtF(x.fecha)+'</td><td><b>'+esc(x.apto)+'</b></td><td>'+esc(x.estado_apto||'')+'</td><td style="text-align:left">'+esc(x.cortesias||'')+'</td><td style="text-align:left">'+esc(x.observaciones||'')+'</td><td>'+esc(x.revisado_por||'')+'</td><td style="white-space:nowrap">'+_btnsEdit('revisiones_apto',x.id)+'</td></tr>';}).join('')||'<tr><td colspan="7" style="text-align:center;color:#999;padding:16px">Sin revisiones registradas</td></tr>';
+  cont.innerHTML='<div class="card"><div class="card-title" style="margin-bottom:8px">Revisiones recientes</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th>Fecha</th><th>Apto</th><th>Estado</th><th>Cortesías</th><th>Observaciones</th><th>Revisó</th><th>Acciones</th></tr></thead><tbody>'+tr+'</tbody></table></div></div>';
 }
 
 async function renderPrestamosElementos(){
