@@ -464,7 +464,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-28-solic-kl';
+const APP_VERSION = '2026-06-28-preserva-cki';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -4520,6 +4520,12 @@ async function guardarReserva() {
       if(!_ok){ showToast('Reserva NO guardada — se conservó la reserva existente','error'); _resetBtn(); return; }
     }
   }catch(e){}
+  // Preservar check-ins ya hechos: si una celda ya está Ocupado/Completo/Check-out hoy, no revertirla a "Check-in hoy" al re-guardar
+  try{
+    var _prevCk = await sb.from('rack').select('apto,fecha,estado').in('apto', _aptosW2).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO).in('estado',['Ocupado','Completo','Check-out hoy']);
+    var _prevCkMap = {}; (_prevCk.data||[]).forEach(function(x){ _prevCkMap[x.apto+'|'+x.fecha]=x.estado; });
+    rows.forEach(function(r){ var _ck=r.apto+'|'+r.fecha; if(_prevCkMap[_ck] && r.estado==='Check-in hoy'){ r.estado=_prevCkMap[_ck]; } });
+  }catch(_e){}
   // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
   await sb.from('rack').delete().in('apto', _aptosW2).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
   if(window._reservaEditOld && window._reservaEditOld.apto && window._reservaEditOld.checkin && window._reservaEditOld.checkout){ var _ro=window._reservaEditOld; try{ await sb.from('rack').delete().eq('apto',_ro.apto).gte('fecha',_ro.checkin).lte('fecha',_ro.checkout).eq('edificio',EDIFICIO_ACTIVO); }catch(e){} window._reservaEditOld=null; }
