@@ -269,6 +269,7 @@ textarea{resize:vertical;min-height:80px}
     <div id="m-reserva-banner" style="display:none;margin:0 0 12px;padding:10px 12px;background:#EAF2FB;border:1px solid #9EC5F0;border-radius:8px;font-size:12.5px;color:#0C447C">
       Esta celda pertenece a una <strong>reserva</strong>. Para cambiar fechas, nombre o check-in/out, edítala desde la reserva (el rack se actualiza solo).
       <button type="button" onclick="_editarReservaDesdeRack()" style="margin-left:6px;background:var(--azul-m,#1D3461);color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600">✏️ Editar la reserva</button>
+      <div id="m-reserva-cki" style="margin-top:6px;font-size:11.5px;color:#0C447C;line-height:1.6"></div>
     </div>
     <div class="form-group">
       <label>Estado</label>
@@ -464,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-29-solicitudes-andres-lote1';
+const APP_VERSION = '2026-06-29-fase3-cki-cko-reserva';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2436,7 +2437,10 @@ async function openAptoModal(id, num) {
   _aptoData = data || {};
   currentAptoId = id;
   // Híbrido rack↔reserva: si la celda pertenece a una reserva, ofrecer editarla desde la reserva
-  try{ var _rb=document.getElementById('m-reserva-banner'); if(_rb){ if(data && data.reserva_id){ window._rackReservaId=data.reserva_id; _rb.style.display='block'; } else { window._rackReservaId=null; _rb.style.display='none'; } } }catch(_e){}
+  try{ var _rb=document.getElementById('m-reserva-banner'); if(_rb){ if(data && data.reserva_id){ window._rackReservaId=data.reserva_id; _rb.style.display='block';
+      // Fase 3 (lectura): mostrar quién y cuándo hizo el check-in/out registrado en la reserva
+      var _ck=document.getElementById('m-reserva-cki'); if(_ck){ _ck.innerHTML=''; sb.from('reservas').select('cki_at,cki_por,cko_at,cko_por').eq('id',data.reserva_id).single().then(function(_rr){ var _r=_rr&&_rr.data; var _el=document.getElementById('m-reserva-cki'); if(!_r||!_el) return; var _fmt=function(t){ try{ return new Date(t).toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}); }catch(_){ return ''; } }; var _t=[]; if(_r.cki_at) _t.push('🟢 Check-in'+(_r.cki_por?(' por '+_r.cki_por):'')+' · '+_fmt(_r.cki_at)); if(_r.cko_at) _t.push('🔴 Check-out'+(_r.cko_por?(' por '+_r.cko_por):'')+' · '+_fmt(_r.cko_at)); _el.innerHTML=_t.join('<br>'); }).catch(function(){}); }
+    } else { window._rackReservaId=null; _rb.style.display='none'; var _ck0=document.getElementById('m-reserva-cki'); if(_ck0) _ck0.innerHTML=''; } } }catch(_e){}
   document.getElementById('modal-apto-num').textContent = String(num).split(' · ')[0].trim();
   document.getElementById('m-estado').value  = data?.estado || 'Libre';
   window._mEstadoPrev = document.getElementById('m-estado').value;
@@ -9939,6 +9943,13 @@ R/${quien}`;
         // Dejar el rack posicionado en el mes del check-in y refrescar si está abierto (que el cambio se vea)
         try { const _d=new Date(fi+'T00:00:00'); window._rackMes=_d.getMonth(); window._rackYear=_d.getFullYear(); if(window._currentView==='rack' && typeof renderRack==='function') renderRack(); } catch(_){}
       }
+      // Fase 3: si la estadía está ligada a una reserva (fuente única), deja constancia del check-in en la reserva.
+      // Solo vía el reserva_id que el trigger ya mantiene en la celda — sin adivinar rangos. Solo si cki_at está vacío.
+      try{
+        const _rc = await sb.from('rack').select('reserva_id').eq('apto',apto).eq('fecha',fi).eq('edificio',EDIFICIO_ACTIVO).not('reserva_id','is',null).limit(1);
+        const _rid = _rc.data && _rc.data[0] && _rc.data[0].reserva_id;
+        if(_rid){ await sb.from('reservas').update({ cki_at:new Date().toISOString(), cki_por:(quien||(currentProfile&&currentProfile.nombre)||'') }).eq('id',_rid).is('cki_at', null); }
+      }catch(_e3){ console.error('CKI→reserva:', _e3); }
     } catch(e) { console.error('CKI→rack:', e); }
   })();
 
@@ -10236,10 +10247,13 @@ async function _ckoAplicarRack(apto) {
   const ed = EDIFICIO_ACTIVO;
   const hForm = (window._ckoHuesped || '').trim();
   // 1) La fila de HOY queda como 'Sucio' (salió el huésped, pendiente de limpieza).
-  const { data: hoyD } = await sb.from('rack').select('huesped,tarifa,canal').eq('fecha', TODAY).eq('apto', apto).eq('edificio', ed).limit(1);
+  const { data: hoyD } = await sb.from('rack').select('huesped,tarifa,canal,reserva_id').eq('fecha', TODAY).eq('apto', apto).eq('edificio', ed).limit(1);
   const hoy = (hoyD && hoyD[0]) || null;
   const huesped = (hoy && hoy.huesped) || hForm || null;
   const _hrCKO = fmtHora12();
+  // Fase 3: deja constancia del check-out en la reserva (fuente única) ANTES de marcar 'Sucio',
+  // para que el upsert directo de 'Sucio' (escritura final) prevalezca sobre el re-derivado del trigger.
+  try{ const _ridK = hoy && hoy.reserva_id; if(_ridK){ await sb.from('reservas').update({ cko_at:new Date().toISOString(), cko_por:((currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||'') }).eq('id',_ridK).is('cko_at', null); } }catch(_eK){ console.error('CKO→reserva:', _eK); }
   const { error } = await sb.from('rack').upsert([{ fecha: TODAY, apto, estado: 'Sucio', huesped: null, telefono: null, tarifa: null, canal: null, observaciones: `CKO ${_hrCKO}${huesped ? ' — ' + huesped : ''} · pendiente limpieza`, edificio: ed, updated_by: currentUser.id }], { onConflict: 'fecha,apto,edificio' });
   if (error) { showToast('Error: ' + error.message, 'error'); return 0; }
   // 2) Liberar los días FUTUROS de la misma estadía (mismo huésped, mismo apto, solo este edificio)
