@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-29-mant-revision-gerencia';
+const APP_VERSION = '2026-06-29-caja-entrega-efectivo';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -686,7 +686,6 @@ const NAV_ITEMS = {
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
     { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
-    { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
     { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
     { id: 'hk-list', icon: '🧹', label: 'Housekeeping' },
@@ -753,7 +752,6 @@ const NAV_ITEMS = {
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
     { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
-    { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
     { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
     { id: 'hk-list', icon: '🧹', label: 'Housekeeping' },
@@ -807,8 +805,6 @@ const NAV_ITEMS = {
     { id: 'hk-list', icon: '🧹', label: 'Tiempos Camareras' },
     { id: 'control-personal-list', icon: '⏱', label: 'Control Personal' },
     { id: 'control-personal-form', icon: '➕', label: 'Registrar Ingreso Personal' },
-    { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
-    { id: 'entrega-efectivos-form', icon: '➕', label: 'Nueva Entrega' },
     { id: 'transportes-form', icon: '🚗', label: 'Registrar Transporte' },
     { id: 'caja-form', icon: '💰', label: 'Movimiento Caja' },
     { section: 'Huéspedes' },
@@ -958,8 +954,6 @@ const MENU_COMPLETO = [
   { id: 'mantenimiento-list', icon: '🔧', label: 'Ver Mantenimiento' },
   { id: 'hk-form', icon: '🧹', label: 'Registrar Limpieza' },
   { id: 'hk-list', icon: '🧹', label: 'Tiempos Camareras' },
-  { id: 'entrega-efectivos-form', icon: '➕', label: 'Nueva Entrega' },
-  { id: 'entrega-efectivos', icon: '💵', label: 'Entrega Efectivos' },
   { id: 'transportes-form', icon: '🚗', label: 'Registrar Transporte' },
   { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
   { id: 'caja-form', icon: '💰', label: 'Movimiento Caja' },
@@ -1236,7 +1230,7 @@ async function loadView(view) {
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'caja-informe':       await renderCajaInforme(); break;
-    case 'caja-list':          await renderList('caja','💰 Caja y Movimientos','caja-form',['fecha','tipo','concepto','area','empresa','valor','recibo_no','entregado_por'],['Fecha','Tipo','Concepto','Área','Caja / Razón Social','Valor','Recibo','Entregó']); break;
+    case 'caja-list':          await renderList('caja','💰 Caja y Movimientos','caja-form',['fecha','tipo','concepto','area','empresa','valor','recibo_no','entregado_por','recibido_por','fecha_entrega'],['Fecha','Tipo','Concepto','Área','Caja / Razón Social','Valor','Recibo','Entregó','Recibió','Fecha entrega']); break;
     case 'caja-form':          renderGenForm('caja','💰 Movimiento de Caja',[
       {id:'fecha',label:'Fecha de creado (automática)',type:'date',default:TODAY,locked:true},
       {id:'fecha_factura',label:'Fecha del recibo',type:'date'},
@@ -1246,8 +1240,9 @@ async function loadView(view) {
       {id:'empresa',label:'Caja / Razón Social',type:'select',opts:EB().cajas},
       {id:'valor',label:'Valor ($)',type:'money',req:true},
       {id:'recibo_no',label:'No. Recibo',type:'text'},
-      {id:'entregado_por',label:'Entregado por',type:'text'},
-      {id:'recibido_por',label:'Recibido por',type:'text'},
+      {id:'entregado_por',label:'Entregado por (admin que entrega)',type:'text'},
+      {id:'recibido_por',label:'Recibido por (Adri / Jonathan)',type:'text'},
+      {id:'fecha_entrega',label:'Fecha de entrega del efectivo',type:'date'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'visitantes-list':    await renderVisitantesList(); break;
@@ -5123,6 +5118,17 @@ async function submitGenForm(tabla, ids, reqs) {
     delete o2.obs_ingreso; delete o2.obs_salida;
     if (_i || _s) o2.observaciones = (_i || '') + ((_i && _s) ? ' | ' : (_s ? '| ' : '')) + (_s || '');
     ({ error } = await sb.from(tabla).insert(o2));
+  }
+  // Compatibilidad: si la BD aún no tiene alguna columna nueva del formulario (p.ej. fecha_entrega recién
+  // agregada), se quita esa columna y se reintenta — así el guardado nunca se rompe mientras se agrega la
+  // columna en la BD. Acotado a 6 intentos para evitar bucles.
+  let _gfGuard = 0;
+  while (error && _gfGuard < 6) {
+    const _cm = String(error.message||'').match(/'([^']+)' column|column "([^"]+)"/);
+    const _col = _cm && (_cm[1] || _cm[2]);
+    if (!_col || !(_col in obj)) break;
+    delete obj[_col]; _gfGuard++;
+    ({ error } = window._genEditId ? await sb.from(tabla).update(obj).eq('id',window._genEditId) : await sb.from(tabla).insert(obj));
   }
   if (error) {
     showToast('Error al guardar: ' + error.message, 'error');
