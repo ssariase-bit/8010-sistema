@@ -464,7 +464,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-28-preserva-cki';
+const APP_VERSION = '2026-06-28-cki-enlazado';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -2556,6 +2556,19 @@ function _calcTarifaMoneda(idTar, idMon, idTrm){
   }
   return { tarifa:_raw, tarifa_usd:null, moneda:'COP' };
 }
+async function _linkCkiReserva(estado){
+  // Fase 2: al marcar la celda, escribe el check-in/out en la RESERVA (fuente única). El trigger sincroniza el resto.
+  try{
+    var _rid = _aptoData && _aptoData.reserva_id;
+    if(!_rid) return;
+    var _quien = (currentProfile && currentProfile.nombre) || (currentUser && currentUser.email) || '';
+    if(estado==='Ocupado' || estado==='Completo'){
+      await sb.from('reservas').update({ cki_at: new Date().toISOString(), cki_por: _quien }).eq('id', _rid).is('cki_at', null);
+    } else if(estado==='Check-out hoy'){
+      await sb.from('reservas').update({ cko_at: new Date().toISOString(), cko_por: _quien }).eq('id', _rid).is('cko_at', null);
+    }
+  }catch(_e){}
+}
 async function saveApto() {
   const aNum = document.getElementById('modal-apto-num').textContent;
   const fecha = _aptoData?.fecha || TODAY;
@@ -2607,6 +2620,7 @@ async function saveApto() {
     const rr = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
     if (rr.error) { showToast('Error al aplicar el rango: ' + rr.error.message, 'error'); return; }
     showToast(`\u2705 Apto ${aNum}: "${updates.estado}" aplicado del ${fmtDate(_rd)} al ${fmtDate(_rh)} (${rows.length} dia(s))`, 'success');
+    await _linkCkiReserva(updates.estado);
     closeModal('modal-apto'); renderRack(); return;
   }
 
@@ -2628,6 +2642,7 @@ async function saveApto() {
     if (rr.error) { showToast('Error al aplicar el rango: ' + rr.error.message, 'error'); return; }
     if (varA && (ocupacional || updates.estado==='Completo')) await aplicarCompleto(aNum, fecha, updates.checkin, updates.checkout, updates.huesped, esCompleto);
     showToast(`✅ Apto ${aNum}: cambios aplicados a ${rows.length} día(s) (${fmtDate(updates.checkin)} a ${fmtDate(updates.checkout)})`, 'success');
+    await _linkCkiReserva(updates.estado);
     closeModal('modal-apto');
     renderRack();
     return;
@@ -2644,6 +2659,7 @@ async function saveApto() {
     showToast('✅ Apartamento actualizado', 'success');
   }
 
+  await _linkCkiReserva(updates.estado);
   closeModal('modal-apto');
   renderRack();
 }
