@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-29-fase3-cki-cko-reserva';
+const APP_VERSION = '2026-06-29-mant-revision-gerencia';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3798,7 +3798,7 @@ async function renderMantList(filtroApto='') {
       ${rowsFiltrados.length === 0
         ? '<div class="empty"><div class="empty-icon">✅</div><p>Sin órdenes de trabajo</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th>Fecha</th><th>Área/Apto</th><th>Descripción del trabajo</th><th>Solicitó</th><th>Técnico (quién realiza)</th><th>Prioridad</th><th>Estado</th><th>Costo</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Área/Apto</th><th>Descripción del trabajo</th><th>Solicitó</th><th>Técnico (quién realiza)</th><th>Prioridad</th><th>Estado</th><th>Costo</th><th>Gerencia</th><th></th></tr></thead>
             <tbody>${rowsFiltrados.map(o=>`<tr style="${o.estado==='Pendiente'?'background:#fff9f5':''}">
               <td style="white-space:nowrap">${fmtDate(o.fecha || (o.created_at?o.created_at.split('T')[0]:null))}</td>
               <td><strong style="color:var(--azul)">${o.area_apto}</strong></td>
@@ -3815,6 +3815,7 @@ async function renderMantList(filtroApto='') {
                 </select>
               </td>
               <td style="white-space:nowrap">${o.costo ? '<strong>$'+fmtNum(o.costo)+'</strong>' : '-'}</td>
+              <td style="min-width:150px">${window._revGerCell('mantenimiento', o)}</td>
               <td style="white-space:nowrap"><button onclick="editarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button> <button onclick="borrarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:#9A4A40;border-color:#E0C0BA">🗑</button></td>
             </tr>`).join('')}
             </tbody>
