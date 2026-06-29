@@ -464,7 +464,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-29-turno-correo-activo';
+const APP_VERSION = '2026-06-29-solicitudes-andres-lote1';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -728,7 +728,6 @@ const NAV_ITEMS = {
     { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
     { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
-    { id: 'magnifique-form', icon: '➕', label: 'Nuevo Recibo' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
     { id: 'cargos-form', icon: '➕', label: 'Registrar Cargo' },
     { section: 'Comercial' },
@@ -998,7 +997,6 @@ const MENU_COMPLETO = [
     { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
   { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
   { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
-  { id: 'magnifique-form', icon: '➕', label: 'Nuevo Recibo' },
   { id: 'magnifique-list', icon: '🍽️', label: EDIFICIO_ACTIVO==='kubik'?'Recibos Bagatelle':'Recibos Magnifique' },
   { id: 'cargos-form', icon: '➕', label: 'Registrar Cargo' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
@@ -1162,8 +1160,8 @@ async function loadView(view) {
 
     // Listado General de Cargos
     case 'cargos-list': await renderList('listado_cargos','📋 Listado General de Cargos','cargos-form',
-      ['fecha','semana','apto','arrendatario','num_comanda','transporte','lavanderia','minibar','varios','salas','iva','total'],
-      ['Fecha','Semana','Apto','Arrendatario','Comanda','Transporte','Lavandería','Minibar','Varios','Salas','IVA','Total']); break;
+      ['fecha','semana','apto','arrendatario','num_comanda','transporte','lavanderia','minibar','varios','salas','iva','total','observaciones'],
+      ['Fecha','Semana','Apto','Arrendatario','Comanda','Transporte','Lavandería','Minibar','Varios','Salas','IVA','Total','Comentarios']); break;
     case 'cargos-form': renderGenForm('listado_cargos','📋 Registrar Cargo',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'semana',label:'Semana (ej: 25 MAY - 31 MAY)',type:'text'},
@@ -3174,7 +3172,7 @@ function renderMantForm(ot) {
         <div class="form-group"><label>Solicitado por (quien lo pide) *</label>
           <input type="text" id="ot-solicita" value="${solicitaVal}" placeholder="Huésped, recepción, gerencia...">
         </div>
-        ${ot?`<div class="form-group"><label>Estado</label><select id="ot-estado">${['Pendiente','En proceso','Terminado','Cerrado'].map(s=>`<option ${e.estado===s?'selected':''}>${s}</option>`).join('')}</select></div>`:'<div class="form-group"></div>'}
+        ${ot?`<div class="form-group"><label>Estado</label><select id="ot-estado">${['Pendiente','En proceso','Terminado'].concat(e.estado==='Cerrado'?['Cerrado']:[]).map(s=>`<option ${e.estado===s?'selected':''}>${s}</option>`).join('')}</select></div>`:'<div class="form-group"></div>'}
       </div>
       <div class="form-group"><label>Descripción del trabajo</label>
         <textarea id="ot-desc" placeholder="Describe detalladamente qué se debe hacer o qué ocurrió..." style="min-height:120px">${h(e.descripcion)}</textarea>
@@ -3769,7 +3767,7 @@ async function renderMantList(filtroApto='') {
                       <option ${o.estado==='Pendiente'?'selected':''}>Pendiente</option>
                       <option ${o.estado==='En proceso'?'selected':''}>En proceso</option>
                       <option ${o.estado==='Terminado'?'selected':''}>Terminado</option>
-                      <option ${o.estado==='Cerrado'?'selected':''}>Cerrado</option>
+                      ${o.estado==='Cerrado'?'<option selected>Cerrado</option>':''}
                     </select>
                     ${o.costo ? `<span style="font-size:13px;font-weight:700;color:var(--verde)">$${fmtNum(o.costo)}</span>` : ''}
                     ${o.fecha_cierre ? `<span style="font-size:10px;color:var(--gris-t)">Cerrado: ${fmtDate(o.fecha_cierre)}</span>` : ''}
@@ -3809,7 +3807,7 @@ async function renderMantList(filtroApto='') {
                   <option ${o.estado==='Pendiente'?'selected':''}>Pendiente</option>
                   <option ${o.estado==='En proceso'?'selected':''}>En proceso</option>
                   <option ${o.estado==='Terminado'?'selected':''}>Terminado</option>
-                  <option ${o.estado==='Cerrado'?'selected':''}>Cerrado</option>
+                  ${o.estado==='Cerrado'?'<option selected>Cerrado</option>':''}
                 </select>
               </td>
               <td style="white-space:nowrap">${o.costo ? '<strong>$'+fmtNum(o.costo)+'</strong>' : '-'}</td>
@@ -5717,15 +5715,22 @@ async function renderPuntosFijos(){
   const rows = data || [];
   const esc = s => String(s==null?'':s).replace(/</g,'&lt;');
   const chk = (id,campo,v)=>{ const on=v==='Sí'; return `<button onclick="togglePF('${id}','${campo}','${on?'No':'Sí'}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">${on?'✅ Sí':'⬜ No'}</button>`; };
-  const filas = rows.map(r => `<tr>
+  // Organizados por fecha: cada día (camareras los hacen en fin de semana/festivos y no todas reportan el mismo día)
+  const _colsPF = EDIFICIO_ACTIVO==='kubik' ? 7 : 6;
+  let _lastFechaPF = null;
+  const filas = rows.map(r => {
+    const _fStr = r.fecha ? fmtDate(String(r.fecha).substring(0,10)) : 'Sin fecha';
+    let _hdr = '';
+    if (_fStr !== _lastFechaPF){ _lastFechaPF = _fStr; const _n = rows.filter(x=>(x.fecha?fmtDate(String(x.fecha).substring(0,10)):'Sin fecha')===_fStr).length; _hdr = `<tr style="background:#eef2f7"><td colspan="${_colsPF}" style="font-weight:700;color:var(--azul);padding:8px 10px">📅 ${_fStr} <span style="font-weight:400;color:var(--gris-t);font-size:12px">· ${_n} registro${_n>1?'s':''}</span></td></tr>`; }
+    return _hdr + `<tr>
     <td><strong>${esc(r.piso)}</strong></td>
-    <td>${r.fecha?fmtDate(String(r.fecha).substring(0,10)):'-'}</td>
     <td>${esc(r.camarera)||'-'}</td>
     <td>${chk(r.id,'cuadros',r.cuadros)}</td>
     <td>${chk(r.id,'tapete',r.tapete)}</td>
     ${EDIFICIO_ACTIVO==='kubik' ? `<td>${chk(r.id,'gabinete_incendios',r.gabinete_incendios)}</td><td>${chk(r.id,'puerta_cortafuegos',r.puerta_cortafuegos)}</td>` : `<td>${chk(r.id,'ventanas',r.ventanas)}</td>`}
     <td style="white-space:nowrap">${_btnsEdit('puntos_fijos', r.id)}</td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div class="page-title" style="margin-bottom:0">🧽 Puntos Fijos de Pisos</div>
@@ -5733,8 +5738,8 @@ async function renderPuntosFijos(){
       <button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('puntos-fijos-form')">+ Nuevo Punto Fijo</button>
     </div>
     <div class="card">
-      <table class="tabla"><thead><tr><th>Piso</th><th>Fecha</th><th>Camarera</th><th>Cuadros</th><th>Tapete</th>${(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')?'<th>Gabinete incendios</th><th>Puerta cortafuegos</th>':'<th>Ventanas y Marcos</th>'}<th></th></tr></thead>
-      <tbody>${filas || '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px">Sin registros. Crea uno con “+ Nuevo Punto Fijo”.</td></tr>'}</tbody></table>
+      <table class="tabla"><thead><tr><th>Piso</th><th>Camarera</th><th>Cuadros</th><th>Tapete</th>${(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')?'<th>Gabinete incendios</th><th>Puerta cortafuegos</th>':'<th>Ventanas y Marcos</th>'}<th></th></tr></thead>
+      <tbody>${filas || `<tr><td colspan="${_colsPF}" style="text-align:center;color:#999;padding:20px">Sin registros. Crea uno con “+ Nuevo Punto Fijo”.</td></tr>`}</tbody></table>
     </div>`;
 }
 async function togglePF(id, campo, val){
