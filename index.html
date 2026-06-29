@@ -464,7 +464,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-28-cki-enlazado';
+const APP_VERSION = '2026-06-29-quitar-maletas';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -697,7 +697,6 @@ const NAV_ITEMS = {
     { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'contratos-list', icon: '📄', label: 'Contratos' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
-    { id: 'maletas-list', icon: '🧳', label: 'Maletas Bodega' },
     { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
     { id: 'capsulas-list', icon: '🧴', label: 'Cápsulas Cortesía' },
     { id: 'prestamos-list', icon: '📦', label: 'Préstamos' },
@@ -767,7 +766,6 @@ const NAV_ITEMS = {
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
     { id: 'visitantes-form', icon: '➕', label: 'Registrar Visitante' },
-    { id: 'maletas-list', icon: '🧳', label: 'Maletas en Bodega' },
     { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
     { id: 'prestamos-list', icon: '📦', label: 'Préstamos' },
     { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
@@ -820,8 +818,6 @@ const NAV_ITEMS = {
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'visitantes-form', icon: '👥', label: 'Registrar Visitante' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
-    { id: 'maletas-form', icon: '🧳', label: 'Maleta en Bodega' },
-    { id: 'maletas-list', icon: '🧳', label: 'Bodega' },
     { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
     { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
     { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
@@ -978,8 +974,6 @@ const MENU_COMPLETO = [
   { id: 'contratos-list', icon: '📄', label: 'Contratos' },
   { id: 'visitantes-form', icon: '➕', label: 'Registrar Visitante' },
   { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
-  { id: 'maletas-form', icon: '🧳', label: 'Maleta en Bodega' },
-  { id: 'maletas-list', icon: '🧳', label: 'Maletas Bodega' },
   { id: 'paquetes-form', icon: '📦', label: 'Registrar Paquete' },
   { id: 'paquetes-list', icon: '📦', label: 'Paquetes / Encargos' },
   { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
