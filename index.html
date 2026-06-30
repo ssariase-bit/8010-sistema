@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-factura-operacion-eventos-mes';
+const APP_VERSION = '2026-06-30-cko-autollenar-apto';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -10154,17 +10154,17 @@ function renderInformeCKO(aptoPreload, huesped, canal) {
         <button class="btn btn-danger" onclick="generarMsgCKO()" style="min-width:200px">📤 Generar Informe CKO</button>
       </div>
     </div>`;
-  const _selCKO=document.getElementById('cko-apto'); if(_selCKO) _selCKO.addEventListener('change', cargarTotalCKO);
+  const _selCKO=document.getElementById('cko-apto'); if(_selCKO) _selCKO.addEventListener('change', function(){ cargarTotalCKO(true); });
   cargarTotalCKO();
 }
 
-async function cargarTotalCKO(){
+async function cargarTotalCKO(force){
   try{
     const apto=document.getElementById('cko-apto')?.value; if(!apto) return;
     const d=new Date(TODAY+'T00:00:00'); d.setDate(d.getDate()-120); const desde=d.toISOString().split('T')[0];
-    const { data } = await sb.from('rack').select('fecha,tarifa,huesped,estado,telefono').eq('apto',apto).eq('edificio',EDIFICIO_ACTIVO).gte('fecha',desde).lte('fecha',TODAY).neq('estado','Libre').order('fecha',{ascending:false});
+    const { data } = await sb.from('rack').select('fecha,tarifa,huesped,nombre,apellido1,apellido2,canal,estado,telefono').eq('apto',apto).eq('edificio',EDIFICIO_ACTIVO).gte('fecha',desde).lte('fecha',TODAY).neq('estado','Libre').order('fecha',{ascending:false});
     const rows=(data||[]).filter(r=>(r.huesped||'').trim());
-    if(!rows.length){ const aEl=document.getElementById('cko-aloja'); if(aEl) aEl.value=0; const nEl=document.getElementById('cko-noches'); if(nEl) nEl.value=0; return; }
+    if(!rows.length){ const aEl=document.getElementById('cko-aloja'); if(aEl) aEl.value=0; const nEl=document.getElementById('cko-noches'); if(nEl) nEl.value=0; if(force){ ['cko-nombre','cko-apellido1','cko-apellido2','cko-tel','cko-canal'].forEach(function(id){var e=document.getElementById(id); if(e) e.value='';}); } return; }
     const hRef=(rows[0].huesped||'').trim().toLowerCase();
     let total=0, noches=0, prev=null;
     for(const r of rows){
@@ -10174,7 +10174,7 @@ async function cargarTotalCKO(){
       if(r.tarifa){ total+=Number(r.tarifa)||0; noches++; }
     }
     var _gapDias=Math.round((new Date(TODAY+'T00:00:00')-new Date((rows[0].fecha||TODAY)+'T00:00:00'))/86400000);
-    if(_gapDias<=1){ var _np0=window._nombrePartes(rows[0]||{}); var _se=function(id,v){var e=document.getElementById(id); if(e&&!e.value) e.value=v||'';}; _se('cko-nombre',_np0.nombre); _se('cko-apellido1',_np0.apellido1); _se('cko-apellido2',_np0.apellido2); _se('cko-tel', rows[0].telefono); }
+    if(_gapDias<=7){ var _np0=window._nombrePartes(rows[0]||{}); var _se=function(id,v){var e=document.getElementById(id); if(e&&(force||!e.value)) e.value=v||'';}; _se('cko-nombre',_np0.nombre); _se('cko-apellido1',_np0.apellido1); _se('cko-apellido2',_np0.apellido2); _se('cko-tel', rows[0].telefono); _se('cko-canal', rows[0].canal); if(force && typeof showToast==='function') showToast('📋 Datos traídos: '+((rows[0].huesped||_np0.nombre||'').trim()||('Apto '+apto)),'success'); }
     const aEl=document.getElementById('cko-aloja'); if(aEl) aEl.value=total;
     const nEl=document.getElementById('cko-noches'); if(nEl) nEl.value=noches;
   }catch(e){ console.error('cargarTotalCKO', e); }
