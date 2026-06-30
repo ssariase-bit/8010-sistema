@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-reembolso-formato-oficial';
+const APP_VERSION = '2026-06-30-factura-operacion-eventos-mes';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -959,6 +959,7 @@ const MENU_COMPLETO = [
   { id: 'caja-form', icon: '💰', label: 'Movimiento Caja' },
   { id: 'caja-list', icon: '💰', label: 'Caja' },
   { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
+  { id: 'facturas-list', icon: '🧾', label: 'Facturación' },
   { section: 'Huéspedes' },
   { id: 'ocupacion', icon: '🏨', label: 'Ocupación' },
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
@@ -1004,7 +1005,6 @@ const MENU_COMPLETO = [
   { id: 'eventos', icon: '🎪', label: 'Eventos', roles: ['gerente_general','administrador','gerencia_operativa','comercial','eventos','recepcion'] },
   { id: 'eventos-agenda', icon: '📅', label: 'Agenda de Eventos', roles: ['gerente_general','administrador','gerencia_operativa','comercial','eventos','recepcion'] },
   { id: 'eventos-rack', icon: '🗓️', label: 'Rack de Salones', roles: ['gerente_general','administrador','gerencia_operativa','comercial','eventos','recepcion'] },
-  { id: 'facturas-list', icon: '🧾', label: 'Facturación' },
   { section: 'Auditoría' },
   { id: 'novedades-diarias', icon: '📋', label: 'Novedades del Día' },
   { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
@@ -7963,6 +7963,15 @@ async function renderEventos(){
   var meses=[...new Set(rows.map(function(r){ return String(r.fecha_inicio||'').slice(0,7); }).filter(Boolean))].sort().reverse();
   var optMes='<option value="">Todos los meses</option>'+meses.map(function(m){ return '<option'+(fm===m?' selected':'')+' value="'+m+'">'+m+'</option>'; }).join('');
   var optEst='<option value="">Todos los estados</option>'+_EV_ESTADOS.map(function(x){ return '<option'+(fe===x?' selected':'')+'>'+x+'</option>'; }).join('');
+  // Resumen: ventas REALIZADAS por mes y por línea de venta (Salón / Alimentación / Consumos)
+  var _real=rows.filter(function(r){ return r.estado==='Realizado'; });
+  var _bm={};
+  _real.forEach(function(r){ var m=String(r.fecha_inicio||'').slice(0,7); if(!m) return; if(!_bm[m]) _bm[m]={salon:0,alim:0,cons:0,n:0}; _bm[m].salon+=Number(r.val_sala)||0; _bm[m].alim+=Number(r.val_alimentacion)||0; _bm[m].cons+=Number(r.val_consumos)||0; _bm[m].n++; });
+  var _mk=Object.keys(_bm).sort().reverse();
+  var _gs=0,_ga=0,_gc=0,_gn=0;
+  var _NM=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var _filasMes=_mk.map(function(m){ var o=_bm[m]; var t=o.salon+o.alim+o.cons; _gs+=o.salon;_ga+=o.alim;_gc+=o.cons;_gn+=o.n; var _p=m.split('-'); var _lbl=(_NM[Number(_p[1])]||_p[1])+' '+_p[0]; return '<tr><td style="white-space:nowrap">'+_lbl+'</td><td style="text-align:right">'+_evMoney(o.salon)+'</td><td style="text-align:right">'+_evMoney(o.alim)+'</td><td style="text-align:right">'+_evMoney(o.cons)+'</td><td style="text-align:right;font-weight:700">'+_evMoney(t)+'</td><td style="text-align:center">'+o.n+'</td></tr>'; }).join('') || '<tr><td colspan="6" style="text-align:center;color:#999;padding:14px">Sin eventos realizados</td></tr>';
+  var resumenMensual='<div class="card" style="margin-bottom:16px"><div class="card-header"><div class="card-title">📊 Ventas realizadas por mes y línea</div></div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Mes</th><th style="text-align:right">Salón</th><th style="text-align:right">Alimentación</th><th style="text-align:right">Consumos</th><th style="text-align:right">Total</th><th style="text-align:center">#</th></tr></thead><tbody>'+_filasMes+'</tbody><tfoot><tr style="font-weight:700;background:#f3f4f6"><td>TOTAL</td><td style="text-align:right">'+_evMoney(_gs)+'</td><td style="text-align:right">'+_evMoney(_ga)+'</td><td style="text-align:right">'+_evMoney(_gc)+'</td><td style="text-align:right">'+_evMoney(_gs+_ga+_gc)+'</td><td style="text-align:center">'+_gn+'</td></tr></tfoot></table></div></div>';
   document.getElementById('main-content').innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <div class="page-title" style="margin-bottom:0">🎪 Eventos — 8010</div>
@@ -7973,6 +7982,7 @@ async function renderEventos(){
         <button class="btn btn-success btn-sm" onclick="window._eventoEdit=null;loadView('evento-form')">+ Nuevo evento</button>
       </div>
     </div>
+    ${resumenMensual}
     <div class="card">
       <div class="card-header"><div class="card-title">${filt.length} eventos · Facturado: ${_evMoney(totFact)}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap"><select onchange="window._evFiltroMes=this.value;renderEventos()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">${optMes}</select><select onchange="window._evFiltroEstado=this.value;renderEventos()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">${optEst}</select></div>
