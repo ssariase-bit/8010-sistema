@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-29-caja-entrega-efectivo';
+const APP_VERSION = '2026-06-29-rack-cki-cko-marca';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1961,6 +1961,17 @@ async function renderRack() {
   window._rackData = rack;
   window._rackMesNombre = monthNames[month];
 
+  // CKI/CKO realizados: leer cki_at/cko_at de las reservas del mes para marcarlos en el rack (con hora)
+  const _ckMap = {};
+  try {
+    const _rids = [...new Set(allRack.map(r => r.reserva_id).filter(Boolean))];
+    if (_rids.length) {
+      const { data: _rsv } = await sb.from('reservas').select('id,cki_at,cki_por,cko_at,cko_por').in('id', _rids);
+      (_rsv || []).forEach(r => { _ckMap[r.id] = r; });
+    }
+  } catch (_e) { console.error('rack CKI/CKO map:', _e); }
+  window._rackCkMap = _ckMap;
+
   const _noEntr = EB().noEntregados || [];
   let aptos = [...new Set([...EB().aptosFull, ...(allRack||[]).map(r => r.apto)])].filter(a => _noEntr.indexOf(a) < 0).sort((a,b) => {
     const na = parseInt(a); const nb = parseInt(b);
@@ -2077,9 +2088,18 @@ async function renderRack() {
       const codeCelda = _dispAqui ? '✓' : (cm.code||'');
       const borderCelda = _dispAqui ? '2px solid #00838F' : border;
       const atenuar = (_enRango && !_dispAqui) ? 'opacity:.4;' : '';
-      return `<td data-tip="${title}" onclick="${onclick}" style="background:${bgCelda};color:${colCelda};text-align:center;padding:2px 1px;border:${borderCelda};cursor:${canEdit?'pointer':'default'};min-width:${CELL_W}px;max-width:${CELL_W}px;overflow:hidden;height:32px;${atenuar}">
+      // CKI/CKO ya realizado: marca de color + hora en la celda, y detalle en el tooltip (lee cki_at/cko_at de la reserva)
+      const _ckR = (rec && rec.reserva_id && window._rackCkMap) ? window._rackCkMap[rec.reserva_id] : null;
+      const _hhmm = t => { try { return new Date(t).toLocaleString('en-US',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true}).replace(' ','').replace('AM','a').replace('PM','p'); } catch(_){ return ''; } };
+      const _ckiHecho = !!(_ckR && _ckR.cki_at && rec && rec.checkin && String(rec.checkin).slice(0,10) === _fechaCelda);
+      const _ckoHecho = !!(_ckR && _ckR.cko_at && rec && rec.checkout && String(rec.checkout).slice(0,10) === _fechaCelda);
+      let _ckSuf = '', _ckBadge = '', _ckLinea2 = apellido;
+      if (_ckiHecho){ _ckSuf = ` · ✅ CKI ${_hhmm(_ckR.cki_at)}${_ckR.cki_por?(' por '+_ckR.cki_por):''}`; _ckBadge = '<span style="position:absolute;top:0;right:0;background:#1E7E34;color:#fff;font-size:7px;line-height:1;padding:1px 2px;border-radius:0 0 0 4px;font-weight:700">✓</span>'; _ckLinea2 = '🟢 '+_hhmm(_ckR.cki_at); }
+      if (_ckoHecho){ _ckSuf = ` · ✅ CKO ${_hhmm(_ckR.cko_at)}${_ckR.cko_por?(' por '+_ckR.cko_por):''}`; _ckBadge = '<span style="position:absolute;top:0;right:0;background:#C2410C;color:#fff;font-size:7px;line-height:1;padding:1px 2px;border-radius:0 0 0 4px;font-weight:700">✓</span>'; _ckLinea2 = '🔴 '+_hhmm(_ckR.cko_at); }
+      return `<td data-tip="${title}${_ckSuf}" onclick="${onclick}" style="position:relative;background:${bgCelda};color:${colCelda};text-align:center;padding:2px 1px;border:${borderCelda};cursor:${canEdit?'pointer':'default'};min-width:${CELL_W}px;max-width:${CELL_W}px;overflow:hidden;height:32px;${atenuar}">
+        ${_ckBadge}
         <div style="font-size:10px;font-weight:800;line-height:1.3">${codeCelda}</div>
-        <div style="font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:${CELL_W-2}px;font-weight:600">${apellido}</div>
+        <div style="font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:${CELL_W-2}px;font-weight:600">${_ckLinea2}</div>
       </td>`;
     }).join('');
     // Estado y huésped de HOY (fecha actual), no el último movimiento registrado
