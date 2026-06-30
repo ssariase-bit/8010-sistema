@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-carpetas-rotulos-negociacion';
+const APP_VERSION = '2026-06-30-reembolso-formato-oficial';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1425,6 +1425,7 @@ async function loadView(view) {
       {id:'empresa',label:'Empresa / Proveedor',type:'text',req:true},
       {id:'descripcion',label:'Descripción del gasto',type:'text',req:true},
       {id:'area',label:'Área',type:'select',opts:['Compras','Eventos','Cargo Apto.','Administrativo','Mantenimiento','Housekeeping','Recepción','Cocina','General']},
+      {id:'centro_costos',label:'Centro de costos',type:'select',opts:['Apartamentos','Operativo']},
       {id:'caja',label:'Caja (origen del efectivo)',type:'select',opts:['LTM3','80|10','PH']},
       {id:'valor',label:'Valor ($)',type:'money',req:true},
       {id:'entregado_por',label:'Entregado por',type:'text'},
@@ -7075,15 +7076,31 @@ async function renderReembolsoInforme(){
         '<div class="form-group"><label>Desde</label><input type="date" id="ri-desde" value="'+ini+'"></div>'+
         '<div class="form-group"><label>Hasta</label><input type="date" id="ri-hasta" value="'+hoy+'"></div>'+
       '</div>'+
+      '<div class="form-row col3">'+
+        '<div class="form-group"><label>Responsable</label><input type="text" id="ri-resp" placeholder="Responsable de la caja"></div>'+
+        '<div class="form-group"><label>Consecutivo</label><input type="text" id="ri-consec" placeholder="Ej: 8-0009"></div>'+
+        '<div class="form-group"><label>Fondo fijo ($)</label><input type="number" id="ri-fondo" value="1000000"></div>'+
+      '</div>'+
+      '<div class="form-row col3">'+
+        '<div class="form-group"><label>Dinero en efectivo ($)</label><input type="number" id="ri-efectivo" value="0"></div>'+
+        '<div class="form-group"><label>Reembolso pendiente ($)</label><input type="number" id="ri-pend" value="0"></div>'+
+        '<div class="form-group"></div>'+
+      '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-success" onclick="generarInformeReembolso()">📄 Generar informe</button><button class="btn btn-outline" id="ri-print-btn" onclick="imprimirInformeReembolso()" style="display:none">🖨️ Imprimir / PDF</button></div>'+
     '</div>'+
     '<div id="ri-resultado" style="margin-top:14px"></div>';
 }
 window._riPrintHTML='';
-async function generarInformeReembolso(){
+async function generarInformeReembolso(keepVB){
+  if(!keepVB) window._riVB = null;
   var estado = document.getElementById('ri-estado').value;
   var desde = document.getElementById('ri-desde').value;
   var hasta = document.getElementById('ri-hasta').value;
+  var responsable = (document.getElementById('ri-resp')||{}).value||'';
+  var consec = (document.getElementById('ri-consec')||{}).value||'';
+  var fondoFijo = Number((document.getElementById('ri-fondo')||{}).value)||0;
+  var efectivo = Number((document.getElementById('ri-efectivo')||{}).value)||0;
+  var pendiente = Number((document.getElementById('ri-pend')||{}).value)||0;
   var cont = document.getElementById('ri-resultado');
   if(!desde || !hasta){ if(typeof showToast==='function') showToast('Selecciona el rango de fechas','error'); return; }
   cont.innerHTML = '<div style="color:var(--gris-t)">Cargando…</div>';
@@ -7096,17 +7113,38 @@ async function generarInformeReembolso(){
   var fmt = function(n){ return '$'+Math.round(Number(n)||0).toLocaleString('es-CO'); };
   var fmtF = function(f){ if(!f) return '-'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
   var total = rows.reduce(function(s,r){ return s+(Number(r.valor)||0); },0);
+  var recibosProv = total;
+  var diferencia = fondoFijo - recibosProv;
   var nomEd=(typeof EB==='function' && EB().nombre)||'';
+  var _nit=(typeof EB==='function' && EB().nit)||'';
   var estLbl=(estado==='__todos')?'Todos los estados':estado;
-  var tr = rows.map(function(r){ return '<tr><td>'+fmtF(r.fecha)+'</td><td>'+fmtF(r.fecha_factura)+'</td><td>'+esc(r.recibo_no||'')+'</td><td style="text-align:left">'+esc(r.empresa||'')+'</td><td style="text-align:left">'+esc(r.descripcion||'')+'</td><td>'+esc(r.area||'')+'</td><td>'+esc(r.estado||'')+'</td><td style="text-align:right;white-space:nowrap">'+fmt(r.valor)+'</td></tr>'; }).join('') || '<tr><td colspan="8" style="text-align:center;color:#999;padding:18px">Sin reembolsos en ese rango</td></tr>';
-  var encabezado = '<h2 style="color:#1D3461;margin:0 0 2px">'+esc(nomEd)+' — Informe de Reembolsos</h2><div style="color:#6b7280;font-size:13px;margin-bottom:12px">Estado: <b>'+esc(estLbl)+'</b> · Del '+fmtF(desde)+' al '+fmtF(hasta)+' · '+rows.length+' reembolso'+(rows.length===1?'':'s')+'</div>';
-  var tabla = '<table class="tabla" style="width:100%;font-size:12px"><thead><tr><th>F. creado</th><th>F. recibo</th><th>Recibo</th><th>Empresa / Proveedor</th><th>Descripción</th><th>Área</th><th>Estado</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+tr+'</tbody></table>';
-  var totales = '<div style="margin-top:14px;font-size:18px">Total reembolsos del período: <b style="color:#1D3461">'+fmt(total)+'</b></div>';
-  cont.innerHTML = '<div class="card">'+encabezado+'<div style="overflow-x:auto">'+tabla+'</div>'+totales+'</div>';
-  window._riPrintHTML = '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe de Reembolsos</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}h2{color:#1D3461;margin:0 0 2px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}th{background:#1F3864;color:#fff}@media print{.np{display:none}}</style></head><body><button class="np" onclick="window.print()" style="background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">🖨️ Imprimir / PDF</button>'+encabezado+tabla+totales+'</body></html>';
+  var tr = rows.map(function(r,i){ return '<tr><td>'+(i+1)+'</td><td>'+fmtF(r.fecha)+'</td><td>'+esc(r.tipo||'')+'</td><td>'+esc(r.numero||'')+'</td><td style="text-align:left">'+esc(r.descripcion||'')+'</td><td style="text-align:right;white-space:nowrap">'+fmt(r.valor)+'</td><td>'+esc(r.centro_costos||r.area||'')+'</td></tr>'; }).join('') || '<tr><td colspan="7" style="text-align:center;color:#999;padding:18px">Sin reembolsos en ese rango</td></tr>';
+  var encabezado = '<div style="text-align:center;margin-bottom:4px"><h2 style="color:#1D3461;margin:0">'+esc(nomEd)+' — Reembolso Caja Menor</h2><div style="color:#6b7280;font-size:12px">NIT '+esc(_nit)+'</div></div>'+
+    '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px 16px;font-size:12px;margin:8px 0 4px"><div><b>Fecha:</b> '+fmtF(hasta)+'</div><div><b>Responsable:</b> '+esc(responsable||'—')+'</div><div><b>Consecutivo:</b> '+esc(consec||'—')+'</div><div><b>Estado:</b> '+esc(estLbl)+'</div></div>';
+  var resumen = '<table style="border-collapse:collapse;font-size:12px;margin:8px 0 12px">'+
+    '<tr><td style="border:1px solid #cbd5e1;padding:4px 12px">Fondo fijo</td><td style="border:1px solid #cbd5e1;padding:4px 12px;text-align:right">'+fmt(fondoFijo)+'</td></tr>'+
+    '<tr><td style="border:1px solid #cbd5e1;padding:4px 12px">Recibos provisionales</td><td style="border:1px solid #cbd5e1;padding:4px 12px;text-align:right">'+fmt(recibosProv)+'</td></tr>'+
+    '<tr><td style="border:1px solid #cbd5e1;padding:4px 12px">Dinero en efectivo</td><td style="border:1px solid #cbd5e1;padding:4px 12px;text-align:right">'+fmt(efectivo)+'</td></tr>'+
+    '<tr><td style="border:1px solid #cbd5e1;padding:4px 12px">Reembolso pendiente</td><td style="border:1px solid #cbd5e1;padding:4px 12px;text-align:right">'+fmt(pendiente)+'</td></tr>'+
+    '<tr><td style="border:1px solid #cbd5e1;padding:4px 12px;font-weight:700">Diferencia</td><td style="border:1px solid #cbd5e1;padding:4px 12px;text-align:right;font-weight:700;color:'+(diferencia<0?'#b91c1c':'#15803d')+'">'+fmt(diferencia)+'</td></tr>'+
+    '</table>';
+  var tabla = '<table class="tabla" style="width:100%;font-size:12px"><thead><tr><th>No.</th><th>Fecha</th><th>Tipo</th><th>Número</th><th>Descripción</th><th style="text-align:right">Neto</th><th>Centro de costos</th></tr></thead><tbody>'+tr+'</tbody></table>';
+  var totales = '<div style="margin-top:10px;font-size:16px;text-align:right">Total: <b style="color:#1D3461">'+fmt(total)+'</b></div>';
+  // Firmas: Elaboró / Autorizó (el VB del gerente general aparece en Autorizó)
+  var _vb = window._riVB;
+  var _esGer = (typeof currentProfile!=='undefined' && currentProfile && currentProfile.rol==='gerente_general');
+  var vbBtn = (_esGer && !_vb && rows.length) ? '<button class="btn np" style="background:#15803d;color:#fff;margin-top:12px" onclick="darVBReembolso()">✅ Dar mi Visto Bueno (Autorizó)</button>' : '';
+  var firmas = '<div style="display:flex;justify-content:space-around;gap:30px;margin-top:48px;font-size:12px">'+
+    '<div style="text-align:center;flex:1"><div style="border-top:1px solid #555;padding-top:4px">Elaboró</div></div>'+
+    '<div style="text-align:center;flex:1"><div style="border-top:1px solid #555;padding-top:4px">Autorizó'+(_vb?('<br><b style="color:#15803d">✅ '+esc(_vb.nombre)+'</b><br><span style="font-size:10px;color:#666">'+esc(_vb.fecha)+'</span>'):'')+'</div></div>'+
+    '</div>';
+  cont.innerHTML = '<div class="card">'+encabezado+resumen+'<div style="overflow-x:auto">'+tabla+'</div>'+totales+firmas+vbBtn+'</div>';
+  window._riPrintHTML = '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reembolso Caja Menor</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}h2{color:#1D3461;margin:0}table.tabla{border-collapse:collapse;width:100%;font-size:12px}table.tabla th,table.tabla td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}table.tabla th{background:#1F3864;color:#fff}@media print{.np{display:none}}</style></head><body><button class="np" onclick="window.print()" style="background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">🖨️ Imprimir / PDF</button>'+encabezado+resumen+tabla+totales+firmas+'</body></html>';
   var pb=document.getElementById('ri-print-btn'); if(pb) pb.style.display='inline-block';
 }
 function imprimirInformeReembolso(){ if(!window._riPrintHTML){ if(typeof showToast==='function') showToast('Genera el informe primero','error'); return; } var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(window._riPrintHTML); w.document.close(); }
+window._riVB = null;
+function darVBReembolso(){ window._riVB = { nombre: (typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'Gerencia', fecha: (typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO')) }; generarInformeReembolso(true); if(typeof showToast==='function') showToast('✅ Visto Bueno registrado en el informe','success'); }
 
 // ════════ REEMBOLSO: comprobante, previsualización y correo con scan (propuesta Sebastián) ════════
 const _REEMB_DEST = {
