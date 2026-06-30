@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-29-cko-checkout-realizado';
+const APP_VERSION = '2026-06-30-carpetas-rotulos-negociacion';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1345,14 +1345,15 @@ async function loadView(view) {
 
     // ── MÓDULOS DE AUDITORÍA ───────────────────────────────
     case 'check-carpetas-list': await renderList('check_carpetas','📂 Check List Carpetas','check-carpetas-form',
-      ['fecha','apto','arrendatario','contrato_firmado','registro_ingreso','copia_documentos','carpeta_completa'],
-      ['Fecha','Apto','Arrendatario','Contrato','Registro','Docs','Completa']); break;
+      ['fecha','apto','arrendatario','tipo_negociacion','contrato_firmado','registro_ingreso','copia_documentos','carpeta_completa'],
+      ['Fecha','Apto','Arrendatario','Negociación','Contrato','Registro','Docs','Completa']); break;
     case 'rotulos': await renderRotulos(); break;
     case 'check-carpetas-form': renderGenForm('check_carpetas','📂 Carpeta de Apto',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY},
       {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
       {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
       {id:'empresa',label:'Empresa',type:'text'},
+      {id:'tipo_negociacion',label:'Tipo de negociación',type:'select',opts:['','LTM3 SAS','80|10 SAS']},
       {id:'apto_vacio',label:'Apto vacío',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
       {id:'facturar_a',label:'Facturar a',type:'select',opts:(EB().facturarA||['Particular','Otra'])},
       {id:'contrato_firmado',label:'Contrato firmado',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
@@ -7327,8 +7328,8 @@ async function imprimirRotuloCarpeta(id){
 }
 
 // ════════ MÓDULO RÓTULOS (auditor CKI) — imprime rótulo desde apto/arrendatario/empresa ════════
-function imprimirRotulo(apto, arrendatario, empresa, vacio){
-  apto=decodeURIComponent(apto||''); arrendatario=decodeURIComponent(arrendatario||''); empresa=decodeURIComponent(empresa||'');
+function imprimirRotulo(apto, arrendatario, empresa, vacio, fci, fco){
+  apto=decodeURIComponent(apto||''); arrendatario=decodeURIComponent(arrendatario||''); empresa=decodeURIComponent(empresa||''); fci=decodeURIComponent(fci||''); fco=decodeURIComponent(fco||'');
   var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||''; var accent=(nb.indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var ITEMS=['Registro de ingreso','Copia de documentos','Información reserva','Inventario','Envío book de servicios','Contrato digitalizado','Otrosí digitalizado'];
@@ -7341,6 +7342,8 @@ function imprimirRotulo(apto, arrendatario, empresa, vacio){
     +'<table style="width:100%;margin:8px 0 14px;border-collapse:collapse">'
     +'<tr><td style="padding:6px 4px;font-size:13px;width:38%;color:#555">Arrendatario</td><td style="padding:6px 4px;font-size:16px;font-weight:700">'+esc(arrendatario||'—')+'</td></tr>'
     +'<tr><td style="padding:6px 4px;font-size:13px;color:#555">Empresa</td><td style="padding:6px 4px;font-size:16px;font-weight:700">'+esc(empresa||'—')+'</td></tr>'
+    +'<tr><td style="padding:6px 4px;font-size:13px;color:#555">Fecha CKI</td><td style="padding:6px 4px;font-size:15px;font-weight:700">'+esc(fci?fmtDate(fci):'—')+'</td></tr>'
+    +'<tr><td style="padding:6px 4px;font-size:13px;color:#555">Fecha CKO</td><td style="padding:6px 4px;font-size:15px;font-weight:700">'+esc(fco?fmtDate(fco):'—')+'</td></tr>'
     +'</table>'
     +'<div style="font-size:12px;font-weight:700;color:'+accent+';margin-bottom:6px">CHECK LIST DE CARPETA (FO-SE-27)</div>'
     +'<table style="width:100%;border-collapse:collapse">'+filas+'</table>'
@@ -7353,17 +7356,18 @@ function imprimirRotulosLote(){
   var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||''; var accent=(nb.indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var ITEMS=['Registro de ingreso','Copia de documentos','Información reserva','Inventario','Envío book de servicios','Contrato digitalizado','Otrosí digitalizado'];
-  var box=function(apto,hu,empresa){
+  var box=function(apto,hu,empresa,fci,fco){
     var filas=ITEMS.map(function(it){ return '<tr><td style="border:1px solid #555;padding:2px 4px;font-size:8px">'+esc(it)+'</td><td style="border:1px solid #555;padding:2px;text-align:center;width:24px;font-size:8px">&#9744;SI</td><td style="border:1px solid #555;padding:2px;text-align:center;width:24px;font-size:8px">&#9744;NO</td></tr>'; }).join('');
     return '<div style="border:2px solid '+accent+';border-radius:6px;padding:7px 9px;break-inside:avoid;page-break-inside:avoid;width:47%;box-sizing:border-box;margin:0 0.8% 9px">'
       +'<div style="text-align:center;border-bottom:1px solid '+accent+';padding-bottom:3px;margin-bottom:4px;font-size:9px;font-weight:800;letter-spacing:.5px">'+esc(nb)+' &mdash; CARPETA APTO</div>'
       +'<div style="font-size:22px;font-weight:900;text-align:center;margin:1px 0">'+esc(apto||'—')+'</div>'
       +'<div style="font-size:10px;margin:2px 0"><b>Arrendatario:</b> '+esc(hu||'—')+'</div>'
-      +'<div style="font-size:10px;margin:2px 0 5px"><b>Empresa:</b> '+esc(empresa||'—')+'</div>'
+      +'<div style="font-size:10px;margin:2px 0"><b>Empresa:</b> '+esc(empresa||'—')+'</div>'
+      +'<div style="font-size:9px;margin:1px 0 5px"><b>CKI:</b> '+(fci?esc(fmtDate(fci)):'—')+' &nbsp;·&nbsp; <b>CKO:</b> '+(fco?esc(fmtDate(fco)):'—')+'</div>'
       +'<table style="width:100%;border-collapse:collapse">'+filas+'</table>'
       +'<div style="font-size:7px;color:#888;text-align:right;margin-top:3px">FO-SE-27</div></div>';
   };
-  var boxes=rows.map(function(x){ var hu=x.huesped||[x.nombre,x.apellido1,x.apellido2].filter(Boolean).join(' '); return box(x.apto,hu,x.empresa); }).join('');
+  var boxes=rows.map(function(x){ var hu=x.huesped||[x.nombre,x.apellido1,x.apellido2].filter(Boolean).join(' '); return box(x.apto,hu,x.empresa,x.checkin||window._rotFecha,x.checkout); }).join('');
   var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Rótulos</title><style>@media print{.noprint{display:none}} @page{margin:10mm}</style></head><body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:10px;color:#111">'
     +'<button class="noprint" onclick="window.print()" style="position:fixed;top:10px;right:10px;background:#1F3864;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-weight:700">🖨️ Imprimir / PDF</button>'
     +'<div style="display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:flex-start">'+boxes+'</div></body></html>';
@@ -7373,11 +7377,11 @@ async function renderRotulos(){
   var fecha=window._rotFecha || (function(){ var d=new Date(TODAY+'T00:00:00'); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })();
   window._rotFecha=fecha;
   document.getElementById('main-content').innerHTML='<div class="page-title">🏷️ Rótulos de Carpetas</div><p style="color:var(--gris-t)">Cargando ingresos…</p>';
-  var r=await sb.from('rack').select('apto,huesped,empresa,estado,nombre,apellido1,apellido2').eq('edificio',EDIFICIO_ACTIVO).eq('fecha',fecha).eq('estado','Check-in hoy').order('apto');
+  var r=await sb.from('rack').select('apto,huesped,empresa,estado,nombre,apellido1,apellido2,checkin,checkout').eq('edificio',EDIFICIO_ACTIVO).eq('fecha',fecha).eq('estado','Check-in hoy').order('apto');
   var rows=(r.data||[]).filter(function(x){return (x.huesped||x.nombre);}); window._rotRows=rows;
   var esc=function(s){ return String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); };
   var enc=function(s){ return encodeURIComponent(String(s==null?'':s)); };
-  var filas=rows.map(function(x){ var hu=x.huesped||[x.nombre,x.apellido1,x.apellido2].filter(Boolean).join(' '); return '<tr><td style="font-weight:700">'+esc(x.apto)+'</td><td>'+esc(hu)+'</td><td>'+esc(x.empresa||'—')+'</td><td><button class="btn btn-outline btn-sm" style="color:#1D3461;border-color:#1D3461" onclick="imprimirRotulo(\''+enc(x.apto)+'\',\''+enc(hu)+'\',\''+enc(x.empresa)+'\',false)">🖨 Rótulo</button></td></tr>'; }).join('');
+  var filas=rows.map(function(x){ var hu=x.huesped||[x.nombre,x.apellido1,x.apellido2].filter(Boolean).join(' '); return '<tr><td style="font-weight:700">'+esc(x.apto)+'</td><td>'+esc(hu)+'</td><td>'+esc(x.empresa||'—')+'</td><td><button class="btn btn-outline btn-sm" style="color:#1D3461;border-color:#1D3461" onclick="imprimirRotulo(\''+enc(x.apto)+'\',\''+enc(hu)+'\',\''+enc(x.empresa)+'\',false,\''+enc(x.checkin||fecha)+'\',\''+enc(x.checkout||'')+'\')">🖨 Rótulo</button></td></tr>'; }).join('');
   document.getElementById('main-content').innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div class="page-title" style="margin-bottom:0">🏷️ Rótulos de Carpetas</div>'
     +'<label style="font-size:13px;color:var(--gris-t)">Ingresos del día <input type="date" value="'+fecha+'" onchange="window._rotFecha=this.value;renderRotulos()" style="padding:6px;border:1px solid var(--gris-b);border-radius:8px"></label></div>'
