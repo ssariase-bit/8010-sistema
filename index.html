@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-cko-autollenar-apto';
+const APP_VERSION = '2026-06-30-novedad-mant-orden-robusto';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3119,10 +3119,10 @@ async function enviarNovedad() {
   const _res = _ned ? await sb.from('novedades').update(_payload).eq('id',_ned.id).select().single() : await sb.from('novedades').insert(_payload).select().single();
   const error = _res.error; const _row = _res.data;
   if (error) { showToast('Error al guardar', 'error'); btn.innerHTML = _ned?'💾 Guardar cambios':'📤 Reportar novedad'; btn.disabled = false; return; }
-  // Si es novedad NUEVA de Mantenimiento → enviar a tareas por apartamento (historial del apto)
-  if(!_ned && _payload.area==='Mantenimiento' && _row){
+  // Novedad de Mantenimiento (nueva o editada a Mantenimiento) → crea/asegura la Orden (deduplicado por novedad_id)
+  if(_payload.area==='Mantenimiento' && _row){
     var _okM = await window._novToMantTask(_row);
-    if(_okM===true) showToast('🔧 Enviada a tareas de Mantenimiento (apto '+(_row.apto||'—')+')','success');
+    if(_okM===true) showToast('🔧 Enviada a Órdenes de Mantenimiento (apto '+(_row.apto||'—')+')','success');
   }
   var descFinal = desc + (accion ? `\n\n✅ Acción tomada: ${accion}` : '');
   window._novedadEdit = null;
@@ -3508,7 +3508,7 @@ window._renderTrazabilidadNov = function(n){
 window._novToMantTask = async function(nov){
   try{
     var base = { fecha: nov.fecha||TODAY, area_apto: nov.apto || 'General', descripcion: nov.descripcion||'',
-      prioridad: (nov.prioridad==='Alta'?'Urgente':'Normal'), estado:'Pendiente',
+      prioridad: (nov.prioridad==='Alta'?'Urgente':'Normal'), estado:(/(resuelt|cerrad)/i.test(nov.estado||'')?'Resuelto':'Pendiente'),
       solicitado_por: nov.reportado_por||null, user_id: currentUser.id };
     if(nov.tratamiento){ var ai=window._accionInicialNov(nov.tratamiento); if(ai) base.descripcion += '\nAcción: '+ai; }
     try{ var ex = await sb.from('mantenimiento').select('id').eq('novedad_id', nov.id).limit(1);
