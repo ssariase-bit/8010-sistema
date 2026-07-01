@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-compras-correo-operativo';
+const APP_VERSION = '2026-06-30-seguimientos-pestana-turnos';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3930,7 +3930,7 @@ async function borrarOT(id){
 }
 
 function _tiemposTabs(active){
-  var t=[['turnos-list','📋 Turnos','turnos'],['control-personal-list','⏱ Control Personal','control'],['cuadro-extras','⏲️ Horas Extra','extras']];
+  var t=[['turnos-list','📋 Turnos','turnos'],['control-personal-list','⏱ Control Personal','control'],['cuadro-extras','⏲️ Horas Extra','extras'],['seguimientos-list','📌 Seguimientos','seguimientos']];
   return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+t.map(function(x){var on=x[2]===active;return '<button onclick="loadView(\''+x[0]+'\')" class="btn btn-sm" style="border:1px solid '+(on?'var(--azul)':'var(--gris-b)')+';background:'+(on?'var(--azul)':'#fff')+';color:'+(on?'#fff':'var(--azul)')+';font-weight:'+(on?'700':'500')+';padding:7px 14px">'+x[1]+'</button>';}).join('')+'</div>';
 }
 async function renderTurnosList() {
@@ -5653,6 +5653,7 @@ async function renderSeguimientosTurno(){
     <td style="white-space:nowrap">${_btnsEdit('seguimientos_turno', r.id)}</td>
   </tr>`).join('');
   document.getElementById('main-content').innerHTML = `
+    ${_tiemposTabs('seguimientos')}
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div class="page-title" style="margin-bottom:0">📌 Seguimientos por Turno ${verTodo?'— Historial completo':'— Semana '+fmtDate(_ini)+' al '+fmtDate(_fin)}</div>
       ${barraCompartir()}<button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('seguimientos-form')">+ Nuevo Seguimiento</button><button class="btn btn-outline btn-sm" onclick="window._segVerTodo=${verTodo?'false':'true'};renderSeguimientosTurno()">${verTodo?'📅 Solo esta semana':'🗂️ Ver historial'}</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=tr.querySelector('.b-resuelto')?'none':''})">Solo pendientes</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=''})">Todos</button>
