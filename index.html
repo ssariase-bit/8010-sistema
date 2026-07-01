@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-entrega-llaves-y-limpieza';
+const APP_VERSION = '2026-06-30-restaura-paquetes';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -969,6 +969,8 @@ const MENU_COMPLETO = [
   { id: 'contratos-list', icon: '📄', label: 'Contratos' },
   { id: 'visitantes-form', icon: '➕', label: 'Registrar Visitante' },
   { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
+  { id: 'paquetes-form', icon: '📦', label: 'Registrar Paquete' },
+  { id: 'paquetes-list', icon: '📦', label: 'Paquetes / Encargos' },
   { id: 'entrega-llaves', icon: '🔑', label: 'Entrega de Llaves / Accesos' },
   { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
   { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
