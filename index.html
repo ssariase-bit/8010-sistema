@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-camarera-leonor-moreno';
+const APP_VERSION = '2026-07-01-saldos-master-extras-formato';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -6567,7 +6567,7 @@ async function renderList(tabla, titulo, formView, cols, headers) {
       if (v === null || v === undefined) return '<td>-</td>';
       if (typeof v === 'boolean') return `<td><span style="color:${v?'#1E7E34':'#B00020'};font-weight:600">${v ? 'Sí' : 'No'}</span></td>`;
       const _cl = String(c).toLowerCase();
-      if (['valor','costo','iva','total','tarifa','transporte','lavander','minibar','varios','monto','subtotal','abono','saldo','utilidad','efectivo'].some(m=>_cl.includes(m)) && v!=='' && !isNaN(Number(v))) return `<td>$${fmtNum(Number(v))}</td>`;
+      if ((['master','extras','saldo_total'].includes(_cl) || (['valor','costo','iva','total','tarifa','transporte','lavander','minibar','varios','monto','subtotal','abono','saldo','utilidad','efectivo','canon','neto','precio'].some(m=>_cl.includes(m)) && !_cl.includes('descrip') && !_cl.includes('forma') && !_cl.includes('tipo') && !_cl.includes('num'))) && v!=='' && !isNaN(Number(v))) return `<td>$${fmtNum(Number(v))}</td>`;
       if (String(c).includes('fecha') && String(v).includes('-')) return `<td>${fmtDate(String(v).substring(0,10))}</td>`;
       if (c === 'estado') { if (esPaquetes) { var _pd=(v==='Entregado'); return `<td><span style="background:${_pd?'#D1FAE5':'#FEF3C7'};color:${_pd?'#065F46':'#92400E'};font-weight:700;font-size:11px;padding:2px 10px;border-radius:10px;white-space:nowrap">${_pd?'✅ ':'📦 '}${v}</span></td>`; } return `<td><span class="badge b-${v==='Activo'||v==='Ocupado'||v==='Prestado'?'proceso':v==='Resuelto'||v==='Devuelto'||v==='Recibido'?'resuelto':'alta'}">${v}</span></td>`; }
       return `<td>${String(v).length > 35 ? String(v).substring(0,35)+'…' : v}</td>`;
