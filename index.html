@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-ventas-linea-sin-eventos-kubik';
+const APP_VERSION = '2026-06-30-camarera-leonor-8010';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -510,8 +510,8 @@ const EDIFICIOS = {
     // Restaurante del edificio (impuesto YA incluido en el precio -> se extrae). Magnifique factura impoconsumo 8%.
     restaurante: { nombre:'Magnifique', impuesto:'Impoconsumo', tasa:0.08, servicio:0, domicilio:0.15 },
     // Camareras + combinaciones de apoyo (Jaqueline apoya a la que necesite)
-    camareras: ['Guillermina Sanabria','Liliana Navarro','Maria Duran','Martha Oyola','Jaqueline Bautista',
-                'Guillermina Sanabria + Jaqueline','Liliana Navarro + Jaqueline','Maria Duran + Jaqueline','Martha Oyola + Jaqueline'],
+    camareras: ['Guillermina Sanabria','Leonor','Maria Duran','Martha Oyola','Jaqueline Bautista',
+                'Guillermina Sanabria + Jaqueline','Leonor + Jaqueline','Maria Duran + Jaqueline','Martha Oyola + Jaqueline'],
     jornadas: { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 },
     indicadoresMes: {'2026-01':{noches:374,disp:651,adr:796301,ocu:0.5745},'2026-02':{noches:507,disp:588,adr:729055,ocu:0.8622},'2026-03':{noches:491,disp:651,adr:752681,ocu:0.7542},'2026-04':{noches:397,disp:630,adr:733852,ocu:0.6302},'2026-05':{noches:612,disp:651,adr:716838,ocu:0.9401},'2026-06':{noches:434,disp:630,adr:708910,ocu:0.6889},'2026-07':{noches:380,disp:651,adr:636366,ocu:0.5837},'2026-08':{noches:290,disp:651,adr:619572,ocu:0.4455},'2026-09':{noches:210,disp:630,adr:570174,ocu:0.3333},'2026-10':{noches:217,disp:651,adr:551781,ocu:0.3333},'2026-11':{noches:213,disp:630,adr:572487,ocu:0.3381},'2026-12':{noches:78,disp:651,adr:686969,ocu:0.1198}}
   },
