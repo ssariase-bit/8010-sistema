@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-ventas-por-linea';
+const APP_VERSION = '2026-06-30-ventas-linea-dashboard-look';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1546,13 +1546,24 @@ async function renderVentasLinea(){
   }
   const gtot=tot.aloj+tot.eve+tot.mag+tot.con+tot.des+tot.tra;
   const pct=(v)=> gtot>0?Math.round(v/gtot*100):0;
-  main.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px" class="no-print-flex">'
-    +'<div class="page-title" style="margin-bottom:0">💵 Ventas por Línea de Negocio — '+(eb.nombre||'')+'</div>'
-    +'<div style="display:flex;gap:8px;align-items:center"><label style="font-size:12px;color:var(--gris-t)">Año</label>'
+  const kc=(cls,lbl,val,sub)=>'<div class="kpi '+cls+'"><div class="kpi-lbl">'+lbl+'</div><div class="kpi-val" style="font-size:22px">'+val+'</div>'+(sub?'<div class="kpi-sub">'+sub+'</div>':'')+'</div>';
+  main.innerHTML='<div class="page-title" style="text-align:center;margin-bottom:4px">💵 Ventas por Línea de Negocio</div>'
+    +'<div style="text-align:center;color:var(--gris-t);font-size:13px;margin-bottom:16px">'+(eb.nombre||'')+' &nbsp;·&nbsp; Año '+yr+'</div>'
+    +'<div style="display:flex;justify-content:center;gap:8px;align-items:center;margin-bottom:18px" class="no-print">'
+    +'<label style="font-size:12px;color:var(--gris-t)">Año</label>'
     +'<select onchange="window._vlYear=parseInt(this.value);renderVentasLinea()" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:8px">'
     +[yr+1,yr,yr-1,yr-2].filter((v,ix,ar)=>ar.indexOf(v)===ix).map(y=>'<option value="'+y+'"'+(y===yr?' selected':'')+'>'+y+'</option>').join('')
-    +'</select><button onclick="window.print()" style="background:#1D3461;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">🖨️ PDF</button></div></div>'
-    +'<div class="card"><div class="card-title" style="margin-bottom:10px">Ingresos '+yr+' · todas las líneas · '+(eb.nombre||'')+'</div>'
+    +'</select><button onclick="window.print()" style="background:#1D3461;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">🖨️ PDF</button></div>'
+    +'<div class="kpi-grid">'
+    +kc('k-azul','Total '+yr, f(gtot), 'todas las líneas')
+    +kc('k-verde','Alojamiento', f(tot.aloj), pct(tot.aloj)+'% del total')
+    +kc('k-naran','Eventos', f(tot.eve), pct(tot.eve)+'% del total')
+    +kc('k-azul',magLbl, f(tot.mag), pct(tot.mag)+'% del total')
+    +kc('k-verde','Consumos', f(tot.con), pct(tot.con)+'% del total')
+    +kc('k-naran','Desayunos', f(tot.des), pct(tot.des)+'% del total')
+    +kc('k-rojo','Transportes', f(tot.tra), pct(tot.tra)+'% del total')
+    +'</div>'
+    +'<div class="card"><div class="card-title" style="margin-bottom:10px;text-align:center">Detalle mes a mes — '+yr+'</div>'
     +'<div style="overflow-x:auto"><table class="tabla"><thead><tr>'
     +'<th style="text-align:left">Mes</th><th>Alojamiento</th><th>Eventos</th><th>'+magLbl+'</th><th>Consumos</th><th>Desayunos</th><th>Transportes</th><th>TOTAL</th>'
     +'</tr></thead><tbody>'+filas+'</tbody>'
