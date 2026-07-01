@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-01-saldos-master-extras-formato';
+const APP_VERSION = '2026-07-01-resumen-ventas-solo-edificio';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -8522,7 +8522,7 @@ async function renderResumenVentas(){
   var ini=mesSel+'-01', fin=mesSel+'-'+String(dim).padStart(2,'0');
   var _mn=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][M-1]; var _MN=_mn.charAt(0).toUpperCase()+_mn.slice(1);
   document.getElementById('main-content').innerHTML='<div class="page-title">💵 Resumen de Ventas — '+_MN+' '+Y+'</div><p style="color:var(--gris-t)">Cargando…</p>';
-  var edis=[{id:'8010',nom:'8010 Urban Living'},{id:'kubik',nom:'Kubik Living 8i8'}]; var rows=[];
+  var edis=(EDIFICIO_ACTIVO==='kubik')?[{id:'kubik',nom:'Kubik Living 8i8'}]:[{id:'8010',nom:'8010 Urban Living'}]; var rows=[];
   for(var i=0;i<edis.length;i++){
     var e=edis[i];
     var rkR=await _rackRango('apto,fecha,estado,tarifa,tipo,updated_at', ini, fin, e.id);
