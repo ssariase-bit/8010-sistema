@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-ventas-linea-dashboard-look';
+const APP_VERSION = '2026-06-30-compras-correo-operativo';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -5375,8 +5375,8 @@ const _DEST_KUBIK_REPORTES = [
 ];
 // Listas de distribucion por reporte (8010). Primero = Para; resto = CC.
 const _DEST_8010_REPORTES = [
-  { match:/novedad/i,           to:['santiago.arias@8010urbanliving.com'], cc:['natalia.munoz@8010urbanliving.com','zareth.varela@8010urbanliving.com','mantenimiento@8010urbanliving.com','compras@8010urbanliving.com','fernando.herrera@8010urbanliving.com','cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','maria.tosta@8010urbanliving.com','recepcion@8010urbanliving.com'] },
-  { match:/rack/i,              to:['santiago.arias@8010urbanliving.com'], cc:['natalia.munoz@8010urbanliving.com','zareth.varela@8010urbanliving.com','mantenimiento@8010urbanliving.com','compras@8010urbanliving.com','fernando.herrera@8010urbanliving.com','cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','maria.tosta@8010urbanliving.com','recepcion@8010urbanliving.com'] },
+  { match:/novedad/i,           to:['santiago.arias@8010urbanliving.com'], cc:['natalia.munoz@8010urbanliving.com','zareth.varela@8010urbanliving.com','mantenimiento@8010urbanliving.com','operativo.compras@8i8op.com','fernando.herrera@8010urbanliving.com','cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','maria.tosta@8010urbanliving.com','recepcion@8010urbanliving.com'] },
+  { match:/rack/i,              to:['santiago.arias@8010urbanliving.com'], cc:['natalia.munoz@8010urbanliving.com','zareth.varela@8010urbanliving.com','mantenimiento@8010urbanliving.com','operativo.compras@8i8op.com','fernando.herrera@8010urbanliving.com','cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','maria.tosta@8010urbanliving.com','recepcion@8010urbanliving.com'] },
   { match:/ingreso.*personal|control de personal/i, to:['santiago.arias@8010urbanliving.com'], cc:['zareth.varela@8010urbanliving.com','fabio.malaver@8010urbanliving.com'] },
   { match:/camareras/i,         to:['santiago.arias@8010urbanliving.com'], cc:['fabio.malaver@8010urbanliving.com'] },
   { match:/fin de semana/i,     to:['fabio.malaver@8010urbanliving.com'], cc:['mantenimiento@8010urbanliving.com','natalia.munoz@8010urbanliving.com','recepcion@8010urbanliving.com'] },
@@ -6434,7 +6434,7 @@ const _DIRECTORIO = {
     {n:'Andrés Parga', e:'andres.parga@8010urbanliving.com'},
     {n:'Fernando Herrera', e:'fernando.herrera@8010urbanliving.com'},
     {n:'Juan Martínez', e:'juan.martinez@8010urbanliving.com'},
-    {n:'Andrés Leguizamón (Compras)', e:'compras@8010urbanliving.com'},
+    {n:'Andrés Leguizamón (Compras)', e:'operativo.compras@8i8op.com'},
     {n:'Zareth Varela', e:'zareth.varela@8010urbanliving.com'},
     {n:'Natalia Muñoz (Eventos)', e:'natalia.munoz@8010urbanliving.com'}
   ],
@@ -6454,7 +6454,7 @@ const _GRUPOS_CORREO = {
     'Administrativo': ['adriana.bernal@8010urbanliving.com','zareth.varela@8010urbanliving.com','cristina.cervino@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
     'Mantenimiento': ['mantenimiento@8010urbanliving.com','fernando.herrera@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
     'Sistemas': ['fernando.herrera@8010urbanliving.com','mantenimiento@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
-    'Compras': ['compras@8010urbanliving.com']
+    'Compras': ['operativo.compras@8i8op.com']
   },
   'kubik': {
     'Administradores': ['admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com'],
@@ -6470,8 +6470,8 @@ function _normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD')
 function _dirEmail(nombre){ var a=_DIRECTORIO[EDIFICIO_ACTIVO]||[]; var t=_normNom(nombre); if(!t) return null; var m=a.find(function(p){return _normNom(p.n)===t;}); if(m) return m.e; var tk=t.split(' ').filter(Boolean); var ap=tk[tk.length-1]; var byAp=a.filter(function(p){return _normNom(p.n).split(' ').indexOf(ap)>=0;}); if(byAp.length===1) return byAp[0].e; var byFn=a.filter(function(p){return _normNom(p.n).split(' ')[0]===tk[0];}); if(byFn.length===1) return byFn[0].e; return null; }
 // Departamento -> correo (direcciones confirmadas del ecosistema). Para dirigir solicitudes a un area.
 const _DEPTOS = {
-  '8010': { 'recepcion':'recepcion@8010urbanliving.com', 'mantenimiento':'mantenimiento@8010urbanliving.com', 'compras':'compras@8010urbanliving.com', 'administracion':'administrativo@8010urbanliving.com', 'administrativo':'administrativo@8010urbanliving.com', 'gerencia':'santiago.arias@8010urbanliving.com', 'eventos':'natalia.munoz@8010urbanliving.com', 'comercial':'cristina.cervino@8010urbanliving.com' },
-  'kubik': { 'recepcion':'recepcion@8i8op.com', 'gerencia':'sariase@8i8op.com', 'compras':'compras@8010urbanliving.com' }
+  '8010': { 'recepcion':'recepcion@8010urbanliving.com', 'mantenimiento':'mantenimiento@8010urbanliving.com', 'compras':'operativo.compras@8i8op.com', 'administracion':'administrativo@8010urbanliving.com', 'administrativo':'administrativo@8010urbanliving.com', 'gerencia':'santiago.arias@8010urbanliving.com', 'eventos':'natalia.munoz@8010urbanliving.com', 'comercial':'cristina.cervino@8010urbanliving.com' },
+  'kubik': { 'recepcion':'recepcion@8i8op.com', 'gerencia':'sariase@8i8op.com', 'compras':'operativo.compras@8i8op.com' }
 };
 function _depEmail(nombre){ var d=_DEPTOS[EDIFICIO_ACTIVO]||{}; var t=_normNom(nombre); return (t&&d[t])||null; }
 function _destinos(){
@@ -7219,7 +7219,7 @@ function darVBReembolso(){ window._riVB = { nombre: (typeof currentProfile!=='un
 
 // ════════ REEMBOLSO: comprobante, previsualización y correo con scan (propuesta Sebastián) ════════
 const _REEMB_DEST = {
-  '8010': { to:['santiago.arias@8010urbanliving.com','adriana.bernal@8010urbanliving.com','compras@8010urbanliving.com','nydia.pardo@8010urbanliving.com','administrativo@8010urbanliving.com'], cc:['recepcion@8010urbanliving.com'] },
+  '8010': { to:['santiago.arias@8010urbanliving.com','adriana.bernal@8010urbanliving.com','operativo.compras@8i8op.com','nydia.pardo@8010urbanliving.com','administrativo@8010urbanliving.com'], cc:['recepcion@8010urbanliving.com'] },
   'kubik':{ to:['sariase@8i8op.com','operativo@8i8op.com'], cc:['operativo.compras@8i8op.com','contador@8i8op.com'] }
 };
 function _reembNo(r){ return 'REB-'+String(r.consecutivo||r.id||'').toString().padStart(4,'0'); }
@@ -8062,7 +8062,7 @@ async function renderEventos(){
     </div>`;
 }
 function enviarAgendaEventos(btn){
-  var dest={ to:['natalia.munoz@8010urbanliving.com','cristina.cervino@8010urbanliving.com'], cc:['santiago.arias@8010urbanliving.com','gerencia@8010urbanliving.com','fabio.malaver@8010urbanliving.com','mantenimiento@8010urbanliving.com','compras@8010urbanliving.com','administrativo@8010urbanliving.com','zareth.varela@8010urbanliving.com','cocina@8010urbanliving.com','migue22more@gmail.com'] };
+  var dest={ to:['natalia.munoz@8010urbanliving.com','cristina.cervino@8010urbanliving.com'], cc:['santiago.arias@8010urbanliving.com','gerencia@8010urbanliving.com','fabio.malaver@8010urbanliving.com','mantenimiento@8010urbanliving.com','operativo.compras@8i8op.com','administrativo@8010urbanliving.com','zareth.varela@8010urbanliving.com','cocina@8010urbanliving.com','migue22more@gmail.com'] };
   return enviarInformeCorreo('Agenda de Eventos · '+(window._evAgWeek||''), window._evAgTxt||'Sin eventos.', btn, null, dest);
 }
 async function renderEventosAgenda(){
