@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-restaura-paquetes';
+const APP_VERSION = '2026-06-30-ventas-por-linea';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -986,6 +986,7 @@ const MENU_COMPLETO = [
       { id: 'nomina', icon: '💼', label: 'Nómina' },
     ] : []),
   { id: 'indicadores', icon: '📊', label: 'Indicadores Ocup./Ventas' },
+  { id: 'ventas-linea', icon: '💵', label: 'Ventas por Línea (mes a mes)' },
   { id: 'requisiciones-form', icon: '➕', label: 'Nueva Requisición' },
   { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
   { id: 'personal-form', icon: '➕', label: 'Nuevo Personal' },
@@ -1406,6 +1407,7 @@ async function loadView(view) {
     case 'ventas-ppto': await renderVentasPpto(); break;
     case 'finanzas': await renderFinanzas(); break;
     case 'indicadores': await renderIndicadores(); break;
+    case 'ventas-linea': await renderVentasLinea(); break;
     case 'nomina': await (EDIFICIO_ACTIVO==='kubik' ? renderNomina() : renderNomina8010()); break;
     case 'semana-info': window._ocupVista='semana'; await renderOcupacion(); break;
     case 'checklist-turnos': await renderChecklistTurnos(); break;
@@ -1505,6 +1507,62 @@ async function _rackRango(cols, desde, hasta, edi){
     from+=1000; if(from>500000) break;
   }
   return {data:all, error:null};
+}
+async function renderVentasLinea(){
+  const main = document.getElementById('main-content');
+  const yr = window._vlYear || new Date().getFullYear();
+  const eb = (typeof EB==='function')?EB():{};
+  const desde=yr+'-01-01', hasta=yr+'-12-31';
+  const FUERA=['Libre','Bloqueado','Mantenimiento'];
+  main.innerHTML = '<div class="page-title">💵 Ventas por Línea de Negocio — '+(eb.nombre||'')+'</div><p style="color:var(--gris-t)">Cargando ingresos del año…</p>';
+  let rk={},ev={},mg={},co={},de={},tr={};
+  try{
+    [rk,ev,mg,co,de,tr] = await Promise.all([
+      _rackRango('estado,tarifa,fecha', desde, hasta),
+      sb.from('eventos').select('val_sala,val_alimentacion,val_consumos,fecha_inicio,estado').gte('fecha_inicio',desde).lte('fecha_inicio',hasta+'T23:59:59'),
+      sb.from('recibos_magnifique').select('total,valor_recibo,fecha').gte('fecha',desde).lte('fecha',hasta),
+      sb.from('consumos').select('valor,fecha').gte('fecha',desde).lte('fecha',hasta),
+      sb.from('desayunos').select('valor,fecha').gte('fecha',desde).lte('fecha',hasta),
+      sb.from('transportes').select('valor,fecha').gte('fecha',desde).lte('fecha',hasta)
+    ]);
+  }catch(e){ /* alguna tabla puede no existir en un edificio */ }
+  const M = Array.from({length:12},()=>({aloj:0,eve:0,mag:0,con:0,des:0,tra:0}));
+  const mi = f => { const m=parseInt(String(f||'').slice(5,7),10)-1; return (m>=0&&m<12)?m:-1; };
+  (rk&&rk.data||[]).forEach(r=>{ const i=mi(r.fecha); if(i<0)return; const t=Number(r.tarifa)||0; if(t>0 && FUERA.indexOf(r.estado)<0) M[i].aloj+=t; });
+  (ev&&ev.data||[]).forEach(r=>{ if(r.estado!=='Realizado')return; const i=mi(r.fecha_inicio); if(i<0)return; M[i].eve+=(Number(r.val_sala)||0)+(Number(r.val_alimentacion)||0)+(Number(r.val_consumos)||0); });
+  (mg&&mg.data||[]).forEach(r=>{ const i=mi(r.fecha); if(i<0)return; M[i].mag+=Number(r.total)||Number(r.valor_recibo)||0; });
+  (co&&co.data||[]).forEach(r=>{ const i=mi(r.fecha); if(i<0)return; M[i].con+=Number(r.valor)||0; });
+  (de&&de.data||[]).forEach(r=>{ const i=mi(r.fecha); if(i<0)return; M[i].des+=Number(r.valor)||0; });
+  (tr&&tr.data||[]).forEach(r=>{ const i=mi(r.fecha); if(i<0)return; M[i].tra+=Number(r.valor)||0; });
+  const MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const f=(n)=>'$'+Math.round(n||0).toLocaleString('es-CO');
+  const magLbl = (EDIFICIO_ACTIVO==='kubik')?'Bagatelle':'Magnifique';
+  const tot={aloj:0,eve:0,mag:0,con:0,des:0,tra:0};
+  let filas='';
+  for(let i=0;i<12;i++){ const o=M[i]; const tm=o.aloj+o.eve+o.mag+o.con+o.des+o.tra; tot.aloj+=o.aloj;tot.eve+=o.eve;tot.mag+=o.mag;tot.con+=o.con;tot.des+=o.des;tot.tra+=o.tra; const vacio=tm===0;
+    filas+='<tr style="'+(vacio?'color:#bcbcbc':'')+'"><td style="text-align:left;font-weight:600">'+MES[i]+'</td>'
+      +'<td style="text-align:right">'+f(o.aloj)+'</td><td style="text-align:right">'+f(o.eve)+'</td><td style="text-align:right">'+f(o.mag)+'</td><td style="text-align:right">'+f(o.con)+'</td><td style="text-align:right">'+f(o.des)+'</td><td style="text-align:right">'+f(o.tra)+'</td>'
+      +'<td style="text-align:right;font-weight:700;color:#1D3461">'+f(tm)+'</td></tr>';
+  }
+  const gtot=tot.aloj+tot.eve+tot.mag+tot.con+tot.des+tot.tra;
+  const pct=(v)=> gtot>0?Math.round(v/gtot*100):0;
+  main.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px" class="no-print-flex">'
+    +'<div class="page-title" style="margin-bottom:0">💵 Ventas por Línea de Negocio — '+(eb.nombre||'')+'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center"><label style="font-size:12px;color:var(--gris-t)">Año</label>'
+    +'<select onchange="window._vlYear=parseInt(this.value);renderVentasLinea()" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:8px">'
+    +[yr+1,yr,yr-1,yr-2].filter((v,ix,ar)=>ar.indexOf(v)===ix).map(y=>'<option value="'+y+'"'+(y===yr?' selected':'')+'>'+y+'</option>').join('')
+    +'</select><button onclick="window.print()" style="background:#1D3461;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">🖨️ PDF</button></div></div>'
+    +'<div class="card"><div class="card-title" style="margin-bottom:10px">Ingresos '+yr+' · todas las líneas · '+(eb.nombre||'')+'</div>'
+    +'<div style="overflow-x:auto"><table class="tabla"><thead><tr>'
+    +'<th style="text-align:left">Mes</th><th>Alojamiento</th><th>Eventos</th><th>'+magLbl+'</th><th>Consumos</th><th>Desayunos</th><th>Transportes</th><th>TOTAL</th>'
+    +'</tr></thead><tbody>'+filas+'</tbody>'
+    +'<tfoot><tr style="font-weight:700;background:#1F3864;color:#fff"><td style="text-align:left">TOTAL '+yr+'</td>'
+    +'<td style="text-align:right">'+f(tot.aloj)+'</td><td style="text-align:right">'+f(tot.eve)+'</td><td style="text-align:right">'+f(tot.mag)+'</td><td style="text-align:right">'+f(tot.con)+'</td><td style="text-align:right">'+f(tot.des)+'</td><td style="text-align:right">'+f(tot.tra)+'</td><td style="text-align:right">'+f(gtot)+'</td></tr>'
+    +'<tr style="font-size:11px;color:#555;background:#eef1f6"><td style="text-align:left">% del total</td>'
+    +'<td style="text-align:right">'+pct(tot.aloj)+'%</td><td style="text-align:right">'+pct(tot.eve)+'%</td><td style="text-align:right">'+pct(tot.mag)+'%</td><td style="text-align:right">'+pct(tot.con)+'%</td><td style="text-align:right">'+pct(tot.des)+'%</td><td style="text-align:right">'+pct(tot.tra)+'%</td><td style="text-align:right">100%</td></tr></tfoot>'
+    +'</table></div>'
+    +'<p style="color:var(--gris-t);font-size:11px;margin-top:10px">Alojamiento = tarifa cobrada del rack. Eventos = salón + alimentación + consumos (eventos realizados). '+magLbl+', Consumos, Desayunos y Transportes = valor registrado. Cifras del edificio activo.</p>'
+    +'</div>';
 }
 async function renderIndicadores(){
   const main = document.getElementById('main-content');
