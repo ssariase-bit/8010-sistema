@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-novedad-mant-orden-robusto';
+const APP_VERSION = '2026-06-30-entrega-llaves-y-limpieza';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -969,8 +969,7 @@ const MENU_COMPLETO = [
   { id: 'contratos-list', icon: '📄', label: 'Contratos' },
   { id: 'visitantes-form', icon: '➕', label: 'Registrar Visitante' },
   { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
-  { id: 'paquetes-form', icon: '📦', label: 'Registrar Paquete' },
-  { id: 'paquetes-list', icon: '📦', label: 'Paquetes / Encargos' },
+  { id: 'entrega-llaves', icon: '🔑', label: 'Entrega de Llaves / Accesos' },
   { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
   { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
   { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
@@ -1072,6 +1071,7 @@ async function loadView(view) {
     case 'informe-cki':     renderInformeCKI(); break;
     case 'informe-cko':     renderInformeCKO(); break;
     case 'informe-noshow':  await renderInformeNoShows(); break;
+    case 'entrega-llaves':  renderEntregaLlaves(); break;
     case 'entrega-efectivos': await renderEntregaEfectivos(); break;
 
     // Facturación (seguimiento de facturas por reserva)
@@ -10180,6 +10180,67 @@ async function cargarTotalCKO(force){
   }catch(e){ console.error('cargarTotalCKO', e); }
 }
 
+function renderEntregaLlaves(){
+  var nombre = (currentProfile&&currentProfile.nombre)||'';
+  var q=function(s){return String(s||'').replace(/"/g,'&quot;');};
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-title">🔑 Entrega de Llaves / Accesos</div>
+    <div class="card" style="max-width:680px">
+      <div class="form-row">
+        <div class="form-group"><label>Fecha</label><input type="date" id="el-fecha" value="${TODAY}"></div>
+        <div class="form-group"><label>Apartamento *</label><input type="text" id="el-apto" placeholder="Ej: 301"></div>
+      </div>
+      <div class="form-group"><label>Arrendatario / Huésped *</label><input type="text" id="el-arr" placeholder="Nombre completo de quien recibe"></div>
+      <div class="form-row col3">
+        <div class="form-group"><label>Tipo de acceso *</label>
+          <select id="el-tipo"><option>Llave física</option><option>Tarjeta de acceso</option><option>Control remoto</option><option>Código / clave</option><option>Otro</option></select>
+        </div>
+        <div class="form-group"><label>Cantidad</label><input type="number" id="el-cant" value="1" min="1"></div>
+        <div class="form-group"><label>Motivo *</label>
+          <select id="el-motivo"><option>Adicional</option><option>Reposición por pérdida</option><option>Reposición por daño</option><option>Primera entrega</option><option>Otro</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>¿Tiene costo? Valor ($)</label><input type="number" id="el-costo" value="0" placeholder="0 si es sin costo"></div>
+        <div class="form-group"><label>Entregado por</label><input type="text" id="el-entrego" value="${q(nombre)}"></div>
+      </div>
+      <div class="form-group"><label>Observaciones</label><textarea id="el-obs" placeholder="Ej: se entrega llave adicional por pérdida de la original..." style="min-height:70px"></textarea></div>
+      <div class="form-actions">
+        <button class="btn btn-outline btn-sm" onclick="loadView('dashboard')">Cancelar</button>
+        <button class="btn btn-success" onclick="generarActaLlave()" style="min-width:220px">🖨️ Generar acta para firma</button>
+      </div>
+      <p style="color:var(--gris-t);font-size:12px;margin-top:8px">El acta se abre lista para imprimir/PDF, con líneas de firma para el arrendatario y quien entrega.</p>
+    </div>`;
+}
+function generarActaLlave(){
+  var g=function(id){return (document.getElementById(id)||{}).value||'';};
+  var apto=g('el-apto').trim(), arr=g('el-arr').trim();
+  if(!apto||!arr){ if(typeof showToast==='function') showToast('Completa apartamento y arrendatario','error'); return; }
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  var fmtF=function(f){ if(!f) return '-'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  var fmtM=function(n){ n=Number(n)||0; return n>0?('$'+n.toLocaleString('es-CO')):'Sin costo'; };
+  var ed=(typeof EB==='function'&&EB().nombre)||''; var nit=(typeof EB==='function'&&EB().nit)||'';
+  var fecha=g('el-fecha'), tipo=g('el-tipo'), cant=g('el-cant')||'1', motivo=g('el-motivo'), costo=g('el-costo'), entrego=g('el-entrego').trim(), obs=g('el-obs').trim();
+  var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Acta de Entrega de Llaves/Accesos</title>'
+   +'<style>body{font-family:Arial,Helvetica,sans-serif;margin:36px;color:#1f2937;font-size:13px}h2{color:#1D3461;margin:0}table{border-collapse:collapse;width:100%;margin:14px 0}td,th{border:1px solid #cbd5e1;padding:7px 10px;text-align:left}th{background:#f3f4f6;width:38%}.firmas{display:flex;justify-content:space-around;gap:40px;margin-top:64px}.firmas>div{text-align:center;flex:1}.linea{border-top:1px solid #555;padding-top:4px}@media print{.np{display:none}}</style></head><body>'
+   +'<button class="np" onclick="window.print()" style="background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-bottom:14px">🖨️ Imprimir / PDF</button>'
+   +'<div style="text-align:center;margin-bottom:6px"><h2>'+esc(ed)+'</h2><div style="color:#6b7280;font-size:12px">NIT '+esc(nit)+'</div><div style="font-weight:700;margin-top:6px;font-size:15px">ACTA DE ENTREGA DE LLAVES / ACCESOS</div></div>'
+   +'<table>'
+   +'<tr><th>Fecha</th><td>'+esc(fmtF(fecha))+'</td></tr>'
+   +'<tr><th>Apartamento</th><td>'+esc(apto)+'</td></tr>'
+   +'<tr><th>Arrendatario / Huésped</th><td>'+esc(arr)+'</td></tr>'
+   +'<tr><th>Tipo de acceso</th><td>'+esc(tipo)+'</td></tr>'
+   +'<tr><th>Cantidad entregada</th><td>'+esc(cant)+'</td></tr>'
+   +'<tr><th>Motivo</th><td>'+esc(motivo)+'</td></tr>'
+   +'<tr><th>Costo / cobro por reposición</th><td>'+esc(fmtM(costo))+'</td></tr>'
+   +(obs?('<tr><th>Observaciones</th><td>'+esc(obs)+'</td></tr>'):'')
+   +'</table>'
+   +'<p style="line-height:1.5">El arrendatario declara haber recibido el(los) acceso(s) descrito(s), se hace responsable de su uso y custodia, y se compromete a devolverlo(s) al finalizar su estadía. En caso de pérdida o daño no reportado, autoriza el cobro correspondiente por reposición.</p>'
+   +'<div class="firmas"><div><div class="linea">Firma del arrendatario</div><div style="font-size:11px;color:#666;margin-top:3px">'+esc(arr)+'</div></div>'
+   +'<div><div class="linea">Entregó</div><div style="font-size:11px;color:#666;margin-top:3px">'+esc(entrego||'—')+'</div></div></div>'
+   +'</body></html>';
+  var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(html); w.document.close();
+}
 const ENCUESTA_CFG = {
   '8010': { url:'https://docs.google.com/forms/d/e/1FAIpQLSdl2zWdtXPXiwOO1dxnmL28T0VV9DRf2txLTckhTXb0MgCxsw/viewform', nombre:'8010 Urban Living', recepcion:'recepcion@8010urbanliving.com' },
   'kubik': { url:'https://forms.office.com/Pages/ResponsePage.aspx?id=N4sE1fzghk-fzKKlMT2cWHubpewM4q9Esy1yNj02NktURDdWUEFFOEpKNEgwSERLNk4wT0RMQlBSTy4u', nombre:'Kubik Living 8i8', recepcion:'recepcion@8i8op.com' }
