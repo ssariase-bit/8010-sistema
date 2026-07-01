@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-06-30-seguimientos-pestana-turnos';
+const APP_VERSION = '2026-06-30-ventas-linea-sin-eventos-kubik';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1537,14 +1537,22 @@ async function renderVentasLinea(){
   const MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const f=(n)=>'$'+Math.round(n||0).toLocaleString('es-CO');
   const magLbl = (EDIFICIO_ACTIVO==='kubik')?'Bagatelle':'Magnifique';
-  const tot={aloj:0,eve:0,mag:0,con:0,des:0,tra:0};
+  const LINES = [
+    {k:'aloj',lbl:'Alojamiento',cls:'k-verde'},
+    {k:'eve',lbl:'Eventos',cls:'k-naran',only8010:true},
+    {k:'mag',lbl:magLbl,cls:'k-azul'},
+    {k:'con',lbl:'Consumos',cls:'k-verde'},
+    {k:'des',lbl:'Desayunos',cls:'k-naran'},
+    {k:'tra',lbl:'Transportes',cls:'k-rojo'}
+  ].filter(c=> !c.only8010 || EDIFICIO_ACTIVO==='8010');
+  const tot={}; LINES.forEach(c=>tot[c.k]=0);
   let filas='';
-  for(let i=0;i<12;i++){ const o=M[i]; const tm=o.aloj+o.eve+o.mag+o.con+o.des+o.tra; tot.aloj+=o.aloj;tot.eve+=o.eve;tot.mag+=o.mag;tot.con+=o.con;tot.des+=o.des;tot.tra+=o.tra; const vacio=tm===0;
+  for(let i=0;i<12;i++){ const o=M[i]; let tm=0; LINES.forEach(c=>{ tot[c.k]+=(o[c.k]||0); tm+=(o[c.k]||0); }); const vacio=tm===0;
     filas+='<tr style="'+(vacio?'color:#bcbcbc':'')+'"><td style="text-align:left;font-weight:600">'+MES[i]+'</td>'
-      +'<td style="text-align:right">'+f(o.aloj)+'</td><td style="text-align:right">'+f(o.eve)+'</td><td style="text-align:right">'+f(o.mag)+'</td><td style="text-align:right">'+f(o.con)+'</td><td style="text-align:right">'+f(o.des)+'</td><td style="text-align:right">'+f(o.tra)+'</td>'
+      +LINES.map(c=>'<td style="text-align:right">'+f(o[c.k]||0)+'</td>').join('')
       +'<td style="text-align:right;font-weight:700;color:#1D3461">'+f(tm)+'</td></tr>';
   }
-  const gtot=tot.aloj+tot.eve+tot.mag+tot.con+tot.des+tot.tra;
+  let gtot=0; LINES.forEach(c=>gtot+=tot[c.k]);
   const pct=(v)=> gtot>0?Math.round(v/gtot*100):0;
   const kc=(cls,lbl,val,sub)=>'<div class="kpi '+cls+'"><div class="kpi-lbl">'+lbl+'</div><div class="kpi-val" style="font-size:22px">'+val+'</div>'+(sub?'<div class="kpi-sub">'+sub+'</div>':'')+'</div>';
   main.innerHTML='<div class="page-title" style="text-align:center;margin-bottom:4px">💵 Ventas por Línea de Negocio</div>'
@@ -1556,23 +1564,18 @@ async function renderVentasLinea(){
     +'</select><button onclick="window.print()" style="background:#1D3461;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">🖨️ PDF</button></div>'
     +'<div class="kpi-grid">'
     +kc('k-azul','Total '+yr, f(gtot), 'todas las líneas')
-    +kc('k-verde','Alojamiento', f(tot.aloj), pct(tot.aloj)+'% del total')
-    +kc('k-naran','Eventos', f(tot.eve), pct(tot.eve)+'% del total')
-    +kc('k-azul',magLbl, f(tot.mag), pct(tot.mag)+'% del total')
-    +kc('k-verde','Consumos', f(tot.con), pct(tot.con)+'% del total')
-    +kc('k-naran','Desayunos', f(tot.des), pct(tot.des)+'% del total')
-    +kc('k-rojo','Transportes', f(tot.tra), pct(tot.tra)+'% del total')
+    +LINES.map(c=>kc(c.cls,c.lbl,f(tot[c.k]),pct(tot[c.k])+'% del total')).join('')
     +'</div>'
     +'<div class="card"><div class="card-title" style="margin-bottom:10px;text-align:center">Detalle mes a mes — '+yr+'</div>'
     +'<div style="overflow-x:auto"><table class="tabla"><thead><tr>'
-    +'<th style="text-align:left">Mes</th><th>Alojamiento</th><th>Eventos</th><th>'+magLbl+'</th><th>Consumos</th><th>Desayunos</th><th>Transportes</th><th>TOTAL</th>'
+    +'<th style="text-align:left">Mes</th>'+LINES.map(c=>'<th>'+c.lbl+'</th>').join('')+'<th>TOTAL</th>'
     +'</tr></thead><tbody>'+filas+'</tbody>'
     +'<tfoot><tr style="font-weight:700;background:#1F3864;color:#fff"><td style="text-align:left">TOTAL '+yr+'</td>'
-    +'<td style="text-align:right">'+f(tot.aloj)+'</td><td style="text-align:right">'+f(tot.eve)+'</td><td style="text-align:right">'+f(tot.mag)+'</td><td style="text-align:right">'+f(tot.con)+'</td><td style="text-align:right">'+f(tot.des)+'</td><td style="text-align:right">'+f(tot.tra)+'</td><td style="text-align:right">'+f(gtot)+'</td></tr>'
+    +LINES.map(c=>'<td style="text-align:right">'+f(tot[c.k])+'</td>').join('')+'<td style="text-align:right">'+f(gtot)+'</td></tr>'
     +'<tr style="font-size:11px;color:#555;background:#eef1f6"><td style="text-align:left">% del total</td>'
-    +'<td style="text-align:right">'+pct(tot.aloj)+'%</td><td style="text-align:right">'+pct(tot.eve)+'%</td><td style="text-align:right">'+pct(tot.mag)+'%</td><td style="text-align:right">'+pct(tot.con)+'%</td><td style="text-align:right">'+pct(tot.des)+'%</td><td style="text-align:right">'+pct(tot.tra)+'%</td><td style="text-align:right">100%</td></tr></tfoot>'
+    +LINES.map(c=>'<td style="text-align:right">'+pct(tot[c.k])+'%</td>').join('')+'<td style="text-align:right">100%</td></tr></tfoot>'
     +'</table></div>'
-    +'<p style="color:var(--gris-t);font-size:11px;margin-top:10px">Alojamiento = tarifa cobrada del rack. Eventos = salón + alimentación + consumos (eventos realizados). '+magLbl+', Consumos, Desayunos y Transportes = valor registrado. Cifras del edificio activo.</p>'
+    +'<p style="color:var(--gris-t);font-size:11px;margin-top:10px">Alojamiento = tarifa cobrada del rack. '+(EDIFICIO_ACTIVO==='8010'?'Eventos = salón + alimentación + consumos (eventos realizados). ':'')+magLbl+', Consumos, Desayunos y Transportes = valor registrado. Cifras del edificio activo.</p>'
     +'</div>';
 }
 async function renderIndicadores(){
