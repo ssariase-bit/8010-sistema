@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-02-facturas-por-mes';
+const APP_VERSION = '2026-07-02-maletas-702A-paquete-seguimiento';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -971,6 +971,7 @@ const MENU_COMPLETO = [
   { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
   { id: 'paquetes-form', icon: '📦', label: 'Registrar Paquete' },
   { id: 'paquetes-list', icon: '📦', label: 'Paquetes / Encargos' },
+  { id: 'maletas-list', icon: '🧳', label: 'Maletas en Bodega' },
   { id: 'entrega-llaves', icon: '🔑', label: 'Entrega de Llaves / Accesos' },
   { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
   { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
@@ -2735,7 +2736,7 @@ async function saveApto() {
     try{ var _om=window._aptoModalOldRange; if(_om && _om.checkin && _om.checkout){ var _dq=sb.from('rack').delete().eq('apto',aNum).eq('edificio',EDIFICIO_ACTIVO).gte('fecha',_om.checkin).lte('fecha',_om.checkout); if(_om.huesped) _dq=_dq.eq('huesped',_om.huesped); await _dq; } window._aptoModalOldRange=null; }catch(e){}
     const rr = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
     if (rr.error) { showToast('Error al aplicar el rango: ' + rr.error.message, 'error'); return; }
-    if (varA && (ocupacional || updates.estado==='Completo')) await aplicarCompleto(aNum, fecha, updates.checkin, updates.checkout, updates.huesped, esCompleto);
+    if (varA && esCompleto && (ocupacional || updates.estado==='Completo')) await aplicarCompleto(aNum, fecha, updates.checkin, updates.checkout, updates.huesped, true);
     showToast(`✅ Apto ${aNum}: cambios aplicados a ${rows.length} día(s) (${fmtDate(updates.checkin)} a ${fmtDate(updates.checkout)})`, 'success');
     await _linkCkiReserva(updates.estado);
     closeModal('modal-apto');
@@ -2747,9 +2748,9 @@ async function saveApto() {
   if (error) { showToast('Error al guardar', 'error'); return; }
 
   // Apto completo: ocupar/liberar la variante A "de largo" durante la estadía
-  if (varA && ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'].includes(updates.estado)) {
-    await aplicarCompleto(aNum, fecha, updates.checkin, updates.checkout, updates.huesped, esCompleto);
-    showToast(esCompleto ? `✅ Apto ${aNum} guardado — ${varA} completo de largo` : '✅ Apartamento actualizado', 'success');
+  if (varA && esCompleto && ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'].includes(updates.estado)) {
+    await aplicarCompleto(aNum, fecha, updates.checkin, updates.checkout, updates.huesped, true);
+    showToast(`✅ Apto ${aNum} guardado — ${varA} completo de largo`, 'success');
   } else {
     showToast('✅ Apartamento actualizado', 'success');
   }
@@ -5271,6 +5272,14 @@ async function submitGenForm(tabla, ids, reqs) {
       const _html = `<div style="font-family:Arial,sans-serif;max-width:600px;color:#222"><div style="background:#1D3461;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0"><div style="font-weight:700;font-size:16px">📞 Nueva cotización / lead — ${_escm(_edi)}</div></div><div style="border:1px solid #e3e6ea;border-top:none;border-radius:0 0 8px 8px;padding:18px"><p>Se registró un nuevo interesado en el sistema. Datos para seguimiento de Mercadeo:</p><table style="width:100%;border-collapse:collapse;font-size:13px">${_rows}</table><p style="margin-top:14px;font-size:11px;color:#9a938b">Generado automáticamente desde el Sistema ${_escm(_edi)}${typeof fmtFH12==='function'?(' · '+fmtFH12()):''}</p></div></div>`;
       _comEnviarCorreo(_mkt, 'Nueva cotización / lead — '+_f('nombre')+' · '+_edi, _html).then(r=>{ if(r&&r.error) showToast('Lead guardado, pero el aviso a Mercadeo falló','error'); else showToast('📧 Aviso enviado a Mercadeo','success'); });
     } catch(_e){ console.error('aviso mercadeo:', _e); }
+  }
+  // Sol Juanita (Kubik): al REGISTRAR un paquete/encargo, dejarlo también en Seguimientos por turno
+  if (tabla==='paquetes' && !_wasEdit) {
+    try {
+      var _pkgDet = '📦 Paquete/encargo: '+(obj.descripcion||'')+(obj.destinatario?(' — para '+obj.destinatario):'')+(obj.transportadora?(' ('+obj.transportadora+')'):'');
+      await sb.from('seguimientos_turno').insert({ fecha: obj.fecha||TODAY, categoria:'Otro', apto: obj.apto||null, detalle: _pkgDet, responsable: obj.recibido_por||null, estado:'Pendiente', edificio: EDIFICIO_ACTIVO });
+      showToast('📌 También quedó en Seguimientos por turno','success');
+    } catch(_e){ console.error('paquete→seguimiento:', _e); }
   }
   const listaView = {
     'prestamos_tec': 'prestamos-list',
