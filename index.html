@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-01-resumen-cuadra-con-rack';
+const APP_VERSION = '2026-07-01-indicadores-titulos-alineados';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1667,7 +1667,7 @@ async function renderIndicadores(){
     +'<button onclick="window.print()" class="no-print" style="background:#1D3461;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">🖨️ PDF</button></div></div>'
     +'<div class="card"><div class="card-title" style="margin-bottom:10px">Resumen '+yr+' · '+nVend+' aptos vendibles</div>'
     +'<div style="overflow-x:auto"><table class="tabla"><thead><tr>'
-    +'<th style="text-align:left">Mes</th><th>Noches ocup.</th><th>Noches disp.</th><th>% Ocup.</th><th>Ventas</th><th>ADR</th><th>RevPAR</th><th>Desperdicio</th>'
+    +'<th style="text-align:left">Mes</th><th style="text-align:center">Noches ocup.</th><th style="text-align:center">Noches disp.</th><th style="text-align:center">% Ocup.</th><th style="text-align:right">Ventas</th><th style="text-align:right">ADR</th><th style="text-align:right">RevPAR</th><th style="text-align:center">Desperdicio</th>'
     +'</tr></thead><tbody>'+filas
     +semRow('I Semestre',sem[0])+semRow('II Semestre',sem[1])
     +'<tr style="background:#211D1E;color:#fff;font-weight:700"><td style="text-align:left;color:#fff">TOTAL '+yr+'</td><td style="text-align:center;color:#fff">'+totN+'</td><td style="text-align:center;color:#fff">'+totDisp+'</td><td style="text-align:center;color:#fff">'+ocuTot+'%</td><td style="text-align:right;color:#fff">$'+f(totVen)+'</td><td style="text-align:right;color:#fff">$'+f(adrTot)+'</td><td style="text-align:right;color:#fff">$'+f(revparTot)+'</td><td style="text-align:center;color:#fff">'+despTot+'</td></tr>'
