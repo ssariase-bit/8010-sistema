@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-01-mant-filtro-y-facturas-cliente-apto';
+const APP_VERSION = '2026-07-01-nombre-completo-3-partes';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1109,7 +1109,7 @@ async function loadView(view) {
     case 'eventos-rack': await renderEventosRack(); break;
     case 'comercial-form': renderGenForm('cotizaciones','📞 Nueva Cotización / Lead',[
       {id:'fecha_solicitud',label:'Fecha de solicitud',type:'date',default:TODAY,req:true},
-      {id:'nombre',label:'Nombre del interesado',type:'text',req:true},
+      {id:'nombre',label:'Nombre del interesado',type:'nombre3',req:true},
       {id:'telefono',label:'Teléfono',type:'text'},
       {id:'correo',label:'Correo electrónico',type:'text'},
       {id:'interes',label:'Interés (apto / fechas / estadía)',type:'text'},
@@ -1130,7 +1130,7 @@ async function loadView(view) {
     case 'paquetes-form': renderGenForm('paquetes','📦 Registrar Paquete',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento',type:'text',req:true},
-      {id:'destinatario',label:'Destinatario',type:'text'},
+      {id:'destinatario',label:'Destinatario',type:'nombre3'},
       {id:'descripcion',label:'Descripción del paquete',type:'text',req:true},
       {id:'transportadora',label:'Transportadora / Quién lo trajo',type:'text'},
       {id:'recibido_por',label:'Recibido por',type:'text',default:(currentProfile?.nombre||'')},
@@ -1143,7 +1143,7 @@ async function loadView(view) {
     case 'magnifique-form': renderGenForm('recibos_magnifique','🍽️ Registrar Recibo '+(EDIFICIO_ACTIVO==='kubik'?'Bagatelle':'Magnifique'),[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento / Evento / Cliente (elige o escribe)',type:'text',req:true},
-      {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
+      {id:'arrendatario',label:'Arrendatario',type:'nombre3',req:true},
       {id:'num_comanda',label:'No. Comanda',type:'text'},
       {id:'productos',label:'Productos (descripción)',type:'textarea'},
       {id:'valor_comanda',label:'Valor comanda ($)',type:'number',req:true},
@@ -1164,7 +1164,7 @@ async function loadView(view) {
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'semana',label:'Semana (ej: 25 MAY - 31 MAY)',type:'text'},
       {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
-      {id:'arrendatario',label:'Arrendatario',type:'text'},
+      {id:'arrendatario',label:'Arrendatario',type:'nombre3'},
       {id:'num_comanda',label:'No. Comanda / Producto',type:'text'},
       {id:'transporte',label:'Transporte ($)',type:'number',default:'0'},
       {id:'utilidad_transporte',label:'Utilidad transporte ($)',type:'number',default:'0'},
@@ -1186,7 +1186,7 @@ async function loadView(view) {
       {id:'destino',label:'Destino de la entrega',type:'select',opts:['Entregado en persona','Dejado en cajilla de seguridad']},
       ...(EDIFICIO_ACTIVO!=='kubik'
         ? [{id:'apto',label:'Apto',type:'text',default:''},
-           {id:'arrendatario',label:'Arrendatario (a)',type:'text',default:''},
+           {id:'arrendatario',label:'Arrendatario (a)',type:'nombre3',default:''},
            {id:'fv',label:'FV',type:'text',default:''},
            {id:'valor',label:'Valor ($)',type:'money',default:''},
            {id:'administrador_entrega',label:'Administrador que entrega',type:'select',opts:['Adriana Bernal','Jonathan Zambrano']},
@@ -1218,7 +1218,7 @@ async function loadView(view) {
     case 'contratos-list':     await renderContratos(); break;
     case 'contratos-form':     renderGenForm('contratos','📄 Nuevo Contrato / Otrosí',[
       {id:'apto',label:'Apartamento',type:'text',req:true},
-      {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
+      {id:'arrendatario',label:'Arrendatario',type:'nombre3',req:true},
       {id:'tipo',label:'Tipo',type:'select',opts:['Contrato','Otrosí','Renovación']},
       {id:'estado',label:'Estado',type:'select',opts:['Activo','Vencido','Por vencer','Cancelado']},
       {type:'section',label:'Vigencia del Contrato'},
@@ -1251,11 +1251,11 @@ async function loadView(view) {
     case 'visitantes-list':    await renderVisitantesList(); break;
     case 'visitantes-form':    renderGenForm('visitantes','👥 Registrar Visitante',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
-      {id:'nombre_visitante',label:'Nombre del visitante',type:'text',req:true},
+      {id:'nombre_visitante',label:'Nombre del visitante',type:'nombre3',req:true},
       {id:'hora_ingreso',label:'Hora ingreso',type:'time'},
       {id:'hora_salida',label:'Hora salida',type:'time'},
       {id:'apto',label:'Apartamento que visita',type:'select',opts:EB().aptosBase,req:true},
-      {id:'arrendatario_autoriza',label:'Arrendatario que autoriza',type:'text',req:true},
+      {id:'arrendatario_autoriza',label:'Arrendatario que autoriza',type:'nombre3',req:true},
       {id:'num_acompanantes',label:'No. acompañantes',type:'number'},
       {id:'pernocta',label:'¿Pernocta en el edificio?',type:'select',opts:['false','true']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
@@ -1264,7 +1264,7 @@ async function loadView(view) {
     case 'maletas-form':       renderGenForm('maletas','🧳 Registrar Maleta en Bodega',[
       {id:'fecha_ingreso',label:'Fecha ingreso',type:'date',default:TODAY,req:true},
       {id:'ticket_no',label:'No. Ticket',type:'text'},
-      {id:'huesped',label:'Huésped',type:'text',req:true},
+      {id:'huesped',label:'Huésped',type:'nombre3',req:true},
       {id:'descripcion',label:'Descripción de la maleta',type:'text',req:true},
       {id:'color',label:'Color',type:'text'},
       {id:'marca',label:'Marca',type:'text'},
@@ -1275,7 +1275,7 @@ async function loadView(view) {
     case 'desayunos-form':     renderGenForm('desayunos','☕ Registrar Desayuno',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento',type:'text',req:true},
-      {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
+      {id:'arrendatario',label:'Arrendatario',type:'nombre3',req:true},
       {id:'cantidad',label:'Cantidad de desayunos',type:'number',req:true},
       {id:'valor',label:'Valor ($)',type:'money'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
@@ -1284,7 +1284,7 @@ async function loadView(view) {
     case 'capsulas-form':      renderGenForm('capsulas','🧴 Entrega de Cápsulas de Cortesía',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento',type:'text',req:true},
-      {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
+      {id:'arrendatario',label:'Arrendatario',type:'nombre3',req:true},
       {id:'capsulas_lavavajillas',label:'Cápsulas lavavajillas',type:'number'},
       {id:'capsulas_lavadora',label:'Cápsulas lavadora',type:'number'},
       {id:'entregado_por',label:'Entregado por',type:'text'},
@@ -1294,7 +1294,7 @@ async function loadView(view) {
     case 'prestamos-form':     renderGenForm('prestamos_tec','📦 Registrar Préstamo',[
       {id:'fecha_prestamo',label:'Fecha préstamo',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento',type:'text',req:true},
-      {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
+      {id:'arrendatario',label:'Arrendatario',type:'nombre3',req:true},
       {id:'articulo',label:'Artículo prestado',type:'text',req:true},
       {id:'cantidad',label:'Cantidad',type:'number'},
       {id:'entregado_por',label:'Entregado por',type:'text'},
@@ -1307,7 +1307,7 @@ async function loadView(view) {
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'recibo_no',label:'No. Recibo',type:'text'},
       {id:'asunto',label:'Asunto / Motivo',type:'text',req:true},
-      {id:'persona',label:'Persona',type:'text',req:true},
+      {id:'persona',label:'Persona',type:'nombre3',req:true},
       {id:'punto_inicio',label:'Punto de inicio',type:'text'},
       {id:'punto_final',label:'Punto final',type:'text'},
       {id:'valor',label:'Valor ($)',type:'money',req:true},
@@ -1331,7 +1331,7 @@ async function loadView(view) {
         _vs ? ['Nombre','Cargo','Área','Salario','Ingreso','Contrato','Estado'] : ['Nombre','Cargo','Área','Ingreso','Contrato','Estado']);
     } break;
     case 'personal-form':      renderGenForm('personal','👤 Registrar Personal',[
-      {id:'nombre',label:'Nombre completo',type:'text',req:true},
+      {id:'nombre',label:'Nombre completo',type:'nombre3',req:true},
       {id:'cargo',label:'Cargo',type:'text',req:true},
       {id:'area',label:'Área',type:'select',opts:['Recepción','Mantenimiento','Housekeeping','Administración','Comercial','Financiero','RRHH','Eventos']},
       {id:'documento',label:'No. Documento',type:'text'},
@@ -1354,7 +1354,7 @@ async function loadView(view) {
     case 'check-carpetas-form': renderGenForm('check_carpetas','📂 Carpeta de Apto',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY},
       {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
-      {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
+      {id:'arrendatario',label:'Arrendatario',type:'nombre3',req:true},
       {id:'empresa',label:'Empresa',type:'text'},
       {id:'tipo_negociacion',label:'Tipo de negociación',type:'select',opts:['','LTM3 SAS','80|10 SAS']},
       {id:'apto_vacio',label:'Apto vacío',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
@@ -1375,7 +1375,7 @@ async function loadView(view) {
     case 'saldos-form': renderGenForm('saldos_aptos','💳 Registrar Saldo de Apto',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
-      {id:'arrendatario',label:'Arrendatario',type:'text',req:true},
+      {id:'arrendatario',label:'Arrendatario',type:'nombre3',req:true},
       {id:'empresa',label:'Empresa',type:'text'},
       {id:'master',label:'Master ($)',type:'money'},
       {id:'extras',label:'Extras ($)',type:'number'},
@@ -1387,7 +1387,7 @@ async function loadView(view) {
     case 'control-personal-list': await renderControlPersonal(); break;
     case 'control-personal-form': renderGenForm('control_personal','⏱ Control de Ingreso Personal',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
-      {id:'nombre',label:'Nombre del empleado',type:'text',req:true},
+      {id:'nombre',label:'Nombre del empleado',type:'nombre3',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro']},
       {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:25 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 2:20 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:50 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','8:00 AM - 5:00 PM','8:00 AM - 5:45 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
@@ -2621,6 +2621,13 @@ window._splitNombre = function(full){
 };
 // Devuelve {nombre,apellido1,apellido2} de un registro: usa las columnas si existen, si no parte el huesped
 window._nombrePartes = function(r){ r=r||{}; if(r.nombre||r.apellido1||r.apellido2) return {nombre:r.nombre||'',apellido1:r.apellido1||'',apellido2:r.apellido2||''}; return window._splitNombre(r.huesped||''); };
+// Nombre COMPLETO para mostrar en cualquier parte: prefiere columnas estructuradas (nombre/apellido1/apellido2),
+// si no, usa el texto ya guardado (huesped/cliente/nombre/arrendatario). Formato: "Nombre Apellido Segundo".
+window._nombreCompleto = function(r){ r=r||{}; var p=window._nombrePartes(r); var full=window._composeNombre(p.nombre,p.apellido1,p.apellido2); return full || String(r.huesped||r.cliente||r.nombre||r.arrendatario||r.nombre_visitante||'').trim(); };
+// Campo de nombre en 3 partes para el motor de formularios (tipo 'nombre3').
+// base = id COMPLETO del campo oculto (ej: 'gf-arrendatario' o 'fac-huesped'); los sub-inputs son base+'__n'/'__a1'/'__a2'.
+window._nombre3Sync = function(base){ var g=function(s){ return ((document.getElementById(base+s)||{}).value||''); }; var h=document.getElementById(base); if(h) h.value=window._composeNombre(g('__n'),g('__a1'),g('__a2')); };
+window._nombre3Split = function(h){ if(!h) return; var base=String(h.id||''); var p=window._splitNombre(h.value||''); var s=function(suf,v){ var e=document.getElementById(base+suf); if(e && document.activeElement!==e) e.value=v; }; s('__n',p.nombre); s('__a1',p.apellido1); s('__a2',p.apellido2); };
 function _toggleTRM(){ var s=document.getElementById('m-moneda'); var w=document.getElementById('m-trm-wrap'); if(w) w.style.display=(s&&s.value==='USD')?'':'none'; }
 // Observacion automatica de hora al salir/volver de viaje (rellena el campo; editable antes de guardar)
 function _autoObsViaje(nuevo){
@@ -5016,7 +5023,7 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
       input = `<select id="gf-${f.id}">${(f.opts||[]).map(o=>{ var ov=(o&&typeof o==='object')?o.v:o; var ol=(o&&typeof o==='object')?o.l:o; var sel=(f.default!=null && String(ov)===String(f.default))?' selected':''; return `<option value="${ov}"${sel}>${ol}</option>`; }).join('')}</select>`;
     } else if (f.type === 'textarea') {
       input = `<textarea id="gf-${f.id}" placeholder="${f.label}..."></textarea>`;
-    } else if (f.type === 'aptotar') { var _ms=(typeof EB==='function'&&(((EB().nombre)||'').indexOf('8010')>-1))?[60,70,90,96,120,126,132]:[29,42,56,79,85,100,113,130]; var _rw=_ms.map(function(m){return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><span style="width:64px;font-size:12px;font-weight:600">'+m+' m²</span><input type="number" class="at-ini" data-m="'+m+'" placeholder="Tarifa ini" oninput="aptoTarSync()" style="width:120px;padding:6px"><input type="number" class="at-neg" data-m="'+m+'" placeholder="Negociado" oninput="aptoTarSync()" style="width:120px;padding:6px"></div>';}).join(''); input='<input type="hidden" id="gf-aptos_tarifas"><div id="gf-aptotar-box" style="padding-top:4px">'+_rw+'</div>'; } else if (f.type === 'tipos') { var _to=['1 habitación','2 habitaciones','Studio / Loft','General / Varios']; input = '<input type="hidden" id="gf-'+f.id+'"><div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:4px">'+_to.map(function(o){return '<label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="'+o+'" onchange="cotTiposSync(this)"> '+o+'</label>';}).join('')+'</div>'; } else if (f.type === 'money') {
+    } else if (f.type === 'aptotar') { var _ms=(typeof EB==='function'&&(((EB().nombre)||'').indexOf('8010')>-1))?[60,70,90,96,120,126,132]:[29,42,56,79,85,100,113,130]; var _rw=_ms.map(function(m){return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><span style="width:64px;font-size:12px;font-weight:600">'+m+' m²</span><input type="number" class="at-ini" data-m="'+m+'" placeholder="Tarifa ini" oninput="aptoTarSync()" style="width:120px;padding:6px"><input type="number" class="at-neg" data-m="'+m+'" placeholder="Negociado" oninput="aptoTarSync()" style="width:120px;padding:6px"></div>';}).join(''); input='<input type="hidden" id="gf-aptos_tarifas"><div id="gf-aptotar-box" style="padding-top:4px">'+_rw+'</div>'; } else if (f.type === 'nombre3') { var _p3=window._splitNombre(val); var _b='gf-'+f.id; return {_sec:true, html:'<div class="form-group" style="grid-column:1/-1"><label>'+f.label+(f.req?' *':'')+' <span style="font-weight:400;color:var(--gris-t);font-size:11px">(Nombre · Apellido · 2º Apellido)</span></label><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="'+_b+'__n" value="'+_p3.nombre+'" placeholder="Nombre(s)" oninput="_nombre3Sync(\''+_b+'\')" style="flex:2;min-width:150px"><input id="'+_b+'__a1" value="'+_p3.apellido1+'" placeholder="Primer apellido" oninput="_nombre3Sync(\''+_b+'\')" style="flex:1;min-width:120px"><input id="'+_b+'__a2" value="'+_p3.apellido2+'" placeholder="Segundo apellido" oninput="_nombre3Sync(\''+_b+'\')" style="flex:1;min-width:120px"></div><input type="hidden" id="'+_b+'" value="'+val+'" oninput="_nombre3Split(this)" onchange="_nombre3Split(this)"></div>'}; } else if (f.type === 'tipos') { var _to=['1 habitación','2 habitaciones','Studio / Loft','General / Varios']; input = '<input type="hidden" id="gf-'+f.id+'"><div style="display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:4px">'+_to.map(function(o){return '<label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="'+o+'" onchange="cotTiposSync(this)"> '+o+'</label>';}).join('')+'</div>'; } else if (f.type === 'money') {
       input = `<input type="text" inputmode="numeric" data-money="1" id="gf-${f.id}" value="${val}" oninput="fmtMoneyInput(this)" placeholder="${f.label}">`;
     } else {
       input = `<input type="${f.type}" id="gf-${f.id}" value="${val}"${f.locked?' readonly disabled style="background:#eef0f2;color:#555;cursor:not-allowed"':''} placeholder="${f.label}${f.req?'*':''}">`;
@@ -5945,7 +5952,7 @@ window._ctValidarContrato = function(tabla){
 window.nuevoOtroSi = function(edif, apto, arr){
   loadView('contratos-form');
   setTimeout(function(){
-    var set=function(id,v){ var el=document.getElementById('gf-'+id); if(el){ el.value=v; } };
+    var set=function(id,v){ var el=document.getElementById('gf-'+id); if(el){ el.value=v; try{ el.dispatchEvent(new Event('change')); }catch(e){} } };
     set('apto', apto); set('arrendatario', arr);
     var t=document.getElementById('gf-tipo'); if(t){ for(var i=0;i<t.options.length;i++){ if(window._norm(t.options[i].value).indexOf('otros')===0){ t.selectedIndex=i; break; } } }
     if(typeof showToast==='function') showToast('Nuevo Otro Si para apto '+apto+' - '+arr+'. Completa las fechas del periodo.', 'success');
@@ -6215,7 +6222,7 @@ window.renderReservas = async function(filtro){
     var _enRango=(r.checkin && r.checkout && String(r.checkin)<=TODAY && TODAY<=String(r.checkout));
     var _rk=(window._rvRackHoy||{})[String(r.apto)]; var _enRack, _rowStyle='';
     if(!_enRango){ _enRack='<span style="color:#bbb" title="No aplica hoy">—</span>'; }
-    else { var _ocup=_rk && _OCU[_rk.estado]; var _hn=_rk?(_rk.huesped||((_rk.nombre||'')+' '+(_rk.apellido1||'')).trim()):''; var _match=_ocup && window._rvNameMatch(_hn, r.nombre);
+    else { var _ocup=_rk && _OCU[_rk.estado]; var _hn=_rk?window._nombreCompleto(_rk):''; var _match=_ocup && window._rvNameMatch(_hn, r.nombre);
       if(_match){ _enRack='<span style="color:#1A5C2E;font-weight:700" title="Coincide con el rack">✓</span>'; }
       else { _enRack='<span style="color:#C0392B;font-weight:700" title="No coincide con el rack de hoy'+(_hn?(' (rack: '+_hn+')'):' (apto libre)')+'">✗</span>'; _rowStyle=' style="background:#FDF3F2"'; } }
     return '<tr'+_rowStyle+'><td style="white-space:nowrap"><strong style="cursor:pointer;color:#1D3461;text-decoration:underline" title="Ver detalle de la reserva" onclick="verDetalleReserva(\''+r.id+'\')">'+window._rvEsc(r.numero||r.num_reserva||'-')+'</strong></td><td style="white-space:nowrap;font-size:11px;color:#6B7280">'+window._rvFmtD(r.created_at)+'</td><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td>'+(r.empresa?window._rvEsc(r.empresa):'<span style="color:#bbb">—</span>')+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">'+_tnStr+'</td><td style="white-space:nowrap">'+_tmStr+'</td><td style="white-space:nowrap;font-weight:600">'+_ttStr+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="text-align:center">'+_enRack+'</td><td style="min-width:150px">'+window._revGerCell('reservas', r)+'</td><td style="white-space:nowrap"><span title="Ver detalle" style="cursor:pointer;font-size:14px" onclick="verDetalleReserva(\''+r.id+'\')">👁️</span> <span title="Hacer Check-In (CKI)" style="cursor:pointer;font-size:13px" onclick="ckiDesdeReserva(\''+r.id+'\')">🟢</span> <span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
@@ -8252,7 +8259,7 @@ function renderFacturaGen(){
   +'<div class="form-section"><div class="form-section-title">🛏️ Reserva</div><div class="form-row">'
   +'<div class="form-group"><label>N° reserva</label><input type="text" id="fac-reserva" placeholder="Ej: 140/2026"></div>'
   +'<div class="form-group"><label>Apartamento</label><input type="text" id="fac-apto"></div>'
-  +'<div class="form-group"><label>Huésped</label><input type="text" id="fac-huesped"></div></div>'
+  +'<div class="form-group" style="flex:2"><label>Huésped <span style="font-weight:400;color:var(--gris-t);font-size:11px">(Nombre · Apellido · 2º Apellido)</span></label><div style="display:flex;gap:6px;flex-wrap:wrap"><input type="text" id="fac-huesped__n" placeholder="Nombre(s)" oninput="_nombre3Sync(\'fac-huesped\')" style="flex:2;min-width:120px"><input type="text" id="fac-huesped__a1" placeholder="Primer apellido" oninput="_nombre3Sync(\'fac-huesped\')" style="flex:1;min-width:100px"><input type="text" id="fac-huesped__a2" placeholder="Segundo apellido" oninput="_nombre3Sync(\'fac-huesped\')" style="flex:1;min-width:100px"></div><input type="hidden" id="fac-huesped"></div></div>'
   +'<div class="form-row"><div class="form-group"><label>Check-in</label><input type="date" id="fac-ci"></div>'
   +'<div class="form-group"><label>Check-out</label><input type="date" id="fac-co"></div>'
   +'<div class="form-group"><label>Pax</label><input type="text" id="fac-pax" placeholder="1 adulto"></div></div></div>'
@@ -8273,7 +8280,7 @@ function renderFacturaGen(){
 function _facPrefillFactura(ed){
   var S=function(id,v){var e=document.getElementById(id); if(e)e.value=(v==null?'':v);};
   S('fac-cli-nombre',ed.cliente); S('fac-cli-nit',ed.cliente_nit); S('fac-cli-dir',ed.cliente_dir); S('fac-cli-email',ed.email); S('fac-cli-tel',ed.telefono);
-  S('fac-reserva',ed.num_reserva); S('fac-apto',ed.apto); S('fac-huesped',ed.huesped); S('fac-ci',ed.checkin); S('fac-co',ed.checkout); S('fac-pax',ed.pax);
+  S('fac-reserva',ed.num_reserva); S('fac-apto',ed.apto); S('fac-huesped',ed.huesped); try{window._nombre3Split(document.getElementById('fac-huesped'));}catch(e){} S('fac-ci',ed.checkin); S('fac-co',ed.checkout); S('fac-pax',ed.pax);
   S('fac-fpago',ed.forma_pago); S('fac-mpago',ed.medio_pago); S('fac-abono',ed.abono); S('fac-obs',ed.observaciones);
   var body=document.getElementById('fac-lineas'); if(body){ body.innerHTML=''; (ed.lineas||[]).forEach(function(l){ body.insertAdjacentHTML('beforeend',_facLineaRow(l.concepto,l.valor,l.tasa,l.desc,l.fecha)); }); if(!(ed.lineas||[]).length) _facAddLinea(); }
   _facRecalc();
@@ -8396,7 +8403,7 @@ async function renderFacturacionVsRack(){
   var PRI={'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1};
   var map={}; (rk.data||[]).forEach(function(r){var k=r.apto+'|'+r.fecha;var c=map[k];if(!c){map[k]=r;return;}var pr=PRI[r.estado]||0,pc=PRI[c.estado]||0;if(pr>pc)map[k]=r;else if(pr===pc&&(r.updated_at||'')>(c.updated_at||''))map[k]=r;});
   var OCU={'Ocupado':1,'Check-in hoy':1,'Completo':1,'Sale de viaje':1};
-  var rack={}; Object.keys(map).forEach(function(k){var r=map[k];if(!OCU[r.estado])return;var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto)));if(esPar)return;var ap=String(r.apto); if(!rack[ap])rack[ap]={aloja:0,noches:0,hue:{},emp:{},can:{},ci:'',co:''}; var R=rack[ap]; R.aloja+=Number(r.tarifa)||0; R.noches++; var hn=(r.huesped||((r.nombre||'')+' '+(r.apellido1||'')).trim()); if(hn)R.hue[hn]=1; if(r.empresa)R.emp[r.empresa]=1; if(r.canal)R.can[r.canal]=1; var ci=r.checkin||r.fecha, co=r.checkout||r.fecha; if(!R.ci||ci<R.ci)R.ci=ci; if(!R.co||co>R.co)R.co=co; });
+  var rack={}; Object.keys(map).forEach(function(k){var r=map[k];if(!OCU[r.estado])return;var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto)));if(esPar)return;var ap=String(r.apto); if(!rack[ap])rack[ap]={aloja:0,noches:0,hue:{},emp:{},can:{},ci:'',co:''}; var R=rack[ap]; R.aloja+=Number(r.tarifa)||0; R.noches++; var hn=window._nombreCompleto(r); if(hn)R.hue[hn]=1; if(r.empresa)R.emp[r.empresa]=1; if(r.canal)R.can[r.canal]=1; var ci=r.checkin||r.fecha, co=r.checkout||r.fecha; if(!R.ci||ci<R.ci)R.ci=ci; if(!R.co||co>R.co)R.co=co; });
   var aptos=Object.keys(fac).concat(Object.keys(rack)).filter(function(v,i,a){return a.indexOf(v)===i;}).sort(_aptoSort);
   var m=function(n){return '$'+Math.round(Number(n)||0).toLocaleString('es-CO');}; var esc=function(s){return String(s==null?'':s).replace(/</g,'&lt;');}; var keys=function(o){return Object.keys(o||{}).join(', ');};
   var Tf=0,Tr=0;
