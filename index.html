@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-02-maletas-702A-paquete-seguimiento';
+const APP_VERSION = '2026-07-02-aviso-apto-ocupado-y-loza';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -546,7 +546,7 @@ function EB(){ return EDIFICIOS[EDIFICIO_ACTIVO]; } // atajo al edificio activo
 const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitantes',
   'mantenimiento','control_personal','turnos','personal','contratos','transportes',
   'reembolsos','prestamos_tec','maletas','entrega_efectivos','capsulas','caja',
-  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes','consumos','semana_seguimiento','checklist_turnos']);
+  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes','consumos','semana_seguimiento','checklist_turnos','inventario_loza']);
 (function(){
   const _from = sb.from.bind(sb);
   window._sbFromRaw = _from; // acceso al from sin filtro de edificio (para vistas multi-edificio o de un edificio fijo)
@@ -976,6 +976,7 @@ const MENU_COMPLETO = [
   { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
   { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
   { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
+  { id: 'loza-list', icon: '🍽️', label: 'Inventario de Loza' },
   { id: 'prestamos-list', icon: '📦', label: 'Préstamos' },
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
   { section: 'Financiero / Admin' },
@@ -1289,6 +1290,19 @@ async function loadView(view) {
       {id:'capsulas_lavavajillas',label:'Cápsulas lavavajillas',type:'number'},
       {id:'capsulas_lavadora',label:'Cápsulas lavadora',type:'number'},
       {id:'entregado_por',label:'Entregado por',type:'text'},
+    ]); break;
+    case 'loza-list': await renderList('inventario_loza','🍽️ Inventario de Loza','loza-form',
+      ['fecha','apto','elemento','cantidad','ubicacion_original','ubicacion_actual','estado'],
+      ['Fecha','Apto/Área','Elemento','Cant.','Ubic. original','Ubic. actual','Estado']); break;
+    case 'loza-form': renderGenForm('inventario_loza','🍽️ Registrar / Trasladar Loza',[
+      {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
+      {id:'apto',label:'Apartamento / Área',type:'text',req:true},
+      {id:'elemento',label:'Elemento (plato, copa, cubierto, olla...)',type:'text',req:true},
+      {id:'cantidad',label:'Cantidad',type:'number',default:'1',req:true},
+      {id:'ubicacion_original',label:'Ubicación original (puesto asignado)',type:'text'},
+      {id:'ubicacion_actual',label:'Ubicación actual (si se trasladó a otro apto/área)',type:'text'},
+      {id:'estado',label:'Estado',type:'select',opts:['Completo','Trasladado','Faltante','Dañado']},
+      {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'prestamos-elem': await renderPrestamosElementos(); break;
     case 'prestamos-list':     await renderList('prestamos_tec','📦 Préstamos','prestamos-form',['fecha_prestamo','apto','arrendatario','articulo','cantidad','estado','fecha_devolucion'],['Fecha','Apto','Arrendatario','Artículo','Cant.','Estado','Devolución']); break;
@@ -4639,6 +4653,17 @@ async function guardarReserva() {
   const _adjSel = Array.from((document.getElementById('res-adjuntos')||{}).selectedOptions||[]).map(o=>o.value).filter(a=>a&&_aptosW.indexOf(a)<0);
   const _aptosW2 = [..._aptosW, ..._adjSel];
   const _nCombo = _aptosW2.length;
+  // Aviso preventivo de doble-booking: si el/los apto(s) ya están ocupados por OTRO huésped en esas fechas
+  try {
+    const _coPrev = (function(){ const d=new Date(co); d.setDate(d.getDate()-1); return d.toISOString().split('T')[0]; })();
+    const _occ = await sb.from('rack').select('apto,fecha,huesped,estado').eq('edificio',EDIFICIO_ACTIVO).in('apto',_aptosW2).gte('fecha',ci).lte('fecha',_coPrev).in('estado',['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje']);
+    const _norm = s => String(s||'').trim().toLowerCase();
+    const _confl = (_occ.data||[]).filter(r => r.huesped && _norm(r.huesped)!==_norm(nombre));
+    if (_confl.length) {
+      const _u=_confl[0]; const _fechas=[...new Set(_confl.map(x=>x.fecha))].sort();
+      if(!confirm('⚠️ APTO OCUPADO\n\nEl apto '+_u.apto+' ya está ocupado por "'+_u.huesped+'" en esas fechas ('+_fechas[0]+(_fechas.length>1?(' a '+_fechas[_fechas.length-1]):'')+').\n\n¿Registrar de todos modos? (sobrescribirá el rack de ese apto)')){ _resetBtn(); return; }
+    }
+  } catch(_e){}
   const rows = [];
   for (let i = 0; i < noches; i++) {
     const d = new Date(ci);
