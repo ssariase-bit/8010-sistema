@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-02-aviso-apto-ocupado-y-loza';
+const APP_VERSION = '2026-07-02-ventas-unificadas';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1543,7 +1543,7 @@ async function renderVentasLinea(){
   }catch(e){ /* alguna tabla puede no existir en un edificio */ }
   const M = Array.from({length:12},()=>({aloj:0,eve:0,mag:0,con:0,des:0,tra:0}));
   const mi = f => { const m=parseInt(String(f||'').slice(5,7),10)-1; return (m>=0&&m<12)?m:-1; };
-  (rk&&rk.data||[]).forEach(r=>{ const i=mi(r.fecha); if(i<0)return; const t=Number(r.tarifa)||0; if(t>0 && FUERA.indexOf(r.estado)<0) M[i].aloj+=t; });
+  (rk&&rk.data||[]).forEach(r=>{ const i=mi(r.fecha); if(i<0)return; if(window._esVentaAloja(r)) M[i].aloj+=Number(r.tarifa)||0; });
   (ev&&ev.data||[]).forEach(r=>{ if(r.estado!=='Realizado')return; const i=mi(r.fecha_inicio); if(i<0)return; M[i].eve+=(Number(r.val_sala)||0)+(Number(r.val_alimentacion)||0)+(Number(r.val_consumos)||0); });
   (mg&&mg.data||[]).forEach(r=>{ const i=mi(r.fecha); if(i<0)return; M[i].mag+=Number(r.total)||Number(r.valor_recibo)||0; });
   (co&&co.data||[]).forEach(r=>{ const i=mi(r.fecha); if(i<0)return; M[i].con+=Number(r.valor)||0; });
@@ -1612,7 +1612,7 @@ async function renderIndicadores(){
       const mi = parseInt(String(r.fecha).slice(5,7),10)-1;
       if(isNaN(mi)||mi<0||mi>11) return;
       const t=Number(r.tarifa)||0;
-      const cobrado = t>0 && FUERA.indexOf(r.estado)<0;       // dia con tarifa = ingreso real (respeta TxN/TxD)
+      const cobrado = window._esVentaAloja(r);       // regla canónica de venta de alojamiento
       const fisica = OCU.indexOf(r.estado)>-1;                 // ocupacion fisica (incluye cortesias)
       if(cobrado||fisica) m[mi].noches++;
       if(cobrado){ m[mi].nTar++; m[mi].ventas+=t; }
@@ -2643,6 +2643,21 @@ window._nombreCompleto = function(r){ r=r||{}; var p=window._nombrePartes(r); va
 // base = id COMPLETO del campo oculto (ej: 'gf-arrendatario' o 'fac-huesped'); los sub-inputs son base+'__n'/'__a1'/'__a2'.
 window._nombre3Sync = function(base){ var g=function(s){ return ((document.getElementById(base+s)||{}).value||''); }; var h=document.getElementById(base); if(h) h.value=window._composeNombre(g('__n'),g('__a1'),g('__a2')); };
 window._nombre3Split = function(h){ if(!h) return; var base=String(h.id||''); var p=window._splitNombre(h.value||''); var s=function(suf,v){ var e=document.getElementById(base+suf); if(e && document.activeElement!==e) e.value=v; }; s('__n',p.nombre); s('__a1',p.apellido1); s('__a2',p.apellido2); };
+// ── REGLA CANÓNICA DE VENTA DE ALOJAMIENTO (unifica TODOS los módulos que leen del rack) ──
+// Cuenta la tarifa del día si el estado es de ocupación real. INCLUYE el día de check-out y "Check-out realizado".
+// NO cuenta No Show. NUNCA cuenta Libre/Bloqueado/Mantenimiento aunque traigan tarifa (error de dato).
+// Los combos 8010 (aptos A) no traen tarifa → suman 0; los 03 independientes de Kubik sí traen tarifa → cuentan.
+window._OCU_VENTA = new Set(['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje','Check-out realizado']);
+window._esVentaAloja = function(r){
+  if(!r) return false;
+  if(!window._OCU_VENTA.has(r.estado)) return false;
+  if((Number(r.tarifa)||0) <= 0) return false;
+  // Combo Two/Family Residence de 8010: la pareja X02+X03 comparte UNA sola tarifa -> no contar la unidad
+  // secundaria (03/02) para no duplicar. Los 03 independientes de Kubik NO son tipo Two/Family -> sí cuentan.
+  var esParSec = (r.tipo==='Two Residence' && /03$/.test(String(r.apto))) || (r.tipo==='Family Residence' && /02$/.test(String(r.apto)));
+  if(esParSec) return false;
+  return true;
+};
 function _toggleTRM(){ var s=document.getElementById('m-moneda'); var w=document.getElementById('m-trm-wrap'); if(w) w.style.display=(s&&s.value==='USD')?'':'none'; }
 // Observacion automatica de hora al salir/volver de viaje (rellena el campo; editable antes de guardar)
 function _autoObsViaje(nuevo){
@@ -5629,10 +5644,8 @@ function _rackEmailHTML(){
       const rec = rack[a] && rack[a][d]; if(!rec) continue;
       const e = rec.estado;
       const ocFis = (e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje');
-      // Two Residence: la pareja X02+X03 comparte tarifa — contar la venta una sola vez
-      const esParTR = (rec.tipo==='Two Residence' && /03$/.test(String(a))) || (rec.tipo==='Family Residence' && /02$/.test(String(a)));
-      const t = esParTR ? 0 : (Number(rec.tarifa)||0);
-      const cobrado = t>0 && _FUERA.indexOf(e)<0;   // dia con tarifa = ingreso real (TxN/TxD, combos)
+      const t = Number(rec.tarifa)||0;
+      const cobrado = window._esVentaAloja(rec);   // regla canónica de venta de alojamiento
       if(ocFis||cobrado) nochesMes++;
       if(cobrado){ nochesTar++; ventasMes+=t; }
       if(esMesActual && d===corte){ if(ocFis) ocupHoy++; if(e==='Check-in hoy') ckiHoy++; if(e==='Check-out hoy') ckoHoy++; }
@@ -8441,7 +8454,7 @@ async function renderFacturacionVsRack(){
   var PRI={'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1};
   var map={}; (rk.data||[]).forEach(function(r){var k=r.apto+'|'+r.fecha;var c=map[k];if(!c){map[k]=r;return;}var pr=PRI[r.estado]||0,pc=PRI[c.estado]||0;if(pr>pc)map[k]=r;else if(pr===pc&&(r.updated_at||'')>(c.updated_at||''))map[k]=r;});
   var OCU={'Ocupado':1,'Check-in hoy':1,'Completo':1,'Sale de viaje':1};
-  var rack={}; Object.keys(map).forEach(function(k){var r=map[k];if(!OCU[r.estado])return;var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto)));if(esPar)return;var ap=String(r.apto); if(!rack[ap])rack[ap]={aloja:0,noches:0,hue:{},emp:{},can:{},ci:'',co:''}; var R=rack[ap]; R.aloja+=Number(r.tarifa)||0; R.noches++; var hn=window._nombreCompleto(r); if(hn)R.hue[hn]=1; if(r.empresa)R.emp[r.empresa]=1; if(r.canal)R.can[r.canal]=1; var ci=r.checkin||r.fecha, co=r.checkout||r.fecha; if(!R.ci||ci<R.ci)R.ci=ci; if(!R.co||co>R.co)R.co=co; });
+  var rack={}; Object.keys(map).forEach(function(k){var r=map[k];if(!window._esVentaAloja(r))return;var ap=String(r.apto); if(!rack[ap])rack[ap]={aloja:0,noches:0,hue:{},emp:{},can:{},ci:'',co:''}; var R=rack[ap]; R.aloja+=Number(r.tarifa)||0; R.noches++; var hn=window._nombreCompleto(r); if(hn)R.hue[hn]=1; if(r.empresa)R.emp[r.empresa]=1; if(r.canal)R.can[r.canal]=1; var ci=r.checkin||r.fecha, co=r.checkout||r.fecha; if(!R.ci||ci<R.ci)R.ci=ci; if(!R.co||co>R.co)R.co=co; });
   var aptos=Object.keys(fac).concat(Object.keys(rack)).filter(function(v,i,a){return a.indexOf(v)===i;}).sort(_aptoSort);
   var m=function(n){return '$'+Math.round(Number(n)||0).toLocaleString('es-CO');}; var esc=function(s){return String(s==null?'':s).replace(/</g,'&lt;');}; var keys=function(o){return Object.keys(o||{}).join(', ');};
   var Tf=0,Tr=0;
@@ -8486,13 +8499,13 @@ async function renderIngresos(){
   let totAloja=0, nochesVendMes=0, alojaCorte=0, nochesVendCorte=0, nochesFisCorte=0, totConsumos=0;
   const canales = {};
   Object.values(map).forEach(r => {
-    const e = r.estado; const oc = (e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje');
-    if(!oc) return;
+    const e = r.estado;
+    if(!window._OCU_VENTA.has(e)) return;   // incluye día de check-out y "Check-out realizado"; excluye No Show/Libre/Bloqueado/Mant.
     const d = Number(r.fecha.slice(8,10));
-    const esParTR = (r.tipo==='Two Residence' && /03$/.test(String(r.apto))) || (r.tipo==='Family Residence' && /02$/.test(String(r.apto)));
-    const t = esParTR ? 0 : (Number(r.tarifa)||0);
+    const esVenta = window._esVentaAloja(r);   // regla canónica (maneja combos Two/Family)
+    const t = esVenta ? (Number(r.tarifa)||0) : 0;
     dias[d].noches++; if(d<=corte) nochesFisCorte++;
-    if(!esParTR){
+    if(esVenta){
       dias[d].aloja += t; totAloja += t; nochesVendMes++;
       if(d<=corte){ alojaCorte += t; nochesVendCorte++; }
       const cn = r.canal || 'Particular';
@@ -8575,7 +8588,7 @@ function _alojaDe(rk){
     if(pr>pc) map[k]=r; else if(pr===pc){ var tr=r.updated_at||r.created_at||'', tc=c.updated_at||c.created_at||''; if(tr>tc) map[k]=r; }
   });
   var aloja=0, noches=0;
-  Object.keys(map).forEach(function(k){ var r=map[k]; var e=r.estado; var oc=(e==='Ocupado'||e==='Check-in hoy'||e==='Check-out hoy'||e==='Completo'||e==='Sale de viaje'); if(!oc) return; var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto))); if(esPar && !((Number(r.tarifa)||0)>0)) return; aloja+=(Number(r.tarifa)||0); noches++; });
+  Object.keys(map).forEach(function(k){ var r=map[k]; if(!window._esVentaAloja(r)) return; aloja+=(Number(r.tarifa)||0); noches++; });
   return {aloja:aloja, noches:noches};
 }
 async function renderResumenVentas(){
@@ -8633,7 +8646,7 @@ async function renderVentasPpto(){
   var PRI={'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1};
   var map={}; (rkR.data||[]).forEach(function(r){var k=r.apto+'|'+r.fecha;var c=map[k]; if(!c){map[k]=r;return;} var pr=PRI[r.estado]||0,pc=PRI[c.estado]||0; if(pr>pc)map[k]=r; else if(pr===pc){var tr=r.updated_at||'',tc=c.updated_at||''; if(tr>tc)map[k]=r;}});
   var aloja=new Array(12).fill(0), noches=new Array(12).fill(0);
-  Object.keys(map).forEach(function(k){var r=map[k]; var e=r.estado; var oc=(e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje'); if(!oc)return; var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto))); if(esPar)return; var m=parseInt(r.fecha.slice(5,7),10)-1; if(m>=0&&m<12){aloja[m]+=(Number(r.tarifa)||0); noches[m]++;} });
+  Object.keys(map).forEach(function(k){var r=map[k]; if(!window._esVentaAloja(r)) return; var m=parseInt(r.fecha.slice(5,7),10)-1; if(m>=0&&m<12){aloja[m]+=(Number(r.tarifa)||0); noches[m]++;} });
   var cons=new Array(12).fill(0); (csR.data||[]).forEach(function(c){var m=parseInt(String(c.fecha).slice(5,7),10)-1; if(m>=0&&m<12) cons[m]+=(Number(c.valor)||0);});
   var evt=new Array(12).fill(0); (evR.data||[]).forEach(function(x){ if(!(Number(x.total)>0))return; var m=parseInt(String(x.fecha_inicio).slice(5,7),10)-1; if(m>=0&&m<12) evt[m]+=(Number(x.total)||0);});
   var realA=aloja.slice();
@@ -8824,7 +8837,7 @@ async function finTraerIngresos(){
   var map={}; (rkR.data||[]).forEach(function(r){var k=r.apto+'|'+r.fecha;var c=map[k];if(!c){map[k]=r;return;}var pr=PRI[r.estado]||0,pc=PRI[c.estado]||0;if(pr>pc)map[k]=r;else if(pr===pc&&(r.updated_at||'')>(c.updated_at||''))map[k]=r;});
   var OCU={'Ocupado':1,'Check-in hoy':1,'Completo':1,'Sale de viaje':1};
   var porApto={};
-  Object.keys(map).forEach(function(k){var r=map[k];if(!OCU[r.estado])return;var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto)));if(esPar)return;(porApto[r.apto]=porApto[r.apto]||[]).push(r);});
+  Object.keys(map).forEach(function(k){var r=map[k];if(!window._esVentaAloja(r))return;(porApto[r.apto]=porApto[r.apto]||[]).push(r);});
   var DAY=86400000; function dnum(f){var p=f.split('-');return Date.UTC(+p[0],+p[1]-1,+p[2])/DAY;}
   var cortas=new Array(12).fill(0), largas=new Array(12).fill(0);
   Object.keys(porApto).forEach(function(ap){
