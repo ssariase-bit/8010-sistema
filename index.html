@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-02-ventas-unificadas';
+const APP_VERSION = '2026-07-02-modulo-masajes-scape';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -546,7 +546,7 @@ function EB(){ return EDIFICIOS[EDIFICIO_ACTIVO]; } // atajo al edificio activo
 const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitantes',
   'mantenimiento','control_personal','turnos','personal','contratos','transportes',
   'reembolsos','prestamos_tec','maletas','entrega_efectivos','capsulas','caja',
-  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes','consumos','semana_seguimiento','checklist_turnos','inventario_loza']);
+  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes','consumos','semana_seguimiento','checklist_turnos','inventario_loza','masajes_scape']);
 (function(){
   const _from = sb.from.bind(sb);
   window._sbFromRaw = _from; // acceso al from sin filtro de edificio (para vistas multi-edificio o de un edificio fijo)
@@ -977,6 +977,7 @@ const MENU_COMPLETO = [
   { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
   { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
   { id: 'loza-list', icon: '🍽️', label: 'Inventario de Loza' },
+  { id: 'scape-list', icon: '💆', label: 'Masajes Scape' },
   { id: 'prestamos-list', icon: '📦', label: 'Préstamos' },
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
   { section: 'Financiero / Admin' },
@@ -1302,6 +1303,18 @@ async function loadView(view) {
       {id:'ubicacion_original',label:'Ubicación original (puesto asignado)',type:'text'},
       {id:'ubicacion_actual',label:'Ubicación actual (si se trasladó a otro apto/área)',type:'text'},
       {id:'estado',label:'Estado',type:'select',opts:['Completo','Trasladado','Faltante','Dañado']},
+      {id:'observaciones',label:'Observaciones',type:'textarea'},
+    ]); break;
+    case 'scape-list': await renderList('masajes_scape','💆 Seguimiento Masajes Scape','scape-form',
+      ['fecha','apto','arrendatario','terapeuta','valor','estado'],
+      ['Fecha','Apto','Arrendatario','Terapeuta','Valor','Estado']); break;
+    case 'scape-form': renderGenForm('masajes_scape','💆 Registrar Masaje Scape',[
+      {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
+      {id:'apto',label:'Apartamento / Ubicación',type:'text',req:true},
+      {id:'arrendatario',label:'Arrendatario / Huésped',type:'nombre3',req:true},
+      {id:'terapeuta',label:'Nombre del Terapeuta',type:'nombre3',req:true},
+      {id:'valor',label:'Valor del masaje ($)',type:'money',req:true},
+      {id:'estado',label:'Estado',type:'select',opts:['Agendado','Realizado','Cancelado']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'prestamos-elem': await renderPrestamosElementos(); break;
