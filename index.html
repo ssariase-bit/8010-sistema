@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-01-resumen-kubik-03-independientes';
+const APP_VERSION = '2026-07-01-resumen-cuadra-con-rack';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -8511,7 +8511,7 @@ function _alojaDe(rk){
     if(pr>pc) map[k]=r; else if(pr===pc){ var tr=r.updated_at||r.created_at||'', tc=c.updated_at||c.created_at||''; if(tr>tc) map[k]=r; }
   });
   var aloja=0, noches=0;
-  Object.keys(map).forEach(function(k){ var r=map[k]; var e=r.estado; var oc=(e==='Ocupado'||e==='Check-in hoy'||e==='Completo'||e==='Sale de viaje'); if(!oc) return; var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto))); if(esPar && !((Number(r.tarifa)||0)>0)) return; aloja+=(Number(r.tarifa)||0); noches++; });
+  Object.keys(map).forEach(function(k){ var r=map[k]; var e=r.estado; var oc=(e==='Ocupado'||e==='Check-in hoy'||e==='Check-out hoy'||e==='Completo'||e==='Sale de viaje'); if(!oc) return; var esPar=(r.tipo==='Two Residence'&&/03$/.test(String(r.apto)))||(r.tipo==='Family Residence'&&/02$/.test(String(r.apto))); if(esPar && !((Number(r.tarifa)||0)>0)) return; aloja+=(Number(r.tarifa)||0); noches++; });
   return {aloja:aloja, noches:noches};
 }
 async function renderResumenVentas(){
