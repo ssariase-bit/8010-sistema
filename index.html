@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-01-indicadores-titulos-alineados';
+const APP_VERSION = '2026-07-01-mant-filtro-y-facturas-cliente-apto';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3784,6 +3784,15 @@ async function renderMantList(filtroApto='') {
   const aptosUnicos = [...new Set(rows.map(r=>r.area_apto).filter(Boolean))].sort();
   const rowsFiltrados = filtroApto ? rows.filter(r=>r.area_apto===filtroApto) : rows;
 
+  // Vista general: ocultar por defecto el cargue inicial histórico (migración masiva sin novedad, previa a jun-02)
+  // y permitir revisar por texto (apto/descripción/solicitó/técnico) y por rango de fechas.
+  const _mf = window._mantF || {};
+  const _esLegacy = o => (!o.novedad_id && o.created_at && String(o.created_at) < '2026-06-02');
+  const _mantTxt = o => { const t=(_mf.q||'').trim().toLowerCase(); if(!t) return true; return [o.area_apto,o.descripcion,o.solicitado_por,o.tecnico].some(x=>String(x||'').toLowerCase().includes(t)); };
+  const _mantFecha = o => { const f=String(o.fecha||(o.created_at?o.created_at.split('T')[0]:'')); if(_mf.ini && f < _mf.ini) return false; if(_mf.fin && f > _mf.fin) return false; return true; };
+  const nLegacy = rows.filter(_esLegacy).length;
+  const rowsGen = rows.filter(o => (_mf.hist ? true : !_esLegacy(o)) && _mantTxt(o) && _mantFecha(o));
+
   // Costo total del apto seleccionado
   const costoTotal = rowsFiltrados.reduce((s,r)=>s+(Number(r.costo)||0),0);
   const otsCerradas = rowsFiltrados.filter(r=>r.estado==='Cerrado'||r.estado==='Terminado').length;
@@ -3886,12 +3895,20 @@ async function renderMantList(filtroApto='') {
     ` :
 
     /* ── VISTA GENERAL (todos los aptos) — tabla compacta ── */
-    `<div class="card" style="padding:10px">
-      ${rowsFiltrados.length === 0
+    `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <input type="text" value="${(_mf.q||'').replace(/"/g,'&quot;')}" placeholder="🔎 Buscar apto, descripción, solicitó o técnico" onchange="window._mantF=Object.assign(window._mantF||{},{q:this.value});renderMantList('')" style="flex:1;min-width:220px;padding:8px 12px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px">
+      <label style="font-size:12px;font-weight:600">Desde <input type="date" value="${_mf.ini||''}" onchange="window._mantF=Object.assign(window._mantF||{},{ini:this.value});renderMantList('')" style="padding:6px;border:1px solid var(--gris-b);border-radius:6px"></label>
+      <label style="font-size:12px;font-weight:600">Hasta <input type="date" value="${_mf.fin||''}" onchange="window._mantF=Object.assign(window._mantF||{},{fin:this.value});renderMantList('')" style="padding:6px;border:1px solid var(--gris-b);border-radius:6px"></label>
+      ${nLegacy>0?`<button onclick="window._mantF=Object.assign(window._mantF||{},{hist:${_mf.hist?'false':'true'}});renderMantList('')" class="btn btn-outline btn-sm" style="${_mf.hist?'background:var(--azul);color:#fff':''}" title="Cargue inicial histórico migrado (no se borra, solo se oculta de la lista diaria)">📦 Cargue inicial (${nLegacy})</button>`:''}
+      ${(_mf.q||_mf.ini||_mf.fin||_mf.hist)?`<button onclick="window._mantF=null;renderMantList('')" class="btn btn-outline btn-sm">✕ Limpiar</button>`:''}
+      <span style="font-size:12px;color:var(--gris-t);margin-left:auto">${rowsGen.length} OT${rowsGen.length===1?'':'s'}${_mf.hist?' · incluye cargue inicial':''}</span>
+    </div>
+    <div class="card" style="padding:10px">
+      ${rowsGen.length === 0
         ? '<div class="empty"><div class="empty-icon">✅</div><p>Sin órdenes de trabajo</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
             <thead><tr><th>Fecha</th><th>Área/Apto</th><th>Descripción del trabajo</th><th>Solicitó</th><th>Técnico (quién realiza)</th><th>Prioridad</th><th>Estado</th><th>Costo</th><th>Gerencia</th><th></th></tr></thead>
-            <tbody>${rowsFiltrados.map(o=>`<tr style="${o.estado==='Pendiente'?'background:#fff9f5':''}">
+            <tbody>${rowsGen.map(o=>`<tr style="${o.estado==='Pendiente'?'background:#fff9f5':''}">
               <td style="white-space:nowrap">${fmtDate(o.fecha || (o.created_at?o.created_at.split('T')[0]:null))}</td>
               <td><strong style="color:var(--azul)">${o.area_apto}</strong></td>
               <td style="max-width:260px">${o.descripcion}</td>
@@ -8328,12 +8345,14 @@ async function renderFacturasList(){
     if(_ff.ini && (!f.fecha || String(f.fecha) < _ff.ini)) return false;
     if(_ff.fin && (!f.fecha || String(f.fecha) > _ff.fin)) return false;
     if(_ff.perfil && f.perfil !== _ff.perfil) return false;
+    if(_ff.cli && String(f.cliente||'').toLowerCase().indexOf(_ff.cli.toLowerCase())<0) return false;
+    if(_ff.apto && String(f.apto||'').toLowerCase().indexOf(String(_ff.apto).toLowerCase())<0) return false;
     return true;
   });
   rows.sort(function(a,b){return _facNum(a.numero)-_facNum(b.numero);}); var money=function(n){return '$'+Math.round(Number(n)||0).toLocaleString('es-CO');};
   var body=rows.map(function(f){ var _esNC=(f.tipo==='Nota Crédito'); return '<tr'+(_esNC?' style="background:#FDF3F2"':'')+'><td><strong>'+(f.numero||'-')+'</strong>'+(_esNC?' <span style="background:#C0392B;color:#fff;font-size:9px;padding:1px 5px;border-radius:4px">NC</span>':'')+'</td><td>'+(f.fecha?fmtDate(f.fecha):'-')+'</td><td>'+(FISCAL[f.perfil]?f.perfil:'-')+'</td><td>'+(f.cliente||'-')+(_esNC&&f.ref_factura?'<div style="font-size:10px;color:#C0392B">abona '+f.ref_factura+'</div>':'')+'</td><td>'+(f.apto||'-')+'</td><td style="text-align:right;font-weight:600'+(_esNC?';color:#C0392B':'')+'">'+money(f.total)+'</td><td>'+(f.estado||'-')+'</td><td style="white-space:nowrap"><span style="cursor:pointer" title="PDF" onclick="facturaPDFById(\''+f.id+'\')">🖨️</span> <span style="cursor:pointer" title="Editar" onclick="facturaEditar(\''+f.id+'\')">✏️</span> <span style="cursor:pointer;color:#C0392B" title="Borrar" onclick="facturaBorrar(\''+f.id+'\')">🗑️</span></td></tr>'; }).join('')||'<tr><td colspan="8" style="text-align:center;color:#999;padding:18px">Sin facturas registradas</td></tr>';
   var tot=rows.reduce(function(s,f){return s+(Number(f.total)||0);},0);
-  document.getElementById('main-content').innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div class="page-title" style="margin-bottom:0">🧾 Facturas (gemelas internas)</div><div style="display:flex;gap:6px">'+barraCompartir()+'<button class="btn btn-outline btn-sm" onclick="loadView(\'facturas-composicion\')">📊 Composición</button><button class="btn btn-outline btn-sm" onclick="loadView(\'facturacion-vs-rack\')">🔍 vs Rack</button><button class="btn btn-outline btn-sm" style="color:#C0392B;border-color:#E0C0BA" onclick="window._facEdit=null;window._facNC=null;loadView(\'nota-credito\')">↩️ Nota Crédito</button><button class="btn btn-success btn-sm" onclick="window._facEdit=null;window._facNC=null;loadView(\'factura-gen\')">+ Generar factura</button></div></div><div class="card"><div class="card-header"><div class="card-title">'+rows.length+' facturas · Total '+money(tot)+'</div></div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 12px;border-bottom:1px solid #eee"><label style="font-size:12px;font-weight:600">Desde <input type="date" value="'+(_ff.ini||'')+'" onchange="window._facFiltro=Object.assign(window._facFiltro||{},{ini:this.value});renderFacturasList()" style="padding:5px;border:1px solid var(--gris-b);border-radius:6px"></label><label style="font-size:12px;font-weight:600">Hasta <input type="date" value="'+(_ff.fin||'')+'" onchange="window._facFiltro=Object.assign(window._facFiltro||{},{fin:this.value});renderFacturasList()" style="padding:5px;border:1px solid var(--gris-b);border-radius:6px"></label><label style="font-size:12px;font-weight:600">Entidad <select onchange="window._facFiltro=Object.assign(window._facFiltro||{},{perfil:this.value});renderFacturasList()" style="padding:5px;border:1px solid var(--gris-b);border-radius:6px"><option value="">Todas</option>'+_entOpts.map(function(e){return '<option'+(_ff.perfil===e?' selected':'')+'>'+e+'</option>';}).join('')+'</select></label>'+((_ff.ini||_ff.fin||_ff.perfil)?'<button class="btn btn-outline btn-sm" onclick="window._facFiltro=null;renderFacturasList()">✕ Limpiar filtros</button>':'')+'</div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>N°</th><th>Fecha</th><th>Entidad</th><th>Cliente</th><th>Apto</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  document.getElementById('main-content').innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div class="page-title" style="margin-bottom:0">🧾 Facturas (gemelas internas)</div><div style="display:flex;gap:6px">'+barraCompartir()+'<button class="btn btn-outline btn-sm" onclick="loadView(\'facturas-composicion\')">📊 Composición</button><button class="btn btn-outline btn-sm" onclick="loadView(\'facturacion-vs-rack\')">🔍 vs Rack</button><button class="btn btn-outline btn-sm" style="color:#C0392B;border-color:#E0C0BA" onclick="window._facEdit=null;window._facNC=null;loadView(\'nota-credito\')">↩️ Nota Crédito</button><button class="btn btn-success btn-sm" onclick="window._facEdit=null;window._facNC=null;loadView(\'factura-gen\')">+ Generar factura</button></div></div><div class="card"><div class="card-header"><div class="card-title">'+rows.length+' facturas · Total '+money(tot)+'</div></div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 12px;border-bottom:1px solid #eee"><label style="font-size:12px;font-weight:600">Desde <input type="date" value="'+(_ff.ini||'')+'" onchange="window._facFiltro=Object.assign(window._facFiltro||{},{ini:this.value});renderFacturasList()" style="padding:5px;border:1px solid var(--gris-b);border-radius:6px"></label><label style="font-size:12px;font-weight:600">Hasta <input type="date" value="'+(_ff.fin||'')+'" onchange="window._facFiltro=Object.assign(window._facFiltro||{},{fin:this.value});renderFacturasList()" style="padding:5px;border:1px solid var(--gris-b);border-radius:6px"></label><label style="font-size:12px;font-weight:600">Entidad <select onchange="window._facFiltro=Object.assign(window._facFiltro||{},{perfil:this.value});renderFacturasList()" style="padding:5px;border:1px solid var(--gris-b);border-radius:6px"><option value="">Todas</option>'+_entOpts.map(function(e){return '<option'+(_ff.perfil===e?' selected':'')+'>'+e+'</option>';}).join('')+'</select></label>'+'<label style="font-size:12px;font-weight:600">Cliente <input type="text" value="'+(_ff.cli||'')+'" placeholder="buscar cliente" onchange="window._facFiltro=Object.assign(window._facFiltro||{},{cli:this.value});renderFacturasList()" style="padding:5px;border:1px solid var(--gris-b);border-radius:6px"></label>'+'<label style="font-size:12px;font-weight:600">Apto <input type="text" value="'+(_ff.apto||'')+'" placeholder="ej: 701" onchange="window._facFiltro=Object.assign(window._facFiltro||{},{apto:this.value});renderFacturasList()" style="padding:5px;border:1px solid var(--gris-b);border-radius:6px;width:80px"></label>'+((_ff.ini||_ff.fin||_ff.perfil||_ff.cli||_ff.apto)?'<button class="btn btn-outline btn-sm" onclick="window._facFiltro=null;renderFacturasList()">✕ Limpiar filtros</button>':'')+'</div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>N°</th><th>Fecha</th><th>Entidad</th><th>Cliente</th><th>Apto</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 }
 function _facById(id){ return (window._facRows||[]).find(function(x){return x.id===id;}); }
 function facturaPDFById(id){ var f=_facById(id); if(f) generarFacturaPDF(f); }
