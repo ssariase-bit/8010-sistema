@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-03-novedades-seguimientos-informe';
+const APP_VERSION = '2026-07-03-modulo-comunicaciones';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -664,7 +664,7 @@ function initApp() {
   if (rolOp.includes(currentProfile?.rol)) {
     document.getElementById('fab-novedad').style.display = 'block';
   }
-  loadView('dashboard');
+  loadView('comunicaciones-list');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -938,7 +938,7 @@ rrhh: [
 const MENU_COMPLETO = [
   { section: 'Principal' },
   { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-  { id: 'informe-ejecutivo', icon: '📈', label: 'Informe Ejecutivo', roles: ['gerente_general','gerencia_operativa','administrador','asesora'] },
+  { id: 'comunicaciones-list', icon: '📣', label: 'Comunicaciones' },
   { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
   { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
@@ -1060,6 +1060,7 @@ async function loadView(view) {
     case 'nueva-reserva':   renderNuevaReserva(); break;
     case 'reservas':        await renderReservas(); break;
     case 'solicitudes':     await renderSolicitudes(); break;
+    case 'comunicaciones-list': await renderComunicaciones(); break;
     case 'comentarios':     await renderComentariosGerencia(); break;
     case 'informe-cki':     renderInformeCKI(); break;
     case 'informe-cko':     renderInformeCKO(); break;
@@ -6393,6 +6394,92 @@ window.renderSolicitudes = async function(filtro){
   setTimeout(function(){ var ta=document.getElementById('sol-desc'); if(ta&&!ta._ph){ ta._ph=true; ta.addEventListener('paste',function(e){ var items=(e.clipboardData||{}).items||[]; for(var i=0;i<items.length;i++){ if(items[i].type.indexOf('image')===0){ window._solHandleFile(items[i].getAsFile()); e.preventDefault(); break; } } }); } var pv=document.getElementById('sol-img-preview'); if(pv&&!window._solImg) pv.innerHTML=''; },100);
 };
 
+// ═══════════════════════════════════════════════════════════
+// COMUNICACIONES — tablero de comentarios y llamados de atención, con acuse (chulo) y respuestas
+// ═══════════════════════════════════════════════════════════
+window._COM_PUBLISHERS = ['gerente_general','administrador','gerencia_operativa','asesora','comercial'];
+window._comPuedePublicar = function(){ return window._COM_PUBLISHERS.indexOf((currentProfile&&currentProfile.rol)||'')>-1; };
+window._comYo = function(){ return (currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; };
+window._comLeyo = function(arr){ var email=(currentUser&&currentUser.email)||''; var yo=window._comYo(); return (Array.isArray(arr)?arr:[]).some(function(l){ return (l.email&&email&&l.email===email)||l.nombre===yo; }); };
+window.renderComunicaciones = async function(filtro){
+  filtro = (filtro===undefined?(window._comFiltro||'activas'):filtro); window._comFiltro=filtro;
+  var yo = window._comYo(); var puede = window._comPuedePublicar();
+  var q = sb.from('comunicaciones').select('*').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(300);
+  if(filtro!=='archivadas') q = q.eq('activo', true);
+  var res = await q;
+  if(res.error){ document.getElementById('main-content').innerHTML='<div class="page-title">📣 Comunicaciones</div><div class="card" style="max-width:560px"><p style="font-size:14px">⚠️ Falta crear la tabla <code>comunicaciones</code> en Supabase. Detalle: '+(res.error.message||'')+'</p></div>'; return; }
+  var rows = res.data||[];
+  var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var fmt = function(iso){ if(!iso) return ''; var d=new Date(iso); var p=function(x){return ('0'+x).slice(-2);}; return p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes()); };
+  var _arr = function(v){ return Array.isArray(v)?v:[]; };
+  var vis = rows.filter(function(c){ if(filtro==='pendientes'){ return !window._comLeyo(c.leidos); } return true; });
+  var cards = vis.map(function(c){
+    var leidos = _arr(c.leidos); var resp = _arr(c.respuestas);
+    var yoLei = window._comLeyo(leidos);
+    var esLlamado = (c.prioridad==='Llamado de atención');
+    var prioBadge = '<span style="background:'+(esLlamado?'#fee2e2;color:#991b1b':'#dbeafe;color:#1e40af')+';font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px">'+(esLlamado?'⚠️ Llamado de atención':'📣 Comunicado')+'</span>';
+    var readBtn = yoLei ? '<span style="color:#166534;font-size:12px;font-weight:600">✓ Leído</span>' : '<button class="btn btn-success btn-sm" onclick="marcarLeidoComunicacion(\''+c.id+'\')" style="padding:5px 14px">✓ Marcar como leído</button>';
+    var leidosTxt = leidos.length ? '<div style="font-size:11px;color:#555;margin-top:6px">✅ Leído por ('+leidos.length+'): '+leidos.map(function(l){return esc(l.nombre)+' <span style="color:#999">'+fmt(l.at)+'</span>';}).join(' · ')+'</div>' : '<div style="font-size:11px;color:#b45309;margin-top:6px">Aún nadie ha marcado leído.</div>';
+    var respHtml = resp.length ? resp.map(function(r){ return '<div style="border-left:3px solid #94a3b8;padding:5px 10px;margin:6px 0;background:#f8fafc;border-radius:0 6px 6px 0"><div style="font-size:11px;color:#666"><strong>'+esc(r.autor||'-')+'</strong> · '+fmt(r.at)+'</div><div style="font-size:12.5px;margin-top:2px;white-space:pre-wrap">'+esc(r.texto||'')+'</div></div>'; }).join('') : '<div style="color:#999;font-size:11.5px;margin:4px 0">Sin respuestas todavía.</div>';
+    var delBtn = (puede || c.autor===yo) ? '<span title="Archivar" style="cursor:pointer;color:#9a4a40;font-size:13px;margin-left:8px" onclick="archivarComunicacion(\''+c.id+'\')">🗑️</span>' : '';
+    return '<div style="border:1px solid #e2e4e8;border-left:4px solid '+(esLlamado?'#dc2626':'#1D3461')+';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
+      + '<div>'+prioBadge+' <span style="font-size:11px;color:#666">· '+esc(c.autor||'')+' · '+fmt(c.created_at)+' · Para: <strong>'+esc(c.dirigido_a||'Todos')+'</strong></span></div>'
+      + '<div style="display:flex;gap:4px;align-items:center">'+readBtn+delBtn+'</div></div>'
+      + (c.titulo?'<div style="font-weight:700;margin-top:6px">'+esc(c.titulo)+'</div>':'')
+      + '<div style="font-size:14px;margin-top:6px;white-space:pre-wrap;line-height:1.5">'+esc(c.mensaje)+'</div>'
+      + leidosTxt
+      + '<div style="margin-top:8px;border-top:1px solid #eef0f2;padding-top:8px"><div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:4px">💬 Respuestas</div>'+respHtml
+      + '<div style="display:flex;gap:6px;margin-top:6px"><input type="text" id="com-rep-'+c.id+'" placeholder="Escribe una respuesta..." style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px"><button class="btn btn-outline btn-sm" onclick="responderComunicacion(\''+c.id+'\')">Responder</button></div></div>'
+      + '</div>';
+  }).join('') || '<div class="empty"><div class="empty-icon">📣</div><p>Sin comunicaciones'+(filtro==='pendientes'?' pendientes':'')+'.</p></div>';
+  var pubForm = puede ? ('<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">✍️ Publicar comunicado / llamado de atención</div></div>'
+    + '<div class="form-group"><label>Mensaje</label><textarea id="com-msg" placeholder="Ej: Señores, veo que están dejando la luz prendida de afuera..." style="min-height:70px"></textarea></div>'
+    + '<div class="form-row"><div class="form-group"><label>Tipo</label><select id="com-prio"><option>Comunicado</option><option>Llamado de atención</option></select></div>'
+    + '<div class="form-group"><label>Dirigido a</label><input type="text" id="com-dir" list="dl-com-dir" value="Todos" placeholder="Todos, Administradores, Recepción..."><datalist id="dl-com-dir"><option>Todos</option><option>Administradores</option><option>Recepción</option><option>Camareras / Aseo</option><option>Mantenimiento</option><option>Comercial</option></datalist></div></div>'
+    + '<button class="btn btn-success" onclick="publicarComunicacion(this)">📣 Publicar</button></div>') : '';
+  var fbtn = function(v,l){ var on=(window._comFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComunicaciones(\''+v+'\')">'+l+'</button>'; };
+  document.getElementById('main-content').innerHTML =
+    '<div class="page-title">📣 Comunicaciones</div>'
+    + '<div style="font-size:12.5px;color:#666;margin:-6px 0 12px">Comentarios y llamados de atención de gerencia. Marca <strong>✓ leído</strong> cuando lo revises; puedes responder abajo.</div>'
+    + pubForm
+    + '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+fbtn('activas','Activas')+fbtn('pendientes','⏳ Mis pendientes')+fbtn('archivadas','Archivadas')+'</div>'
+    + cards;
+};
+window.publicarComunicacion = async function(btn){
+  var msg=((document.getElementById('com-msg')||{}).value||'').trim();
+  if(!msg){ showToast('Escribe el mensaje','error'); return; }
+  var prio=(document.getElementById('com-prio')||{}).value||'Comunicado';
+  var dir=((document.getElementById('com-dir')||{}).value||'Todos').trim()||'Todos';
+  if(btn){ btn.disabled=true; btn.innerHTML='Publicando...'; }
+  var row={ edificio:EDIFICIO_ACTIVO, autor:window._comYo(), autor_email:(currentUser&&currentUser.email)||null, mensaje:msg, prioridad:prio, dirigido_a:dir, activo:true, leidos:[], respuestas:[], user_id:currentUser.id };
+  var r=await sb.from('comunicaciones').insert(row);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); if(btn){btn.disabled=false;btn.innerHTML='📣 Publicar';} return; }
+  showToast('📣 Comunicado publicado','success'); renderComunicaciones('activas');
+};
+window.marcarLeidoComunicacion = async function(id){
+  var g=await sb.from('comunicaciones').select('leidos').eq('id',id).single(); if(g.error){ showToast('Error','error'); return; }
+  var arr=Array.isArray(g.data.leidos)?g.data.leidos:[];
+  if(window._comLeyo(arr)){ renderComunicaciones(); return; }
+  arr.push({nombre:window._comYo(), email:(currentUser&&currentUser.email)||'', at:new Date().toISOString()});
+  var u=await sb.from('comunicaciones').update({leidos:arr}).eq('id',id);
+  if(u.error){ showToast('Error: '+u.error.message,'error'); return; }
+  showToast('✓ Marcado como leído','success'); renderComunicaciones();
+};
+window.responderComunicacion = async function(id){
+  var el=document.getElementById('com-rep-'+id); var txt=((el&&el.value)||'').trim(); if(!txt){ showToast('Escribe una respuesta','error'); return; }
+  var g=await sb.from('comunicaciones').select('respuestas').eq('id',id).single(); if(g.error){ showToast('Error','error'); return; }
+  var arr=Array.isArray(g.data.respuestas)?g.data.respuestas:[]; arr.push({autor:window._comYo(), texto:txt, at:new Date().toISOString()});
+  var u=await sb.from('comunicaciones').update({respuestas:arr}).eq('id',id);
+  if(u.error){ showToast('Error: '+u.error.message,'error'); return; }
+  showToast('💬 Respuesta enviada','success'); renderComunicaciones();
+};
+window.archivarComunicacion = async function(id){
+  if(!confirm('¿Archivar esta comunicación? Dejará de mostrarse en Activas.')) return;
+  var u=await sb.from('comunicaciones').update({activo:false}).eq('id',id);
+  if(u.error){ showToast('Error: '+u.error.message,'error'); return; }
+  showToast('Archivada','success'); renderComunicaciones();
+};
 window._aptoNombreCache = null;
 window._cargarAptoNombres = async function(){
   try{ var _OCU=['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje']; var r=await sb.from('rack').select('apto,huesped,fecha,estado').eq('edificio',EDIFICIO_ACTIVO).eq('fecha',TODAY).not('huesped','is',null).limit(3000); var m={}; (r.data||[]).forEach(function(x){ if(x.apto&&x.huesped&&_OCU.indexOf(x.estado)>=0&&!m[x.apto]) m[x.apto]=x.huesped; }); window._aptoNombreCache=m; }catch(e){ window._aptoNombreCache=window._aptoNombreCache||{}; } return window._aptoNombreCache;
