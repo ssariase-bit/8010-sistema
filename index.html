@@ -469,7 +469,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-03-comunicaciones-dirigido-multiple';
+const APP_VERSION = '2026-07-03-comunicaciones-boton-ok';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -6486,7 +6486,7 @@ window.renderComunicaciones = async function(filtro){
       + '<div style="font-size:14px;margin-top:6px;white-space:pre-wrap;line-height:1.5">'+esc(c.mensaje)+'</div>'
       + leidosTxt
       + '<div style="margin-top:8px;border-top:1px solid #eef0f2;padding-top:8px"><div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:4px">💬 Respuestas</div>'+respHtml
-      + (paraMi?'<div style="display:flex;gap:6px;margin-top:6px"><input type="text" id="com-rep-'+c.id+'" placeholder="Escribe una respuesta..." style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px"><button class="btn btn-outline btn-sm" onclick="responderComunicacion(\''+c.id+'\')">Responder</button></div>':'')+'</div>'
+      + (paraMi?'<div style="display:flex;gap:6px;margin-top:6px"><input type="text" id="com-rep-'+c.id+'" spellcheck="true" lang="es" placeholder="Escribe una respuesta..." style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px"><button class="btn btn-success btn-sm" title="Responder OK rápido" onclick="responderComunicacion(\''+c.id+'\',\'OK\')">👍 OK</button><button class="btn btn-outline btn-sm" onclick="responderComunicacion(\''+c.id+'\')">Responder</button></div>':'')+'</div>'
       + '</div>';
   }).join('') || '<div class="empty"><div class="empty-icon">📣</div><p>Sin comunicaciones'+(filtro==='pendientes'?' pendientes':'')+'.</p></div>';
   var _comChecks = puede ? await window._comTargetChecksHTML() : '';
@@ -6523,8 +6523,10 @@ window.marcarLeidoComunicacion = async function(id){
   if(u.error){ showToast('Error: '+u.error.message,'error'); return; }
   showToast('✓ Marcado como leído','success'); renderComunicaciones();
 };
-window.responderComunicacion = async function(id){
-  var el=document.getElementById('com-rep-'+id); var txt=((el&&el.value)||'').trim(); if(!txt){ showToast('Escribe una respuesta','error'); return; }
+window.responderComunicacion = async function(id, textoFijo){
+  var txt;
+  if(textoFijo){ txt=String(textoFijo).trim(); }
+  else { var el=document.getElementById('com-rep-'+id); txt=((el&&el.value)||'').trim(); if(!txt){ showToast('Escribe una respuesta','error'); return; } }
   var g=await sb.from('comunicaciones').select('respuestas').eq('id',id).single(); if(g.error){ showToast('Error','error'); return; }
   var arr=Array.isArray(g.data.respuestas)?g.data.respuestas:[]; arr.push({autor:window._comYo(), texto:txt, at:new Date().toISOString()});
   var u=await sb.from('comunicaciones').update({respuestas:arr}).eq('id',id);
