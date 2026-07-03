@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-02-scape-num-factura';
+const APP_VERSION = '2026-07-02-facturas-vinos-iva5';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -8281,10 +8281,10 @@ var FISCAL={
   '80-10':{razon:'8010 Ochenta Diez Urban Living SAS',nit:'900.683.855-5',dir:'CARRERA 10 #80-36',ciudad:'BOGOTÁ',regimen:'RÉGIMEN COMÚN',resol:'18764090799551 del 20 de Marzo 2025',rango:'UL 4104 a la UL 7000',prefijo:'UL',ciiu:'5512',ica:'13.8 *1000',banco:'Helm Bank · Cta. corriente N° 013-40531-1',conceptoAloja:'ALOJAMIENTO PLAN CORPORATIVO',tasaAloja:'Exento'},
   '8i8':{razon:'8i8 OPERADORA SAS',nit:'902026873-8',dir:'CARRERA 14 # 88-49',ciudad:'BOGOTÁ',regimen:'RÉGIMEN COMÚN',resol:'FE 18764107923884 · vigencia 01 abril 2026 (2 años)',rango:'F8I8 1 a la F8I8 100000',prefijo:'F8I8',ciiu:'5512',ica:'13.8 *1000',banco:'(por confirmar)',conceptoAloja:'ALOJAMIENTO',tasaAloja:'19%'}
 };
-var FAC_TASAS={'Excluido':0,'Exento':0,'0%':0,'8%':0.08,'19%':0.19};
-var FAC_CONCEPTOS=['Alojamiento','Canon de arrendamiento','Alquiler de Parqueadero','Restaurante / Alimentos','Minibar','Comunicaciones','Sala / Evento','Spa','Lavandería','Transporte','Varios / Cash Advance','Consumos adicionales','Otro'];
+var FAC_TASAS={'Excluido':0,'Exento':0,'0%':0,'5%':0.05,'8%':0.08,'19%':0.19};
+var FAC_CONCEPTOS=['Alojamiento','Canon de arrendamiento','Alquiler de Parqueadero','Restaurante / Alimentos','Minibar','Vinos','Comunicaciones','Sala / Evento','Spa','Lavandería','Transporte','Varios / Cash Advance','Consumos adicionales','Otro'];
 // Mapea cada concepto a una categoría de composición de ventas (como el reporte de NewHotel)
-var FAC_CAT={'Alojamiento':'aloja','Canon de arrendamiento':'aloja','Restaurante / Alimentos':'fb','Minibar':'fb','Consumos adicionales':'fb','Comunicaciones':'com','Sala / Evento':'eventos','Spa':'spa','Lavandería':'otros','Transporte':'otros','Varios / Cash Advance':'otros','Otro':'otros'};
+var FAC_CAT={'Alojamiento':'aloja','Canon de arrendamiento':'aloja','Restaurante / Alimentos':'fb','Minibar':'fb','Vinos':'fb','Consumos adicionales':'fb','Comunicaciones':'com','Sala / Evento':'eventos','Spa':'spa','Lavandería':'otros','Transporte':'otros','Varios / Cash Advance':'otros','Otro':'otros'};
 function _facComp(f){ var c={aloja:0,fb:0,com:0,eventos:0,spa:0,otros:0,neto:0,imp:0}; (f.lineas||[]).forEach(function(l){ var k=FAC_CAT[l.concepto]||'otros'; c[k]+=Number(l.valor)||0; c.neto+=Number(l.valor)||0; c.imp+=Number(l.impuesto)||0; }); c.total=c.neto+c.imp; return c; }
 // Orden: nº de factura ascendente (la 1 primero); aptos en Kubik de PH2 (arriba) a 201 (abajo)
 function _facNum(n){ var m=String(n==null?'':n).match(/(\d+)\s*$/); return m?parseInt(m[1],10):0; }
