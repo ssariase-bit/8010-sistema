@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-02-modulo-masajes-scape';
+const APP_VERSION = '2026-07-02-scape-num-factura';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -1305,16 +1305,17 @@ async function loadView(view) {
       {id:'estado',label:'Estado',type:'select',opts:['Completo','Trasladado','Faltante','Dañado']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
-    case 'scape-list': await renderList('masajes_scape','💆 Seguimiento Masajes Scape','scape-form',
-      ['fecha','apto','arrendatario','terapeuta','valor','estado'],
-      ['Fecha','Apto','Arrendatario','Terapeuta','Valor','Estado']); break;
+    case 'scape-list': await renderList('masajes_scape','💆 Seguimiento Masajes Scape (Scape Wellness)','scape-form',
+      ['fecha','num_factura','apto','arrendatario','terapeuta','valor','estado'],
+      ['Fecha','N° factura','Apto','Arrendatario','Terapeuta','Valor','Estado']); break;
     case 'scape-form': renderGenForm('masajes_scape','💆 Registrar Masaje Scape',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
-      {id:'apto',label:'Apartamento / Ubicación',type:'text',req:true},
-      {id:'arrendatario',label:'Arrendatario / Huésped',type:'nombre3',req:true},
-      {id:'terapeuta',label:'Nombre del Terapeuta',type:'nombre3',req:true},
+      {id:'num_factura',label:'N° factura',type:'text'},
+      {id:'apto',label:'Apartamento (ej. 303 o 601/602)',type:'text',req:true},
+      {id:'arrendatario',label:'Nombre del Arrendatario',type:'nombre3',req:true},
+      {id:'terapeuta',label:'Nombre del Terapeuta (puede ser más de uno, sepáralos con /)',type:'text',req:true},
       {id:'valor',label:'Valor del masaje ($)',type:'money',req:true},
-      {id:'estado',label:'Estado',type:'select',opts:['Agendado','Realizado','Cancelado']},
+      {id:'estado',label:'Estado',type:'select',opts:['Realizado','Agendado','Cancelado']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'prestamos-elem': await renderPrestamosElementos(); break;
