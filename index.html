@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-02-reserva-pago-y-hk-admin-r2';
+const APP_VERSION = '2026-07-03-agenda-eventos-imprimir';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -8159,6 +8159,7 @@ async function renderEventosAgenda(){
   var all=[...(r1.data||[]),...(r2.data||[])]; var seen={}; all=all.filter(function(e){ if(seen[e.id])return false; seen[e.id]=1; return true; });
   var dias=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']; var esc=function(s){ return String(s==null?'':s).replace(/</g,'&lt;'); };
   window._evAgWeek = fmtDate(lunes)+' – '+fmtDate(dom);
+  window._evAgAll = all; window._evAgLunes = lunes; window._evAgDom = dom;
   var _agTxt='📅 Agenda de Eventos · '+window._evAgWeek+' · '+EB().nombre+'\n'; var _hayEv=false;
   for(var _j=0;_j<7;_j++){ var _dj=new Date(d); _dj.setDate(_dj.getDate()+_j); var _fj=_dj.toISOString().slice(0,10);
     var _evj=all.filter(function(e){ var fi=e.fecha_inicio, ff=e.fecha_fin||e.fecha_inicio; return _fj>=fi && _fj<=ff; });
@@ -8183,12 +8184,30 @@ async function renderEventosAgenda(){
         <button class="btn btn-outline btn-sm" onclick="window._evAgendaLunes='${_evShiftWeek(lunes,7)}';renderEventosAgenda()">▶</button>
         <button onclick="loadView('eventos-rack')" class="btn btn-outline btn-sm">🗓️ Rack</button>
         <button onclick="loadView('eventos')" class="btn btn-outline btn-sm">📋 Lista</button>
+        <button onclick="imprimirAgendaEventos()" class="btn btn-outline btn-sm" style="color:#1D3461;border-color:#1D3461">🖨️ Imprimir (copia seguridad)</button>
         <a href="${_agWa}" target="_blank" class="btn btn-outline btn-sm" style="color:#0E8A4F;border-color:#0E8A4F;text-decoration:none">💬 Enviar WhatsApp</a>
         <button onclick="enviarAgendaEventos(this)" class="btn btn-outline btn-sm" style="color:#1D3461;border-color:#1D3461">📧 Enviar correo</button>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">${cards}</div>`;
 }
+window.imprimirAgendaEventos = function(){
+  var all=window._evAgAll||[]; var mondayISO=window._evAgLunes; if(!mondayISO){ renderEventosAgenda(); return; }
+  var d=new Date(mondayISO+'T00:00:00');
+  var dias=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var fmt=function(iso){ var p=String(iso).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  var body='';
+  for(var i=0;i<7;i++){ var dd=new Date(d); dd.setDate(dd.getDate()+i); var fstr=dd.toISOString().slice(0,10);
+    var evs=all.filter(function(e){ var fi=e.fecha_inicio, ff=e.fecha_fin||e.fecha_inicio; return fstr>=fi && fstr<=ff; });
+    var rows = evs.length ? evs.map(function(e){ return '<tr><td>'+esc(e.empresa||'')+'</td><td>'+esc(e.hora||'')+'</td><td style="text-align:center">'+esc(e.pax||'')+'</td><td>'+esc(e.sala||'')+'</td><td>'+esc(e.observaciones||'')+'</td></tr>'; }).join('') : '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>';
+    body += '<table class="ag"><thead><tr><th class="dia">'+dias[i]+' '+fmt(fstr)+'</th><th style="width:120px">Horario</th><th style="width:50px">PAX</th><th style="width:110px">Ubicación</th><th>Observaciones</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+  var nb=(typeof EB==='function'&&EB().nombre)||'8010 Urban Living';
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Agenda de Eventos</title><style>body{font-family:Arial,sans-serif;color:#111;padding:20px}h1{font-size:18px;margin:0 0 2px}h2{font-size:13px;color:#555;font-weight:400;margin:0 0 16px}table.ag{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:12px}table.ag th,table.ag td{border:1px solid #333;padding:5px 8px;text-align:left;vertical-align:top}table.ag th{background:#f0f0f0}table.ag th.dia{background:#1D3461;color:#fff;width:220px}.noprint{margin-top:12px}@media print{.noprint{display:none}}</style></head><body><h1>Agenda de Eventos — '+esc(nb)+'</h1><h2>Semana '+fmt(window._evAgLunes)+' al '+fmt(window._evAgDom)+'</h2>'+body+'<div class="noprint"><button onclick="window.print()" style="padding:8px 16px;font-size:14px;cursor:pointer">🖨️ Imprimir</button></div></body></html>';
+  var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para imprimir','error'); return; }
+  w.document.open(); w.document.write(html); w.document.close(); setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 500);
+};
 // ─── Rack de Salones (grilla sala x dia del mes, alimentado de eventos) ───
 var _EV_SALAS = ['SALA 1','SALA 2','SALA 3','SALA 4','SALA 5','GRAN SALÓN','PISO 12','APARTAMENTO'];
 function _evSalasDe(txt){
