@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-03-modulo-comunicaciones';
+const APP_VERSION = '2026-07-03-comunicaciones-tipos-destinatario';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -6401,6 +6401,31 @@ window._COM_PUBLISHERS = ['gerente_general','administrador','gerencia_operativa'
 window._comPuedePublicar = function(){ return window._COM_PUBLISHERS.indexOf((currentProfile&&currentProfile.rol)||'')>-1; };
 window._comYo = function(){ return (currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; };
 window._comLeyo = function(arr){ var email=(currentUser&&currentUser.email)||''; var yo=window._comYo(); return (Array.isArray(arr)?arr:[]).some(function(l){ return (l.email&&email&&l.email===email)||l.nombre===yo; }); };
+window._comParaMi = function(c){
+  if(window._comPuedePublicar()) return true; // gerencia/admin ven todo (supervisión)
+  var d=String(c.dirigido_a||'Todos').toLowerCase().trim(); if(!d||d==='todos') return true;
+  var yo=String(window._comYo()).toLowerCase().trim();
+  var rol=String((currentProfile&&currentProfile.rol)||'').toLowerCase();
+  if(yo && (d===yo || d.indexOf(yo)>-1 || yo.indexOf(d)>-1)) return true; // dirigido a mi nombre
+  if(d.indexOf('recep')>-1 && rol.indexOf('recep')>-1) return true;
+  if(d.indexOf('admin')>-1 && rol.indexOf('admin')>-1) return true;
+  if((d.indexOf('camarer')>-1||d.indexOf('aseo')>-1) && (rol.indexOf('camarer')>-1||rol.indexOf('aseo')>-1||rol.indexOf('house')>-1)) return true;
+  if(d.indexOf('mant')>-1 && rol.indexOf('mant')>-1) return true;
+  if(d.indexOf('comerc')>-1 && rol.indexOf('comerc')>-1) return true;
+  return false;
+};
+window._COM_TIPOS = ['Comunicado','Llamado de atención','Recomendación','Instrucción / Tarea','Felicitación','Recordatorio','Urgente'];
+window._comTipoStyle = function(t){
+  var m = {
+    'Llamado de atención': {bg:'#fee2e2',col:'#991b1b',ic:'⚠️',bd:'#dc2626'},
+    'Urgente': {bg:'#fee2e2',col:'#991b1b',ic:'🚨',bd:'#dc2626'},
+    'Recomendación': {bg:'#fef9c3',col:'#854d0e',ic:'💡',bd:'#ca8a04'},
+    'Recordatorio': {bg:'#fef3c7',col:'#92400e',ic:'🔔',bd:'#d97706'},
+    'Felicitación': {bg:'#dcfce7',col:'#166534',ic:'👏',bd:'#16a34a'},
+    'Instrucción / Tarea': {bg:'#e0e7ff',col:'#3730a3',ic:'📌',bd:'#4f46e5'}
+  };
+  return m[t] || {bg:'#dbeafe',col:'#1e40af',ic:'📣',bd:'#1D3461'};
+};
 window.renderComunicaciones = async function(filtro){
   filtro = (filtro===undefined?(window._comFiltro||'activas'):filtro); window._comFiltro=filtro;
   var yo = window._comYo(); var puede = window._comPuedePublicar();
@@ -6412,17 +6437,17 @@ window.renderComunicaciones = async function(filtro){
   var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var fmt = function(iso){ if(!iso) return ''; var d=new Date(iso); var p=function(x){return ('0'+x).slice(-2);}; return p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes()); };
   var _arr = function(v){ return Array.isArray(v)?v:[]; };
-  var vis = rows.filter(function(c){ if(filtro==='pendientes'){ return !window._comLeyo(c.leidos); } return true; });
+  var vis = rows.filter(function(c){ if(filtro==='pendientes'){ return window._comParaMi(c) && !window._comLeyo(c.leidos); } return true; });
   var cards = vis.map(function(c){
     var leidos = _arr(c.leidos); var resp = _arr(c.respuestas);
-    var yoLei = window._comLeyo(leidos);
-    var esLlamado = (c.prioridad==='Llamado de atención');
-    var prioBadge = '<span style="background:'+(esLlamado?'#fee2e2;color:#991b1b':'#dbeafe;color:#1e40af')+';font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px">'+(esLlamado?'⚠️ Llamado de atención':'📣 Comunicado')+'</span>';
-    var readBtn = yoLei ? '<span style="color:#166534;font-size:12px;font-weight:600">✓ Leído</span>' : '<button class="btn btn-success btn-sm" onclick="marcarLeidoComunicacion(\''+c.id+'\')" style="padding:5px 14px">✓ Marcar como leído</button>';
+    var yoLei = window._comLeyo(leidos); var paraMi = window._comParaMi(c);
+    var ts = window._comTipoStyle(c.prioridad); var esLlamado = (c.prioridad==='Llamado de atención'||c.prioridad==='Urgente');
+    var prioBadge = '<span style="background:'+ts.bg+';color:'+ts.col+';font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px">'+ts.ic+' '+esc(c.prioridad||'Comunicado')+'</span>';
+    var readBtn = !paraMi ? '' : (yoLei ? '<span style="color:#166534;font-size:12px;font-weight:600">✓ Leído</span>' : '<button class="btn btn-success btn-sm" onclick="marcarLeidoComunicacion(\''+c.id+'\')" style="padding:5px 14px">✓ Marcar como leído</button>');
     var leidosTxt = leidos.length ? '<div style="font-size:11px;color:#555;margin-top:6px">✅ Leído por ('+leidos.length+'): '+leidos.map(function(l){return esc(l.nombre)+' <span style="color:#999">'+fmt(l.at)+'</span>';}).join(' · ')+'</div>' : '<div style="font-size:11px;color:#b45309;margin-top:6px">Aún nadie ha marcado leído.</div>';
     var respHtml = resp.length ? resp.map(function(r){ return '<div style="border-left:3px solid #94a3b8;padding:5px 10px;margin:6px 0;background:#f8fafc;border-radius:0 6px 6px 0"><div style="font-size:11px;color:#666"><strong>'+esc(r.autor||'-')+'</strong> · '+fmt(r.at)+'</div><div style="font-size:12.5px;margin-top:2px;white-space:pre-wrap">'+esc(r.texto||'')+'</div></div>'; }).join('') : '<div style="color:#999;font-size:11.5px;margin:4px 0">Sin respuestas todavía.</div>';
     var delBtn = (puede || c.autor===yo) ? '<span title="Archivar" style="cursor:pointer;color:#9a4a40;font-size:13px;margin-left:8px" onclick="archivarComunicacion(\''+c.id+'\')">🗑️</span>' : '';
-    return '<div style="border:1px solid #e2e4e8;border-left:4px solid '+(esLlamado?'#dc2626':'#1D3461')+';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff">'
+    return '<div style="border:1px solid #e2e4e8;border-left:4px solid '+ts.bd+';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
       + '<div>'+prioBadge+' <span style="font-size:11px;color:#666">· '+esc(c.autor||'')+' · '+fmt(c.created_at)+' · Para: <strong>'+esc(c.dirigido_a||'Todos')+'</strong></span></div>'
       + '<div style="display:flex;gap:4px;align-items:center">'+readBtn+delBtn+'</div></div>'
@@ -6430,13 +6455,14 @@ window.renderComunicaciones = async function(filtro){
       + '<div style="font-size:14px;margin-top:6px;white-space:pre-wrap;line-height:1.5">'+esc(c.mensaje)+'</div>'
       + leidosTxt
       + '<div style="margin-top:8px;border-top:1px solid #eef0f2;padding-top:8px"><div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:4px">💬 Respuestas</div>'+respHtml
-      + '<div style="display:flex;gap:6px;margin-top:6px"><input type="text" id="com-rep-'+c.id+'" placeholder="Escribe una respuesta..." style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px"><button class="btn btn-outline btn-sm" onclick="responderComunicacion(\''+c.id+'\')">Responder</button></div></div>'
+      + (paraMi?'<div style="display:flex;gap:6px;margin-top:6px"><input type="text" id="com-rep-'+c.id+'" placeholder="Escribe una respuesta..." style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px"><button class="btn btn-outline btn-sm" onclick="responderComunicacion(\''+c.id+'\')">Responder</button></div>':'')+'</div>'
       + '</div>';
   }).join('') || '<div class="empty"><div class="empty-icon">📣</div><p>Sin comunicaciones'+(filtro==='pendientes'?' pendientes':'')+'.</p></div>';
+  var _comNombres=''; if(puede){ try{ var _pr=await sb.from('personal').select('nombre').limit(300); _comNombres=[...new Set(((_pr&&_pr.data)||[]).map(function(p){return String(p.nombre||'').trim();}).filter(Boolean))].sort().map(function(n){return '<option>'+esc(n)+'</option>';}).join(''); }catch(e){} }
   var pubForm = puede ? ('<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">✍️ Publicar comunicado / llamado de atención</div></div>'
     + '<div class="form-group"><label>Mensaje</label><textarea id="com-msg" placeholder="Ej: Señores, veo que están dejando la luz prendida de afuera..." style="min-height:70px"></textarea></div>'
-    + '<div class="form-row"><div class="form-group"><label>Tipo</label><select id="com-prio"><option>Comunicado</option><option>Llamado de atención</option></select></div>'
-    + '<div class="form-group"><label>Dirigido a</label><input type="text" id="com-dir" list="dl-com-dir" value="Todos" placeholder="Todos, Administradores, Recepción..."><datalist id="dl-com-dir"><option>Todos</option><option>Administradores</option><option>Recepción</option><option>Camareras / Aseo</option><option>Mantenimiento</option><option>Comercial</option></datalist></div></div>'
+    + '<div class="form-row"><div class="form-group"><label>Tipo</label><select id="com-prio">'+window._COM_TIPOS.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select></div>'
+    + '<div class="form-group"><label>Dirigido a <span style="font-weight:400;color:#888;font-size:11px">(un depto o una persona)</span></label><input type="text" id="com-dir" list="dl-com-dir" value="Todos" placeholder="Todos, Administradores, o el nombre de la persona..."><datalist id="dl-com-dir"><option>Todos</option><option>Administradores</option><option>Recepción</option><option>Camareras / Aseo</option><option>Mantenimiento</option><option>Comercial</option>'+_comNombres+'</datalist></div></div>'
     + '<button class="btn btn-success" onclick="publicarComunicacion(this)">📣 Publicar</button></div>') : '';
   var fbtn = function(v,l){ var on=(window._comFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComunicaciones(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML =
