@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-03-agenda-eventos-imprimir-r2';
+const APP_VERSION = '2026-07-03-novedades-seguimientos-informe';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -10889,7 +10889,9 @@ function _horaNov(r){
   return m ? m[1] : fmtHour(r.created_at);
 }
 async function compartirNovedades() {
-  const _linea = r => `🕐 ${_horaNov(r)} · *[${r.prioridad||'-'}] ${r.area||'General'}* · ${r.estado||'-'}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}`;
+  const _NL = String.fromCharCode(10);
+  const _novSeg = r => { var a=Array.isArray(r.comentarios)?r.comentarios:[]; if(!a.length) return ''; return _NL+'🔁 Seguimientos:'+a.map(function(c){ return _NL+'   – '+(c.fecha?(String(c.fecha)+' '):'')+(c.autor?('('+c.autor+') '):'')+String(c.texto||'').trim(); }).join(''); };
+  const _linea = r => `🕐 ${_horaNov(r)} · *[${r.prioridad||'-'}] ${r.area||'General'}* · ${r.estado||'-'}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}${_novSeg(r)}`;
   // Si hay una fecha seleccionada: novedades de ESA fecha + las ABIERTAS de días anteriores (seguimiento)
   if (window._novFecha) {
     const f = window._novFecha;
@@ -10919,7 +10921,7 @@ _Sistema ${EB().nombre}_`;
     await window._anexarArrendatario(abiertas);
   const cerradas = ce.data || [];
     await window._anexarArrendatario(cerradas);
-  const linea = r => `🕐 ${_horaNov(r)} · *[${r.prioridad||'-'}] ${r.area||'General'}*${r.fecha && r.fecha!==TODAY ? ' · desde '+fmtDate(r.fecha) : ''}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}`;
+  const linea = r => `🕐 ${_horaNov(r)} · *[${r.prioridad||'-'}] ${r.area||'General'}*${r.fecha && r.fecha!==TODAY ? ' · desde '+fmtDate(r.fecha) : ''}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}${_novSeg(r)}`;
   const txt = `🚨 *${EB().nombre} — Novedades*
 📅 ${fmtDate(TODAY)}
 
