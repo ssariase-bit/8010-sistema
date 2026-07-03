@@ -450,6 +450,10 @@ textarea{resize:vertical;min-height:80px}
 <button id="fab-novedad" onclick="window._novedadEdit=null;loadView('novedad-form')" title="Reportar novedad"
   style="display:none;position:fixed;bottom:28px;left:28px;width:52px;height:52px;border-radius:50%;background:var(--rojo);color:white;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(192,57,43,.5);z-index:9998;transition:transform .15s"
   onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">⚠️</button>
+<!-- FAB — Nuevo comunicado (global) -->
+<button id="fab-comunicar" onclick="abrirComunicarRapido()" title="Nuevo comunicado"
+  style="display:none;position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;background:#1D3461;color:white;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(29,52,97,.5);z-index:9998;transition:transform .15s"
+  onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">📣</button>
 
 <script>
 // ═══════════════════════════════════════════════════════════
@@ -465,7 +469,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-03-comunicaciones-tipos-destinatario';
+const APP_VERSION = '2026-07-03-comunicar-boton-flotante-global';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -664,6 +668,7 @@ function initApp() {
   if (rolOp.includes(currentProfile?.rol)) {
     document.getElementById('fab-novedad').style.display = 'block';
   }
+  try{ if(window._comPuedePublicar&&window._comPuedePublicar()){ var _fc=document.getElementById('fab-comunicar'); if(_fc) _fc.style.display='block'; } }catch(e){}
   loadView('comunicaciones-list');
 }
 
@@ -6505,6 +6510,33 @@ window.archivarComunicacion = async function(id){
   var u=await sb.from('comunicaciones').update({activo:false}).eq('id',id);
   if(u.error){ showToast('Error: '+u.error.message,'error'); return; }
   showToast('Archivada','success'); renderComunicaciones();
+};
+// Publicar comunicado rápido desde cualquier módulo (botón flotante 📣)
+window.abrirComunicarRapido = function(){
+  if(!(window._comPuedePublicar&&window._comPuedePublicar())){ showToast('No tienes permiso para publicar comunicados','error'); return; }
+  var m=document.getElementById('modal-comunicar'); if(!m){ m=document.createElement('div'); m.id='modal-comunicar'; document.body.appendChild(m); }
+  var tipos=(window._COM_TIPOS||['Comunicado','Llamado de atención']).map(function(t){return '<option>'+t+'</option>';}).join('');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px';
+  m.innerHTML='<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;padding:20px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0;font-size:17px">📣 Nuevo comunicado</h3><span style="cursor:pointer;font-size:20px;color:#888" onclick="document.getElementById(\'modal-comunicar\').remove()">✕</span></div>'
+    +'<div class="form-group"><label>Mensaje</label><textarea id="comq-msg" style="width:100%;min-height:70px;padding:8px;border:1px solid #ddd;border-radius:8px" placeholder="Escribe el comunicado o llamado de atención..."></textarea></div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap"><div class="form-group" style="flex:1;min-width:150px"><label>Tipo</label><select id="comq-prio" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px">'+tipos+'</select></div>'
+    +'<div class="form-group" style="flex:1;min-width:150px"><label>Dirigido a</label><input type="text" id="comq-dir" value="Todos" list="dl-comq-dir" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px" placeholder="Todos, Administradores, o una persona..."><datalist id="dl-comq-dir"><option>Todos</option><option>Administradores</option><option>Recepción</option><option>Camareras / Aseo</option><option>Mantenimiento</option><option>Comercial</option></datalist></div></div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-outline btn-sm" onclick="document.getElementById(\'modal-comunicar\').remove()">Cancelar</button><button class="btn btn-success" onclick="publicarComunicacionRapido(this)">📣 Publicar</button></div>'
+    +'</div>';
+  setTimeout(function(){ var t=document.getElementById('comq-msg'); if(t) t.focus(); }, 60);
+};
+window.publicarComunicacionRapido = async function(btn){
+  var msg=((document.getElementById('comq-msg')||{}).value||'').trim(); if(!msg){ showToast('Escribe el mensaje','error'); return; }
+  var prio=(document.getElementById('comq-prio')||{}).value||'Comunicado';
+  var dir=((document.getElementById('comq-dir')||{}).value||'Todos').trim()||'Todos';
+  if(btn){ btn.disabled=true; btn.innerHTML='Publicando...'; }
+  var row={ edificio:EDIFICIO_ACTIVO, autor:window._comYo(), autor_email:(currentUser&&currentUser.email)||null, mensaje:msg, prioridad:prio, dirigido_a:dir, activo:true, leidos:[], respuestas:[], user_id:currentUser.id };
+  var r=await sb.from('comunicaciones').insert(row);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); if(btn){btn.disabled=false;btn.innerHTML='📣 Publicar';} return; }
+  var mm=document.getElementById('modal-comunicar'); if(mm) mm.remove();
+  showToast('📣 Comunicado publicado — quedó en Comunicaciones','success');
+  if(window._currentView==='comunicaciones-list' && typeof renderComunicaciones==='function') renderComunicaciones('activas');
 };
 window._aptoNombreCache = null;
 window._cargarAptoNombres = async function(){
