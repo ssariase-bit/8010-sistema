@@ -465,7 +465,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-02-reserva-quien-paga';
+const APP_VERSION = '2026-07-02-reserva-pago-y-hk-admin';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -3484,6 +3484,7 @@ async function enviarHK() {
     hora_salida: document.getElementById('hk-out').value || null,
     pausa_min: parseInt(document.getElementById('hk-pausa') && document.getElementById('hk-pausa').value) || 0,
     observaciones: (function(){ var o=(document.getElementById('hk-obs').value||'').trim(); var d=(document.getElementById('hk-pausa-detalle')&&document.getElementById('hk-pausa-detalle').value)||''; return d ? (o?(o+' · '):'')+'Pausas: '+d : o; })(),
+    registrado_por: (currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||null,
     user_id: currentUser.id,
   });
   if (error) { showToast('Error al registrar', 'error'); btn.innerHTML = '📤 Registrar limpieza'; btn.disabled = false; return; }
@@ -4161,7 +4162,7 @@ async function renderHKList() {
                 <th onclick="window._hkOrden='camarera';renderHKList()" style="cursor:pointer" title="Ordenar por camarera">Camarera ${_ord==='camarera'?'▾':''}</th>
                 <th>Ingreso</th><th>Salida</th><th>⏱ Duración</th>
                 <th onclick="window._hkOrden='estado';renderHKList()" style="cursor:pointer" title="Ordenar por estado">Estado ${_ord==='estado'?'▾':''}</th>
-                <th>Frec.</th><th>Observaciones</th><th></th></tr></thead>
+                <th>Frec.</th><th>Observaciones</th><th>Registró (admin)</th><th></th></tr></thead>
               <tbody>${_diaOrd.map(h => {
                 const mins = netMin(h);
                 const durColor = !mins ? '#999' : mins <= 30 ? 'var(--verde)' : mins <= 45 ? 'var(--naran)' : 'var(--rojo)';
@@ -4177,6 +4178,7 @@ async function renderHKList() {
                   <td><span class="badge b-${(h.estado==='Limpio'||String(h.estado||'').indexOf('Al día')===0)?'resuelto':h.estado==='Declina limpieza'?'alta':'proceso'}">${h.estado||'-'}</span></td>
                   <td style="font-size:11px;white-space:nowrap">${h.frecuencia||'-'}</td>
                   <td style="max-width:140px;font-size:11px">${h.observaciones||'-'}</td>
+                  <td style="font-size:11px;white-space:nowrap">${h.registrado_por||'-'}${(h.salida_por&&h.salida_por!==h.registrado_por)?('<br><span style="color:#888">salida: '+h.salida_por+'</span>'):''}</td>
                   <td style="white-space:nowrap">${_btnsEdit('housekeeping', h.id)}</td>
                 </tr>`;
               }).join('')}</tbody>
@@ -6233,6 +6235,8 @@ window.verDetalleReserva = async function(id){
     + fila('Canal', esc(r.canal))
     + sec('Pago')
     + fila('Forma de pago', esc(r.pago))
+    + (r.empresa?fila('Empresa / Compañía', esc(r.empresa)):'')
+    + (r.pagador?fila('¿Quién paga?', '<strong>'+esc(r.pagador)+'</strong>'):'')
     + fila('Estado de pago', esc(r.estado_pago))
     + (r.cxc_tipo?fila('CxC', esc(r.cxc_tipo)):'')
     + (r.cxc_razon?fila('Razón social', esc(r.cxc_razon)):'')
@@ -9459,6 +9463,7 @@ async function confirmarDeclinar() {
   const { error: hkErr } = await sb.from('housekeeping').insert({
     fecha: TODAY, apto, camarera: camarera || 'Sin asignar',
     estado: 'Declina limpieza', observaciones: obsText,
+    registrado_por: (currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||null,
     user_id: currentUser.id,
   });
 
@@ -11005,7 +11010,7 @@ async function registrarSalidaHK(id) {
   const ahora = new Date().toTimeString().slice(0,5);
   const hora = prompt('Hora de salida (HH:MM):', ahora);
   if (!hora) return;
-  const { error } = await sb.from('housekeeping').update({ hora_salida: hora, estado: 'Limpio' }).eq('id', id);
+  const { error } = await sb.from('housekeeping').update({ hora_salida: hora, estado: 'Limpio', salida_por: (currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||null }).eq('id', id);
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
   showToast('✅ Hora de salida registrada', 'success');
   renderHKList();
