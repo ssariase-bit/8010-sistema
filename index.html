@@ -469,7 +469,29 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-04-andres-kubik-admin';
+const APP_VERSION = '2026-07-04-rack-combos';
+// ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
+// Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
+const CHANGELOG = [
+  { fecha:'2026-07-04', version:'2026-07-04-rack-combos', titulo:'Rack: unidades combinadas agrupadas + parser de nombres',
+    afecta:'Recepción / Reservas',
+    detalle:'En el Rack, las unidades combinadas (Famili Residence, Two Residence, Suite Deluxe) que ocupan varios aptos físicos —ej. la Famili Residence = 701+702— ahora se marcan con una franja de color y la etiqueta del combo, para leerse como una sola unidad y no como reservas sueltas. Además se corrigió el parser de nombres: los apellidos con partícula ("De Cadenas", "De la Cruz", "Van Der") ya no se parten mal (antes "Sergio De Cadenas Villavicencio" quedaba como nombre "Sergio De").' },
+  { fecha:'2026-07-04', version:'2026-07-04-registro-cambios', titulo:'Nuevo módulo "Registro de Cambios"',
+    afecta:'Gerencia',
+    detalle:'Se agregó esta bitácora dentro del SO (sección Sistema) para dejar trazabilidad de cada cambio estructural: fecha, versión, qué cambió y a quién afecta. Sirve de base para informar al equipo.' },
+  { fecha:'2026-07-04', version:'2026-07-04-historico-ck', titulo:'Histórico CKI/CKO y limpieza de Novedades',
+    afecta:'Recepción / Operativos',
+    detalle:'Los CKI y CKO ya no aparecen en el módulo de Novedades (queda solo para novedades reales). Nuevo módulo "Histórico CKI/CKO" con buscador por apto, huésped o fecha. El comentario del CKI se acortó: se quitó el saludo y el nombre/apto duplicado (el $0 se mantiene).' },
+  { fecha:'2026-07-04', version:'2026-07-04-andres-kubik-admin', titulo:'Andrés Leguizamón en reportes administrativos',
+    afecta:'Administrativo (8010 y Kubik)',
+    detalle:'Se agregó a Andrés Leguizamón (compras) en copia de los reportes administrativos —saldos, carpeta, semana en curso— de ambos edificios, por hacer parte de las dos operaciones.' },
+  { fecha:'2026-07-04', version:'2026-07-04-solicitudes-lote1', titulo:'Gestión de solicitudes y ajustes de menú',
+    afecta:'Todo el equipo',
+    detalle:'Se atendieron 9 solicitudes. Se agregó "Tarjeta débito" en las formas de pago. Se retiró el acceso duplicado a Seguimientos y se renombró el menú a "Turnos / Personal / Extras / Seguimiento". Se sacó a gerencia del envío de Control de Personal (se consulta en el SO).' },
+  { fecha:'2026-07-03', version:'2026-07-03-com-leido-todos', titulo:'Comunicaciones: multi-destinatario y confirmación de lectura',
+    afecta:'Todo el equipo',
+    detalle:'"Dirigido a" pasó a selección múltiple por trabajador. Botón rápido de "OK" para responder. La confirmación de lectura (chulo) quedó disponible para cualquiera que vea el comunicado. Al abrir el SO, gerencia entra al Dashboard y el personal operativo a Comunicaciones.' },
+];
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -691,6 +713,7 @@ const NAV_ITEMS = {
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
+    { id: 'historico-ck', icon: '🔁', label: 'Histórico CKI/CKO' },
     { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
     { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
@@ -742,6 +765,7 @@ const NAV_ITEMS = {
     { id: 'eventos', icon: '🎪', label: 'Eventos' },
     { section: 'Sistema' },
     { id: 'import-rack', icon: '🔄', label: 'Importar Rack 2026' },
+    { id: 'changelog', icon: '🛠️', label: 'Registro de Cambios' },
   ],
   gerencia_operativa: [
     { section: 'Principal' },
@@ -757,6 +781,7 @@ const NAV_ITEMS = {
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
+    { id: 'historico-ck', icon: '🔁', label: 'Histórico CKI/CKO' },
     { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
     { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
@@ -803,6 +828,7 @@ const NAV_ITEMS = {
     { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
     { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
+    { id: 'historico-ck', icon: '🔁', label: 'Histórico CKI/CKO' },
     { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
     { section: 'Operación' },
     { id: 'mant-form', icon: '🔧', label: 'Orden Mantenimiento' },
@@ -954,6 +980,7 @@ const MENU_COMPLETO = [
   { id: 'turnos-list', icon: '📋', label: 'Turnos / Personal / Extras / Seguimiento' },
   { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
   { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
+  { id: 'historico-ck', icon: '🔁', label: 'Histórico CKI/CKO' },
   { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
   { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
   { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
@@ -1009,6 +1036,7 @@ const MENU_COMPLETO = [
   { id: 'semana-resumen', icon: '📅', label: 'Semana en Curso' },
   { section: 'Sistema' },
   { id: 'import-rack', icon: '🔄', label: 'Importar Rack 2026' },
+  { id: 'changelog', icon: '🛠️', label: 'Registro de Cambios' },
 ];
 
 function buildSidebar() {
@@ -1070,6 +1098,7 @@ async function loadView(view) {
     case 'comentarios':     await renderComentariosGerencia(); break;
     case 'informe-cki':     renderInformeCKI(); break;
     case 'informe-cko':     renderInformeCKO(); break;
+    case 'historico-ck':    renderHistoricoCK(); break;
     case 'informe-noshow':  await renderInformeNoShows(); break;
     case 'entrega-llaves':  renderEntregaLlaves(); break;
     case 'entrega-efectivos': await renderEntregaEfectivos(); break;
@@ -1368,6 +1397,7 @@ async function loadView(view) {
     ]); break;
     case 'cuadro-extras':      await renderCuadroExtras(); break;
     case 'import-rack':        renderImportRack(); break;
+    case 'changelog':          renderChangelog(); break;
 
     // ── MÓDULOS DE AUDITORÍA ───────────────────────────────
     case 'check-carpetas-list': await renderList('check_carpetas','📂 Check List Carpetas','check-carpetas-form',
@@ -2145,10 +2175,23 @@ async function renderRack() {
     </th>`;
   }).join('');
 
+  // Unidades combinadas (Famili/Two Residence, Suite Deluxe): marcar sus aptos para agruparlos
+  // visualmente en el rack (misma unidad comercial repartida en varios aptos físicos).
+  const _COMBO_SIGLA = {'Famili Residence':'Famili Residence','Family Residence':'Famili Residence','Two Residence':'Two Residence','Suite Deluxe':'Suite Deluxe','Combo':'Combo'};
+  const _COMBO_SIG = {'Famili Residence':'FR','Family Residence':'FR','Two Residence':'TR','Suite Deluxe':'SD','Combo':'Combo'};
+  const _COMBO_COLOR = '#7C3AED';
+  const _comboMap = {};
+  (allRack||[]).forEach(function(r){
+    if(r.edificio && r.edificio!==EDIFICIO_ACTIVO) return;
+    if(!r.apto || !_COMBO_SIGLA[r.tipo]) return;
+    if(!_comboMap[r.apto]) _comboMap[r.apto]={nombre:_COMBO_SIGLA[r.tipo], sigla:_COMBO_SIG[r.tipo]};
+  });
+
   // Generar filas del rack
   const filas = aptos.map(apto => {
     const _varAdeApto = APTO_A_MAP[apto];   // si este apto es padre, su habitación A
     const _esVarA = apto.endsWith('A');
+    const _combo = _comboMap[apto] || null;
     const celdas = Array.from({length:daysInMonth},(_,i)=>{
       const d = i+1;
       const rec = rack[apto]?.[d];
@@ -2220,11 +2263,13 @@ async function renderRack() {
     const _filaTitle = huesHoy ? `Apto ${apto} · ${huesHoy} · ${estHoy}${_tarHoyTxt}` : `Apto ${apto} · ${estHoy}`;
 
     return `<tr ${_hl?'data-hl="1"':''} style="height:34px;${esVarianteA?'background:#fafafa;':''}${_hl?`outline:3px solid ${window._rkResaltar==='Check-in hoy'?'#0C447C':'#C2410C'};outline-offset:-2px;`:''}">
-      <td style="position:sticky;left:0;background:${cmFila.bg};color:${cmFila.color};font-weight:800;padding:4px 8px;font-size:12px;border:1px solid #ccc;white-space:nowrap;z-index:2;min-width:${APTO_W}px">
+      <td style="position:sticky;left:0;background:${cmFila.bg};color:${cmFila.color};font-weight:800;padding:4px 8px;font-size:12px;border:1px solid #ccc;${_combo?`border-left:4px solid ${_COMBO_COLOR};`:''}white-space:nowrap;z-index:2;min-width:${APTO_W}px">
         ${esVarianteA ? `<span style="font-size:9px;color:#9CA3AF">↳</span> ` : ''}${apto}
+        ${_combo?`<div style="font-size:8px;font-weight:800;color:${_COMBO_COLOR};margin-top:1px;letter-spacing:.3px">🔗 ${_combo.sigla}</div>`:''}
       </td>
       <td style="position:sticky;left:${APTO_W}px;background:${cmFila.bg};color:${cmFila.color};padding:4px 8px;font-size:11px;border:1px solid #ccc;white-space:nowrap;z-index:2;min-width:${HUES_W}px;max-width:${HUES_W}px;overflow:hidden;text-overflow:ellipsis" title="${_filaTitle}">
         <div style="font-weight:600">${huesHoy || (estHoy==='Libre' && !aIncluidaHoy ? '<span style="color:#aaa;font-style:italic">Libre</span>':'')}${aIncluidaHoy?' <span style="font-size:9px;font-style:italic">· completo</span>':''}</div>
+        ${_combo?`<div style="display:inline-block;margin-top:2px;background:#EDE9FE;color:${_COMBO_COLOR};font-size:9px;font-weight:700;padding:1px 6px;border-radius:6px" title="Unidad combinada: se renta como una sola">🔗 ${_combo.nombre}</div>`:''}
         ${_rHoy&&_rHoy.huespedes_extra?`<div style="font-size:9px;color:var(--gris-t)">+ ${_rHoy.huespedes_extra}</div>`:''}
         ${tarHoy && !aIncluidaHoy ? `<div style="font-size:9px;opacity:.7">$${Number(tarHoy).toLocaleString('es-CO')}/noche</div>` : ''}
         ${varADeEste && ['Ocupado','Check-in hoy','Check-out hoy'].includes(estHoy) && canEdit ? `<div style="margin-top:2px"><button onclick="marcarCompletoDirecto('${rack[apto]?.[todayDay]?.id}','${apto}')" style="font-size:8px;background:${aCompletaHoy?'#15401a':'var(--naran)'};color:white;border:none;border-radius:3px;padding:1px 7px;cursor:pointer">${aCompletaHoy?'🏠 Completo ✓':'🏠 Marcar completo'}</button></div>` : ''}
@@ -2635,12 +2680,23 @@ async function borrarDiaRack(){
 // ── Nombre del huésped en 3 partes ──
 window._composeNombre = function(n,a1,a2){ return [n,a1,a2].map(function(s){return String(s||'').trim();}).filter(Boolean).join(' '); };
 window._splitNombre = function(full){
+  // Partículas de apellido (español/portugués/holandés): se pegan al apellido siguiente,
+  // así "Sergio De Cadenas Villavicencio" → nombre "Sergio", ap1 "De Cadenas", ap2 "Villavicencio".
+  var PART = {'de':1,'del':1,'la':1,'las':1,'los':1,'da':1,'das':1,'do':1,'dos':1,'van':1,'von':1,'di':1,'du':1,'san':1,'santa':1,'della':1,'mac':1,'mc':1};
   var w = String(full||'').trim().replace(/\s+/g,' ').split(' ').filter(Boolean);
-  var n = w.length;
-  if(n===0) return {nombre:'',apellido1:'',apellido2:''};
-  if(n===1) return {nombre:w[0],apellido1:'',apellido2:''};
-  if(n===2) return {nombre:w[0],apellido1:w[1],apellido2:''};
-  return {nombre:w.slice(0,n-2).join(' '),apellido1:w[n-2],apellido2:w[n-1]};
+  if(!w.length) return {nombre:'',apellido1:'',apellido2:''};
+  var toks=[], i=0;
+  while(i<w.length){
+    if(PART[w[i].toLowerCase()] && i<w.length-1){
+      var comp=w[i];
+      while(i<w.length-1 && PART[w[i].toLowerCase()]){ i++; comp+=' '+w[i]; }
+      toks.push(comp); i++;
+    } else { toks.push(w[i]); i++; }
+  }
+  var n = toks.length;
+  if(n===1) return {nombre:toks[0],apellido1:'',apellido2:''};
+  if(n===2) return {nombre:toks[0],apellido1:toks[1],apellido2:''};
+  return {nombre:toks.slice(0,n-2).join(' '),apellido1:toks[n-2],apellido2:toks[n-1]};
 };
 // Devuelve {nombre,apellido1,apellido2} de un registro: usa las columnas si existen, si no parte el huesped
 window._nombrePartes = function(r){ r=r||{}; if(r.nombre||r.apellido1||r.apellido2) return {nombre:r.nombre||'',apellido1:r.apellido1||'',apellido2:r.apellido2||''}; return window._splitNombre(r.huesped||''); };
@@ -3527,13 +3583,21 @@ function areaApto(n){
   return splitAreaApto(n && n.area);
 }
 
+// Los CKI/CKO se registran como novedad (trazabilidad) pero NO deben saturar el módulo Novedades:
+// se ven aparte en el Histórico CKI/CKO. Detecta registros nuevos (area 'CKI —'/'CKO —') y viejos (por descripción).
+function _esNovedadCK(n){
+  if(!n) return false;
+  var a=String(n.area||''), d=String(n.descripcion||'');
+  return /^CKI\b/.test(a) || /^CKO\b/.test(a) || d.indexOf('✅ Check-in realizado')===0 || /Realiza CKO/.test(d);
+}
+
 async function renderNovedadesList(filtro='', fechaSel='') {
   window._novFecha = fechaSel || '';
   const q = sb.from('novedades').select('*').order('created_at', { ascending: false }).limit(200);
   if (filtro === 'abiertas') q.in('estado', ['Abierto','En proceso','Escalado']);
   if (fechaSel) q.eq('fecha', fechaSel);
   const { data } = await q;
-  const rows = data || [];
+  const rows = (data || []).filter(n=>!_esNovedadCK(n));
   await window._cargarAptoNombres();
 
   const badgeEst = e => {
@@ -9712,7 +9776,7 @@ async function declinarLimpieza() {
 // ═══════════════════════════════════════════════════════════
 async function renderNovedadesDiarias() {
   const { data } = await sb.from('novedades').select('*').eq('fecha', TODAY).order('created_at', {ascending:false});
-  const rows = data || [];
+  const rows = (data || []).filter(n=>!_esNovedadCK(n));
   const abiertas = rows.filter(r => r.estado !== 'Resuelto');
   const resueltas = rows.filter(r => r.estado === 'Resuelto');
 
@@ -9758,7 +9822,7 @@ async function renderNovedadesDiarias() {
 
 async function compartirNovedadesDiarias() {
   const { data } = await sb.from('novedades').select('*').eq('fecha', TODAY).order('created_at',{ascending:false});
-  const rows = data || [];
+  const rows = (data || []).filter(n=>!_esNovedadCK(n));
   await window._anexarArrendatario(rows);
   const abiertas = rows.filter(r=>r.estado!=='Resuelto' && r.estado!=='Cerrado');
   const resueltas = rows.filter(r=>r.estado==='Resuelto' || r.estado==='Cerrado');
@@ -9786,7 +9850,7 @@ async function reporteNovedades(){
       sb.from('novedades').select('*').eq('fecha', f).eq('edificio', EDIFICIO_ACTIVO).order('created_at',{ascending:true}),
       sb.from('novedades').select('*').lt('fecha', f).eq('edificio', EDIFICIO_ACTIVO).in('estado',['Abierto','En proceso','Escalado']).order('fecha',{ascending:false})
     ]);
-    rows = dd.data || []; previas = sg.data || [];
+    rows = (dd.data || []).filter(n=>!_esNovedadCK(n)); previas = (sg.data || []).filter(n=>!_esNovedadCK(n));
   } catch(e){ showToast('Error cargando datos del reporte','error'); return; }
   // Recorta lo que venga después de "✅ Acción tomada:" — solo el hecho de la novedad
   const _soloNov = d => String(d||'').split(/\n*✅?\s*Acci[oó]n tomada:/i)[0].trim();
@@ -10349,8 +10413,8 @@ function generarMsgCKI() {
   const _fh = fmtFH12();
   const cobroObs = (document.getElementById('cki-cobro')?.value || '').trim();
   const migCKI = (document.getElementById('cki-migracion')?.value || '').startsWith('Sí') ? ', se envía reporte de ingreso a Migración Colombia' : '';
-  const msg = `${(function(_h){return _h<12?'Buenos días':_h<18?'Buenas tardes':'Buenas noches';})(new Date().getHours())}, ${_fh}
-Realiza CKI ${huesped} (${canal==='Particular'?'Hab.':'Hab.'} ${apto} - ${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${cantidad} ${uniLbl}${cantidad>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''}${migCKI}${acompStr}${cortesias} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
+  const msg = `${_fh}
+Realiza CKI (${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${cantidad} ${uniLbl}${cantidad>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''}${migCKI}${acompStr}${cortesias} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
   // Comunicar la estadía al RACK: una fila por noche (Check-in hoy → Ocupado → Check-out hoy)
@@ -10396,7 +10460,7 @@ R/${quien}`;
   try {
     const _hN=new Date().getHours();
     const _qN = quien || currentProfile?.nombre || 'Recepción';
-    const _nov = { fecha: TODAY, turno: _hN<14?'Mañana':(_hN<22?'Tarde':'Noche'), area: 'Recepción', apto: apto,
+    const _nov = { fecha: TODAY, turno: _hN<14?'Mañana':(_hN<22?'Tarde':'Noche'), area: 'CKI — Apto '+apto, apto: apto, edificio: EDIFICIO_ACTIVO,
       prioridad: 'Baja', descripcion: '✅ Check-in realizado — Apto '+apto+(huesped?(' · '+huesped):'')+'\n\n'+msg,
       reportado_por: _qN, gestionado_por: _qN, resuelto_por: _qN, estado: 'Resuelto', fecha_cierre: TODAY, user_id: currentUser.id };
     sb.from('novedades').insert(_nov).then(function(r){
@@ -10685,7 +10749,7 @@ Realiza CKO ${huesped} (apto. ${apto}${canal?' - '+canal:''})${cobroStr}${consum
 R/${quien}`;
 
   // Registrar el informe en Novedades para que quede en el reporte del día
-  try { const _hN=new Date().getHours(); sb.from('novedades').insert({ fecha: TODAY, turno: _hN<14?'Mañana':(_hN<22?'Tarde':'Noche'), area: 'CKO — Apto ' + apto, prioridad: 'Baja', descripcion: msg, reportado_por: quien || currentProfile?.nombre || 'Recepción', estado: 'Resuelto', fecha_cierre: TODAY, user_id: currentUser.id }).then(function(r){ if (r.error) console.error('novedad CKO:', r.error); }); } catch(e) { console.error(e); }
+  try { const _hN=new Date().getHours(); sb.from('novedades').insert({ fecha: TODAY, turno: _hN<14?'Mañana':(_hN<22?'Tarde':'Noche'), area: 'CKO — Apto ' + apto, apto: apto, edificio: EDIFICIO_ACTIVO, prioridad: 'Baja', descripcion: msg, reportado_por: quien || currentProfile?.nombre || 'Recepción', estado: 'Resuelto', fecha_cierre: TODAY, user_id: currentUser.id }).then(function(r){ if (r.error) console.error('novedad CKO:', r.error); }); } catch(e) { console.error(e); }
   // Mostrar modal de compartir + botón para actualizar el rack
   window._ckoHuesped = huesped; // para que el rack registre el CKO aunque hoy no tenga fila
   if (consumos > 0) { sb.from('consumos').insert({ fecha: TODAY, apto, huesped, valor: consumos, pago, factura: fv || null, user_id: currentUser.id }).then(function(r){ if (r.error) console.error('consumos:', r.error); else showToast('💵 Consumo de $' + consumos.toLocaleString('es-CO') + ' registrado en Ingresos', 'success'); }); }
@@ -10720,6 +10784,76 @@ R/${quien}`;
   document.body.appendChild(modal);
   // Actualizar el rack automáticamente (el apto queda SUCIO / días futuros liberados) sin esperar clic
   _ckoAplicarRack(apto).then(function(lib){ showToast('📅 Rack actualizado: Apto '+apto+' marcado "Check-out realizado" (salida)'+(lib?' · '+lib+' día(s) liberados':''),'success'); if(window._currentView==='rack') renderRack(); if(window._currentView==='estado-huespedes') renderEstadoHuespedes(); else if(window._currentView==='ocupacion') renderOcupacion(); }).catch(function(){});
+}
+
+// ═══════════════════════════════════════════════════════════
+// HISTÓRICO CKI / CKO — todos los check-in/check-out con buscador
+// (se alimenta de los registros que el CKI/CKO deja en 'novedades', sin saturar el módulo Novedades)
+// ═══════════════════════════════════════════════════════════
+function _histCKTipo(n){ var a=String(n.area||''), d=String(n.descripcion||''); return (/^CKI\b/.test(a)||d.indexOf('✅ Check-in')===0)?'CKI':'CKO'; }
+async function renderHistoricoCK(){
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-title">🔁 Histórico CKI / CKO</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-outline btn-sm" onclick="renderInformeCKI()" style="color:var(--verde);border-color:var(--verde)">🟢 Nuevo CKI</button>
+      <button class="btn btn-outline btn-sm" onclick="renderInformeCKO()" style="color:var(--rojo);border-color:var(--rojo)">🔴 Nuevo CKO</button>
+      <input type="text" id="histck-q" onkeyup="_histCKFiltrar()" placeholder="🔎 Buscar (apto, huésped, fecha, texto...)" style="padding:7px 12px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px;flex:1;min-width:200px">
+    </div>
+    <div class="card"><div id="histck-body"><div class="empty"><div class="empty-icon">⏳</div><p>Cargando…</p></div></div></div>`;
+  try { if (typeof window._cargarAptoNombres==='function') await window._cargarAptoNombres(); } catch(_){}
+  var r = await sb.from('novedades').select('*').order('created_at',{ascending:false}).limit(2000);
+  window._histCK = (r.data||[]).filter(function(n){ return _esNovedadCK(n) && (n.edificio===EDIFICIO_ACTIVO || !n.edificio); });
+  _histCKPintar(window._histCK);
+}
+function _histCKPintar(rows){
+  var body=document.getElementById('histck-body'); if(!body) return;
+  if(!rows || !rows.length){ body.innerHTML='<div class="empty"><div class="empty-icon">📭</div><p>Sin CKI/CKO registrados</p></div>'; return; }
+  var _e = (typeof esc==='function') ? esc : function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var ci=rows.filter(function(n){return _histCKTipo(n)==='CKI';}).length, co=rows.length-ci;
+  body.innerHTML='<div style="font-size:11px;color:var(--gris-t);margin-bottom:8px">'+rows.length+' registro(s) · 🟢 '+ci+' CKI · 🔴 '+co+' CKO</div>'+
+    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Apto</th><th>Detalle</th><th>Por</th></tr></thead><tbody>'+
+    rows.map(function(n){
+      var t=_histCKTipo(n); var aa=(typeof areaApto==='function'?areaApto(n):{apto:n.apto});
+      var badge=t==='CKI'?'<span class="badge b-resuelto">🟢 CKI</span>':'<span class="badge b-alta">🔴 CKO</span>';
+      var apto=(window._aptoConNombre?window._aptoConNombre(aa.apto):(aa.apto||'-'));
+      return '<tr><td style="white-space:nowrap">'+fmtDate(n.fecha||(n.created_at?n.created_at.split('T')[0]:null))+'</td>'+
+        '<td style="white-space:nowrap;color:var(--gris-t);font-size:11px">'+fmtHour(n.created_at)+'</td>'+
+        '<td>'+badge+'</td>'+
+        '<td style="white-space:nowrap">'+apto+'</td>'+
+        '<td style="max-width:460px;white-space:pre-wrap;font-size:12px">'+_e(String(n.descripcion||''))+'</td>'+
+        '<td style="white-space:nowrap">'+_e(n.reportado_por||'-')+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+function _histCKFiltrar(){
+  var el=document.getElementById('histck-q'); var q=(el?el.value:'').toLowerCase().trim();
+  var rows=window._histCK||[];
+  if(q){ rows=rows.filter(function(n){ return (String(n.fecha||'')+' '+String(n.area||'')+' '+String(n.apto||'')+' '+String(n.descripcion||'')+' '+String(n.reportado_por||'')).toLowerCase().indexOf(q)>-1; }); }
+  _histCKPintar(rows);
+}
+
+// ═══════════════════════════════════════════════════════════
+// REGISTRO DE CAMBIOS — bitácora de cambios estructurales del SO
+// ═══════════════════════════════════════════════════════════
+function renderChangelog(){
+  var _e = (typeof esc==='function') ? esc : function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var cl = (typeof CHANGELOG!=='undefined' && Array.isArray(CHANGELOG)) ? CHANGELOG : [];
+  var items = cl.map(function(c, i){
+    var esUltimo = (i===0);
+    return '<div class="card" style="margin-bottom:10px;border-left:4px solid '+(esUltimo?'var(--verde)':'var(--gris-b)')+'">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
+      +   '<div>'
+      +     '<div style="font-size:14px;font-weight:700;color:#1D3461">'+(esUltimo?'🟢 ':'')+_e(c.titulo||'')+'</div>'
+      +     '<div style="font-size:11px;color:var(--gris-t);margin-top:2px">'+(c.fecha?fmtDate(c.fecha):'')+' · v'+_e(c.version||'')+'</div>'
+      +   '</div>'
+      +   (c.afecta?'<span class="badge b-proceso" style="white-space:nowrap">Afecta: '+_e(c.afecta)+'</span>':'')
+      + '</div>'
+      + '<div style="font-size:13px;line-height:1.55;margin-top:8px">'+_e(c.detalle||'')+'</div>'
+      + '</div>';
+  }).join('');
+  document.getElementById('main-content').innerHTML =
+    '<div class="page-title">🛠️ Registro de Cambios</div>'
+    + '<div style="font-size:12px;color:var(--gris-t);margin-bottom:14px">Bitácora de cambios estructurales del Sistema Operativo. La versión en uso es <strong>'+_e(typeof APP_VERSION!=='undefined'?APP_VERSION:'')+'</strong>.</div>'
+    + (items || '<div class="card"><div class="empty"><div class="empty-icon">📭</div><p>Sin cambios registrados</p></div></div>');
 }
 
 // Anula un bloqueo o estadía completa: pone Libre todas las fechas del rango del apto
@@ -11077,9 +11211,9 @@ async function compartirNovedades() {
       sb.from('novedades').select('*').eq('fecha', f).order('created_at',{ascending:true}),
       sb.from('novedades').select('*').lt('fecha', f).in('estado',['Abierto','En proceso','Escalado']).order('fecha',{ascending:false})
     ]);
-    const rows = delDia.data || [];
+    const rows = (delDia.data || []).filter(n=>!_esNovedadCK(n));
     await window._anexarArrendatario(rows);
-    const previas = seguim.data || [];
+    const previas = (seguim.data || []).filter(n=>!_esNovedadCK(n));
     await window._anexarArrendatario(previas);
     const txt = `🚨 *${EB().nombre} — Novedades del ${fmtDate(f)}*
 ${rows.length} del día${previas.length?` · ${previas.length} en seguimiento`:''}
@@ -11097,7 +11231,7 @@ _Sistema ${EB().nombre}_`;
   ]);
   const abiertas = ab.data || [];
     await window._anexarArrendatario(abiertas);
-  const cerradas = ce.data || [];
+  const cerradas = (ce.data || []).filter(n=>!_esNovedadCK(n));
     await window._anexarArrendatario(cerradas);
   const linea = r => `🕐 ${_horaNov(r)} · *[${r.prioridad||'-'}] ${r.area||'General'}*${r.fecha && r.fecha!==TODAY ? ' · desde '+fmtDate(r.fecha) : ''}\n${(r.descripcion||'').trim()}${r.causa?'\n• Causa: '+r.causa:''}${r.fuente?'\n• Fuente: '+r.fuente:''}${r.tratamiento?'\n• Tratamiento: '+r.tratamiento:''}${r.reportado_por?'\n• Registra: '+r.reportado_por:''}${r.gestionado_por?' · Realiza: '+r.gestionado_por:''}${_novSeg(r)}`;
   const txt = `🚨 *${EB().nombre} — Novedades*
@@ -11293,7 +11427,7 @@ async function tablaNovedades(fechaSel) {
     sb.from('novedades').select('*').eq('fecha', f).order('created_at',{ascending:true}),
     sb.from('novedades').select('*').lt('fecha', f).in('estado',['Abierto','En proceso','Escalado']).order('fecha',{ascending:false})
   ]);
-  const filas = [...(delDia.data||[]).map(r=>({...r,_seg:false})), ...(seguim.data||[]).map(r=>({...r,_seg:true}))];
+  const filas = [...(delDia.data||[]).filter(n=>!_esNovedadCK(n)).map(r=>({...r,_seg:false})), ...(seguim.data||[]).filter(n=>!_esNovedadCK(n)).map(r=>({...r,_seg:true}))];
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const tr = filas.map(r=>`<tr style="${r._seg?'background:#FFFDF2':''}">
     <td>${_horaNov(r)}</td>
