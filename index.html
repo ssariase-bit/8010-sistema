@@ -469,13 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-04-rack-combos';
+const APP_VERSION = '2026-07-04-rack-combos2';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
-  { fecha:'2026-07-04', version:'2026-07-04-rack-combos', titulo:'Rack: unidades combinadas agrupadas + parser de nombres',
+  { fecha:'2026-07-04', version:'2026-07-04-rack-combos2', titulo:'Rack: unidades combinadas agrupadas + parser de nombres',
     afecta:'Recepción / Reservas',
-    detalle:'En el Rack, las unidades combinadas (Famili Residence, Two Residence, Suite Deluxe) que ocupan varios aptos físicos —ej. la Famili Residence = 701+702— ahora se marcan con una franja de color y la etiqueta del combo, para leerse como una sola unidad y no como reservas sueltas. Además se corrigió el parser de nombres: los apellidos con partícula ("De Cadenas", "De la Cruz", "Van Der") ya no se parten mal (antes "Sergio De Cadenas Villavicencio" quedaba como nombre "Sergio De").' },
+    detalle:'En el Rack, las unidades combinadas (Famili Residence, Two Residence, Suite Deluxe) que ocupan varios aptos físicos —ej. la Famili Residence = 701+702— ahora se marcan con una franja de color y la etiqueta del combo, para leerse como una sola unidad y no como reservas sueltas. El agrupado funciona aunque la reserva no tenga guardado el "tipo": detecta el mismo huésped ocupando varios aptos del mismo piso en las mismas fechas. Además se corrigió el parser de nombres: los apellidos con partícula ("De Cadenas", "De la Cruz", "Van Der") ya no se parten mal (antes "Sergio De Cadenas Villavicencio" quedaba como nombre "Sergio De").' },
   { fecha:'2026-07-04', version:'2026-07-04-registro-cambios', titulo:'Nuevo módulo "Registro de Cambios"',
     afecta:'Gerencia',
     detalle:'Se agregó esta bitácora dentro del SO (sección Sistema) para dejar trazabilidad de cada cambio estructural: fecha, versión, qué cambió y a quién afecta. Sirve de base para informar al equipo.' },
@@ -2181,10 +2181,30 @@ async function renderRack() {
   const _COMBO_SIG = {'Famili Residence':'FR','Family Residence':'FR','Two Residence':'TR','Suite Deluxe':'SD','Combo':'Combo'};
   const _COMBO_COLOR = '#7C3AED';
   const _comboMap = {};
+  // 1) Por tipo guardado en la reserva (Famili/Two Residence, Suite Deluxe, Combo)
   (allRack||[]).forEach(function(r){
     if(r.edificio && r.edificio!==EDIFICIO_ACTIVO) return;
     if(!r.apto || !_COMBO_SIGLA[r.tipo]) return;
     if(!_comboMap[r.apto]) _comboMap[r.apto]={nombre:_COMBO_SIGLA[r.tipo], sigla:_COMBO_SIG[r.tipo]};
+  });
+  // 2) Fallback (aunque el 'tipo' no esté guardado): mismo huésped ocupando varios aptos del
+  //    mismo piso en la MISMA fecha = unidad combinada. Detecta FR/TR/SD por los sufijos.
+  const _pisoDe = a => { a=String(a); if(/^PH/i.test(a)) return 'PH'; const m=a.match(/^(\d+?)(\d\d)([A-Z]?)$/); return m?m[1]:a; };
+  const _sufDe = a => { const m=String(a).match(/(\d\d[A-Z]?)$/); return m?m[1]:String(a); };
+  const _nombreCombo = aps => { const s=aps.map(_sufDe).sort().join('+'); if(s==='01+02')return{nombre:'Famili Residence',sigla:'FR'}; if(s==='02+03')return{nombre:'Two Residence',sigla:'TR'}; if(s==='04+04A')return{nombre:'Suite Deluxe',sigla:'SD'}; return{nombre:'Unidad combinada',sigla:'Combo'}; };
+  const _OCU_CK = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
+  const _porHF = {};
+  (allRack||[]).forEach(function(r){
+    if(r.edificio && r.edificio!==EDIFICIO_ACTIVO) return;
+    if(!r.apto || !r.fecha || !_OCU_CK.includes(r.estado)) return;
+    var h=String(r.huesped||'').trim().toLowerCase(); if(!h) return;
+    var k=h+'|'+r.fecha+'|'+_pisoDe(r.apto);
+    (_porHF[k]=_porHF[k]||new Set()).add(r.apto);
+  });
+  Object.keys(_porHF).forEach(function(k){
+    var aps=[..._porHF[k]]; if(aps.length<2) return;
+    var info=_nombreCombo(aps);
+    aps.forEach(function(a){ if(!_comboMap[a]) _comboMap[a]=info; });
   });
 
   // Generar filas del rack
