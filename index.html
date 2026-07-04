@@ -469,7 +469,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-03-comunicaciones-boton-ok';
+const APP_VERSION = '2026-07-03-landing-dashboard-gerencia';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -669,7 +669,8 @@ function initApp() {
     document.getElementById('fab-novedad').style.display = 'block';
   }
   try{ if(window._comPuedePublicar&&window._comPuedePublicar()){ var _fc=document.getElementById('fab-comunicar'); if(_fc) _fc.style.display='block'; } }catch(e){}
-  loadView('comunicaciones-list');
+  // Gerencia/publicadores entran al Dashboard; el resto a Comunicaciones (para dar chulo)
+  try{ if(window._comPuedePublicar&&window._comPuedePublicar()){ loadView('dashboard'); } else { loadView('comunicaciones-list'); } }catch(e){ loadView('dashboard'); }
 }
 
 // ═══════════════════════════════════════════════════════════
