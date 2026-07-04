@@ -469,7 +469,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-03-com-leido-todos';
+const APP_VERSION = '2026-07-04-solicitudes-lote1';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -951,11 +951,11 @@ const MENU_COMPLETO = [
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'comentarios', icon: '💬', label: 'Comentarios' },
   { section: 'Operación' },
-  { id: 'turnos-list', icon: '📋', label: 'Turnos / Personal / Extra' },
+  { id: 'turnos-list', icon: '📋', label: 'Turnos / Personal / Extras / Seguimiento' },
   { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
   { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
   { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
-  { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
+  { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
   { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
   { id: 'hk-list', icon: '🧹', label: 'Tiempos Camareras' },
   { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
@@ -5458,7 +5458,7 @@ const _DEST_INFORME = {
 // Listas de distribucion por reporte (Kubik). Primero = Para; resto = CC.
 const _DEST_KUBIK_REPORTES = [
   { match:/novedad/i,           to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com'] },
-  { match:/ingreso.*personal|control de personal/i, to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','rrhh@8i8op.com'] },
+  { match:/ingreso.*personal|control de personal/i, to:['rrhh@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com'] },
   { match:/rack/i,              to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com'] },
   { match:/camareras/i,         to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com'] },
   { match:/fin de semana/i,     to:['operativo@8i8op.com'], cc:['operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com'] },
@@ -5467,12 +5467,12 @@ const _DEST_KUBIK_REPORTES = [
 const _DEST_8010_REPORTES = [
   { match:/novedad/i,           to:['santiago.arias@8010urbanliving.com'], cc:['natalia.munoz@8010urbanliving.com','zareth.varela@8010urbanliving.com','mantenimiento@8010urbanliving.com','operativo.compras@8i8op.com','fernando.herrera@8010urbanliving.com','cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','maria.tosta@8010urbanliving.com','recepcion@8010urbanliving.com'] },
   { match:/rack/i,              to:['santiago.arias@8010urbanliving.com'], cc:['natalia.munoz@8010urbanliving.com','zareth.varela@8010urbanliving.com','mantenimiento@8010urbanliving.com','operativo.compras@8i8op.com','fernando.herrera@8010urbanliving.com','cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','maria.tosta@8010urbanliving.com','recepcion@8010urbanliving.com'] },
-  { match:/ingreso.*personal|control de personal/i, to:['santiago.arias@8010urbanliving.com'], cc:['zareth.varela@8010urbanliving.com','fabio.malaver@8010urbanliving.com'] },
+  { match:/ingreso.*personal|control de personal/i, to:['fabio.malaver@8010urbanliving.com'], cc:['zareth.varela@8010urbanliving.com'] },
   { match:/camareras/i,         to:['santiago.arias@8010urbanliving.com'], cc:['fabio.malaver@8010urbanliving.com'] },
   { match:/fin de semana/i,     to:['fabio.malaver@8010urbanliving.com'], cc:['mantenimiento@8010urbanliving.com','natalia.munoz@8010urbanliving.com','recepcion@8010urbanliving.com'] },
-  { match:/saldos/i,            to:['santiago.arias@8010urbanliving.com'], cc:['adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','recepcion@8010urbanliving.com','cristina.cervino@8010urbanliving.com'] },
-  { match:/carpeta/i,           to:['santiago.arias@8010urbanliving.com'], cc:['cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','recepcion@8010urbanliving.com','fabio.malaver@8010urbanliving.com','zareth.varela@8010urbanliving.com'] },
-  { match:/semana en curso/i,   to:['santiago.arias@8010urbanliving.com'], cc:['cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','recepcion@8010urbanliving.com','fabio.malaver@8010urbanliving.com'] },
+  { match:/saldos/i,            to:['santiago.arias@8010urbanliving.com'], cc:['adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','recepcion@8010urbanliving.com','cristina.cervino@8010urbanliving.com','compras@8010urbanliving.com'] },
+  { match:/carpeta/i,           to:['santiago.arias@8010urbanliving.com'], cc:['cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','recepcion@8010urbanliving.com','fabio.malaver@8010urbanliving.com','zareth.varela@8010urbanliving.com','compras@8010urbanliving.com'] },
+  { match:/semana en curso/i,   to:['santiago.arias@8010urbanliving.com'], cc:['cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','recepcion@8010urbanliving.com','fabio.malaver@8010urbanliving.com','compras@8010urbanliving.com'] },
 ];
 function _destInforme(edi, titulo){
   const t = String(titulo||'');
@@ -6433,12 +6433,12 @@ window._comTargetOptions = async function(){
 };
 window._comTargetChecksHTML = async function(){
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); };
-  var deptos=['Todos','Administradores','Recepción','Camareras / Aseo','Mantenimiento','Comercial'];
+  var deptos=['Todos'];
   var personas=[];
   try{ var _pr=await sb.from('personal').select('nombre').limit(400); personas=[...new Set(((_pr&&_pr.data)||[]).map(function(p){return String(p.nombre||'').trim();}).filter(Boolean))].sort(function(a,b){return a.localeCompare(b);}); }catch(e){}
   var chk=function(v){ return '<label style="display:inline-flex;align-items:center;gap:5px;font-weight:400;font-size:12.5px;padding:3px 9px;background:#f1f5f9;border-radius:8px;cursor:pointer;margin:2px"><input type="checkbox" class="com-dir-chk" value="'+esc(v)+'"> '+esc(v)+'</label>'; };
-  var html='<div style="font-size:11px;color:#64748b;margin-bottom:2px">Departamentos</div><div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:6px">'+deptos.map(chk).join('')+'</div>';
-  if(personas.length) html+='<div style="font-size:11px;color:#64748b;margin-bottom:2px">Personas</div><div style="display:flex;flex-wrap:wrap;gap:2px;max-height:130px;overflow:auto">'+personas.map(chk).join('')+'</div>';
+  var html='<div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:6px">'+deptos.map(chk).join('')+'</div>';
+  if(personas.length) html+='<div style="font-size:11px;color:#64748b;margin-bottom:2px">Trabajadores</div><div style="display:flex;flex-wrap:wrap;gap:2px;max-height:220px;overflow:auto">'+personas.map(chk).join('')+'</div>';
   return html;
 };
 window._comGetDir = function(containerId){
@@ -8518,7 +8518,7 @@ function renderFacturaGen(){
   +'<button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="_facAddLinea()">+ Agregar concepto</button>'
   +'<div style="display:flex;gap:24px;justify-content:flex-end;padding:12px 4px;font-size:14px"><div>Subtotal: <strong id="fac-sub">$ 0</strong></div><div>Impuestos: <strong id="fac-imp">$ 0</strong></div><div>Total: <strong id="fac-tot" style="color:var(--verde)">$ 0</strong></div></div></div>'
   +'<div class="form-section"><div class="form-section-title">💳 Pago y notas</div><div class="form-row">'
-  +'<div class="form-group"><label>Forma de pago</label><select id="fac-fpago"><option>Crédito</option><option>Contado</option><option>CxC (Cuentas por Cobrar)</option><option>Tarjeta crédito</option><option>Transferencia</option><option>Efectivo</option></select></div>'
+  +'<div class="form-group"><label>Forma de pago</label><select id="fac-fpago"><option>Crédito</option><option>Contado</option><option>CxC (Cuentas por Cobrar)</option><option>Tarjeta crédito</option><option>Tarjeta débito</option><option>Transferencia</option><option>Efectivo</option></select></div>'
   +'<div class="form-group"><label>Medio de pago</label><input type="text" id="fac-mpago" placeholder="Acuerdo mutuo, Helm Bank..."></div></div>'
   +'<div class="form-row"><div class="form-group"><label>Pago / abono recibido ($) <span style="color:#6B7280;font-size:11px">cruza con los conceptos (saldo)</span></label><input type="number" id="fac-abono" oninput="_facRecalc()" placeholder="0"></div><div class="form-group" style="align-self:flex-end"><div style="font-size:13px;padding:8px 0">Saldo pendiente: <strong id="fac-saldo">$ 0</strong></div></div></div>'
   +'<div class="form-group"><label>Observaciones (desglose USD × TRM, tramos, etc.)</label><textarea id="fac-obs" placeholder="Ej: ALOJ USD 230 * TRM ($3.572,85) = $821.756 / EXENTO RESIDENCIA"></textarea></div></div>'
@@ -10180,7 +10180,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
       <div class="form-row col3">
         <div class="form-group"><label>No. Factura</label><input type="text" id="cki-fv" placeholder="FV UL0000"></div>
         <div class="form-group"><label>Forma de pago</label>
-          <select id="cki-pago"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Cortesía</option><option>No paga al CKI</option><option>CxC Full</option><option>CxC Alojamiento</option></select>
+          <select id="cki-pago"><option>Efectivo</option><option>Tarjeta crédito</option><option>Tarjeta débito</option><option>Transferencia</option><option>Cortesía</option><option>No paga al CKI</option><option>CxC Full</option><option>CxC Alojamiento</option></select>
         </div>
         <div class="form-group"><label>Equipaje</label>
           <select id="cki-equipaje"><option>Declina acompañamiento</option><option>Acepta acompañamiento</option></select>
