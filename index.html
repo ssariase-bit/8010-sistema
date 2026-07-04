@@ -469,7 +469,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-04-solicitudes-lote1';
+const APP_VERSION = '2026-07-04-andres-kubik-admin';
 async function checkAppVersion(force){
   try{
     const r = await fetch(location.pathname + '?_ts=' + Date.now(), { cache:'no-store' });
@@ -5462,6 +5462,9 @@ const _DEST_KUBIK_REPORTES = [
   { match:/rack/i,              to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com'] },
   { match:/camareras/i,         to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com'] },
   { match:/fin de semana/i,     to:['operativo@8i8op.com'], cc:['operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com'] },
+  { match:/saldos/i,            to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com'] },
+  { match:/carpeta/i,           to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com'] },
+  { match:/semana en curso/i,   to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com'] },
 ];
 // Listas de distribucion por reporte (8010). Primero = Para; resto = CC.
 const _DEST_8010_REPORTES = [
