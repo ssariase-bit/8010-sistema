@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-04-rack-combos3';
+const APP_VERSION = '2026-07-05-permisos';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-05', version:'2026-07-05-permisos', titulo:'Permisos: Financiero, Salarios, Horas Extra y Sistema restringidos',
+    afecta:'Todo el equipo',
+    detalle:'Se protegió la información confidencial. Financiero y Salarios (Estado de Resultados, Ingresos, Ventas, Indicadores, Nómina, Personal/RRHH, Listado de Cargos) solo los ven personas autorizadas. Horas Extra: los autorizados ven las de todo el personal y cada empleado ve solo las suyas (para saber qué le pagarán). El módulo Sistema (Importar Rack, Registro de Cambios) queda solo para gerencia. Se eliminó el cargo "Jefe de Administradores" (Fabio queda como Gerencia Operativa).' },
   { fecha:'2026-07-04', version:'2026-07-04-rack-combos3', titulo:'Rack: unidades combinadas agrupadas + parser de nombres',
     afecta:'Recepción / Reservas',
     detalle:'En el Rack, las unidades combinadas (Famili Residence, Two Residence, Suite Deluxe) que ocupan varios aptos físicos —ej. la Famili Residence = 701+702— ahora se marcan con una franja de color y la etiqueta del combo, para leerse como una sola unidad y no como reservas sueltas. El agrupado funciona aunque la reserva no tenga guardado el "tipo": detecta el mismo huésped ocupando varios aptos del mismo piso en las mismas fechas. Además se corrigió el parser de nombres: los apellidos con partícula ("De Cadenas", "De la Cruz", "Van Der") ya no se parten mal (antes "Sergio De Cadenas Villavicencio" quedaba como nombre "Sergio De").' },
@@ -1039,9 +1042,42 @@ const MENU_COMPLETO = [
   { id: 'changelog', icon: '🛠️', label: 'Registro de Cambios' },
 ];
 
+// ── Permisos por persona (correo de acceso) + edificio ──
+// Confidencial = financiero + salarios (Nómina, Personal/RRHH, Cargos, Estado de Resultados, Ingresos, Ventas, Indicadores)
+window._WL_CONFID_8010 = ['santiago.arias@8010urbanliving.com','zareth.varela@8010urbanliving.com'];
+window._WL_CONFID_KL_EXTRA = ['aolaya@kubiklab.com','admin.fin@8i8op.com','contador@8i8op.com'];
+// Horas Extra: estos ven las de TODOS; el resto del personal solo ve las suyas.
+window._WL_EXTRAS_8010 = ['santiago.arias@8010urbanliving.com','fabio.malaver@8010urbanliving.com','zareth.varela@8010urbanliving.com','compras@8010urbanliving.com'];
+window._WL_EXTRAS_KL_EXTRA = ['aolaya@kubiklab.com','admin.fin@8i8op.com','contador@8i8op.com'];
+window._miEmail = function(){ return String((typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||'').toLowerCase().trim(); };
+window._enLista = function(base, klExtra){
+  var em=window._miEmail(); if(!em) return false;
+  var wl=base.slice(); if(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik') wl=wl.concat(klExtra||[]);
+  return wl.map(function(x){return x.toLowerCase();}).indexOf(em)>-1;
+};
+window._puedeConfidencial = function(){ return window._enLista(window._WL_CONFID_8010, window._WL_CONFID_KL_EXTRA); };
+window._puedeExtrasTodos = function(){ return window._enLista(window._WL_EXTRAS_8010, window._WL_EXTRAS_KL_EXTRA); };
+window._puedeSistema = function(){ return (currentProfile&&currentProfile.rol)==='gerente_general'; };
+// Ítems restringidos por grupo
+window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','nomina','indicadores','ventas-linea','personal-list','cargos-list'];
+window._ITEMS_SISTEMA = ['import-rack','changelog'];
+window._itemPermitido = function(it){
+  var _rol = currentProfile && currentProfile.rol;
+  if(it.roles && it.roles.indexOf(_rol)<0) return false;
+  if(window._ITEMS_CONFID.indexOf(it.id)>-1 && !window._puedeConfidencial()) return false;
+  if(window._ITEMS_SISTEMA.indexOf(it.id)>-1 && !window._puedeSistema()) return false;
+  return true;
+};
+
 function buildSidebar() {
-  const _rol = currentProfile && currentProfile.rol;
-  const items = MENU_COMPLETO.filter(it => !it.roles || it.roles.indexOf(_rol) > -1);
+  // Filtrar por permisos
+  const visibles = MENU_COMPLETO.filter(it => it.section || window._itemPermitido(it));
+  // Quitar encabezados de sección que quedaron sin ítems visibles debajo
+  const items = visibles.filter((it, i) => {
+    if (!it.section) return true;
+    for (let j=i+1; j<visibles.length; j++){ if (visibles[j].section) break; if (!visibles[j].section) return true; }
+    return false;
+  });
   const sb2 = document.getElementById('sidebar');
   sb2.innerHTML = items.map(item => {
     if (item.section) return `<div class="nav-section">${item.section}</div>`;
@@ -1077,6 +1113,17 @@ function cerrarSidebar() {
 
 async function loadView(view) {
   cerrarSidebar(); // cerrar el menú al elegir una opción (móvil)
+  // Guardián de acceso: bloquear vistas confidenciales/sistema a quien no tiene permiso
+  try {
+    if (window._ITEMS_CONFID && window._ITEMS_CONFID.indexOf(view)>-1 && !window._puedeConfidencial()){
+      document.getElementById('main-content').innerHTML = '<div class="empty"><div class="empty-icon">🔒</div><p>Este módulo es confidencial. No tienes permiso para verlo.</p></div>';
+      window._currentView = view; return;
+    }
+    if (window._ITEMS_SISTEMA && window._ITEMS_SISTEMA.indexOf(view)>-1 && !window._puedeSistema()){
+      document.getElementById('main-content').innerHTML = '<div class="empty"><div class="empty-icon">🔒</div><p>Módulo de sistema restringido a gerencia.</p></div>';
+      window._currentView = view; return;
+    }
+  } catch(_e){}
   // Si recargamos la MISMA vista (una acción), conservar la posición de scroll en vez de saltar arriba
   const _samePage = (view === window._currentView);
   let _savedScroll = 0, _scEl = null;
@@ -4625,7 +4672,6 @@ function renderNuevaReserva() {
           <div class="form-group">
             <label>Cargo del firmante</label>
             <select id="res-cargo">
-              <option>Jefe de Administradores</option>
               <option>Gerente General</option>
               <option>Administrador(a)</option>
               <option>Gerencia Operativa</option>
@@ -4847,7 +4893,7 @@ async function guardarReserva() {
     personas: document.getElementById('res-personas')?.value || '1 adulto', pax: document.getElementById('res-pax')?.value || '1',
     obs: document.getElementById('res-obs').value,
     firmante: document.getElementById('res-firmante').value || currentProfile?.nombre || 'Fabio Malaver',
-    cargo: document.getElementById('res-cargo').value || 'Jefe de Administradores',
+    cargo: document.getElementById('res-cargo').value || 'Gerencia Operativa',
     email: document.getElementById('res-email').value.trim(),
     tel: window._telFull('res-tel'),
     numero: await getNextNumeroConfirmacion()
@@ -4894,7 +4940,7 @@ async function previsualizarConfirmacion() {
     tel: window._telFull('res-tel'),
     numero: await peekNumeroConfirmacion(),
     firmante: document.getElementById('res-firmante').value || currentProfile?.nombre || 'Fabio Malaver',
-    cargo: document.getElementById('res-cargo').value || 'Jefe de Administradores',
+    cargo: document.getElementById('res-cargo').value || 'Gerencia Operativa',
   });
 }
 
@@ -4994,7 +5040,7 @@ function generarConfirmacion(r) {
   const conIVA = !/LTM3/i.test(r.cxcRazon||'') && r.iva !== 'exento' && r.iva !== 'no_aplica' && r.iva !== 'excluido';
   const tratamiento = r.nombre.split(' ')[0].toLowerCase().endsWith('a') ? 'SRA.' : 'SR.';
     const _accent = (((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1)?'#3a3a3a':'#1c1c1c';
-    const _es8010c=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1); const _larga=(Number(r.noches)||0)>30; const _razon=_es8010c?(_larga?'LTM3 SAS':'8010 SAS'):'8i8 Operadora SAS'; const _nit=_es8010c?(_larga?'900.361.992-4':'900.683.855-5'):'902.026.873-8'; const _email=_es8010c?'recepcion@8010urbanliving.com':'gmercadeo@8i8op.com'; const _firmaNom=_es8010c?'Fabio Malaver':'Cristina Cerviño'; const _firmaCargo=_es8010c?'Jefe de Administradores':'Gerente Mercadeo';
+    const _es8010c=(((typeof EB==='function'&&EB().nombre)||'').indexOf('8010')>-1); const _larga=(Number(r.noches)||0)>30; const _razon=_es8010c?(_larga?'LTM3 SAS':'8010 SAS'):'8i8 Operadora SAS'; const _nit=_es8010c?(_larga?'900.361.992-4':'900.683.855-5'):'902.026.873-8'; const _email=_es8010c?'recepcion@8010urbanliving.com':'gmercadeo@8i8op.com'; const _firmaNom=_es8010c?'Fabio Malaver':'Cristina Cerviño'; const _firmaCargo=_es8010c?'Gerencia Operativa':'Gerente Mercadeo';
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -7230,11 +7276,16 @@ async function renderCuadroExtras(){
     acc[k].min.diurna+=c.diurna; acc[k].min.nocturna+=c.nocturna; acc[k].min.diurna_fest+=c.diurna_fest; acc[k].min.nocturna_fest+=c.nocturna_fest;
   });
 
-  // Los valores en $ (salario y pago) SOLO los ve el gerente general
-  const _verSal = (currentProfile?.rol === 'gerente_general' || currentProfile?.rol === 'asesora');
+  // Horas Extra: los autorizados ven las de TODOS; el resto del personal ve SOLO las suyas.
+  const _esAuthExtras = window._puedeExtrasTodos ? window._puedeExtrasTodos() : false;
+  const _miPers = resolverPers((currentProfile&&currentProfile.nombre)||'');
+  const _miNom = _miPers ? norm(_miPers.nombre) : norm((currentProfile&&currentProfile.nombre)||'');
+  let _accList = Object.values(acc);
+  if(!_esAuthExtras){ _accList = _accList.filter(e => norm(e.nombre)===_miNom); }
+  const _verSal = true; // autorizados: $ de todos · empleado: solo su propia fila (su $)
   let totalPagar = 0;
   const hm = m => (m/60).toFixed(2).replace('.',',')+'h';
-  const filas = Object.values(acc).map(e => {
+  const filas = _accList.map(e => {
     const vh = e.salario>0 ? e.salario/240 : 0;
     const pago = t => (e.min[t]/60) * vh * factorExtraNomina(t, ini);
     const pagoTotal = pago('diurna')+pago('nocturna')+pago('diurna_fest')+pago('nocturna_fest');
