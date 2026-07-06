@@ -469,13 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-05-permisos';
+const APP_VERSION = '2026-07-05-permisos2';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
-  { fecha:'2026-07-05', version:'2026-07-05-permisos', titulo:'Permisos: Financiero, Salarios, Horas Extra y Sistema restringidos',
+  { fecha:'2026-07-05', version:'2026-07-05-permisos2', titulo:'Permisos: Financiero, Salarios, Horas Extra y Sistema restringidos',
     afecta:'Todo el equipo',
-    detalle:'Se protegió la información confidencial. Financiero y Salarios (Estado de Resultados, Ingresos, Ventas, Indicadores, Nómina, Personal/RRHH, Listado de Cargos) solo los ven personas autorizadas. Horas Extra: los autorizados ven las de todo el personal y cada empleado ve solo las suyas (para saber qué le pagarán). El módulo Sistema (Importar Rack, Registro de Cambios) queda solo para gerencia. Se eliminó el cargo "Jefe de Administradores" (Fabio queda como Gerencia Operativa).' },
+    detalle:'Se protegió la información confidencial. Financiero y Salarios (Estado de Resultados, Ingresos, Ventas, Indicadores, Nómina, Personal/RRHH) solo los ven personas autorizadas. El Listado de Cargos queda operativo (visible para todos, sin sueldos). Horas Extra: los autorizados ven las de todo el personal y cada empleado ve solo las suyas (para saber qué le pagarán). El módulo Sistema (Importar Rack, Registro de Cambios) queda solo para gerencia. Se eliminó el cargo "Jefe de Administradores" (Fabio queda como Gerencia Operativa).' },
   { fecha:'2026-07-04', version:'2026-07-04-rack-combos3', titulo:'Rack: unidades combinadas agrupadas + parser de nombres',
     afecta:'Recepción / Reservas',
     detalle:'En el Rack, las unidades combinadas (Famili Residence, Two Residence, Suite Deluxe) que ocupan varios aptos físicos —ej. la Famili Residence = 701+702— ahora se marcan con una franja de color y la etiqueta del combo, para leerse como una sola unidad y no como reservas sueltas. El agrupado funciona aunque la reserva no tenga guardado el "tipo": detecta el mismo huésped ocupando varios aptos del mismo piso en las mismas fechas. Además se corrigió el parser de nombres: los apellidos con partícula ("De Cadenas", "De la Cruz", "Van Der") ya no se parten mal (antes "Sergio De Cadenas Villavicencio" quedaba como nombre "Sergio De").' },
@@ -1059,7 +1059,7 @@ window._puedeConfidencial = function(){ return window._enLista(window._WL_CONFID
 window._puedeExtrasTodos = function(){ return window._enLista(window._WL_EXTRAS_8010, window._WL_EXTRAS_KL_EXTRA); };
 window._puedeSistema = function(){ return (currentProfile&&currentProfile.rol)==='gerente_general'; };
 // Ítems restringidos por grupo
-window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','nomina','indicadores','ventas-linea','personal-list','cargos-list'];
+window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','nomina','indicadores','ventas-linea','personal-list'];
 window._ITEMS_SISTEMA = ['import-rack','changelog'];
 window._itemPermitido = function(it){
   var _rol = currentProfile && currentProfile.rol;
