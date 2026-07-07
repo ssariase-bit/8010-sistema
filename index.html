@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-07-rack-info-click';
+const APP_VERSION = '2026-07-07-disp-fechas';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-07', version:'2026-07-07-disp-fechas', titulo:'Consultar disponibilidad: la fecha de Entrada ya no se borra',
+    afecta:'Recepción / Reservas',
+    detalle:'En "Consultar disponibilidad" del Rack, al poner la fecha de Entrada y luego ir a la de Salida, la Entrada se borraba si el rack se refrescaba. Ahora la fecha que escribes se guarda al instante y queda fija hasta que busques o limpies. Además, la fecha de Salida no permite elegir un día anterior al de Entrada.' },
   { fecha:'2026-07-07', version:'2026-07-07-rack-info-click', titulo:'Rack: la info sale al espichar (clic), no al pasar el mouse',
     afecta:'Recepción / Reservas',
     detalle:'En el Rack, la información de la reserva ya no aparece con solo pasar el mouse por encima (mareaba). Ahora se muestra al hacer clic en la celda: sale un recuadro con el detalle (huésped, fechas, estado, tarifa, CKI/CKO) y, dentro, un botón "✏️ Editar" para abrir la reserva si tienes permiso. En celdas libres, el clic sigue permitiendo crear.' },
@@ -2435,8 +2438,8 @@ async function renderRack() {
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#E0F7FA;border:1px solid #4DD0E1;border-radius:8px;padding:8px 12px;margin-bottom:12px">
       <span style="font-size:12px;font-weight:700;color:#006978">🔎 Consultar disponibilidad</span>
-      <label style="font-size:11px;color:#006978">Entrada <input type="date" id="rk-disp-desde" value="${window._rackConsulta?.desde||''}" style="font-size:12px;padding:4px 6px;border:1px solid #4DD0E1;border-radius:5px"></label>
-      <label style="font-size:11px;color:#006978">Salida <input type="date" id="rk-disp-hasta" value="${window._rackConsulta?.hasta||''}" style="font-size:12px;padding:4px 6px;border:1px solid #4DD0E1;border-radius:5px"></label>
+      <label style="font-size:11px;color:#006978">Entrada <input type="date" id="rk-disp-desde" value="${window._rackConsulta?.desde||window._rkDispTmp?.desde||''}" oninput="window._rkDispTmp=Object.assign({},window._rkDispTmp,{desde:this.value}); var h=document.getElementById('rk-disp-hasta'); if(h) h.min=this.value;" style="font-size:12px;padding:4px 6px;border:1px solid #4DD0E1;border-radius:5px"></label>
+      <label style="font-size:11px;color:#006978">Salida <input type="date" id="rk-disp-hasta" value="${window._rackConsulta?.hasta||window._rkDispTmp?.hasta||''}" min="${window._rackConsulta?.desde||window._rkDispTmp?.desde||''}" oninput="window._rkDispTmp=Object.assign({},window._rkDispTmp,{hasta:this.value})" style="font-size:12px;padding:4px 6px;border:1px solid #4DD0E1;border-radius:5px"></label>
       <button onclick="consultarDisponibilidad()" style="background:#00838F;color:white;border:none;border-radius:6px;padding:5px 16px;cursor:pointer;font-size:12px;font-weight:600">Buscar</button>
       ${window._rackConsulta ? `<button onclick="limpiarConsultaDisp()" style="background:#fff;color:#00838F;border:1px solid #00838F;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px">Limpiar</button>` : ''}
     </div>
@@ -2563,12 +2566,13 @@ async function consultarDisponibilidad(){
     return !occ || !dias.some(f=>occ.has(f));
   }).sort((a,b)=>{ const na=parseInt(a),nb=parseInt(b); if(na!==nb) return na-nb; return a.length-b.length; });
   window._rackConsulta = { desde, hasta, dias, disponibles };
+  window._rkDispTmp = { desde, hasta };
   // Saltar al mes de la fecha de entrada para ver el resaltado
   window._rackMes = ini.getMonth();
   window._rackYear = ini.getFullYear();
   renderRack();
 }
-function limpiarConsultaDisp(){ window._rackConsulta = null; renderRack(); }
+function limpiarConsultaDisp(){ window._rackConsulta = null; window._rkDispTmp = null; renderRack(); }
 
 // Sol Santiago: al espichar una celda ocupada del rack, mostrar un recuadro con la info
 // (en vez del tooltip al pasar el mouse) y, dentro, un botón "✏️ Editar" si tiene permiso.
