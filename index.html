@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-07-oleada3b';
+const APP_VERSION = '2026-07-07-fix-acceso-gerencia';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-07', version:'2026-07-07-fix-acceso-gerencia', titulo:'Fix: Gerencia General vuelve a ver Financiero, Flujo, Salarios, Horas Extra y el VB de reembolsos',
+    afecta:'Gerencia General',
+    detalle:'Los permisos quedaron atados al correo exacto de acceso y, si no calzaba carácter por carácter, dejaban a Santiago (dueño y gerente) sin ver los módulos confidenciales (Financiero, Flujo/Estado de Resultados, Salarios, Horas Extra) y sin los botones de aprobar/Visto Bueno de reembolsos. Se corrigió: el rol "Gerencia General" siempre tiene acceso a todo eso (sigue siendo exclusivo de Santiago), sin depender de que el correo coincida exactamente.' },
   { fecha:'2026-07-07', version:'2026-07-07-oleada3b', titulo:'Oleada 3b: CKI a Ocupación, TRM de referencia y N° New Hotel',
     afecta:'Recepción / Reservas',
     detalle:'(1) BUG CORREGIDO: al hacer el CKI, la reserva se quedaba "pendiente" y no aparecía en Ocupación porque el rack perdía el vínculo con la reserva (reserva_id). Ahora el CKI conserva ese vínculo, marca la reserva como realizada y el huésped aparece en Ocupación (caso Sra. María del Pilar). (2) CKI en USD: nuevo campo "TRM de referencia" — calcula el valor estimado en pesos (para saber cuánto llevamos vendido), lo muestra en el reporte y lo refleja en el Rack; en el CKO se captura la TRM real de la factura. (3) Reservas: nueva columna "N° New Hotel" en el listado; el buscador ya permite filtrar por ese número (el consecutivo interno no cambia).' },
@@ -1072,6 +1075,10 @@ window._WL_EXTRAS_8010 = ['santiago.arias@8010urbanliving.com','fabio.malaver@80
 window._WL_EXTRAS_KL_EXTRA = ['aolaya@kubiklab.com','admin.fin@8i8op.com','contador@8i8op.com'];
 window._miEmail = function(){ return String((typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||'').toLowerCase().trim(); };
 window._enLista = function(base, klExtra){
+  // Gerencia General (rol) SIEMPRE tiene acceso — es exclusivamente Santiago. Esto evita que,
+  // si su correo de acceso al SO no calza carácter por carácter con la lista blanca, se quede
+  // sin ver Financiero / Flujo / Salarios / Horas Extra (dueño y gerente al mismo tiempo).
+  if((typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.rol)==='gerente_general') return true;
   var em=window._miEmail(); if(!em) return false;
   var wl=base.slice(); if(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik') wl=wl.concat(klExtra||[]);
   return wl.map(function(x){return x.toLowerCase();}).indexOf(em)>-1;
@@ -7713,8 +7720,12 @@ function darVBReembolso(){
 // ── Solo Santiago Arias puede dar el Visto Bueno / aprobar reembolsos ──
 window._WL_APRUEBA_REEMB = ['santiago.arias@8010urbanliving.com'];
 window._puedeAprobarReemb = function(){
-  var e=(typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.email)||'';
-  return window._WL_APRUEBA_REEMB.indexOf(String(e).toLowerCase())>-1;
+  // Gerencia General (rol) SIEMPRE puede — es exclusivamente Santiago. Además, por seguridad,
+  // se permite el/los correos en lista blanca (por si el rol no estuviera cargado).
+  var rol=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.rol)||'';
+  if(rol==='gerente_general') return true;
+  var e=((typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.email)||'').toLowerCase().trim();
+  return window._WL_APRUEBA_REEMB.indexOf(e)>-1;
 };
 // ── Aprobación real y auditable de reembolsos (persistente en BD) ──
 window.aprobarReembolso = async function(id){
