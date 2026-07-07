@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-05-permisos2';
+const APP_VERSION = '2026-07-06-aprobar-reembolso';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-06', version:'2026-07-06-aprobar-reembolso', titulo:'Aprobación real y auditable de reembolsos',
+    afecta:'Gerencia / Financiero / Administración',
+    detalle:'En el módulo Reembolsos ahora hay un botón "✅ Aprobar" (visible solo para gerencia y el grupo Confidencial). Al aprobar, el reembolso queda marcado como "Aprobado" de forma permanente en el sistema y se registra quién lo aprobó y en qué fecha/hora (traza auditable en observaciones y en el campo "Aprobado por"). Antes el "Visto Bueno" del Informe solo estampaba la firma en el PDF y se borraba al recargar; ahora la aprobación queda con rastro real para control interno de caja menor.' },
   { fecha:'2026-07-05', version:'2026-07-05-permisos2', titulo:'Permisos: Financiero, Salarios, Horas Extra y Sistema restringidos',
     afecta:'Todo el equipo',
     detalle:'Se protegió la información confidencial. Financiero y Salarios (Estado de Resultados, Ingresos, Ventas, Indicadores, Nómina, Personal/RRHH) solo los ven personas autorizadas. El Listado de Cargos queda operativo (visible para todos, sin sueldos). Horas Extra: los autorizados ven las de todo el personal y cada empleado ve solo las suyas (para saber qué le pagarán). El módulo Sistema (Importar Rack, Registro de Cambios) queda solo para gerencia. Se eliminó el cargo "Jefe de Administradores" (Fabio queda como Gerencia Operativa).' },
@@ -6969,7 +6972,10 @@ async function renderList(tabla, titulo, formView, cols, headers) {
     } else if (tabla === 'maletas' && r.estado === 'En bodega') {
       acciones = `<td style="white-space:nowrap"><button onclick="entregarMaleta('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--verde);border-color:var(--verde)">🧳 Entregar</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else if (tabla === 'reembolsos') {
-      acciones = `<td style="white-space:nowrap"><button onclick="previewReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px">👁 Ver</button> <button onclick="correoReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">✉️ Correo</button> ${_btnsEdit(tabla, r.id)}</td>`;
+      var _puedeAprob = (typeof _puedeConfidencial==='function' && _puedeConfidencial()) || (typeof currentProfile!=='undefined' && currentProfile && currentProfile.rol==='gerente_general');
+      var _yaAprob = (r.estado==='Aprobado'||r.estado==='Pagado'||r.estado==='Reembolso recibido completo'||r.estado==='Reembolso recibido parcial');
+      var _btnAprob = (_puedeAprob && !_yaAprob) ? `<button onclick="aprobarReembolso('${r.id}')" class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#15803d;color:#fff;border:none">✅ Aprobar</button> ` : '';
+      acciones = `<td style="white-space:nowrap">${_btnAprob}<button onclick="previewReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px">👁 Ver</button> <button onclick="correoReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">✉️ Correo</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else if (tabla === 'check_carpetas') {
       acciones = `<td style="white-space:nowrap"><button onclick="imprimirRotuloCarpeta('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">🖨 Rótulo</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else {
@@ -7613,6 +7619,24 @@ async function generarInformeReembolso(keepVB){
 function imprimirInformeReembolso(){ if(!window._riPrintHTML){ if(typeof showToast==='function') showToast('Genera el informe primero','error'); return; } var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(window._riPrintHTML); w.document.close(); }
 window._riVB = null;
 function darVBReembolso(){ window._riVB = { nombre: (typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'Gerencia', fecha: (typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO')) }; generarInformeReembolso(true); if(typeof showToast==='function') showToast('✅ Visto Bueno registrado en el informe','success'); }
+// ── Aprobación real y auditable de reembolsos (persistente en BD) ──
+window.aprobarReembolso = async function(id){
+  var _puedeAprob = (typeof _puedeConfidencial==='function' && _puedeConfidencial()) || (typeof currentProfile!=='undefined' && currentProfile && currentProfile.rol==='gerente_general');
+  if(!_puedeAprob){ if(typeof showToast==='function') showToast('No tienes permiso para aprobar reembolsos','error'); return; }
+  var res = await sb.from('reembolsos').select('*').eq('id',id).single();
+  if(res.error||!res.data){ if(typeof showToast==='function') showToast('No se pudo cargar el reembolso','error'); return; }
+  var r=res.data;
+  var quien=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||(typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||'Gerencia';
+  var cuando=(typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO'));
+  var ref=(r.consecutivo?('R-'+r.consecutivo):('#'+id));
+  if(!confirm('¿Aprobar el reembolso '+ref+' por '+_reembFmt(r.valor)+'?\n\nQuedará marcado como APROBADO por '+quien+' ('+cuando+'). Esta acción queda registrada en el sistema.')) return;
+  var traza='✅ Aprobado por '+quien+' el '+cuando;
+  var obs=(r.observaciones? (r.observaciones+' | '):'')+traza;
+  var upd=await sb.from('reembolsos').update({ estado:'Aprobado', aprobado_por:quien, observaciones:obs }).eq('id',id);
+  if(upd.error){ if(typeof showToast==='function') showToast('Error al aprobar: '+upd.error.message,'error'); return; }
+  if(typeof showToast==='function') showToast('✅ Reembolso '+ref+' aprobado','success');
+  if(typeof loadView==='function') loadView('reembolsos-list');
+};
 
 // ════════ REEMBOLSO: comprobante, previsualización y correo con scan (propuesta Sebastián) ════════
 const _REEMB_DEST = {
