@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-07-financiero-elfinanciero';
+const APP_VERSION = '2026-07-07-rack-info-click';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-07', version:'2026-07-07-rack-info-click', titulo:'Rack: la info sale al espichar (clic), no al pasar el mouse',
+    afecta:'Recepción / Reservas',
+    detalle:'En el Rack, la información de la reserva ya no aparece con solo pasar el mouse por encima (mareaba). Ahora se muestra al hacer clic en la celda: sale un recuadro con el detalle (huésped, fechas, estado, tarifa, CKI/CKO) y, dentro, un botón "✏️ Editar" para abrir la reserva si tienes permiso. En celdas libres, el clic sigue permitiendo crear.' },
   { fecha:'2026-07-07', version:'2026-07-07-financiero-elfinanciero', titulo:'Acceso financiero para el equipo de El Financiero (solo 8010)',
     afecta:'Financiero / Gerencia',
     detalle:'Se habilitó el acceso al grupo confidencial (financiero + salarios/nómina) de 8010 para Julian Boada (julian@elfinanciero.co) y Paola Faccini (info@elfinanciero.co). Verán los estados financieros, flujo, ingresos, ventas, indicadores, nómina y horas extra, únicamente en 8010 (su perfil queda restringido a ese edificio). Las cuentas de acceso se crean en Supabase por Gerencia.' },
@@ -2159,6 +2162,7 @@ async function renderRack() {
 
   const rol = currentProfile?.rol;
   const canEdit = ['gerente_general','gerencia_operativa','administrador','recepcion','asesora'].includes(rol);
+  window._rackCanEdit = canEdit; // para el recuadro de info (mostrar botón Editar solo si puede)
   const now = new Date();
   const year = window._rackYear;
   const month = window._rackMes;
@@ -2361,7 +2365,9 @@ async function renderRack() {
       }
       const _empT = rec?.empresa || (rec?.canal && rec.canal !== 'Particular' ? rec.canal : 'Particular');
       const title = rec?.huesped ? `Apto ${apto} · ${_fcT} · ${rec.huesped} · ${_empT} · ${estTxt}${_tarT?' · '+_tarT:''}` : `Apto ${apto} · ${_fcT} · ${estTxt}`;
-      const onclick = canEdit && rec?.id ? `openAptoModal('${rec.id}','${apto}')` : (canEdit ? `crearDiaRack('${apto}','${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}')` : '');
+      // Sol Santiago: en vez de tooltip al pasar el mouse (mareador), al ESPICHAR la celda sale
+      // un recuadro con la info y, dentro, un botón "✏️ Editar" (si tiene permiso).
+      const onclick = rec?.id ? `mostrarInfoRack(this)` : (canEdit ? `crearDiaRack('${apto}','${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}')` : '');
       // Consulta de disponibilidad: resaltar libres / atenuar ocupados dentro del rango
       const _cons = window._rackConsulta;
       const _fechaCelda = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
@@ -2380,7 +2386,7 @@ async function renderRack() {
       let _ckSuf = '', _ckBadge = '', _ckLinea2 = apellido;
       if (_ckiHecho){ _ckSuf = ` · ✅ CKI ${_hhmm(_ckR.cki_at)}${_ckR.cki_por?(' por '+_ckR.cki_por):''}`; _ckBadge = '<span style="position:absolute;top:0;right:0;background:#1E7E34;color:#fff;font-size:7px;line-height:1;padding:1px 2px;border-radius:0 0 0 4px;font-weight:700">✓</span>'; _ckLinea2 = '🟢 '+_hhmm(_ckR.cki_at); }
       if (_ckoHecho){ _ckSuf = ` · ✅ CKO ${_hhmm(_ckR.cko_at)}${_ckR.cko_por?(' por '+_ckR.cko_por):''}`; _ckBadge = '<span style="position:absolute;top:0;right:0;background:#C2410C;color:#fff;font-size:7px;line-height:1;padding:1px 2px;border-radius:0 0 0 4px;font-weight:700">✓</span>'; _ckLinea2 = '🔴 '+_hhmm(_ckR.cko_at); }
-      return `<td data-tip="${title}${_ckSuf}" onclick="${onclick}" style="position:relative;background:${bgCelda};color:${colCelda};text-align:center;padding:2px 1px;border:${borderCelda};cursor:${canEdit?'pointer':'default'};min-width:${CELL_W}px;max-width:${CELL_W}px;overflow:hidden;height:32px;${atenuar}">
+      return `<td data-info="${String(title+_ckSuf).replace(/"/g,'&quot;')}" data-rid="${rec?.id||''}" data-apto="${apto}" onclick="${onclick}" style="position:relative;background:${bgCelda};color:${colCelda};text-align:center;padding:2px 1px;border:${borderCelda};cursor:${(rec?.id||canEdit)?'pointer':'default'};min-width:${CELL_W}px;max-width:${CELL_W}px;overflow:hidden;height:32px;${atenuar}">
         ${_ckBadge}
         <div style="font-size:10px;font-weight:800;line-height:1.3">${codeCelda}</div>
         <div style="font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:${CELL_W-2}px;font-weight:600">${_ckLinea2}</div>
@@ -2564,6 +2570,36 @@ async function consultarDisponibilidad(){
 }
 function limpiarConsultaDisp(){ window._rackConsulta = null; renderRack(); }
 
+// Sol Santiago: al espichar una celda ocupada del rack, mostrar un recuadro con la info
+// (en vez del tooltip al pasar el mouse) y, dentro, un botón "✏️ Editar" si tiene permiso.
+window.mostrarInfoRack = function(el){
+  try{
+    var info = el.getAttribute('data-info')||'';
+    var rid = el.getAttribute('data-rid')||'';
+    var apto = el.getAttribute('data-apto')||'';
+    var old=document.getElementById('rack-info-pop'); if(old) old.remove();
+    var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+    var partes = info.split(' · ').filter(function(x){ return x && x.trim(); });
+    var lineas = partes.map(function(s){ return '<div style="padding:2px 0;border-bottom:1px solid #f1f5f9">'+esc(s)+'</div>'; }).join('');
+    var puedeEd = (typeof window._rackCanEdit!=='undefined') ? window._rackCanEdit : false;
+    var editBtn = (puedeEd && rid) ? '<button onclick="var p=document.getElementById(\'rack-info-pop\');if(p)p.remove(); openAptoModal(\''+rid+'\',\''+esc(apto)+'\')" class="btn btn-sm" style="background:#1D3461;color:#fff;border:none;padding:6px 14px;font-size:12px">✏️ Editar</button>' : '';
+    var pop=document.createElement('div'); pop.id='rack-info-pop';
+    pop.style.cssText='position:fixed;z-index:99999;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.28);padding:12px 14px;max-width:340px;font-size:12.5px;color:#1f2937';
+    pop.innerHTML='<div style="font-weight:700;color:#1D3461;margin-bottom:6px">📋 Detalle de la reserva</div>'
+      +'<div style="line-height:1.5">'+(lineas||esc(info))+'</div>'
+      +'<div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">'+editBtn
+      +'<button onclick="var p=document.getElementById(\'rack-info-pop\');if(p)p.remove();" class="btn btn-outline btn-sm" style="padding:6px 14px;font-size:12px">Cerrar</button></div>';
+    document.body.appendChild(pop);
+    var r=el.getBoundingClientRect();
+    var pw=pop.offsetWidth, ph=pop.offsetHeight;
+    var left=r.left; var top=r.bottom+6;
+    if(left+pw>window.innerWidth-10) left=window.innerWidth-pw-10;
+    if(top+ph>window.innerHeight-10) top=r.top-ph-6;
+    if(top<10) top=10; if(left<10) left=10;
+    pop.style.top=top+'px'; pop.style.left=left+'px';
+    setTimeout(function(){ var _cl=function(e){ var p=document.getElementById('rack-info-pop'); if(p && !p.contains(e.target) && e.target!==el){ p.remove(); document.removeEventListener('mousedown', _cl); } }; document.addEventListener('mousedown', _cl); }, 30);
+  }catch(_e){ /* si algo falla, abrir el editor directamente */ if(typeof openAptoModal==='function'){ var _rid=el.getAttribute('data-rid'), _ap=el.getAttribute('data-apto'); if(_rid) openAptoModal(_rid,_ap); } }
+};
 async function crearDiaRack(apto, fecha) {
   // Upsert: crear o actualizar el registro para ese apto+día
   const { data } = await sb.from('rack').upsert({
