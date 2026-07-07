@@ -320,7 +320,7 @@ textarea{resize:vertical;min-height:80px}
         <label>IVA</label>
         <select id="m-iva">
           <option value="incluido">Incluye IVA (19%)</option>
-          <option value="encima">IVA 19% (se suma)</option><option value="exento">Exento de IVA</option><option value="no_aplica">No aplica (N/A)</option>
+          <option value="encima">IVA 19% (se suma)</option><option value="exento">Exento de IVA</option><option value="excluido">Excluido (canon de arrendamiento)</option><option value="no_aplica">No aplica (N/A)</option>
         </select>
       </div>
     </div>
@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-07-oleada2';
+const APP_VERSION = '2026-07-07-oleada3a';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-07', version:'2026-07-07-oleada3a', titulo:'Oleada 3a: canon exento + eliminar reserva + entrega de efectivos en informe de cajas',
+    afecta:'Recepción / Caja / Administración',
+    detalle:'(1) Reservas: la opción "Excluido (canon de arrendamiento)" quedó también en la ventana del rack (además del formulario de reserva); se maneja como exento de IVA (Sol Juanita, definición de Santiago). (2) Reservas: nuevo botón "🗑️ Eliminar" en el detalle de la reserva — borra la reserva, libera esas fechas en el rack y deja registro en el histórico (Sol Sebastián: para corregir una marcada por error). (3) Informe de cajas: nuevo filtro "Solo entregas de efectivo" para revisar únicamente esos movimientos (Sol Sebastián).' },
   { fecha:'2026-07-07', version:'2026-07-07-oleada2', titulo:'Oleada 2: CKI (Sr./Sra.+apto), desayuno, menú y alerta de Comunicaciones',
     afecta:'Recepción / Operación / Todo el equipo',
     detalle:'(1) Reporte de CKI: ahora muestra una línea de encabezado con Apto + tratamiento (Sr./Sra.) + huésped, para que se vean en el reporte y el correo (Sol Sebastián). (2) Reservas: si marcas "Incluye desayuno: Sí", queda reflejado en las observaciones de la confirmación (Sol Andrés/María José). (3) Menú: "Seguimientos por Turno" quedó junto a Novedades y el módulo de turnos se renombró "Turnos / Personal / Extras" (Sol Sebastián). (4) Check list Turno 2 (Kubik): el ítem de consumos del restaurante se ajustó al nuevo proceso (cargar a la habitación con firma del arrendatario al momento del cargo) (Sol Juanita). (5) Comunicaciones: ahora aparece un contador rojo de comunicados sin leer en el menú y un aviso al entrar (Sol Fabio).' },
@@ -6452,6 +6455,7 @@ window.verDetalleReserva = async function(id){
     +   btn('✏️','Editar','editarReserva(\''+r.id+'\')')
     +   btn('📄','Confirmación','regenerarConfirmacion(\''+r.id+'\')')
     +   btn('📜','Histórico','verHistorialReserva(\''+r.id+'\')')
+    +   '<button onclick="var m=document.getElementById(\'modal-det-rv\'); if(m)m.remove(); eliminarReserva(\''+r.id+'\')" style="flex:1;min-width:90px;background:#fee2e2;color:#b91c1c;border:none;border-radius:9px;padding:10px;font-size:12.5px;font-weight:600;cursor:pointer">🗑️ Eliminar</button>'
     +   '<button onclick="document.getElementById(\'modal-det-rv\').remove()" style="flex:1;min-width:90px;background:#f3f4f6;color:#6B7280;border:none;border-radius:9px;padding:10px;font-size:12.5px;font-weight:600;cursor:pointer">Cerrar</button>'
     + '</div></div>';
   modal.addEventListener('click',function(e){ if(e.target===modal) modal.remove(); });
@@ -7564,7 +7568,7 @@ async function renderCajaInforme(){
         '<div class="form-group"><label>Caja / Razón Social</label><select id="ci-caja">'+opc+'</select></div>'+
         '<div class="form-group"><label>Desde</label><input type="date" id="ci-desde" value="'+ini+'"></div>'+
         '<div class="form-group"><label>Hasta</label><input type="date" id="ci-hasta" value="'+hoy+'"></div>'+
-        '<div class="form-group"><label>Movimientos a incluir</label><select id="ci-tipo"><option value="todos">Todos</option><option value="inegr">Solo ingresos y egresos</option><option value="ing">Solo ingresos</option><option value="egr">Solo egresos</option><option value="prov">Solo provisionales</option></select></div>'+
+        '<div class="form-group"><label>Movimientos a incluir</label><select id="ci-tipo"><option value="todos">Todos</option><option value="inegr">Solo ingresos y egresos</option><option value="ing">Solo ingresos</option><option value="egr">Solo egresos</option><option value="entrega">Solo entregas de efectivo</option><option value="prov">Solo provisionales</option></select></div>'+
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-success" onclick="generarInformeCaja()">📄 Generar informe</button><button class="btn btn-outline" onclick="imprimirInformeCaja()" id="ci-print-btn" style="display:none">🖨️ Imprimir / PDF</button></div>'+
     '</div>'+
@@ -7586,7 +7590,7 @@ async function generarInformeCaja(){
   var rows = res.data || [];
   var ftipo=(document.getElementById('ci-tipo')||{}).value||'todos';
   var _E=['Ingreso','Fondo'], _S=['Egreso','Reembolso','Entrega efectivo'];
-  if(ftipo!=='todos'){ rows=rows.filter(function(r){ if(ftipo==='prov') return r.tipo==='Provisional'; if(ftipo==='inegr') return r.tipo!=='Provisional'; if(ftipo==='ing') return _E.indexOf(r.tipo)>=0; if(ftipo==='egr') return _S.indexOf(r.tipo)>=0; return true; }); }
+  if(ftipo!=='todos'){ rows=rows.filter(function(r){ if(ftipo==='prov') return r.tipo==='Provisional'; if(ftipo==='inegr') return r.tipo!=='Provisional'; if(ftipo==='ing') return _E.indexOf(r.tipo)>=0; if(ftipo==='entrega') return r.tipo==='Entrega efectivo'; if(ftipo==='egr') return _S.indexOf(r.tipo)>=0; return true; }); }
   var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var fmt = function(n){ return '$'+Math.round(Number(n)||0).toLocaleString('es-CO'); };
   var fmtF = function(f){ if(!f) return '-'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
