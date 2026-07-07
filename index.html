@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-06-aprobar-lote-firma';
+const APP_VERSION = '2026-07-07-fix-pantalla-blanco';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-07', version:'2026-07-07-fix-pantalla-blanco', titulo:'Fix: ya no queda la pantalla en blanco al guardar',
+    afecta:'Todo el equipo',
+    detalle:'Se corrigió el bug reportado por Sebastián: al guardar en ciertos módulos, la pantalla quedaba en blanco ("Vista no encontrada") y parecía que el registro se había perdido. En realidad SÍ se guardaba, pero la redirección caía en una vista inexistente. Ahora, ante cualquier vista desconocida, el sistema regresa automáticamente a la pantalla anterior (la lista o el menú) en vez de dejar la pantalla vacía. Esto elimina la sensación de "se borró lo que hice".' },
   { fecha:'2026-07-06', version:'2026-07-06-aprobar-lote-firma', titulo:'Aprobar lote de reembolsos + firma (VB exclusivo de Gerencia General)',
     afecta:'Gerencia General',
     detalle:'El Visto Bueno / aprobación de reembolsos queda restringido EXCLUSIVAMENTE a Santiago Arias (Gerencia General); nadie más ve ni puede pulsar los botones de aprobar. Nuevo botón "✅✍️ Aprobar lote": aprueba de un solo clic todos los recibos de un mismo consecutivo (ej. los 10 del R-0000027) y abre el documento firmado listo para PDF/reenvío. Se agregó la firma: Santiago puede subir su firma (se guarda en su equipo) y queda estampada en el bloque "Autorizó" del informe y del lote. La aprobación se guarda de forma permanente y auditable (estado=Aprobado, aprobado_por y fecha/hora en observaciones).' },
@@ -1544,7 +1547,17 @@ async function loadView(view) {
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
 
-    default: main.innerHTML = '<p>Vista no encontrada</p>';
+    default:
+      // Sol Sebastián: evitar la "pantalla en blanco/Vista no encontrada" tras guardar.
+      // El registro ya quedó guardado; si el destino no existe, volvemos a un lugar seguro
+      // (la vista anterior, normalmente la lista o el menú) en vez de dejar la pantalla vacía.
+      if (window._prevView && window._prevView !== view && !window._loadViewFallback) {
+        window._loadViewFallback = true;
+        try { await loadView(window._prevView); } finally { window._loadViewFallback = false; }
+      } else {
+        window._loadViewFallback = false;
+        await renderDashboard();
+      }
   }
   // Restaurar la posición de scroll si fue una recarga de la misma vista
   if(_samePage && _savedScroll>0){ try{ requestAnimationFrame(function(){ if(_scEl) _scEl.scrollTop=_savedScroll; else window.scrollTo(0,_savedScroll); setTimeout(function(){ if(_scEl) _scEl.scrollTop=_savedScroll; else window.scrollTo(0,_savedScroll); },80); }); }catch(e){} }
