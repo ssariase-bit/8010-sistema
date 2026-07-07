@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-07-oleada1-bugs';
+const APP_VERSION = '2026-07-07-oleada2';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-07', version:'2026-07-07-oleada2', titulo:'Oleada 2: CKI (Sr./Sra.+apto), desayuno, menú y alerta de Comunicaciones',
+    afecta:'Recepción / Operación / Todo el equipo',
+    detalle:'(1) Reporte de CKI: ahora muestra una línea de encabezado con Apto + tratamiento (Sr./Sra.) + huésped, para que se vean en el reporte y el correo (Sol Sebastián). (2) Reservas: si marcas "Incluye desayuno: Sí", queda reflejado en las observaciones de la confirmación (Sol Andrés/María José). (3) Menú: "Seguimientos por Turno" quedó junto a Novedades y el módulo de turnos se renombró "Turnos / Personal / Extras" (Sol Sebastián). (4) Check list Turno 2 (Kubik): el ítem de consumos del restaurante se ajustó al nuevo proceso (cargar a la habitación con firma del arrendatario al momento del cargo) (Sol Juanita). (5) Comunicaciones: ahora aparece un contador rojo de comunicados sin leer en el menú y un aviso al entrar (Sol Fabio).' },
   { fecha:'2026-07-07', version:'2026-07-07-oleada1-bugs', titulo:'Oleada 1 de solicitudes: metrajes, combo del rack y buscador de módulos',
     afecta:'Recepción / Reservas',
     detalle:'(1) Metrajes por apto en 8010: al elegir configuración, el metraje ahora es el REAL del apto (pisos 3-4 = 96/90 m², del 501 en adelante 132/126 m², piso 11 = 120) en vez de un valor fijo por terminación. (2) Rack: el badge de "unidad combinada" ya no aparece por error: solo se marca cuando el MISMO huésped ocupa realmente los dos aptos (antes una reserva con tipo "Two Residence" en un apto hacía ver el vecino como parte de ella aunque fuera de otro huésped — caso Nancy/303). (3) Nuevo buscador de módulos en el menú lateral: escribe y filtra los módulos al instante.' },
@@ -992,12 +995,12 @@ const MENU_COMPLETO = [
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'comentarios', icon: '💬', label: 'Comentarios' },
   { section: 'Operación' },
-  { id: 'turnos-list', icon: '📋', label: 'Turnos / Personal / Extras / Seguimiento' },
+  { id: 'turnos-list', icon: '📋', label: 'Turnos / Personal / Extras' },
   { id: 'informe-cki', icon: '🟢', label: 'Informe CKI' },
   { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
   { id: 'historico-ck', icon: '🔁', label: 'Histórico CKI/CKO' },
   { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
-  { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
+  { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
   { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
   { id: 'hk-list', icon: '🧹', label: 'Tiempos Camareras' },
   { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
@@ -4953,6 +4956,8 @@ async function guardarReserva() {
     tel: window._telFull('res-tel'),
     numero: await getNextNumeroConfirmacion()
   };
+  // Sol Andrés/María José: reflejar "Incluye desayuno" en las observaciones de la confirmación
+  if ((document.getElementById('res-desayuno')?.value) === 'Si') { resData.obs = (resData.obs?resData.obs+' | ':'') + 'Incluye desayuno'; }
   if (typeof _adjSel!=='undefined' && _adjSel.length>0) { resData.obs = (resData.obs?resData.obs+' | ':'') + 'Combo unido: ' + _aptosW2.join(' + '); }
   try { var _rvRow = { edificio: EDIFICIO_ACTIVO, apto: resData.apto, config: resData.config, moneda: resData.moneda, tarifa_usd: resData.tarifa_usd||null, trm: resData.trm||null, tipo_apto_manual: resData.tipoAptoManual||null, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, huespedes_extra: _he2, numero: resData.numero, empresa: resData.empresa, pagador: resData.pagador, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, desayuno: (document.getElementById('res-desayuno')?.value || 'No'), user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',pagador:'Quién paga',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insR=await sb.from('reservas').insert(_rvRow).select('id').single(); if(_insR.error){ showToast('⚠️ Quedó en el rack pero NO se guardó en Reservas: '+_insR.error.message,'error'); } var _insH=(_insR.data)||{}; if(_insH.id){ try{ await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); }catch(_eh){} } } } catch(_e){ showToast('⚠️ Reserva en el rack, pero falló el registro en Reservas: '+(_e&&_e.message||_e),'error'); }
   setTimeout(() => {
@@ -6985,6 +6990,22 @@ window._alarmaComentarios = async function(conToast){
 };
 setTimeout(function(){ if(window._alarmaComentarios) window._alarmaComentarios(true); }, 5000);
 setInterval(function(){ if(window._alarmaComentarios) window._alarmaComentarios(true); }, 45000);
+// Sol Fabio: alerta de Comunicaciones — badge con nº de comunicados sin leer + aviso al entrar
+window._alarmaComunicaciones = async function(conToast){
+  try{
+    if(typeof sb==='undefined'||typeof EDIFICIO_ACTIVO==='undefined') return 0;
+    var res=await sb.from('comunicaciones').select('*').eq('edificio',EDIFICIO_ACTIVO).eq('activo',true).order('created_at',{ascending:false}).limit(300);
+    var rows=(res&&res.data)||[]; var pend=0;
+    rows.forEach(function(c){ try{ var paraMi=(typeof window._comParaMi==='function')?window._comParaMi(c):true; var leido=(typeof window._comLeyo==='function')?window._comLeyo(c.leidos):false; if(paraMi && !leido) pend++; }catch(_){} });
+    var link=[...document.querySelectorAll('[onclick]')].find(function(e){ return /loadView\('comunicaciones-list'\)/.test(e.getAttribute('onclick')||''); });
+    if(link){ var old=link.querySelector('.comunic-badge'); if(old) old.remove();
+      if(pend>0){ var b=document.createElement('span'); b.className='comunic-badge'; b.textContent=pend; b.style.cssText='background:#e24b4a;color:#fff;border-radius:10px;font-size:10px;padding:1px 7px;margin-left:6px;font-weight:700'; link.appendChild(b); } }
+    if(conToast && pend>0 && !window._alarmaComunicShown && typeof showToast==='function'){ window._alarmaComunicShown=true; showToast('📣 Tienes '+pend+' comunicado'+(pend>1?'s':'')+' sin leer — revísalos en Comunicaciones','info'); }
+    return pend;
+  }catch(e){ return 0; }
+};
+setTimeout(function(){ if(window._alarmaComunicaciones) window._alarmaComunicaciones(true); }, 6500);
+setInterval(function(){ if(window._alarmaComunicaciones) window._alarmaComunicaciones(true); }, 60000);
 
 async function renderList(tabla, titulo, formView, cols, headers) {
   const { data } = await sb.from(tabla).select('*').order('created_at', { ascending: false }).limit(100);
@@ -9746,7 +9767,7 @@ const CHECKLIST_KL = {
   ['1.1','Entrega de novedades abiertas.'],['1.2','Entrega de novedades internas.'],['1.3','Entrega del estado de apartamentos.'],['1.4','Conteo de llaves.'],['1.5','Arqueo de Caja.'],['1.6','Enviar cierre de turno por el S.O.'],
   ['2','Diligenciar tiempos de limpiezas de camareras y enviar por el S.O.'],
   ['2.1','Enviar reporte de salida del personal, en cuanto salga la última camarera.'],
-  ['3','Firmar estados de cuentas de consumos de Bagatelle del día.'],
+  ['3','Cargar consumos del restaurante (Bagatelle) a la habitación, con firma del arrendatario al momento del cargo.'],
   ['4','Todos los miércoles 6 pm, enviar reporte de apartamentos a Don Santiago.'],
   ['5','Viernes, sábados, domingos y festivos a las 6 pm, enviar reporte de novedades a Don Santiago.'],
   ['6','Actas.'],
@@ -10683,7 +10704,11 @@ function generarMsgCKI() {
   const _fh = fmtFH12();
   const cobroObs = (document.getElementById('cki-cobro')?.value || '').trim();
   const migCKI = (document.getElementById('cki-migracion')?.value || '').startsWith('Sí') ? ', se envía reporte de ingreso a Migración Colombia' : '';
+  // Sol Sebastián: mostrar el Apto (ubicación) y el tratamiento (Sr./Sra.) en el reporte/correo del CKI
+  const _tratG = (document.getElementById('cki-tratamiento')?.value || '').trim();
+  const _encabCKI = `Apto ${apto} · ${_tratG ? _tratG + ' ' : ''}${huesped}`;
   const msg = `${_fh}
+${_encabCKI}
 Realiza CKI (${canal})${fechasAloj?' // ALOJ '+fechasAloj:''} // TN:$${fmt(tarifa)} x ${cantidad} ${uniLbl}${cantidad>1?'s':''} = $${fmt(subtotal)}${exento?' (IVA exento)':' + IVA ($'+fmt(iva)+')'} = $${fmt(total)} ${moneda}${pagoSeg}${cobroObs?' ('+cobroObs+')':''}, ${equipaje}, ${acta}, se relaciona check list${_book ? ', se envía book de servicios' : ''}${migCKI}${acompStr}${cortesias} y se actualiza estado de huéspedes.${obs ? '\n'+obs : ''}
 R/${quien}`;
 
