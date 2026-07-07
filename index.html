@@ -469,13 +469,16 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-06-aprobar-reembolso';
+const APP_VERSION = '2026-07-06-aprobar-lote-firma';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-06', version:'2026-07-06-aprobar-lote-firma', titulo:'Aprobar lote de reembolsos + firma (VB exclusivo de Gerencia General)',
+    afecta:'Gerencia General',
+    detalle:'El Visto Bueno / aprobación de reembolsos queda restringido EXCLUSIVAMENTE a Santiago Arias (Gerencia General); nadie más ve ni puede pulsar los botones de aprobar. Nuevo botón "✅✍️ Aprobar lote": aprueba de un solo clic todos los recibos de un mismo consecutivo (ej. los 10 del R-0000027) y abre el documento firmado listo para PDF/reenvío. Se agregó la firma: Santiago puede subir su firma (se guarda en su equipo) y queda estampada en el bloque "Autorizó" del informe y del lote. La aprobación se guarda de forma permanente y auditable (estado=Aprobado, aprobado_por y fecha/hora en observaciones).' },
   { fecha:'2026-07-06', version:'2026-07-06-aprobar-reembolso', titulo:'Aprobación real y auditable de reembolsos',
-    afecta:'Gerencia / Financiero / Administración',
-    detalle:'En el módulo Reembolsos ahora hay un botón "✅ Aprobar" (visible solo para gerencia y el grupo Confidencial). Al aprobar, el reembolso queda marcado como "Aprobado" de forma permanente en el sistema y se registra quién lo aprobó y en qué fecha/hora (traza auditable en observaciones y en el campo "Aprobado por"). Antes el "Visto Bueno" del Informe solo estampaba la firma en el PDF y se borraba al recargar; ahora la aprobación queda con rastro real para control interno de caja menor.' },
+    afecta:'Gerencia General',
+    detalle:'En el módulo Reembolsos hay un botón "✅ Aprobar" (solo Gerencia General). Al aprobar, el reembolso queda marcado como "Aprobado" de forma permanente y se registra quién lo aprobó y en qué fecha/hora (traza auditable en observaciones y en el campo "Aprobado por").' },
   { fecha:'2026-07-05', version:'2026-07-05-permisos2', titulo:'Permisos: Financiero, Salarios, Horas Extra y Sistema restringidos',
     afecta:'Todo el equipo',
     detalle:'Se protegió la información confidencial. Financiero y Salarios (Estado de Resultados, Ingresos, Ventas, Indicadores, Nómina, Personal/RRHH) solo los ven personas autorizadas. El Listado de Cargos queda operativo (visible para todos, sin sueldos). Horas Extra: los autorizados ven las de todo el personal y cada empleado ve solo las suyas (para saber qué le pagarán). El módulo Sistema (Importar Rack, Registro de Cambios) queda solo para gerencia. Se eliminó el cargo "Jefe de Administradores" (Fabio queda como Gerencia Operativa).' },
@@ -6972,10 +6975,11 @@ async function renderList(tabla, titulo, formView, cols, headers) {
     } else if (tabla === 'maletas' && r.estado === 'En bodega') {
       acciones = `<td style="white-space:nowrap"><button onclick="entregarMaleta('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--verde);border-color:var(--verde)">🧳 Entregar</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else if (tabla === 'reembolsos') {
-      var _puedeAprob = (typeof _puedeConfidencial==='function' && _puedeConfidencial()) || (typeof currentProfile!=='undefined' && currentProfile && currentProfile.rol==='gerente_general');
+      var _puedeAprob = (typeof window._puedeAprobarReemb==='function') && window._puedeAprobarReemb();
       var _yaAprob = (r.estado==='Aprobado'||r.estado==='Pagado'||r.estado==='Reembolso recibido completo'||r.estado==='Reembolso recibido parcial');
-      var _btnAprob = (_puedeAprob && !_yaAprob) ? `<button onclick="aprobarReembolso('${r.id}')" class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#15803d;color:#fff;border:none">✅ Aprobar</button> ` : '';
-      acciones = `<td style="white-space:nowrap">${_btnAprob}<button onclick="previewReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px">👁 Ver</button> <button onclick="correoReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">✉️ Correo</button> ${_btnsEdit(tabla, r.id)}</td>`;
+      var _btnAprob = (_puedeAprob && !_yaAprob) ? `<button onclick="aprobarReembolso('${r.id}')" class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#166534;color:#fff;border:none">✅ Aprobar</button> ` : '';
+      var _btnLote = (_puedeAprob && r.consecutivo) ? `<button onclick="aprobarLoteReembolso('${String(r.consecutivo).replace(/'/g,"\\'")}')" class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#15803d;color:#fff;border:none">✅✍️ Aprobar lote</button> ` : '';
+      acciones = `<td style="white-space:nowrap">${_btnLote}${_btnAprob}<button onclick="previewReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px">👁 Ver</button> <button onclick="correoReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">✉️ Correo</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else if (tabla === 'check_carpetas') {
       acciones = `<td style="white-space:nowrap"><button onclick="imprimirRotuloCarpeta('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">🖨 Rótulo</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else {
@@ -7606,11 +7610,13 @@ async function generarInformeReembolso(keepVB){
   var totales = '<div style="margin-top:10px;font-size:16px;text-align:right">Total: <b style="color:#1D3461">'+fmt(total)+'</b></div>';
   // Firmas: Elaboró / Autorizó (el VB del gerente general aparece en Autorizó)
   var _vb = window._riVB;
-  var _esGer = (typeof currentProfile!=='undefined' && currentProfile && currentProfile.rol==='gerente_general');
+  var _esGer = (typeof window._puedeAprobarReemb==='function') && window._puedeAprobarReemb();
   var vbBtn = (_esGer && !_vb && rows.length) ? '<button class="btn np" style="background:#15803d;color:#fff;margin-top:12px" onclick="darVBReembolso()">✅ Dar mi Visto Bueno (Autorizó)</button>' : '';
+  var _vbFirma = _vb ? (_vb.firma||'') : '';
+  var _vbFirmaImg = _vbFirma ? '<img src="'+_vbFirma+'" style="max-height:60px;display:block;margin:0 auto 2px">' : '';
   var firmas = '<div style="display:flex;justify-content:space-around;gap:30px;margin-top:48px;font-size:12px">'+
     '<div style="text-align:center;flex:1"><div style="border-top:1px solid #555;padding-top:4px">Elaboró</div></div>'+
-    '<div style="text-align:center;flex:1"><div style="border-top:1px solid #555;padding-top:4px">Autorizó'+(_vb?('<br><b style="color:#15803d">✅ '+esc(_vb.nombre)+'</b><br><span style="font-size:10px;color:#666">'+esc(_vb.fecha)+'</span>'):'')+'</div></div>'+
+    '<div style="text-align:center;flex:1">'+(_vb?_vbFirmaImg:'')+'<div style="border-top:1px solid #555;padding-top:4px">Autorizó'+(_vb?('<br><b style="color:#15803d">✅ '+esc(_vb.nombre)+'</b><br><span style="font-size:10px;color:#666">'+esc(_vb.fecha)+'</span>'):'')+'</div></div>'+
     '</div>';
   cont.innerHTML = '<div class="card">'+encabezado+resumen+'<div style="overflow-x:auto">'+tabla+'</div>'+totales+firmas+vbBtn+'</div>';
   window._riPrintHTML = '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reembolso Caja Menor</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}h2{color:#1D3461;margin:0}table.tabla{border-collapse:collapse;width:100%;font-size:12px}table.tabla th,table.tabla td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}table.tabla th{background:#1F3864;color:#fff}@media print{.np{display:none}}</style></head><body><button class="np" onclick="window.print()" style="background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">🖨️ Imprimir / PDF</button>'+encabezado+resumen+tabla+totales+firmas+'</body></html>';
@@ -7618,11 +7624,25 @@ async function generarInformeReembolso(keepVB){
 }
 function imprimirInformeReembolso(){ if(!window._riPrintHTML){ if(typeof showToast==='function') showToast('Genera el informe primero','error'); return; } var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(window._riPrintHTML); w.document.close(); }
 window._riVB = null;
-function darVBReembolso(){ window._riVB = { nombre: (typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'Gerencia', fecha: (typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO')) }; generarInformeReembolso(true); if(typeof showToast==='function') showToast('✅ Visto Bueno registrado en el informe','success'); }
+function darVBReembolso(){
+  if(typeof window._puedeAprobarReemb==='function' && !window._puedeAprobarReemb()){ if(typeof showToast==='function') showToast('Solo Gerencia General (Santiago) puede dar el Visto Bueno','error'); return; }
+  var _f=(typeof window._getFirma==='function'?window._getFirma():'');
+  var _doVB=function(){ window._riVB = { nombre: (typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'Gerencia', fecha: (typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO')), firma: (typeof window._getFirma==='function'?window._getFirma():'') }; generarInformeReembolso(true); if(typeof showToast==='function') showToast('✅ Visto Bueno registrado en el informe','success'); };
+  if(!_f && typeof window.subirMiFirma==='function'){
+    if(confirm('Aún no tienes una firma guardada en este equipo. ¿Quieres subir tu firma ahora para que quede estampada en el informe?\n\n(Aceptar = subir firma · Cancelar = firmar solo con tu nombre)')){ window.subirMiFirma(function(){ _doVB(); }); return; }
+  }
+  _doVB();
+}
+// ── Solo Santiago Arias puede dar el Visto Bueno / aprobar reembolsos ──
+window._WL_APRUEBA_REEMB = ['santiago.arias@8010urbanliving.com'];
+window._puedeAprobarReemb = function(){
+  var e=(typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.email)||'';
+  return window._WL_APRUEBA_REEMB.indexOf(String(e).toLowerCase())>-1;
+};
 // ── Aprobación real y auditable de reembolsos (persistente en BD) ──
 window.aprobarReembolso = async function(id){
-  var _puedeAprob = (typeof _puedeConfidencial==='function' && _puedeConfidencial()) || (typeof currentProfile!=='undefined' && currentProfile && currentProfile.rol==='gerente_general');
-  if(!_puedeAprob){ if(typeof showToast==='function') showToast('No tienes permiso para aprobar reembolsos','error'); return; }
+  var _puedeAprob = window._puedeAprobarReemb();
+  if(!_puedeAprob){ if(typeof showToast==='function') showToast('Solo Gerencia General (Santiago) puede aprobar reembolsos','error'); return; }
   var res = await sb.from('reembolsos').select('*').eq('id',id).single();
   if(res.error||!res.data){ if(typeof showToast==='function') showToast('No se pudo cargar el reembolso','error'); return; }
   var r=res.data;
@@ -7637,6 +7657,112 @@ window.aprobarReembolso = async function(id){
   if(typeof showToast==='function') showToast('✅ Reembolso '+ref+' aprobado','success');
   if(typeof loadView==='function') loadView('reembolsos-list');
 };
+
+// ── Firma del aprobador (imagen guardada en este equipo) ──
+window._firmaKey = function(){ var e=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.email)||(typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||'user'; return 'so_firma_'+e; };
+window._getFirma = function(){ try{ return localStorage.getItem(window._firmaKey())||''; }catch(_){ return ''; } };
+window.subirMiFirma = function(cb){
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+  inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var img=new Image();
+      img.onload=function(){
+        // Redimensiona a máx 320px de ancho para no saturar localStorage
+        var maxW=320, sc=Math.min(1, maxW/img.width), w=Math.round(img.width*sc), h=Math.round(img.height*sc);
+        var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        var durl=cv.toDataURL('image/png');
+        try{ localStorage.setItem(window._firmaKey(), durl); if(typeof showToast==='function') showToast('✍️ Firma guardada en este equipo','success'); if(cb) cb(durl); }
+        catch(e){ if(typeof showToast==='function') showToast('No se pudo guardar la firma (imagen muy grande)','error'); }
+      };
+      img.src=rd.result;
+    };
+    rd.readAsDataURL(f);
+  };
+  inp.click();
+};
+// ── Aprobación de LOTE completo (todos los recibos de un consecutivo) con firma ──
+window._loteRows = null;
+window.aprobarLoteReembolso = async function(consec){
+  var _puedeAprob = window._puedeAprobarReemb();
+  if(!_puedeAprob){ if(typeof showToast==='function') showToast('Solo Gerencia General (Santiago) puede dar el Visto Bueno del lote','error'); return; }
+  if(consec==null || consec===''){ if(typeof showToast==='function') showToast('Este reembolso no tiene consecutivo (usa Aprobar individual)','error'); return; }
+  var res = await sb.from('reembolsos').select('*').eq('consecutivo',consec).order('fecha');
+  if(res.error){ if(typeof showToast==='function') showToast('Error: '+res.error.message,'error'); return; }
+  var rows=res.data||[];
+  if(!rows.length){ if(typeof showToast==='function') showToast('No se encontraron recibos de ese lote','error'); return; }
+  window._loteRows=rows;
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var fmtF=function(f){ if(!f) return '-'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  var total=rows.reduce(function(s,r){ return s+(Number(r.valor)||0); },0);
+  var pend=rows.filter(function(r){ return !(r.estado==='Aprobado'||r.estado==='Pagado'||r.estado==='Reembolso recibido completo'||r.estado==='Reembolso recibido parcial'); }).length;
+  var tr=rows.map(function(r,i){ return '<tr><td style="padding:4px 8px;border-bottom:1px solid #eee">'+(i+1)+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee">'+fmtF(r.fecha)+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee">'+esc(r.descripcion||'')+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">'+_reembFmt(r.valor)+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:center;font-size:11px">'+esc(r.estado||'')+'</td></tr>'; }).join('');
+  var quien=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||(typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||'Gerencia';
+  var cargo=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.rol==='gerente_general')?'Gerente General':((typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.cargo)||'');
+  var firma=window._getFirma();
+  var firmaHTML=firma? '<img id="lote-firma-img" src="'+firma+'" style="max-height:60px;display:block;margin:0 auto 2px">' : '<div id="lote-firma-img" style="height:52px"></div>';
+  var ov=document.createElement('div'); ov.id='lote-ap-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:760px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,.3)">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3 style="margin:0;font-size:18px">✅ Aprobar lote R-'+esc(consec)+'</h3><button onclick="var o=document.getElementById(\'lote-ap-ov\');if(o)o.remove();" style="border:none;background:none;font-size:22px;cursor:pointer;color:#888">×</button></div>'
+    +'<div style="font-size:12px;color:#555;margin-bottom:10px">'+rows.length+' recibos · '+pend+' pendientes por aprobar · Total <b style="color:#1D3461">'+_reembFmt(total)+'</b></div>'
+    +'<div style="border:1px solid #e5e7eb;border-radius:8px;max-height:260px;overflow:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#1F3864;color:#fff"><th style="padding:6px 8px;text-align:left">No.</th><th style="padding:6px 8px;text-align:left">Fecha</th><th style="padding:6px 8px;text-align:left">Descripción</th><th style="padding:6px 8px;text-align:right">Valor</th><th style="padding:6px 8px">Estado</th></tr></thead><tbody>'+tr+'</tbody></table></div>'
+    +'<div style="border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-bottom:14px;text-align:center;max-width:320px;margin-left:auto;margin-right:auto">'
+      +'<div style="font-size:11px;color:#888;margin-bottom:6px">Autorizó (firma)</div>'
+      +firmaHTML
+      +'<div style="border-top:1px solid #555;margin-top:2px;padding-top:4px;font-size:13px"><b>'+esc(quien)+'</b></div>'
+      +(cargo?'<div style="font-size:11px;color:#666">'+esc(cargo)+'</div>':'')
+      +'<div style="font-size:10px;color:#999">'+esc((typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO')))+'</div>'
+      +'<button onclick="window.subirMiFirma(function(d){var im=document.getElementById(\'lote-firma-img\'); if(im){ if(im.tagName===\'IMG\'){im.src=d;} else { var n=document.createElement(\'img\'); n.id=\'lote-firma-img\'; n.src=d; n.style.cssText=\'max-height:60px;display:block;margin:0 auto 2px\'; im.parentNode.replaceChild(n,im);} }})" class="btn btn-outline btn-sm" style="margin-top:8px;font-size:11px">✍️ '+(firma?'Cambiar firma':'Subir mi firma')+'</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end"><button onclick="var o=document.getElementById(\'lote-ap-ov\');if(o)o.remove();" class="btn btn-outline">Cancelar</button><button id="lote-ap-btn" onclick="_confirmarAprobarLote(\''+esc(consec).replace(/'/g,"\\'")+'\')" class="btn" style="background:#15803d;color:#fff;border:none">✅ Aprobar y firmar lote</button></div>'
+    +'</div>';
+  document.body.appendChild(ov);
+};
+window._confirmarAprobarLote = async function(consec){
+  if(!window._puedeAprobarReemb()){ if(typeof showToast==='function') showToast('Solo Gerencia General (Santiago) puede dar el Visto Bueno del lote','error'); return; }
+  var rows=window._loteRows||[];
+  if(!rows.length){ return; }
+  var btn=document.getElementById('lote-ap-btn'); if(btn){ btn.disabled=true; btn.textContent='Aprobando…'; }
+  var quien=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||(typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||'Gerencia';
+  var cuando=(typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO'));
+  var traza='✅ Aprobado (lote R-'+consec+') por '+quien+' el '+cuando;
+  var ids=rows.map(function(r){ return r.id; });
+  // Actualiza uno por uno para conservar observaciones previas de cada recibo
+  var okAll=true, errMsg='';
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i];
+    var obs=(r.observaciones? (r.observaciones+' | '):'')+traza;
+    var upd=await sb.from('reembolsos').update({ estado:'Aprobado', aprobado_por:quien, observaciones:obs }).eq('id', r.id);
+    if(upd.error){ okAll=false; errMsg=upd.error.message; break; }
+  }
+  if(!okAll){ if(typeof showToast==='function') showToast('Error al aprobar lote: '+errMsg,'error'); if(btn){ btn.disabled=false; btn.textContent='✅ Aprobar y firmar lote'; } return; }
+  var o=document.getElementById('lote-ap-ov'); if(o) o.remove();
+  if(typeof showToast==='function') showToast('✅ Lote R-'+consec+' aprobado ('+rows.length+' recibos)','success');
+  // Abre el documento firmado listo para PDF / reenvío
+  _imprimirLoteFirmado(consec, rows, window._getFirma(), quien, cuando);
+  if(typeof loadView==='function') loadView('reembolsos-list');
+};
+function _imprimirLoteFirmado(consec, rows, firma, quien, cuando){
+  var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||''; var nit=eb.nit||'';
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var fmtF=function(f){ if(!f) return '-'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  var total=rows.reduce(function(s,r){ return s+(Number(r.valor)||0); },0);
+  var cargo=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.rol==='gerente_general')?'Gerente General':((typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.cargo)||'');
+  var tr=rows.map(function(r,i){ return '<tr><td>'+(i+1)+'</td><td>'+fmtF(r.fecha)+'</td><td>'+esc(r.tipo||'')+'</td><td>'+esc(r.numero||'')+'</td><td style="text-align:left">'+esc(r.descripcion||'')+'</td><td style="text-align:right;white-space:nowrap">'+_reembFmt(r.valor)+'</td><td>'+esc(r.centro_costos||r.area||'')+'</td></tr>'; }).join('');
+  var encab='<div style="text-align:center;margin-bottom:6px"><h2 style="color:#1D3461;margin:0">'+esc(nb)+' — Reembolso Caja Menor</h2><div style="color:#6b7280;font-size:12px">NIT '+esc(nit)+'</div></div>'
+    +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px 16px;font-size:12px;margin:8px 0"><div><b>Consecutivo:</b> R-'+esc(consec)+'</div><div><b>Fecha:</b> '+esc(fmtF(cuando.split(' ')[0]&&cuando.indexOf('-')>-1?cuando:'')||fmtF((rows[0]||{}).fecha))+'</div><div><b>Estado:</b> Aprobado</div><div><b>Total:</b> '+_reembFmt(total)+'</div></div>';
+  var tabla='<table class="tabla" style="width:100%;font-size:12px"><thead><tr><th>No.</th><th>Fecha</th><th>Tipo</th><th>Número</th><th>Descripción</th><th style="text-align:right">Neto</th><th>Centro de costos</th></tr></thead><tbody>'+tr+'</tbody></table>';
+  var totales='<div style="margin-top:10px;font-size:16px;text-align:right">Total: <b style="color:#1D3461">'+_reembFmt(total)+'</b></div>';
+  var firmaImg=firma? '<img src="'+firma+'" style="max-height:64px;display:block;margin:0 auto 2px">' : '<div style="height:56px"></div>';
+  var firmas='<div style="display:flex;justify-content:space-around;gap:30px;margin-top:56px;font-size:12px">'
+    +'<div style="text-align:center;flex:1"><div style="border-top:1px solid #555;padding-top:4px">Elaboró</div></div>'
+    +'<div style="text-align:center;flex:1">'+firmaImg+'<div style="border-top:1px solid #555;padding-top:4px">Autorizó<br><b>'+esc(quien)+'</b>'+(cargo?('<br><span style="font-size:10px;color:#666">'+esc(cargo)+'</span>'):'')+'<br><span style="font-size:10px;color:#15803d">✅ '+esc(cuando)+'</span></div></div>'
+    +'</div>';
+  var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Lote R-'+esc(consec)+' (firmado)</title><style>body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#1f2937}h2{color:#1D3461;margin:0}table.tabla{border-collapse:collapse;width:100%;font-size:12px}table.tabla th,table.tabla td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}table.tabla th{background:#1F3864;color:#fff}@media print{.np{display:none}}</style></head><body><button class="np" onclick="window.print()" style="background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">🖨️ Imprimir / PDF</button>'+encab+tabla+totales+firmas+'</body></html>';
+  var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para ver el documento firmado','error'); return; } w.document.write(html); w.document.close();
+}
 
 // ════════ REEMBOLSO: comprobante, previsualización y correo con scan (propuesta Sebastián) ════════
 const _REEMB_DEST = {
