@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-07-fix-acceso-gerencia';
+const APP_VERSION = '2026-07-07-financiero-elfinanciero';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-07', version:'2026-07-07-financiero-elfinanciero', titulo:'Acceso financiero para el equipo de El Financiero (solo 8010)',
+    afecta:'Financiero / Gerencia',
+    detalle:'Se habilitó el acceso al grupo confidencial (financiero + salarios/nómina) de 8010 para Julian Boada (julian@elfinanciero.co) y Paola Faccini (info@elfinanciero.co). Verán los estados financieros, flujo, ingresos, ventas, indicadores, nómina y horas extra, únicamente en 8010 (su perfil queda restringido a ese edificio). Las cuentas de acceso se crean en Supabase por Gerencia.' },
   { fecha:'2026-07-07', version:'2026-07-07-fix-acceso-gerencia', titulo:'Fix: Gerencia General vuelve a ver Financiero, Flujo, Salarios, Horas Extra y el VB de reembolsos',
     afecta:'Gerencia General',
     detalle:'Los permisos quedaron atados al correo exacto de acceso y, si no calzaba carácter por carácter, dejaban a Santiago (dueño y gerente) sin ver los módulos confidenciales (Financiero, Flujo/Estado de Resultados, Salarios, Horas Extra) y sin los botones de aprobar/Visto Bueno de reembolsos. Se corrigió: el rol "Gerencia General" siempre tiene acceso a todo eso (sigue siendo exclusivo de Santiago), sin depender de que el correo coincida exactamente.' },
@@ -1068,10 +1071,10 @@ const MENU_COMPLETO = [
 
 // ── Permisos por persona (correo de acceso) + edificio ──
 // Confidencial = financiero + salarios (Nómina, Personal/RRHH, Cargos, Estado de Resultados, Ingresos, Ventas, Indicadores)
-window._WL_CONFID_8010 = ['santiago.arias@8010urbanliving.com','zareth.varela@8010urbanliving.com'];
+window._WL_CONFID_8010 = ['santiago.arias@8010urbanliving.com','zareth.varela@8010urbanliving.com','julian@elfinanciero.co','info@elfinanciero.co'];
 window._WL_CONFID_KL_EXTRA = ['aolaya@kubiklab.com','admin.fin@8i8op.com','contador@8i8op.com'];
 // Horas Extra: estos ven las de TODOS; el resto del personal solo ve las suyas.
-window._WL_EXTRAS_8010 = ['santiago.arias@8010urbanliving.com','fabio.malaver@8010urbanliving.com','zareth.varela@8010urbanliving.com','compras@8010urbanliving.com'];
+window._WL_EXTRAS_8010 = ['santiago.arias@8010urbanliving.com','fabio.malaver@8010urbanliving.com','zareth.varela@8010urbanliving.com','compras@8010urbanliving.com','julian@elfinanciero.co','info@elfinanciero.co'];
 window._WL_EXTRAS_KL_EXTRA = ['aolaya@kubiklab.com','admin.fin@8i8op.com','contador@8i8op.com'];
 window._miEmail = function(){ return String((typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||'').toLowerCase().trim(); };
 window._enLista = function(base, klExtra){
