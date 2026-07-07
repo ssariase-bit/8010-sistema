@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-07-fix-pantalla-blanco';
+const APP_VERSION = '2026-07-07-oleada1-bugs';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-07', version:'2026-07-07-oleada1-bugs', titulo:'Oleada 1 de solicitudes: metrajes, combo del rack y buscador de módulos',
+    afecta:'Recepción / Reservas',
+    detalle:'(1) Metrajes por apto en 8010: al elegir configuración, el metraje ahora es el REAL del apto (pisos 3-4 = 96/90 m², del 501 en adelante 132/126 m², piso 11 = 120) en vez de un valor fijo por terminación. (2) Rack: el badge de "unidad combinada" ya no aparece por error: solo se marca cuando el MISMO huésped ocupa realmente los dos aptos (antes una reserva con tipo "Two Residence" en un apto hacía ver el vecino como parte de ella aunque fuera de otro huésped — caso Nancy/303). (3) Nuevo buscador de módulos en el menú lateral: escribe y filtra los módulos al instante.' },
   { fecha:'2026-07-07', version:'2026-07-07-fix-pantalla-blanco', titulo:'Fix: ya no queda la pantalla en blanco al guardar',
     afecta:'Todo el equipo',
     detalle:'Se corrigió el bug reportado por Sebastián: al guardar en ciertos módulos, la pantalla quedaba en blanco ("Vista no encontrada") y parecía que el registro se había perdido. En realidad SÍ se guardaba, pero la redirección caía en una vista inexistente. Ahora, ante cualquier vista desconocida, el sistema regresa automáticamente a la pantalla anterior (la lista o el menú) en vez de dejar la pantalla vacía. Esto elimina la sensación de "se borró lo que hice".' },
@@ -1088,12 +1091,39 @@ function buildSidebar() {
     return false;
   });
   const sb2 = document.getElementById('sidebar');
-  sb2.innerHTML = items.map(item => {
+  // Sol Sebastián: buscador de módulos (filtra el menú al escribir)
+  const buscador = `<div style="position:sticky;top:0;z-index:5;background:inherit;padding:8px 10px 6px">
+      <input id="nav-buscar" type="text" oninput="_filtrarModulos(this.value)" placeholder="🔎 Buscar módulo…" autocomplete="off"
+        style="width:100%;padding:7px 10px;border:1px solid rgba(255,255,255,.25);border-radius:8px;background:rgba(255,255,255,.1);color:inherit;font-size:12px;outline:none">
+    </div>`;
+  sb2.innerHTML = buscador + items.map(item => {
     if (item.section) return `<div class="nav-section">${item.section}</div>`;
     return `<div class="nav-item" id="nav-${item.id}" onclick="loadView('${item.id}')">
       <span class="icon">${item.icon}</span>${item.label}
     </div>`;
   }).join('');
+}
+// Filtra los módulos del menú por texto (y oculta encabezados de sección sin resultados)
+function _filtrarModulos(q){
+  q=(q||'').trim().toLowerCase();
+  const sb2=document.getElementById('sidebar'); if(!sb2) return;
+  const nodes=[].slice.call(sb2.querySelectorAll('.nav-item,.nav-section'));
+  nodes.forEach(function(n){
+    if(n.classList.contains('nav-item')){
+      const t=(n.textContent||'').toLowerCase();
+      n.style.display=(!q || t.indexOf(q)>-1)?'':'none';
+    }
+  });
+  for(let i=0;i<nodes.length;i++){
+    const n=nodes[i];
+    if(!n.classList.contains('nav-section')) continue;
+    let anyVisible=false;
+    for(let j=i+1;j<nodes.length;j++){
+      if(nodes[j].classList.contains('nav-section')) break;
+      if(nodes[j].style.display!=='none'){ anyVisible=true; break; }
+    }
+    n.style.display=(!q || anyVisible)?'':'none';
+  }
 }
 
 function setActiveNav(id) {
@@ -2247,14 +2277,18 @@ async function renderRack() {
   const _COMBO_SIG = {'Famili Residence':'FR','Family Residence':'FR','Two Residence':'TR','Suite Deluxe':'SD','Combo':'Combo'};
   const _COMBO_COLOR = '#7C3AED';
   const _comboMap = {};
-  // 1) Por tipo guardado en la reserva (Famili/Two Residence, Suite Deluxe, Combo)
+  // Guardamos el 'tipo' de combo declarado en la reserva, pero NO lo usamos por sí solo para
+  // marcar el combo (eso combinaba aptos que no lo estaban: p.ej. una reserva con tipo "Two
+  // Residence" en el 302 hacía ver el 303 como parte de ella, aunque el 303 fuera de otro huésped).
+  // El badge de combo SOLO se pinta si el MISMO huésped ocupa realmente los dos aptos (regla de abajo).
+  const _tipoDeclarado = {};
   (allRack||[]).forEach(function(r){
     if(r.edificio && r.edificio!==EDIFICIO_ACTIVO) return;
     if(!r.apto || !_COMBO_SIGLA[r.tipo]) return;
-    if(!_comboMap[r.apto]) _comboMap[r.apto]={nombre:_COMBO_SIGLA[r.tipo], sigla:_COMBO_SIG[r.tipo]};
+    if(!_tipoDeclarado[r.apto]) _tipoDeclarado[r.apto]={nombre:_COMBO_SIGLA[r.tipo], sigla:_COMBO_SIG[r.tipo]};
   });
-  // 2) Fallback (aunque el 'tipo' no esté guardado): mismo huésped ocupando varios aptos del
-  //    mismo piso en la MISMA fecha = unidad combinada. Detecta FR/TR/SD por los sufijos.
+  // Regla real: mismo huésped ocupando VARIOS aptos del mismo piso en la MISMA fecha = unidad
+  // combinada. Detecta FR/TR/SD por los sufijos (y respeta el tipo declarado si existe).
   const _pisoDe = a => { a=String(a); if(/^PH/i.test(a)) return 'PH'; const m=a.match(/^(\d+?)(\d\d)([A-Z]?)$/); return m?m[1]:a; };
   const _sufDe = a => { const m=String(a).match(/(\d\d[A-Z]?)$/); return m?m[1]:String(a); };
   const _nombreCombo = aps => { const s=aps.map(_sufDe).sort().join('+'); if(s==='01+02')return{nombre:'Famili Residence',sigla:'FR'}; if(s==='02+03')return{nombre:'Two Residence',sigla:'TR'}; if(s==='04+04A')return{nombre:'Suite Deluxe',sigla:'SD'}; return{nombre:'Unidad combinada',sigla:'Combo'}; };
@@ -2269,7 +2303,9 @@ async function renderRack() {
   });
   Object.keys(_porHF).forEach(function(k){
     var aps=[..._porHF[k]]; if(aps.length<2) return;
-    var info=_nombreCombo(aps);
+    // Preferir el nombre del tipo declarado en la reserva si existe; si no, inferir por sufijos
+    var info=null; for(var _i=0;_i<aps.length;_i++){ if(_tipoDeclarado[aps[_i]]){ info=_tipoDeclarado[aps[_i]]; break; } }
+    if(!info) info=_nombreCombo(aps);
     aps.forEach(function(a){ if(!_comboMap[a]) _comboMap[a]=info; });
   });
 
@@ -11180,6 +11216,19 @@ async function renderEntregaEfectivos() {
     </div>`;
 }
 
+// Metraje TOTAL real por apto en 8010 (Sol Sebastián): los pisos 3-4 son 96/90 m²,
+// y a partir del piso 5 (501/502...) son 132/126, hasta 1001-1002; piso 11 = 120.
+window._TOTAL_8010 = {
+  '301':96,'302':90,'303':60,'304':70,
+  '401':96,'402':90,'403':60,
+  '501':132,'502':126,
+  '601':132,'602':126,'602A':60,
+  '701':132,'702':126,'702A':60,
+  '801':132,'802':126,'802A':60,
+  '901':132,'902':126,'902A':60,
+  '1001':132,'1002':126,'1002A':60,
+  '1101':120,'1102':120
+};
 // Actualiza los textos del selector de configuración según el apto elegido
 // (metrajes reales del edificio activo, en vez de los 126/132 fijos de 8010)
 function actualizarConfigApto() {
@@ -11193,9 +11242,19 @@ function actualizarConfigApto() {
     if (typeof plano === 'number') {            // metrajes por apto (Kubik)
       mDiv = plano;
       if (typeof planoA === 'number') { mDel = planoA; mComp = plano + planoA; }
-    } else {                                     // metrajes por terminación (8010)
+    } else {                                     // 8010: metraje REAL por apto (no plano por terminación)
+      const es8010 = (((EB().nombre)||'').indexOf('8010')>-1);
+      const tot = es8010 ? (window._TOTAL_8010||{})[base] : null;
       const mt = M[base.slice(-2)];
-      if (mt && typeof mt === 'object') { mComp = mt.total; mDiv = mt.privado; mDel = base.endsWith('1') ? 25 : 22; }
+      if (tot != null) {
+        mComp = tot;                                   // Completo = metraje real del apto (501=132, 301=96...)
+        // "Dividido" (solo apto principal) y "Deluxe" solo aplican en aptos combinables (con habitación A)
+        const combinable = ((window._TOTAL_8010||{})[base+'A'] != null) || (tot >= 126 && /(?:01|02)$/.test(base));
+        if (combinable && mt && typeof mt === 'object') { mDiv = mt.privado; mDel = base.endsWith('1') ? 25 : 22; }
+        else { mDiv = tot; }                           // pisos 3-4 (96/90): no se dividen
+      } else if (mt && typeof mt === 'object') {       // respaldo por terminación
+        mComp = mt.total; mDiv = mt.privado; mDel = base.endsWith('1') ? 25 : 22;
+      }
     }
   }
   sel.options[0].text = mComp != null ? `Completo — ${mComp} m² · apto + habitación A` : 'Completo — apto + habitación A';
