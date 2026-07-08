@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-08-novedades-seg-confirm';
+const APP_VERSION = '2026-07-08-confirm-metraje-razon';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-08', version:'2026-07-08-confirm-metraje-razon', titulo:'Confirmación: metraje del apartamento completo por defecto + razón social en el mensaje',
+    afecta:'Recepción / Reservas',
+    detalle:'(1) Sol Sebastián: la confirmación automática de 8010 tomaba el metraje "dividido" (ej. 90 m² para el 802) porque la configuración estaba fija en "Dividido". Ahora por defecto usa el apartamento COMPLETO (ej. 126 m² para el 802); si se necesita el dividido, se elige en "Tipo de apto en la confirmación". (2) Sol Sebastián: el mensaje de WhatsApp de confirmación ahora incluye la razón social ("Facturar a: ...").' },
   { fecha:'2026-07-08', version:'2026-07-08-novedades-seg-confirm', titulo:'Módulo "Novedades / Seguimientos" con pestañas + confirmación sin nº de apto',
     afecta:'Operación / Recepción / Comercial',
     detalle:'(1) Sol Sebastián: "Novedades" y "Seguimientos por Turno" quedaron en un solo módulo con pestañas arriba (Novedades | Seguimientos por Turno), igual que "Turnos / Personal / Extras". Seguimientos salió del grupo de Turnos. (2) Sol Cristina: en la Confirmación de Reserva ya no aparece el NÚMERO de apartamento; en su lugar se muestra el TIPO de unidad (ej. "Grand Residence 100 m²", "Apartamento de 132 m²"), tanto en el documento impreso como en el mensaje de WhatsApp, en Kubik y 8010, para evitar inconvenientes con los clientes.' },
@@ -4605,7 +4608,7 @@ function renderNuevaReserva() {
             <input type="date" id="res-checkout" onchange="calcReserva()">
           </div>
         </div>
-        <select id="res-config" style="display:none"><option value="dividido" selected>Dividido</option></select>
+        <select id="res-config" style="display:none"><option value="completo" selected>Completo</option></select>
         ${(((EB&&EB().nombre)||'').indexOf('8010')>-1) ? `<div class="form-row"><div class="form-group">
           <label>Tipo de apto en la confirmación (opcional)</label>
           <select id="res-tipo-manual">
@@ -5300,7 +5303,7 @@ function generarConfirmacion(r) {
   const _esKLc = _edN.indexOf('8010') === -1;
   const _telC = normTel(r.tel);
   const confirmMsg = `Estimado/a ${r.nombre},%0A%0AConfirmamos su reserva en ${_edN}:%0A%0AApartamento: ${r.apto}%0ACheck-in: ${r.checkin}%0ACheck-out: ${r.checkout}%0A${r.tipoTarifa==='TxD'?('Días: '+(Number(r.noches)+1)):('Noches: '+r.noches)}%0ATarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel} /${r.tipoTarifa==='TxD'?'día':'noche'}${conIVA?' + IVA':''}%0ATotal: $${((r.valorTotal>0?r.valorTotal:r.tarifa*((r.tipoTarifa==='TxD')?(Number(r.noches)+1):Number(r.noches)))).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':'%0A%0APor favor revise la Guía de Comportamiento adjunta.'}%0A%0A${_edN}`;
-  const waMsg = encodeURIComponent(`*${_edN} — Confirmación de Reserva*\n\nEstimado/a ${r.nombre},\n\nSu reserva está confirmada:\n▪ Unidad: ${tipo}\n▪ Check-in: ${r.checkin}\n▪ Check-out: ${r.checkout}\n▪ Noches: ${r.noches}\n▪ Tarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n▪ Total: $${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':`\n\n▪ Guía de Comportamiento: ${guiaUrl}`}\n\n_${_edN}_`);
+  const waMsg = encodeURIComponent(`*${_edN} — Confirmación de Reserva*\n\nEstimado/a ${r.nombre},\n\nSu reserva está confirmada:\n▪ Unidad: ${tipo}\n▪ Check-in: ${r.checkin}\n▪ Check-out: ${r.checkout}\n▪ Noches: ${r.noches}\n▪ Tarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n▪ Total: $${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n▪ Facturar a: ${r.cxcRazon||_razon}${_esKLc?'':`\n\n▪ Guía de Comportamiento: ${guiaUrl}`}\n\n_${_edN}_`);
   const emailDest = r.email ? encodeURIComponent(r.email) : '';
 
   const botonesHTML = `
