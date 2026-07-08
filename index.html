@@ -469,13 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-08-comunic-personas';
+const APP_VERSION = '2026-07-08-comunic-personas2';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
-  { fecha:'2026-07-08', version:'2026-07-08-comunic-personas', titulo:'Comunicaciones: la lista de "Dirigido a" ahora incluye a todo el personal y usuarios del SO',
+  { fecha:'2026-07-08', version:'2026-07-08-comunic-personas2', titulo:'Comunicaciones "Dirigido a": personal por edificio + usuarios del SO habilitados en ese edificio (sin mezclar)',
     afecta:'Gerencia / Comunicaciones',
-    detalle:'Sol Santiago: en "Dirigido a" no aparecían Fabio, Andrés ni Cristina porque la lista solo salía de la tabla de personal (y filtrada por edificio), y ellos son usuarios del SO (Gerencia/Administración) que no están en esa tabla. Ahora la lista combina TODO el personal (sin filtro de edificio) + los usuarios del SO, así se puede dirigir un comunicado a cualquiera de ellos.' },
+    detalle:'Corrección: la lista de "Dirigido a" ya NO mezcla el personal de los dos edificios. Muestra el personal del edificio activo (Kubik ve Kubik, 8010 ve 8010) MÁS los usuarios del SO cuyo perfil esté habilitado en ese edificio (campo "edificios"). Así, quienes trabajan cruzado (Gerencia/Administración con edificios ["8010","kubik"], como Cristina o Andrés Leguizamón) aparecen en ambos, y se puede dirigir directamente a la persona que se quiera.' },
   { fecha:'2026-07-08', version:'2026-07-08-comunic-adjunto', titulo:'Comunicaciones: adjuntar archivo',
     afecta:'Todo el equipo',
     detalle:'Sol Santiago: al publicar un comunicado ahora se puede adjuntar un archivo (imagen, PDF, etc.). Los destinatarios lo ven con un botón "📎 Ver / descargar archivo" dentro del comunicado. (El estado de lectura por persona —quién ya lo leyó y con qué hora— ya se mostraba en cada comunicado.)' },
@@ -6697,8 +6697,8 @@ window._comTargetOptions = async function(){
   var deptos='<optgroup label="Departamentos"><option>Todos</option><option>Administradores</option><option>Recepción</option><option>Camareras / Aseo</option><option>Mantenimiento</option><option>Comercial</option></optgroup>';
   var personas='';
   var _nm=[];
-  try{ var _rawP=(window._sbFromRaw?window._sbFromRaw('personal'):sb.from('personal')); var _pr=await _rawP.select('nombre').limit(800); ((_pr&&_pr.data)||[]).forEach(function(p){ var n=String(p.nombre||'').trim(); if(n) _nm.push(n); }); }catch(e){}
-  try{ var _pf=await sb.from('profiles').select('nombre').limit(400); ((_pf&&_pf.data)||[]).forEach(function(p){ var n=String(p.nombre||'').trim(); if(n) _nm.push(n); }); }catch(e){}
+  try{ var _pr=await sb.from('personal').select('nombre').limit(800); ((_pr&&_pr.data)||[]).forEach(function(p){ var n=String(p.nombre||'').trim(); if(n) _nm.push(n); }); }catch(e){}
+  try{ var _pf=await sb.from('profiles').select('nombre,edificios').limit(400); ((_pf&&_pf.data)||[]).forEach(function(p){ var eds=Array.isArray(p.edificios)?p.edificios:[]; if(eds.indexOf(EDIFICIO_ACTIVO)>-1){ var n=String(p.nombre||'').trim(); if(n) _nm.push(n); } }); }catch(e){}
   var names=[...new Set(_nm)].sort(function(a,b){return a.localeCompare(b);});
   if(names.length) personas='<optgroup label="Personas">'+names.map(function(n){return '<option>'+esc(n)+'</option>';}).join('')+'</optgroup>';
   return deptos+personas;
@@ -6707,10 +6707,11 @@ window._comTargetChecksHTML = async function(){
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); };
   var deptos=['Todos'];
   var personas=[];
-  // Personas: combinar TODO el personal (sin filtro de edificio) + los usuarios del SO (profiles),
-  // así aparecen también Gerencia/Administración que no están en 'personal' (Fabio, Cristina, etc.)
-  try{ var _rawP=(window._sbFromRaw?window._sbFromRaw('personal'):sb.from('personal')); var _pr=await _rawP.select('nombre').limit(800); ((_pr&&_pr.data)||[]).forEach(function(p){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); }); }catch(e){}
-  try{ var _pf=await sb.from('profiles').select('nombre').limit(400); ((_pf&&_pf.data)||[]).forEach(function(p){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); }); }catch(e){}
+  // Personas: personal del EDIFICIO ACTIVO (no se mezclan edificios) + usuarios del SO (profiles)
+  // cuyo perfil esté habilitado en este edificio. Así Gerencia/Administración que trabaja cruzado
+  // (edificios: ["8010","kubik"]) aparece en ambos, sin mezclar el personal de cada edificio.
+  try{ var _pr=await sb.from('personal').select('nombre').limit(800); ((_pr&&_pr.data)||[]).forEach(function(p){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); }); }catch(e){}
+  try{ var _pf=await sb.from('profiles').select('nombre,edificios').limit(400); ((_pf&&_pf.data)||[]).forEach(function(p){ var eds=Array.isArray(p.edificios)?p.edificios:[]; if(eds.indexOf(EDIFICIO_ACTIVO)>-1){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); } }); }catch(e){}
   personas=[...new Set(personas)].sort(function(a,b){return a.localeCompare(b);});
   var chk=function(v){ return '<label style="display:inline-flex;align-items:center;gap:5px;font-weight:400;font-size:12.5px;padding:3px 9px;background:#f1f5f9;border-radius:8px;cursor:pointer;margin:2px"><input type="checkbox" class="com-dir-chk" value="'+esc(v)+'"> '+esc(v)+'</label>'; };
   var html='<div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:6px">'+deptos.map(chk).join('')+'</div>';
