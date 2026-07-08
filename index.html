@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-08-confirm-metraje-razon';
+const APP_VERSION = '2026-07-08-comunic-adjunto';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-08', version:'2026-07-08-comunic-adjunto', titulo:'Comunicaciones: adjuntar archivo',
+    afecta:'Todo el equipo',
+    detalle:'Sol Santiago: al publicar un comunicado ahora se puede adjuntar un archivo (imagen, PDF, etc.). Los destinatarios lo ven con un botón "📎 Ver / descargar archivo" dentro del comunicado. (El estado de lectura por persona —quién ya lo leyó y con qué hora— ya se mostraba en cada comunicado.)' },
   { fecha:'2026-07-08', version:'2026-07-08-confirm-metraje-razon', titulo:'Confirmación: metraje del apartamento completo por defecto + razón social en el mensaje',
     afecta:'Recepción / Reservas',
     detalle:'(1) Sol Sebastián: la confirmación automática de 8010 tomaba el metraje "dividido" (ej. 90 m² para el 802) porque la configuración estaba fija en "Dividido". Ahora por defecto usa el apartamento COMPLETO (ej. 126 m² para el 802); si se necesita el dividido, se elige en "Tipo de apto en la confirmación". (2) Sol Sebastián: el mensaje de WhatsApp de confirmación ahora incluye la razón social ("Facturar a: ...").' },
@@ -6747,6 +6750,7 @@ window.renderComunicaciones = async function(filtro){
       + '<div style="display:flex;gap:4px;align-items:center">'+readBtn+delBtn+'</div></div>'
       + (c.titulo?'<div style="font-weight:700;margin-top:6px">'+esc(c.titulo)+'</div>':'')
       + '<div style="font-size:14px;margin-top:6px;white-space:pre-wrap;line-height:1.5">'+esc(c.mensaje)+'</div>'
+      + (c.adjunto?('<div style="margin-top:8px"><a href="'+esc(c.adjunto)+'" target="_blank" rel="noopener" style="display:inline-block;background:#EEF2FF;color:#1D3461;font-weight:600;font-size:12px;padding:5px 12px;border-radius:8px;text-decoration:none">📎 Ver / descargar archivo</a></div>'):'')
       + leidosTxt
       + '<div style="margin-top:8px;border-top:1px solid #eef0f2;padding-top:8px"><div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:4px">💬 Respuestas</div>'+respHtml
       + (paraMi?'<div style="display:flex;gap:6px;margin-top:6px"><input type="text" id="com-rep-'+c.id+'" spellcheck="true" lang="es" placeholder="Escribe una respuesta..." style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px"><button class="btn btn-success btn-sm" title="Responder OK rápido" onclick="responderComunicacion(\''+c.id+'\',\'OK\')">👍 OK</button><button class="btn btn-outline btn-sm" onclick="responderComunicacion(\''+c.id+'\')">Responder</button></div>':'')+'</div>'
@@ -6757,6 +6761,7 @@ window.renderComunicaciones = async function(filtro){
     + '<div class="form-group"><label>Mensaje</label><textarea id="com-msg" spellcheck="true" lang="es" placeholder="Ej: Señores, veo que están dejando la luz prendida de afuera..." style="min-height:70px"></textarea></div>'
     + '<div class="form-group"><label>Tipo</label><select id="com-prio" style="max-width:260px">'+window._COM_TIPOS.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select></div>'
     + '<div class="form-group"><label>Dirigido a <span style="font-weight:400;color:#888;font-size:11px">(marca uno o varios; o "Todos")</span></label><div id="com-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px">'+_comChecks+'</div></div>'
+    + '<div class="form-group"><label>Adjuntar archivo <span style="font-weight:400;color:#888;font-size:11px">(opcional — imagen, PDF, etc.)</span></label><input type="file" id="com-file" style="font-size:12px"></div>'
     + '<button class="btn btn-success" onclick="publicarComunicacion(this)">📣 Publicar</button></div>') : '';
   var fbtn = function(v,l){ var on=(window._comFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComunicaciones(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML =
@@ -6772,8 +6777,15 @@ window.publicarComunicacion = async function(btn){
   var prio=(document.getElementById('com-prio')||{}).value||'Comunicado';
   var dir=window._comGetDir('com-dir-box');
   if(btn){ btn.disabled=true; btn.innerHTML='Publicando...'; }
+  // Adjunto opcional: subir a almacenamiento y guardar la URL pública
+  var _adj=null; var _fi=document.getElementById('com-file');
+  if(_fi && _fi.files && _fi.files[0]){
+    try{ var _f=_fi.files[0]; var _path='comunicaciones/'+Date.now()+'_'+String(_f.name||'archivo').replace(/[^a-zA-Z0-9._-]/g,'_'); var _up=await sb.storage.from('adjuntos').upload(_path,_f,{cacheControl:'3600',upsert:false,contentType:_f.type||undefined}); if(!_up.error) _adj=sb.storage.from('adjuntos').getPublicUrl(_path).data.publicUrl; }catch(_e){}
+  }
   var row={ edificio:EDIFICIO_ACTIVO, autor:window._comYo(), autor_email:(currentUser&&currentUser.email)||null, mensaje:msg, prioridad:prio, dirigido_a:dir, activo:true, leidos:[], respuestas:[], user_id:currentUser.id };
+  if(_adj) row.adjunto=_adj;
   var r=await sb.from('comunicaciones').insert(row);
+  if(r.error && /adjunto/.test(r.error.message||'')){ delete row.adjunto; r=await sb.from('comunicaciones').insert(row); if(_adj && !r.error) showToast('Comunicado publicado (falta crear la columna "adjunto" en la BD para guardar el archivo)','info'); }
   if(r.error){ showToast('Error: '+r.error.message,'error'); if(btn){btn.disabled=false;btn.innerHTML='📣 Publicar';} return; }
   showToast('📣 Comunicado publicado','success'); renderComunicaciones('activas');
 };
