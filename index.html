@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-07-disp-fechas';
+const APP_VERSION = '2026-07-08-novedades-seg-confirm';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-08', version:'2026-07-08-novedades-seg-confirm', titulo:'Módulo "Novedades / Seguimientos" con pestañas + confirmación sin nº de apto',
+    afecta:'Operación / Recepción / Comercial',
+    detalle:'(1) Sol Sebastián: "Novedades" y "Seguimientos por Turno" quedaron en un solo módulo con pestañas arriba (Novedades | Seguimientos por Turno), igual que "Turnos / Personal / Extras". Seguimientos salió del grupo de Turnos. (2) Sol Cristina: en la Confirmación de Reserva ya no aparece el NÚMERO de apartamento; en su lugar se muestra el TIPO de unidad (ej. "Grand Residence 100 m²", "Apartamento de 132 m²"), tanto en el documento impreso como en el mensaje de WhatsApp, en Kubik y 8010, para evitar inconvenientes con los clientes.' },
   { fecha:'2026-07-07', version:'2026-07-07-disp-fechas', titulo:'Consultar disponibilidad: la fecha de Entrada ya no se borra',
     afecta:'Recepción / Reservas',
     detalle:'En "Consultar disponibilidad" del Rack, al poner la fecha de Entrada y luego ir a la de Salida, la Entrada se borraba si el rack se refrescaba. Ahora la fecha que escribes se guarda al instante y queda fija hasta que busques o limpies. Además, la fecha de Salida no permite elegir un día anterior al de Entrada.' },
@@ -751,7 +754,7 @@ const NAV_ITEMS = {
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
     { id: 'historico-ck', icon: '🔁', label: 'Histórico CKI/CKO' },
     { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
-    { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
+    { id: 'novedades-list', icon: '⚠️', label: 'Novedades / Seguimientos' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
     { id: 'hk-list', icon: '🧹', label: 'Housekeeping' },
     { id: 'control-personal-list', icon: '⏱', label: 'Control Personal' },
@@ -819,7 +822,7 @@ const NAV_ITEMS = {
     { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
     { id: 'historico-ck', icon: '🔁', label: 'Histórico CKI/CKO' },
     { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
-    { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
+    { id: 'novedades-list', icon: '⚠️', label: 'Novedades / Seguimientos' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
     { id: 'hk-list', icon: '🧹', label: 'Housekeeping' },
     { id: 'control-personal-list', icon: '⏱', label: 'Control Personal' },
@@ -889,7 +892,7 @@ const NAV_ITEMS = {
     { id: 'prestamos-list', icon: '💻', label: 'Préstamos' },
     { section: 'Consultar' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-    { id: 'novedades-list', icon: '📋', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
+    { id: 'novedades-list', icon: '📋', label: 'Novedades / Seguimientos' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'novedades-diarias', icon: '📋', label: 'Novedades del Día' },
     { id: 'turnos-list', icon: '📋', label: 'Ver Turnos' },
     { section: 'Auditoría' },
@@ -989,7 +992,7 @@ rrhh: [
     { id: 'control-personal-form', icon: '➕', label: 'Registrar Ingreso Personal' },
     { section: 'Consultar' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-    { id: 'novedades-list', icon: '📋', label: 'Novedades abiertas' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
+    { id: 'novedades-list', icon: '📋', label: 'Novedades / Seguimientos' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
     { id: 'ocupacion', icon: '🏨', label: 'Ocupación' },
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
@@ -1018,7 +1021,7 @@ const MENU_COMPLETO = [
   { id: 'informe-cko', icon: '🔴', label: 'Informe CKO' },
   { id: 'historico-ck', icon: '🔁', label: 'Histórico CKI/CKO' },
   { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
-  { id: 'novedades-list', icon: '⚠️', label: 'Novedades' }, { id: 'seguimientos-list', icon: '📌', label: 'Seguimientos por Turno' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
+  { id: 'novedades-list', icon: '⚠️', label: 'Novedades / Seguimientos' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
   { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
   { id: 'hk-list', icon: '🧹', label: 'Tiempos Camareras' },
   { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
@@ -3788,6 +3791,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
   const badgePrio = p => `<span class="badge b-${(p||'').toLowerCase()}">${p||'-'}</span>`;
 
   document.getElementById('main-content').innerHTML = `
+    ${_novedadesTabs('novedades')}
     <div class="page-title">⚠️ Novedades</div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <button class="btn btn-success btn-sm" onclick="window._novedadEdit=null;loadView('novedad-form')">+ Nueva novedad</button>
@@ -4241,7 +4245,12 @@ async function borrarOT(id){
 }
 
 function _tiemposTabs(active){
-  var t=[['turnos-list','📋 Turnos','turnos'],['control-personal-list','⏱ Control Personal','control'],['cuadro-extras','⏲️ Horas Extra','extras'],['seguimientos-list','📌 Seguimientos','seguimientos']];
+  var t=[['turnos-list','📋 Turnos','turnos'],['control-personal-list','⏱ Control Personal','control'],['cuadro-extras','⏲️ Horas Extra','extras']];
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+t.map(function(x){var on=x[2]===active;return '<button onclick="loadView(\''+x[0]+'\')" class="btn btn-sm" style="border:1px solid '+(on?'var(--azul)':'var(--gris-b)')+';background:'+(on?'var(--azul)':'#fff')+';color:'+(on?'#fff':'var(--azul)')+';font-weight:'+(on?'700':'500')+';padding:7px 14px">'+x[1]+'</button>';}).join('')+'</div>';
+}
+// Sol Sebastián: módulo combinado "Novedades / Seguimientos" con pestañas
+function _novedadesTabs(active){
+  var t=[['novedades-list','⚠️ Novedades','novedades'],['seguimientos-list','📌 Seguimientos por Turno','seguimientos']];
   return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+t.map(function(x){var on=x[2]===active;return '<button onclick="loadView(\''+x[0]+'\')" class="btn btn-sm" style="border:1px solid '+(on?'var(--azul)':'var(--gris-b)')+';background:'+(on?'var(--azul)':'#fff')+';color:'+(on?'#fff':'var(--azul)')+';font-weight:'+(on?'700':'500')+';padding:7px 14px">'+x[1]+'</button>';}).join('')+'</div>';
 }
 async function renderTurnosList() {
@@ -5114,7 +5123,7 @@ function generarConfirmacion(r) {
   const hoy = new Date();
   const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   const fechaDoc = `${hoy.getDate()} de ${meses[hoy.getMonth()]} de ${hoy.getFullYear()}`;
-  let tipo = TIPOS_APTO[r.apto] || `Apartamento ${r.apto}`;
+  let tipo = TIPOS_APTO[r.apto] || `Apartamento`;
   let desc = DESC_APTO[r.apto] || tipo + '.';
   if (r.config === 'deluxe' || String(r.apto).endsWith('A')) { const _b=String(r.apto).replace(/A$/,''); const _m2=_b.endsWith('1')?25:22; tipo = 'Habitación Deluxe'; desc = `Habitación Deluxe de ${_m2} m²:<br>01 cama King.`; }
   if (r.config === 'dividido' && METRAJE_DIVIDIDO[r.apto]) {
@@ -5139,7 +5148,7 @@ function generarConfirmacion(r) {
     else if(_ln==='02'){_mk=_M[_bb];_nm='Smart';_hb='01 cama Queen';}
     else if(_ln==='03'){_mk=_M[_bb];_nm='One Residence';_hb='1 habitación: 01 cama Queen';}
     else if(_ln==='04'){if(_cfg==='dividido'){_mk=_M[_bb];_nm='Suite Home';_hb='1 habitación: 01 cama King';}else{_mk=(typeof _M[_bb+'A']==='number')?(_M[_bb]+_M[_bb+'A']):_M[_bb];_nm='Suite Deluxe';_hb='2 habitaciones: habitación principal con 01 cama King y habitación adicional con 02 camas dobles (1.40)';}}
-    if(_mk!=null){tipo=_disp+' - '+_nm+' '+_mk+' m²';desc=_hb+'.';}
+    if(_mk!=null){tipo=_nm+' '+_mk+' m²';desc=_hb+'.';}
   }
   const _taMan = r.tipoAptoManual || r.tipo_apto_manual || '';
   const _tamap = { '60':['Apartamento de 60 m²','Apartamento de 60 m² con 1 habitación:<br>01 cama King.'], '70':['Apartamento de 70 m²','Apartamento de 70 m² con 1 habitación:<br>01 cama King.'], '90':['Apartamento de 90 m²','Apartamento de 90 m² con 1 habitación:<br>01 cama King.'], '96':['Apartamento de 96 m²','Apartamento de 96 m² con 1 habitación:<br>01 cama King.'], 'PH120':['Penthouse de 120 m²','Penthouse de 120 m² con 1 habitación:<br>01 cama King.'], 'DELUXE':['Habitación Deluxe','Habitación Deluxe:<br>01 cama King.'], '126':['Apartamento de 126 m²','Apartamento de 126 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'], '132':['Apartamento de 132 m²','Apartamento de 132 m² con 2 habitaciones:<br>01 cama King, 02 camas Twin.'] };
@@ -5291,7 +5300,7 @@ function generarConfirmacion(r) {
   const _esKLc = _edN.indexOf('8010') === -1;
   const _telC = normTel(r.tel);
   const confirmMsg = `Estimado/a ${r.nombre},%0A%0AConfirmamos su reserva en ${_edN}:%0A%0AApartamento: ${r.apto}%0ACheck-in: ${r.checkin}%0ACheck-out: ${r.checkout}%0A${r.tipoTarifa==='TxD'?('Días: '+(Number(r.noches)+1)):('Noches: '+r.noches)}%0ATarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel} /${r.tipoTarifa==='TxD'?'día':'noche'}${conIVA?' + IVA':''}%0ATotal: $${((r.valorTotal>0?r.valorTotal:r.tarifa*((r.tipoTarifa==='TxD')?(Number(r.noches)+1):Number(r.noches)))).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':'%0A%0APor favor revise la Guía de Comportamiento adjunta.'}%0A%0A${_edN}`;
-  const waMsg = encodeURIComponent(`*${_edN} — Confirmación de Reserva*\n\nEstimado/a ${r.nombre},\n\nSu reserva está confirmada:\n▪ Apto: ${r.apto}\n▪ Check-in: ${r.checkin}\n▪ Check-out: ${r.checkout}\n▪ Noches: ${r.noches}\n▪ Tarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n▪ Total: $${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':`\n\n▪ Guía de Comportamiento: ${guiaUrl}`}\n\n_${_edN}_`);
+  const waMsg = encodeURIComponent(`*${_edN} — Confirmación de Reserva*\n\nEstimado/a ${r.nombre},\n\nSu reserva está confirmada:\n▪ Unidad: ${tipo}\n▪ Check-in: ${r.checkin}\n▪ Check-out: ${r.checkout}\n▪ Noches: ${r.noches}\n▪ Tarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n▪ Total: $${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':`\n\n▪ Guía de Comportamiento: ${guiaUrl}`}\n\n_${_edN}_`);
   const emailDest = r.email ? encodeURIComponent(r.email) : '';
 
   const botonesHTML = `
@@ -5990,7 +5999,7 @@ async function renderSeguimientosTurno(){
     <td style="white-space:nowrap">${_btnsEdit('seguimientos_turno', r.id)}</td>
   </tr>`).join('');
   document.getElementById('main-content').innerHTML = `
-    ${_tiemposTabs('seguimientos')}
+    ${_novedadesTabs('seguimientos')}
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div class="page-title" style="margin-bottom:0">📌 Seguimientos por Turno ${verTodo?'— Historial completo':'— Semana '+fmtDate(_ini)+' al '+fmtDate(_fin)}</div>
       ${barraCompartir()}<button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('seguimientos-form')">+ Nuevo Seguimiento</button><button class="btn btn-outline btn-sm" onclick="window._segVerTodo=${verTodo?'false':'true'};renderSeguimientosTurno()">${verTodo?'📅 Solo esta semana':'🗂️ Ver historial'}</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=tr.querySelector('.b-resuelto')?'none':''})">Solo pendientes</button><button class="btn btn-outline btn-sm" onclick="document.querySelectorAll('#main-content table.tabla tbody tr').forEach(function(tr){tr.style.display=''})">Todos</button>
