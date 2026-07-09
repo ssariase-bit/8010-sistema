@@ -469,13 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-kl-sin-8010-adjunto-usd';
+const APP_VERSION = '2026-07-09-kl-sin-8010-b';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
-  { fecha:'2026-07-09', version:'2026-07-09-kl-sin-8010-adjunto-usd', titulo:'Kubik sin referencias a 8010/LTM3 + adjunto en comunicado rápido + ventas en USD (TRM) + Comentarios "Dirigido a" a personas',
+  { fecha:'2026-07-09', version:'2026-07-09-kl-sin-8010-b', titulo:'Kubik sin referencias a 8010/LTM3 (auditoría completa) + adjunto en comunicado rápido + ventas en USD (TRM) + Comentarios "Dirigido a" a personas',
     afecta:'Kubik / Comunicaciones / Reservas / Comentarios',
-    detalle:'Sol Santiago: (1) En Kubik ya no aparecen LTM3 ni 8010 en los selectores de Reembolso por Lotes, Reembolso simple (Caja), Transportes (Empresa), Check List Carpetas (Tipo de negociación) ni en el datalist de cargos — muestran 8i8. (2) El modal rápido "Nuevo comunicado" (botón flotante 📣) ahora permite adjuntar archivo, igual que el módulo completo. (3) Reservas en USD: se agregó el campo TRM (aparece solo si la moneda es USD) y el rack guarda el equivalente en pesos (USD×TRM) para que cuente en ventas. (4) En Comentarios el "Dirigido a" es por personas (marcar una o varias), no por departamentos.' },
+    detalle:'Sol Santiago: (1) En Kubik ya no aparecen LTM3 ni 8010: se corrigieron los selectores de Reembolso por Lotes, Reembolso simple (Caja), Transportes (Empresa), Check List Carpetas (Tipo de negociación) y el datalist de cargos (muestran 8i8); la alerta de "NOVEDAD ALTA" por WhatsApp ya usa el nombre del edificio activo; y los módulos "Estado de Resultados" y "Ventas vs Presupuesto" (armados sobre el presupuesto 2026 y las entidades 80-10/LTM3/PH de 8010) quedan ocultos en Kubik. (2) El modal rápido "Nuevo comunicado" (botón flotante 📣) ahora permite adjuntar archivo. (3) Reservas en USD: campo TRM (aparece solo en USD) y el rack guarda el equivalente en pesos para que cuente en ventas. (4) En Comentarios el "Dirigido a" es por personas (marcar una o varias).' },
   { fecha:'2026-07-08', version:'2026-07-08-comentarios-vb', titulo:'Comentarios: botón de Revisión Gerencia / Visto Bueno por comentario',
     afecta:'Gerencia',
     detalle:'Sol Santiago: el módulo "Comentarios" ahora tiene la columna "Revisión Gerencia" con el botón ✔ Revisado (Visto Bueno) y 💬 Comentar, igual que en Novedades y Solicitudes, para que Gerencia deje su VB o comentario directamente desde ahí.' },
@@ -1116,9 +1116,12 @@ window._puedeSistema = function(){ return (currentProfile&&currentProfile.rol)==
 // Ítems restringidos por grupo
 window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','nomina','indicadores','ventas-linea','personal-list'];
 window._ITEMS_SISTEMA = ['import-rack','changelog'];
+// Módulos construidos sobre el presupuesto 2026 y las entidades 80-10 / LTM3 / PH (solo 8010): no se muestran en Kubik
+window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
 window._itemPermitido = function(it){
   var _rol = currentProfile && currentProfile.rol;
   if(it.roles && it.roles.indexOf(_rol)<0) return false;
+  if(window._ITEMS_SOLO_8010.indexOf(it.id)>-1 && (typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')) return false;
   if(window._ITEMS_CONFID.indexOf(it.id)>-1 && !window._puedeConfidencial()) return false;
   if(window._ITEMS_SISTEMA.indexOf(it.id)>-1 && !window._puedeSistema()) return false;
   return true;
@@ -3509,7 +3512,7 @@ async function enviarNovedad() {
     const area  = document.getElementById('n-area').value;
     const apto  = document.getElementById('n-apto').value;
     const now2  = fmtFH12();
-    const msgAlta = `🚨 *NOVEDAD ALTA — 8010 Urban Living*
+    const msgAlta = `🚨 *NOVEDAD ALTA — ${(typeof EB==='function'?EB().nombre:'8010 Urban Living')}*
 📅 ${now2}
 👤 Reporta: ${quien}
 📍 Área: ${area}${apto?' — '+apto:''}
