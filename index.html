@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-dirigido-personas';
+const APP_VERSION = '2026-07-09-preregistro-completo';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-preregistro-completo', titulo:'Formulario del huésped: más datos y campos obligatorios',
+    afecta:'Reservas / Pre-registro',
+    detalle:'Sol Santiago: el formulario que llena el huésped/arrendatario (link) ahora pide: nombres y apellidos, tipo y número de documento, nacionalidad, ciudad, correo, teléfono, fecha de nacimiento, motivo del viaje, empresa a facturar, forma de pago y a quién se paga, placa del vehículo, contacto de emergencia, y adultos/niños/infantes. Los campos clave son OBLIGATORIOS (no deja enviar si faltan) para que la reserva llegue con la mayor información. Requiere columnas nuevas en la tabla prereg (guarda igual los básicos si aún no están).' },
   { fecha:'2026-07-09', version:'2026-07-09-dirigido-personas', titulo:'"Dirigido a" solo personas (sin grupos/departamentos), en lista vertical, en todas partes',
     afecta:'Comunicaciones / Comentarios / Solicitudes',
     detalle:'Sol Santiago: en Comunicaciones, Comentarios y Solicitudes el "Dirigido a" ya no muestra grupos ni departamentos (ni el chip "Todos"), solo las personas del edificio, en lista vertical (una debajo de otra) para marcar una o varias. Solicitudes deja de usar el campo de texto con departamentos y pasa a la misma lista de personas.' },
@@ -12274,15 +12277,37 @@ function _pregBootPublico(){
         '<p style="font-size:13px;color:rgba(255,255,255,.6);margin:0 0 14px">Complete sus datos para agilizar su reserva. Toma menos de un minuto.</p>' +
         _pregCampo('Nombre(s) *','_pregp-nf','text','') +
         '<div style="display:flex;gap:8px">' +
-          '<div style="flex:1">'+_pregCampo('Primer apellido','_pregp-ap1','text','')+'</div>' +
+          '<div style="flex:1">'+_pregCampo('Primer apellido *','_pregp-ap1','text','')+'</div>' +
           '<div style="flex:1">'+_pregCampo('Segundo apellido','_pregp-ap2','text','')+'</div>' +
         '</div>' +
-        _pregCampo('Documento (CC / Pasaporte / NIT)','_pregp-doc','text','') +
-        _pregCampo('Correo electrónico','_pregp-email','email','correo@email.com') +
-        _pregCampo('Teléfono / WhatsApp','_pregp-tel','tel','+57 300 000 0000') +
-        _pregCampo('Empresa (si aplica)','_pregp-emp','text','') +
         '<div style="display:flex;gap:8px">' +
-          '<div style="flex:1">'+_pregCampo('Adultos','_pregp-pa','number','1')+'</div>' +
+          '<div style="flex:1">'+_pregSelect('Tipo de documento *','_pregp-tdoc',['CC','CE','Pasaporte','NIT'])+'</div>' +
+          '<div style="flex:1.5">'+_pregCampo('Número de documento *','_pregp-doc','text','')+'</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<div style="flex:1">'+_pregCampo('Nacionalidad / País *','_pregp-nac','text','Colombia')+'</div>' +
+          '<div style="flex:1">'+_pregCampo('Ciudad de residencia *','_pregp-ciu','text','')+'</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<div style="flex:1">'+_pregCampo('Correo electrónico *','_pregp-email','email','correo@email.com')+'</div>' +
+          '<div style="flex:1">'+_pregCampo('Teléfono / WhatsApp *','_pregp-tel','tel','+57 300 000 0000')+'</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<div style="flex:1">'+_pregCampo('Fecha de nacimiento','_pregp-fnac','date','')+'</div>' +
+          '<div style="flex:1">'+_pregSelect('Motivo del viaje','_pregp-mot',['Turismo','Trabajo','Evento','Otro'])+'</div>' +
+        '</div>' +
+        _pregCampo('Empresa a facturar *','_pregp-emp','text','Razón social / NIT') +
+        '<div style="display:flex;gap:8px">' +
+          '<div style="flex:1">'+_pregSelect('Forma de pago *','_pregp-fpago',['Transferencia','Tarjeta','Efectivo','Otro'])+'</div>' +
+          '<div style="flex:1.3">'+_pregCampo('A quién se paga *','_pregp-paga','text','Entidad / cuenta')+'</div>' +
+        '</div>' +
+        _pregCampo('Placa del vehículo (si trae)','_pregp-placa','text','') +
+        '<div style="display:flex;gap:8px">' +
+          '<div style="flex:1">'+_pregCampo('Contacto de emergencia','_pregp-emnom','text','Nombre')+'</div>' +
+          '<div style="flex:1">'+_pregCampo('Tel. de emergencia','_pregp-emtel','tel','')+'</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<div style="flex:1">'+_pregCampo('Adultos *','_pregp-pa','number','1')+'</div>' +
           '<div style="flex:1">'+_pregCampo('Niños','_pregp-pn','number','0')+'</div>' +
           '<div style="flex:1">'+_pregCampo('Infantes','_pregp-pi','number','0')+'</div>' +
         '</div>' +
@@ -12301,18 +12326,33 @@ function _pregCampo(label,id,type,ph){
   return '<label style="display:block;font-size:11px;color:rgba(255,255,255,.45);margin:8px 0 3px">'+_pregEsc(label)+'</label>'+
     '<input id="'+id+'" type="'+type+'"'+min+val+pht+' style="width:100%;padding:10px;border:1px solid #333;border-radius:8px;background:#101012;color:#eee;font-size:14px;box-sizing:border-box">';
 }
+function _pregSelect(label,id,opts){
+  var o=opts.map(function(v){ return '<option value="'+_pregEsc(v)+'">'+_pregEsc(v)+'</option>'; }).join('');
+  return '<label style="display:block;font-size:11px;color:rgba(255,255,255,.45);margin:8px 0 3px">'+_pregEsc(label)+'</label>'+
+    '<select id="'+id+'" style="width:100%;padding:10px;border:1px solid #333;border-radius:8px;background:#101012;color:#eee;font-size:14px;box-sizing:border-box">'+o+'</select>';
+}
 async function _pregEnviarPublico(token, ed){
   var g=function(id){ var e=document.getElementById(id); return e? e.value.trim() : ''; };
   var gn=function(id){ var e=document.getElementById(id); return (e && e.value!=='')?(Number(e.value)||0):0; };
+  var _sel=function(id){ var e=document.getElementById(id); return e? e.value : ''; };
   var msg=document.getElementById('_pregp-msg');
   var nf=g('_pregp-nf');
-  if(!nf){ msg.style.display='block'; msg.textContent='Por favor ingrese su nombre.'; return; }
+  // Campos obligatorios
+  var req=[['_pregp-nf','nombre'],['_pregp-ap1','primer apellido'],['_pregp-doc','número de documento'],['_pregp-nac','nacionalidad'],['_pregp-ciu','ciudad de residencia'],['_pregp-email','correo'],['_pregp-tel','teléfono'],['_pregp-emp','empresa a facturar'],['_pregp-paga','a quién se paga']];
+  var falta=req.filter(function(f){ return !g(f[0]); }).map(function(f){ return f[1]; });
+  var _pa=gn('_pregp-pa'); if(_pa<1) falta.push('adultos');
+  if(falta.length){ msg.style.display='block'; msg.textContent='Faltan campos obligatorios: '+falta.join(', ')+'.'; return; }
+  var _emv=g('_pregp-email'); if(_emv && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(_emv)){ msg.style.display='block'; msg.textContent='El correo no parece válido.'; return; }
   var btn=document.getElementById('_pregp-btn'); btn.disabled=true; btn.textContent='Enviando…';
-  var row={ token:token, edificio:ed, nombre:nf, apellido1:g('_pregp-ap1'), apellido2:g('_pregp-ap2'),
+  var baseRow={ token:token, edificio:ed, nombre:nf, apellido1:g('_pregp-ap1'), apellido2:g('_pregp-ap2'),
     documento:g('_pregp-doc'), email:g('_pregp-email'), telefono:g('_pregp-tel'), empresa:g('_pregp-emp'),
-    pax_adultos:gn('_pregp-pa'), pax_menores:gn('_pregp-pn'), pax_infantes:gn('_pregp-pi'), estado:'completado' };
+    pax_adultos:_pa, pax_menores:gn('_pregp-pn'), pax_infantes:gn('_pregp-pi'), estado:'completado' };
+  var row=Object.assign({}, baseRow, { tipo_doc:_sel('_pregp-tdoc'), nacionalidad:g('_pregp-nac'), ciudad:g('_pregp-ciu'),
+    fecha_nacimiento:(g('_pregp-fnac')||null), motivo_viaje:_sel('_pregp-mot'), forma_pago:_sel('_pregp-fpago'),
+    pagar_a:g('_pregp-paga'), placa_vehiculo:g('_pregp-placa'), emergencia_nombre:g('_pregp-emnom'), emergencia_tel:g('_pregp-emtel') });
   try{
     var r = await sb.from('prereg').insert(row);
+    if(r.error && /(could not find|does not exist|schema cache|column)/i.test(r.error.message||'')){ r = await sb.from('prereg').insert(baseRow); }
     if(r.error) throw r.error;
     document.getElementById('_pregp-card').innerHTML =
       '<div style="text-align:center;padding:18px 6px">' +
