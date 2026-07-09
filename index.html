@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-08-comentarios-vb';
+const APP_VERSION = '2026-07-09-kl-sin-8010-adjunto-usd';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-kl-sin-8010-adjunto-usd', titulo:'Kubik sin referencias a 8010/LTM3 + adjunto en comunicado rápido + ventas en USD (TRM) + Comentarios "Dirigido a" a personas',
+    afecta:'Kubik / Comunicaciones / Reservas / Comentarios',
+    detalle:'Sol Santiago: (1) En Kubik ya no aparecen LTM3 ni 8010 en los selectores de Reembolso por Lotes, Reembolso simple (Caja), Transportes (Empresa), Check List Carpetas (Tipo de negociación) ni en el datalist de cargos — muestran 8i8. (2) El modal rápido "Nuevo comunicado" (botón flotante 📣) ahora permite adjuntar archivo, igual que el módulo completo. (3) Reservas en USD: se agregó el campo TRM (aparece solo si la moneda es USD) y el rack guarda el equivalente en pesos (USD×TRM) para que cuente en ventas. (4) En Comentarios el "Dirigido a" es por personas (marcar una o varias), no por departamentos.' },
   { fecha:'2026-07-08', version:'2026-07-08-comentarios-vb', titulo:'Comentarios: botón de Revisión Gerencia / Visto Bueno por comentario',
     afecta:'Gerencia',
     detalle:'Sol Santiago: el módulo "Comentarios" ahora tiene la columna "Revisión Gerencia" con el botón ✔ Revisado (Visto Bueno) y 💬 Comentar, igual que en Novedades y Solicitudes, para que Gerencia deje su VB o comentario directamente desde ahí.' },
@@ -1489,7 +1492,7 @@ async function loadView(view) {
       {id:'punto_inicio',label:'Punto de inicio',type:'text'},
       {id:'punto_final',label:'Punto final',type:'text'},
       {id:'valor',label:'Valor ($)',type:'money',req:true},
-      {id:'empresa',label:'Empresa',type:'select',opts:['LTM3 SAS','8010 SAS','Personal','Uber','Didi','Taxi']},
+      {id:'empresa',label:'Empresa',type:'select',opts:(EB().facturarA||[]).filter(function(x){return x!=='Particular'&&x!=='Otra';}).concat(['Personal','Uber','Didi','Taxi'])},
     ]); break;
     case 'requisiciones-list': await renderList('requisiciones','🛒 Requisiciones de Compra','requisiciones-form',['fecha','area','solicitado_por','articulo','cantidad_solicitada','cantidad_recibida','estado'],['Fecha','Área','Solicitó','Artículo','Solicitado','Recibido','Estado']); break;
     case 'requisiciones-form': renderGenForm('requisiciones','🛒 Nueva Requisición de Compra',[
@@ -1535,7 +1538,7 @@ async function loadView(view) {
       {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
       {id:'arrendatario',label:'Arrendatario',type:'nombre3',req:true},
       {id:'empresa',label:'Empresa',type:'text'},
-      {id:'tipo_negociacion',label:'Tipo de negociación',type:'select',opts:['','LTM3 SAS','80|10 SAS']},
+      {id:'tipo_negociacion',label:'Tipo de negociación',type:'select',opts:[''].concat((EB().facturarA||[]).filter(function(x){return x!=='Particular'&&x!=='Otra';}))},
       {id:'apto_vacio',label:'Apto vacío',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
       {id:'facturar_a',label:'Facturar a',type:'select',opts:(EB().facturarA||['Particular','Otra'])},
       {id:'contrato_firmado',label:'Contrato firmado',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
@@ -1609,7 +1612,7 @@ async function loadView(view) {
       {id:'descripcion',label:'Descripción del gasto',type:'text',req:true},
       {id:'area',label:'Área',type:'select',opts:['Compras','Eventos','Cargo Apto.','Administrativo','Mantenimiento','Housekeeping','Recepción','Cocina','General']},
       {id:'centro_costos',label:'Centro de costos',type:'select',opts:['Apartamentos','Operativo']},
-      {id:'caja',label:'Caja (origen del efectivo)',type:'select',opts:['LTM3','80|10','PH']},
+      {id:'caja',label:'Caja (origen del efectivo)',type:'select',opts:(EDIFICIO_ACTIVO==='kubik'?['8i8']:['LTM3','80|10','PH'])},
       {id:'valor',label:'Valor ($)',type:'money',req:true},
       {id:'entregado_por',label:'Entregado por',type:'text'},
       {id:'aprobado_por',label:'Aprobado por',type:'text'},
@@ -4645,6 +4648,11 @@ function renderNuevaReserva() {
               <option value="USD">USD — Dólares</option>
             </select>
           </div>
+          <div class="form-group" id="res-trm-group" style="display:none">
+            <label>TRM (USD→COP) *</label>
+            <input type="number" id="res-trm" oninput="calcReserva()" placeholder="Ej: 4200" style="font-weight:600">
+            <div style="font-size:11px;color:#6B7280;margin-top:3px">Se guarda el equivalente en pesos (tarifa USD × TRM) para que cuente en ventas.</div>
+          </div>
           <div class="form-group">
             <label>IVA</label>
             <select id="res-iva" style="font-weight:600">
@@ -4848,6 +4856,7 @@ function calcReserva() {
   const moneda = document.getElementById('res-moneda')?.value || 'COP';
   const sym = moneda === 'USD' ? 'USD' : '$';
   if (document.getElementById('res-moneda-sym')) document.getElementById('res-moneda-sym').textContent = sym;
+  var _trmG = document.getElementById('res-trm-group'); if (_trmG) _trmG.style.display = (moneda === 'USD') ? '' : 'none';
   if (ci && co) {
     const noches = Math.max(0, Math.round((new Date(co) - new Date(ci)) / 86400000));
     document.getElementById('res-noches').value = noches;
@@ -4920,6 +4929,10 @@ async function guardarReserva() {
   const _tarifaRaw = Number(document.getElementById('res-tarifa').value) || 0;
   const _tipoTG = document.getElementById('res-tipotarifa')?.value || 'TxN';
   const tarifa  = (_tipoTG==='TxM') ? (Math.round(_tarifaRaw/30*100)/100) : _tarifaRaw; // TxM: canon mensual → valor noche (÷30, con 2 decimales para no perder precisión)
+  // Moneda / TRM: si es USD, el rack debe guardar el equivalente en PESOS para que cuente en ventas
+  const _monedaR = document.getElementById('res-moneda')?.value || 'COP';
+  const _trmR = Number(document.getElementById('res-trm')?.value) || 0;
+  const _esUSDr = (_monedaR === 'USD');
   const noches  = Number(document.getElementById('res-noches').value) || 0;
   const canal   = document.getElementById('res-canal').value;
   const iva     = document.getElementById('res-iva')?.value || 'incluido';
@@ -4965,7 +4978,8 @@ async function guardarReserva() {
     const fecha = d.toISOString().split('T')[0];
     const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
-    for (const _a of _aptosW2){ const _tA=(_adjSel.length>0 && _a!==apto)?null:(tNoche||null); rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) }); }
+    const tNocheCOP = (_esUSDr && _trmR>0) ? Math.round(tNoche*_trmR) : tNoche; // USD→COP para que cuente en ventas
+    for (const _a of _aptosW2){ const _sib=(_adjSel.length>0 && _a!==apto); const _tA=_sib?null:(tNocheCOP||null); const _tU=(_esUSDr && !_sib)?(tNoche||null):null; rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) }); }
   }
   // Día de check-out
   const dco = new Date(co);
@@ -5395,7 +5409,7 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     if (inp) {
       let dl = document.getElementById('dl-aptos-mag');
       if (!dl) { dl = document.createElement('datalist'); dl.id = 'dl-aptos-mag'; inp.parentNode.appendChild(dl); }
-      dl.innerHTML = [...EB().aptosFull, 'NOVAL', 'SALAS / EVENTOS', 'LTM3'].map(a => `<option value="${a}">`).join('');
+      dl.innerHTML = [...EB().aptosFull, 'NOVAL', 'SALAS / EVENTOS', (EDIFICIO_ACTIVO==='kubik'?'8i8':'LTM3')].map(a => `<option value="${a}">`).join('');
       inp.setAttribute('list', 'dl-aptos-mag');
       inp.setAttribute('autocomplete', 'off');
     }
@@ -6841,6 +6855,7 @@ window.abrirComunicarRapido = async function(){
     +'<div class="form-group"><label>Mensaje</label><textarea id="comq-msg" spellcheck="true" lang="es" style="width:100%;min-height:70px;padding:8px;border:1px solid #ddd;border-radius:8px" placeholder="Escribe el comunicado o llamado de atención..."></textarea></div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap"><div class="form-group" style="flex:1;min-width:150px"><label>Tipo</label><select id="comq-prio" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px">'+tipos+'</select></div>'
     +'<div class="form-group" style="flex:1;min-width:150px"><label>Dirigido a <span style="font-weight:400;color:#888;font-size:11px">(marca uno o varios)</span></label><div id="comq-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;max-height:200px;overflow:auto">'+targets+'</div></div></div>'
+    +'<div class="form-group" style="margin-top:8px"><label>Adjuntar archivo <span style="font-weight:400;color:#888;font-size:11px">(opcional — imagen, PDF, etc.)</span></label><input type="file" id="comq-file" style="font-size:12px"></div>'
     +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-outline btn-sm" onclick="document.getElementById(\'modal-comunicar\').remove()">Cancelar</button><button class="btn btn-success" onclick="publicarComunicacionRapido(this)">📣 Publicar</button></div>'
     +'</div>';
   setTimeout(function(){ var t=document.getElementById('comq-msg'); if(t) t.focus(); }, 60);
@@ -6850,8 +6865,15 @@ window.publicarComunicacionRapido = async function(btn){
   var prio=(document.getElementById('comq-prio')||{}).value||'Comunicado';
   var dir=window._comGetDir('comq-dir-box');
   if(btn){ btn.disabled=true; btn.innerHTML='Publicando...'; }
+  // Adjunto opcional: subir a almacenamiento y guardar la URL pública
+  var _adj=null; var _fi=document.getElementById('comq-file');
+  if(_fi && _fi.files && _fi.files[0]){
+    try{ var _f=_fi.files[0]; var _path='comunicaciones/'+Date.now()+'_'+String(_f.name||'archivo').replace(/[^a-zA-Z0-9._-]/g,'_'); var _up=await sb.storage.from('adjuntos').upload(_path,_f,{cacheControl:'3600',upsert:false,contentType:_f.type||undefined}); if(!_up.error) _adj=sb.storage.from('adjuntos').getPublicUrl(_path).data.publicUrl; }catch(_e){}
+  }
   var row={ edificio:EDIFICIO_ACTIVO, autor:window._comYo(), autor_email:(currentUser&&currentUser.email)||null, mensaje:msg, prioridad:prio, dirigido_a:dir, activo:true, leidos:[], respuestas:[], user_id:currentUser.id };
+  if(_adj) row.adjunto=_adj;
   var r=await sb.from('comunicaciones').insert(row);
+  if(r.error && /adjunto/.test(r.error.message||'')){ delete row.adjunto; r=await sb.from('comunicaciones').insert(row); if(_adj && !r.error) showToast('Comunicado publicado (falta crear la columna "adjunto" en la BD para guardar el archivo)','info'); }
   if(r.error){ showToast('Error: '+r.error.message,'error'); if(btn){btn.disabled=false;btn.innerHTML='📣 Publicar';} return; }
   var mm=document.getElementById('modal-comunicar'); if(mm) mm.remove();
   showToast('📣 Comunicado publicado — quedó en Comunicaciones','success');
@@ -6957,7 +6979,7 @@ window.renderComentariosGerencia = async function(filtro){
     '<div style="font-size:12px;color:#666;margin:-2px 0 10px">Hazla puntual a una persona o departamento. Queda abierta hasta que la resuelvan.</div>'+
     '<div class="form-group"><label>Pregunta o comentario</label><textarea id="comg-texto" placeholder="Escribe tu pregunta o aclaración..." style="min-height:60px"></textarea></div>'+
     '<div style="margin:-4px 0 8px"><label style="font-size:12px;color:#555;cursor:pointer">📎 <input type="file" id="comg-file" style="display:none" onchange="var s=document.getElementById(\'comg-file-name\'); if(s) s.textContent=this.files[0]?(\'  \'+this.files[0].name):\'\';"> Adjuntar archivo</label><span id="comg-file-name" style="font-size:11px;color:#1d4ed8"></span></div>'+
-    '<div class="form-row col3"><div class="form-group"><label>Dirigido a (persona o departamento)</label><select id="comg-dir"><option value="">— Selecciona persona o departamento —</option>'+(function(){var d=_destinos(); var g=d.groups.map(function(x){return '<option value="'+x.emails.join(',')+'">'+x.n+'</option>';}).join(''); var p=d.people.map(function(x){return '<option value="'+x.e+'">'+x.n+'</option>';}).join(''); return '<optgroup label="Departamentos">'+g+'</optgroup><optgroup label="Personas">'+p+'</optgroup>';})()+'</select></div>'+
+    '<div class="form-row col3"><div class="form-group"><label>Dirigido a <span style="font-weight:400;color:#888;font-size:11px">(marca una o varias personas)</span></label><div style="margin-bottom:4px"><button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(true)">Marcar todos</button> <button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(false)">Ninguno</button></div><div id="comg-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;max-height:160px;overflow:auto;display:flex;flex-wrap:wrap;gap:2px">'+(function(){var _cd=_destinos(); var _e=function(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");}; return _cd.people.map(function(p){return "<label style=\"display:inline-flex;align-items:center;gap:5px;font-weight:400;font-size:12.5px;padding:3px 9px;background:#f1f5f9;border-radius:8px;cursor:pointer;margin:2px\"><input type=\"checkbox\" class=\"comg-dir-chk\" value=\""+_e(p.e)+"\" data-nombre=\""+_e(p.n)+"\"> "+_e(p.n)+"</label>";}).join("");})()+'</div></div>'+
     '<div class="form-group"><label>Apto (opcional)</label><input type="text" id="comg-apto" placeholder="Ej: 301"></div>'+
     '<div class="form-group" style="display:flex;align-items:flex-end"><button class="btn btn-success" style="width:100%" onclick="nuevaPreguntaGerencia()">📨 Enviar pregunta</button></div></div></div>'+
     '<div class="card"><div class="card-header"><div class="card-title">'+all.length+' comentarios</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todos')+fbtn('dirigidos','Dirigidos')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (dirigido a, texto, apto...)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
@@ -7045,10 +7067,13 @@ function _htmlComg(titulo, intro, pregunta, extra){
     '<p style="margin-top:14px">Entra al sistema → <strong>Comentarios</strong> y responde con "Abrir / Responder".</p>'+
     '<p style="color:#888;font-size:12px;margin-top:14px">Mensaje automático del Sistema Operativo.</p></div></div>';
 }
+window._comgMarcarTodos = function(v){ var b=document.getElementById('comg-dir-box'); if(b) b.querySelectorAll('input.comg-dir-chk').forEach(function(c){ c.checked=v; }); };
 window.nuevaPreguntaGerencia = async function(){
   var texto=(document.getElementById('comg-texto')||{}).value||'';
-  var selD=document.getElementById('comg-dir');
-  var email=selD?selD.value:''; var dirNombre=(selD&&selD.selectedIndex>0)?selD.options[selD.selectedIndex].text:'';
+  var _box=document.getElementById('comg-dir-box');
+  var _chk=_box?[].slice.call(_box.querySelectorAll('input.comg-dir-chk:checked')):[];
+  var email=_chk.map(function(c){return c.value;}).join(',');
+  var dirNombre=_chk.map(function(c){return c.getAttribute('data-nombre')||c.value;}).join(', ');
   var apto=(document.getElementById('comg-apto')||{}).value||'';
   if(!texto.trim()){ if(typeof showToast==='function') showToast('Escribe la pregunta','error'); return; }
   if(!email){ if(typeof showToast==='function') showToast('Elige a quién va dirigida','error'); return; }
@@ -7066,7 +7091,7 @@ window.nuevaPreguntaGerencia = async function(){
   var _okC=0; for(var _i=0;_i<_recips.length;_i++){ try{ var rr=await _comEnviarCorreo(_recips[_i], _subj, _html); if(!(rr&&rr.error)) _okC++; }catch(e){} }
   var _mailMsg=_okC>0?('📨 Enviada y notificada a '+dirNombre+(_recips.length>1?(' ('+_okC+'/'+_recips.length+')'):'')):'Pregunta guardada (correo no enviado)';
   if(typeof showToast==='function') showToast(_mailMsg,'success');
-  ['comg-texto','comg-apto'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; }); if(selD) selD.selectedIndex=0;
+  ['comg-texto','comg-apto'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; }); if(_box) _box.querySelectorAll('input.comg-dir-chk').forEach(function(c){ c.checked=false; });
   renderComentariosGerencia();
 };
 window._alarmaShown = false;
@@ -8024,6 +8049,7 @@ async function _enviarReembolso(id){
 // ════════ REEMBOLSO POR LOTES — varios recibos en un solo reembolso (solicitud Sebastián) ════════
 function renderReembolsoLote(){
   var q=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'';
+  var _cajaOpts=(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')?'<option>8i8</option>':'<option>LTM3</option><option>80|10</option><option>PH</option>';
   document.getElementById('main-content').innerHTML=
     '<div class="page-title">💸 Reembolso por Lotes</div>'
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Agrupa varios recibos en UN solo reembolso (un número y un correo con todos los comprobantes). Llena la cabecera, añade los recibos y guarda.</div>'
@@ -8034,7 +8060,7 @@ function renderReembolsoLote(){
       +'<div class="form-group"><label>Número ID</label><input id="lt-numero"></div>'
     +'</div><div class="form-row col3">'
       +'<div class="form-group"><label>Área</label><select id="lt-area"><option>Compras</option><option>Eventos</option><option>Cargo Apto.</option><option>Administrativo</option><option>Mantenimiento</option><option>Housekeeping</option><option>Recepción</option><option>Cocina</option><option>General</option></select></div>'
-      +'<div class="form-group"><label>Caja (origen)</label><select id="lt-caja"><option>LTM3</option><option>80|10</option><option>PH</option></select></div>'
+      +'<div class="form-group"><label>Caja (origen)</label><select id="lt-caja">'+_cajaOpts+'</select></div>'
       +'<div class="form-group"><label>Fecha</label><input type="date" id="lt-fecha" value="'+TODAY+'"></div>'
     +'</div><div class="form-row col3">'
       +'<div class="form-group"><label>Realiza / Entrega</label><input id="lt-entregado" value="'+q.replace(/"/g,'&quot;')+'"></div>'
