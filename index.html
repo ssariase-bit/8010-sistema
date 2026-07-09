@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-caja-fase3';
+const APP_VERSION = '2026-07-09-dirigido-personas';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-dirigido-personas', titulo:'"Dirigido a" solo personas (sin grupos/departamentos), en lista vertical, en todas partes',
+    afecta:'Comunicaciones / Comentarios / Solicitudes',
+    detalle:'Sol Santiago: en Comunicaciones, Comentarios y Solicitudes el "Dirigido a" ya no muestra grupos ni departamentos (ni el chip "Todos"), solo las personas del edificio, en lista vertical (una debajo de otra) para marcar una o varias. Solicitudes deja de usar el campo de texto con departamentos y pasa a la misma lista de personas.' },
   { fecha:'2026-07-09', version:'2026-07-09-caja-fase3', titulo:'Cajas — Fase 3: reembolso por lotes conectado a la Caja (cierre y reposición)',
     afecta:'Reembolsos / Caja',
     detalle:'Sol Santiago: en Reembolso por Lotes, botón "Cargar gastos pendientes de la caja" que trae automáticamente los egresos "Pendiente de legalizar" de la caja elegida (sin re-escribir). Al guardar el lote, esos gastos quedan "En lote"; cuando Gerencia General aprueba y firma el lote, pasan a "Reembolsado" y se genera un movimiento "Reintegro" que repone la caja — así el arqueo del turno vuelve a cuadrar. El selector de caja del lote ya usa las cajas reales del edificio. Requiere la columna lote_consec en la tabla caja.' },
@@ -6604,7 +6607,7 @@ window.guardarSolicitud = async function(){
   var sol=(document.getElementById('sol-solicitante')||{}).value||'';
   var desc=(document.getElementById('sol-desc')||{}).value||'';
   var pri=(document.getElementById('sol-prioridad')||{}).value||'Media';
-  var dir=(document.getElementById('sol-dirigido')||{}).value||'';
+  var _sdb=document.getElementById('sol-dir-box'); var dir=_sdb?[].slice.call(_sdb.querySelectorAll('input.sol-dir-chk:checked')).map(function(c){return c.value;}).join(', '):((document.getElementById('sol-dirigido')||{}).value||'');
   if(!desc.trim()){ if(typeof showToast==='function') showToast('Escribe la solicitud','error'); return; }
   var row={ edificio:EDIFICIO_ACTIVO, solicitante:sol.trim()||((typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||null), dirigido_a:dir.trim()||null, descripcion:desc.trim(), prioridad:pri, estado:'Pendiente', imagen:window._solImg||null, tiene_imagen:!!window._solImg, user_id:currentUser.id };
   var _sfiles=(document.getElementById('sol-files')||{}).files; var _adjs=[];
@@ -6682,7 +6685,7 @@ window.renderSolicitudes = async function(filtro){
     '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">Nueva solicitud / aclaración</div></div>'+
     '<div style="font-size:12px;color:#666;margin:-2px 0 10px">Dirígela a una persona o departamento. Queda pendiente para que la resuelvan y respondan.</div>'+
     '<div class="form-row col3"><div class="form-group"><label>Quién la pide</label><input type="text" id="sol-solicitante" placeholder="Tú (se completa solo)"></div>'+
-    '<div class="form-group"><label>Dirigido a (persona o departamento)</label><input type="text" id="sol-dirigido" list="dl-sol-dir" placeholder="Ej: Fabio, Recepción, Mantenimiento..."><datalist id="dl-sol-dir"><option>Administración</option><option>Recepción</option><option>Mantenimiento</option><option>Camareras / Aseo</option><option>Comercial</option><option>Eventos</option><option>RRHH</option><option>Compras</option><option>Gerencia</option></datalist></div>'+
+    '<div class="form-group"><label>Dirigido a (marca una o varias personas)</label><div id="sol-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:6px;max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:0">'+(function(){var _sd=_destinos();var _e=function(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");};return _sd.people.map(function(p){return "<label style=\"display:flex;align-items:center;gap:6px;font-size:12.5px;padding:3px 4px;border-bottom:1px solid #f5f7fa;cursor:pointer\"><input type=\"checkbox\" class=\"sol-dir-chk\" value=\""+_e(p.n)+"\"> "+_e(p.n)+"</label>";}).join("")||"<span style=\"color:#999;font-size:12px\">Sin personas</span>";})()+'</div></div>'+
     '<div class="form-group"><label>Prioridad</label><select id="sol-prioridad"><option>Alta</option><option selected>Media</option><option>Baja</option></select></div></div>'+
     '<div class="form-group"><label>Solicitud</label><textarea id="sol-desc" placeholder="Describe la solicitud... (puedes pegar una imagen con Ctrl+V)" style="min-height:70px"></textarea></div>'+
     '<div class="form-group"><label>Adjuntos (varios: imágenes, PDF, Excel…)</label><input type="file" multiple id="sol-files"><div style="font-size:11px;color:#888;margin-top:3px">Puedes seleccionar varios. También puedes pegar un pantallazo con Ctrl+V en la descripción.</div><div id="sol-img-preview" style="margin-top:6px"></div></div>'+
@@ -6737,9 +6740,10 @@ window._comTargetChecksHTML = async function(){
   try{ var _pr=await sb.from('personal').select('nombre').limit(800); ((_pr&&_pr.data)||[]).forEach(function(p){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); }); }catch(e){}
   try{ var _pf=await sb.from('profiles').select('nombre,edificios').limit(400); ((_pf&&_pf.data)||[]).forEach(function(p){ var eds=Array.isArray(p.edificios)?p.edificios:[]; if(eds.indexOf(EDIFICIO_ACTIVO)>-1){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); } }); }catch(e){}
   personas=[...new Set(personas)].sort(function(a,b){return a.localeCompare(b);});
-  var chk=function(v){ return '<label style="display:inline-flex;align-items:center;gap:5px;font-weight:400;font-size:12.5px;padding:3px 9px;background:#f1f5f9;border-radius:8px;cursor:pointer;margin:2px"><input type="checkbox" class="com-dir-chk" value="'+esc(v)+'"> '+esc(v)+'</label>'; };
-  var html='<div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:6px">'+deptos.map(chk).join('')+'</div>';
-  if(personas.length) html+='<div style="font-size:11px;color:#64748b;margin-bottom:2px">Trabajadores</div><div style="display:flex;flex-wrap:wrap;gap:2px;max-height:220px;overflow:auto">'+personas.map(chk).join('')+'</div>';
+  var chk=function(v){ return '<label style="display:flex;align-items:center;gap:6px;font-weight:400;font-size:12.5px;padding:3px 6px;border-bottom:1px solid #f1f5f9;cursor:pointer"><input type="checkbox" class="com-dir-chk" value="'+esc(v)+'"> '+esc(v)+'</label>'; };
+  var html='';
+  if(personas.length) html+='<div style="display:flex;flex-direction:column;gap:0;max-height:240px;overflow:auto">'+personas.map(chk).join('')+'</div>';
+  else html='<span style="color:#999;font-size:12px">Sin personas en este edificio</span>';
   return html;
 };
 window._comGetDir = function(containerId){
@@ -6986,7 +6990,7 @@ window.renderComentariosGerencia = async function(filtro){
     '<div style="font-size:12px;color:#666;margin:-2px 0 10px">Hazla puntual a una persona o departamento. Queda abierta hasta que la resuelvan.</div>'+
     '<div class="form-group"><label>Pregunta o comentario</label><textarea id="comg-texto" placeholder="Escribe tu pregunta o aclaración..." style="min-height:60px"></textarea></div>'+
     '<div style="margin:-4px 0 8px"><label style="font-size:12px;color:#555;cursor:pointer">📎 <input type="file" id="comg-file" style="display:none" onchange="var s=document.getElementById(\'comg-file-name\'); if(s) s.textContent=this.files[0]?(\'  \'+this.files[0].name):\'\';"> Adjuntar archivo</label><span id="comg-file-name" style="font-size:11px;color:#1d4ed8"></span></div>'+
-    '<div class="form-row col3"><div class="form-group"><label>Dirigido a <span style="font-weight:400;color:#888;font-size:11px">(marca una o varias personas)</span></label><div style="margin-bottom:4px"><button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(true)">Marcar todos</button> <button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(false)">Ninguno</button></div><div id="comg-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;max-height:160px;overflow:auto;display:flex;flex-wrap:wrap;gap:2px">'+(function(){var _cd=_destinos(); var _e=function(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");}; return _cd.people.map(function(p){return "<label style=\"display:inline-flex;align-items:center;gap:5px;font-weight:400;font-size:12.5px;padding:3px 9px;background:#f1f5f9;border-radius:8px;cursor:pointer;margin:2px\"><input type=\"checkbox\" class=\"comg-dir-chk\" value=\""+_e(p.e)+"\" data-nombre=\""+_e(p.n)+"\"> "+_e(p.n)+"</label>";}).join("");})()+'</div></div>'+
+    '<div class="form-row col3"><div class="form-group"><label>Dirigido a <span style="font-weight:400;color:#888;font-size:11px">(marca una o varias personas)</span></label><div style="margin-bottom:4px"><button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(true)">Marcar todos</button> <button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(false)">Ninguno</button></div><div id="comg-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;max-height:200px;overflow:auto;display:flex;flex-direction:column;gap:1px">'+(function(){var _cd=_destinos(); var _e=function(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");}; return _cd.people.map(function(p){return "<label style=\"display:inline-flex;align-items:center;gap:5px;font-weight:400;font-size:12.5px;padding:3px 9px;background:#f1f5f9;border-radius:8px;cursor:pointer;margin:2px\"><input type=\"checkbox\" class=\"comg-dir-chk\" value=\""+_e(p.e)+"\" data-nombre=\""+_e(p.n)+"\"> "+_e(p.n)+"</label>";}).join("");})()+'</div></div>'+
     '<div class="form-group"><label>Apto (opcional)</label><input type="text" id="comg-apto" placeholder="Ej: 301"></div>'+
     '<div class="form-group" style="display:flex;align-items:flex-end"><button class="btn btn-success" style="width:100%" onclick="nuevaPreguntaGerencia()">📨 Enviar pregunta</button></div></div></div>'+
     '<div class="card"><div class="card-header"><div class="card-title">'+all.length+' comentarios</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todos')+fbtn('dirigidos','Dirigidos')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (dirigido a, texto, apto...)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
