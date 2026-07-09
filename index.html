@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-caja-fase2';
+const APP_VERSION = '2026-07-09-caja-fase3';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-caja-fase3', titulo:'Cajas — Fase 3: reembolso por lotes conectado a la Caja (cierre y reposición)',
+    afecta:'Reembolsos / Caja',
+    detalle:'Sol Santiago: en Reembolso por Lotes, botón "Cargar gastos pendientes de la caja" que trae automáticamente los egresos "Pendiente de legalizar" de la caja elegida (sin re-escribir). Al guardar el lote, esos gastos quedan "En lote"; cuando Gerencia General aprueba y firma el lote, pasan a "Reembolsado" y se genera un movimiento "Reintegro" que repone la caja — así el arqueo del turno vuelve a cuadrar. El selector de caja del lote ya usa las cajas reales del edificio. Requiere la columna lote_consec en la tabla caja.' },
   { fecha:'2026-07-09', version:'2026-07-09-caja-fase2', titulo:'Cajas — Fase 2: arqueo automático en la entrega de turno',
     afecta:'Turno / Caja',
     detalle:'Sol Santiago: en el Informe de Turno, cada caja del edificio muestra su SALDO ESPERADO (calculado solo de los movimientos: Fondo + Ingreso + Reintegro − Egreso − Reembolso − Entrega, sin históricos) junto al CONTEO FÍSICO y la DIFERENCIA (✓ cuadra / Descuadre). Si los gastos se registran bien, el esperado coincide con el arqueo físico. Los 110 movimientos viejos de 8010 se migraron a las cajas LTM3/OT/PH (marcados Histórico). El fondo base de cada caja se registra como movimiento tipo "Fondo".' },
@@ -7938,7 +7941,16 @@ window._confirmarAprobarLote = async function(consec){
   }
   if(!okAll){ if(typeof showToast==='function') showToast('Error al aprobar lote: '+errMsg,'error'); if(btn){ btn.disabled=false; btn.textContent='✅ Aprobar y firmar lote'; } return; }
   var o=document.getElementById('lote-ap-ov'); if(o) o.remove();
-  if(typeof showToast==='function') showToast('✅ Lote R-'+consec+' aprobado ('+rows.length+' recibos)','success');
+  // Fase 3: repone la caja — marca los gastos como Reembolsado y genera el Reintegro
+  try{
+    var cajaId=(rows[0]&&rows[0].caja)||null;
+    var totalLote=rows.reduce(function(s,r){ return s+(Number(r.valor)||0); },0);
+    await sb.from('caja').update({ estado_legal:'Reembolsado' }).eq('lote_consec', consec).eq('estado_legal','En lote');
+    if(cajaId && totalLote>0){
+      await sb.from('caja').insert({ fecha:(typeof TODAY!=='undefined'?TODAY:new Date().toISOString().slice(0,10)), tipo:'Reintegro', caja:cajaId, concepto:'Reintegro por reembolso lote R-'+consec, valor:totalLote, recibo_no:'R-'+consec, estado_legal:null, entregado_por:quien, user_id:currentUser.id });
+    }
+  }catch(e){}
+  if(typeof showToast==='function') showToast('✅ Lote R-'+consec+' aprobado ('+rows.length+' recibos) — caja repuesta','success');
   // Abre el documento firmado listo para PDF / reenvío
   _imprimirLoteFirmado(consec, rows, window._getFirma(), quien, cuando);
   if(typeof loadView==='function') loadView('reembolsos-list');
@@ -8121,7 +8133,9 @@ window.guardarMovCaja=async function(btn){
 // ════════ REEMBOLSO POR LOTES — varios recibos en un solo reembolso (solicitud Sebastián) ════════
 function renderReembolsoLote(){
   var q=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'';
-  var _cajaOpts=(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')?'<option>8i8</option>':'<option>LTM3</option><option>80|10</option><option>PH</option>';
+  window._loteCajaIds=[];
+  var _cm=(EB().cajasMenores)||[];
+  var _cajaOpts=_cm.map(function(c){return '<option value="'+String(c.id).replace(/"/g,'')+'">'+String(c.nombre||c.id).replace(/</g,'&lt;')+'</option>';}).join('');
   document.getElementById('main-content').innerHTML=
     '<div class="page-title">💸 Reembolso por Lotes</div>'
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Agrupa varios recibos en UN solo reembolso (un número y un correo con todos los comprobantes). Llena la cabecera, añade los recibos y guarda.</div>'
@@ -8139,7 +8153,7 @@ function renderReembolsoLote(){
       +'<div class="form-group"><label>Aprobado por</label><input id="lt-aprobado"></div>'
       +'<div class="form-group"><label>Observaciones</label><input id="lt-obs"></div>'
     +'</div></div>'
-    +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:700;color:var(--azul)">Recibos</div><button class="btn btn-outline btn-sm" onclick="_loteAddRow()">+ Añadir recibo</button></div>'
+    +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px"><div style="font-weight:700;color:var(--azul)">Recibos</div><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" style="border-color:#1A5C2E;color:#1A5C2E" onclick="_loteCargarPendientes()">⬇️ Cargar gastos pendientes de la caja</button><button class="btn btn-outline btn-sm" onclick="_loteAddRow()">+ Añadir recibo</button></div></div>'
     +'<div style="overflow-x:auto"><table class="tabla" id="lt-tabla"><thead><tr><th>Fecha recibo</th><th>No. Recibo</th><th>Descripción</th><th style="text-align:right">Valor ($)</th><th></th></tr></thead><tbody id="lt-rows"></tbody>'
     +'<tfoot><tr style="background:var(--azul-c);font-weight:800"><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right" id="lt-total">$ 0</td><td></td></tr></tfoot></table></div></div>'
     +'<div style="display:flex;gap:8px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="_loteGuardar(this)">💾 Guardar reembolso (lote)</button></div>';
@@ -8160,6 +8174,28 @@ function _loteTotal(){
   var el=document.getElementById('lt-total'); if(el) el.textContent='$ '+t.toLocaleString('es-CO');
   return t;
 }
+// Fase 3: traer los gastos pendientes de legalizar de la caja seleccionada al lote
+window._loteCargarPendientes=async function(){
+  var caja=(document.getElementById('lt-caja')||{}).value;
+  if(!caja){ showToast('Elige la caja de origen','error'); return; }
+  var r=await sb.from('caja').select('id,fecha,recibo_no,concepto,valor,subcaja').eq('caja',caja).eq('estado_legal','Pendiente de legalizar').eq('tipo','Egreso').order('fecha',{ascending:true});
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  var rows=r.data||[];
+  if(!rows.length){ showToast('No hay gastos pendientes de legalizar en esa caja','info'); return; }
+  var tb=document.getElementById('lt-rows'); if(tb) tb.innerHTML='';
+  window._loteCajaIds=[];
+  rows.forEach(function(m){
+    _loteAddRow();
+    var trs=document.querySelectorAll('#lt-rows .lt-row'); var tr=trs[trs.length-1];
+    tr.querySelector('.lt-fec').value=m.fecha||'';
+    tr.querySelector('.lt-rec').value=m.recibo_no||'';
+    tr.querySelector('.lt-desc').value=(m.concepto||'')+(m.subcaja?(' ['+m.subcaja+']'):'');
+    tr.querySelector('.lt-val').value=Number(m.valor)||0;
+    window._loteCajaIds.push(m.id);
+  });
+  _loteTotal();
+  showToast('Cargados '+rows.length+' gasto(s) pendientes de la caja','success');
+};
 async function _loteGuardar(btn){
   var empresa=document.getElementById('lt-empresa').value.trim();
   if(!empresa){ showToast('Falta la empresa/proveedor','error'); return; }
@@ -8179,6 +8215,11 @@ async function _loteGuardar(btn){
   var resp=await sb.from('reembolsos').insert(rows);
   if(btn){ btn.disabled=false; btn.textContent='💾 Guardar reembolso (lote)'; }
   if(resp.error){ showToast('Error al guardar: '+resp.error.message,'error'); return; }
+  // Fase 3: marcar los gastos de caja incluidos en este lote
+  if(window._loteCajaIds && window._loteCajaIds.length){
+    try{ await sb.from('caja').update({ estado_legal:'En lote', lote_consec:consec }).in('id', window._loteCajaIds); }catch(e){}
+    window._loteCajaIds=[];
+  }
   showToast('✅ Reembolso #'+consec+' guardado con '+rows.length+' recibo(s)','success');
   comprobanteLote(consec);
 }
