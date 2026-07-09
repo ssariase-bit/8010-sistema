@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-caja-fase1';
+const APP_VERSION = '2026-07-09-caja-fase2';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-caja-fase2', titulo:'Cajas — Fase 2: arqueo automático en la entrega de turno',
+    afecta:'Turno / Caja',
+    detalle:'Sol Santiago: en el Informe de Turno, cada caja del edificio muestra su SALDO ESPERADO (calculado solo de los movimientos: Fondo + Ingreso + Reintegro − Egreso − Reembolso − Entrega, sin históricos) junto al CONTEO FÍSICO y la DIFERENCIA (✓ cuadra / Descuadre). Si los gastos se registran bien, el esperado coincide con el arqueo físico. Los 110 movimientos viejos de 8010 se migraron a las cajas LTM3/OT/PH (marcados Histórico). El fondo base de cada caja se registra como movimiento tipo "Fondo".' },
   { fecha:'2026-07-09', version:'2026-07-09-caja-fase1', titulo:'Cajas — Fase 1: registro único de movimiento, separado por edificio (8010 y KL)',
     afecta:'Caja / Financiero',
     detalle:'Sol Santiago: nuevo formulario de Caja unificado, distinto por edificio. 8010: cajas LTM3 · OT (con subcategoría Arrendatarios/Insumos) · PH. KL: 8i8 Compras (Leguizamón) · 8i8 Administradores. Cada movimiento guarda caja, subcategoría, tipo, factura y estado de legalización, para conectar luego con el arqueo del turno (Fase 2) y el cierre por lotes (Fase 3). Requiere columnas caja/subcaja/estado_legal en la tabla caja (funciona con respaldo si aún no están).' },
@@ -3104,12 +3107,8 @@ function renderTurnoForm() {
         </div>
         <div class="form-row">
           <div class="form-group"><label>Check-outs del día</label><input type="number" id="t-checkouts" min="0" placeholder="0"></div>
-          ${EDIFICIO_ACTIVO==='kubik'
-            ? `<div class="form-group"><label>Caja 8i8 ($)</label><input type="number" id="t-caja-ltm3" min="0" placeholder="0" onchange="calcCajaTurno()"></div>`
-            : `<div class="form-group"><label>Caja LTM3 ($)</label><input type="number" id="t-caja-ltm3" min="0" placeholder="0" onchange="calcCajaTurno()"></div>
-          <div class="form-group"><label>Caja OT ($)</label><input type="number" id="t-caja-ot" min="0" placeholder="0" onchange="calcCajaTurno()"></div>
-          <div class="form-group"><label>Caja PH ($)</label><input type="number" id="t-caja-ph" min="0" placeholder="0" onchange="calcCajaTurno()"></div>`}
-          <div class="form-group"><label>Total Caja al cierre ($)</label><input type="number" id="t-caja" min="0" placeholder="0" readonly style="background:#E2EFDA;font-weight:bold"></div>
+          ${_turnoCajasHTML()}
+          <div class="form-group"><label>Total físico al cierre ($)</label><input type="number" id="t-caja" min="0" placeholder="0" readonly style="background:#E2EFDA;font-weight:bold"></div>
         </div>
       </div>
 
@@ -3173,6 +3172,7 @@ function renderTurnoForm() {
   novCount = 0;
   addNovedadLinea(); // una línea vacía por defecto
   cargarArrastreTurno();
+  _turnoCargarSaldos(); // Fase 2: saldo esperado por caja (arqueo)
 }
 async function cargarArrastreTurno(){
   try{
@@ -3333,7 +3333,7 @@ async function enviarTurno() {
 *OCUPACIÓN:*
 ▪ Aptos ocupados: ${ocup} | Disponibles: ${disp}
 ▪ Check-ins: ${cki} | Check-outs: ${cko}
-${EDIFICIO_ACTIVO==='kubik' ? `▪ Caja 8i8: $${cajaLTM3}` : `▪ Caja LTM3: $${cajaLTM3} | OT: $${cajaOT} | PH: $${cajaPH}`}
+${(function(){ var cs=(EB().cajasMenores)||[]; var vals=[cajaLTM3,cajaOT,cajaPH]; return '▪ Cajas (físico): '+cs.map(function(c,i){ return c.id+' $'+vals[i]; }).join(' | '); })()}
 ▪ Total caja: $${caja}${(Number(llaves)||Number(sombDisp)||Number(sombPrest)) ? `
 
 *ENTREGA DE TURNO:*
@@ -11844,13 +11844,41 @@ async function getNextNumeroConfirmacion() {
   }
 }
 
+// Arqueo de turno (Fase 2): saldo esperado por caja = movimientos (Fondo+Ingreso+Reintegro − Egreso−Reembolso−Entrega), sin históricos.
+window._turnoCajasHTML = function(){
+  var cajas=(EB().cajasMenores)||[]; var cols=['ltm3','ot','ph']; var out='';
+  cajas.forEach(function(c,i){ if(i>2) return; var col=cols[i];
+    out+='<div class="form-group"><label>'+String(c.nombre||c.id).replace(/</g,'&lt;')+' ($)</label>'
+      +'<div style="font-size:11px;color:#666;margin-bottom:2px">Esperado: <b id="t-esp-'+col+'">—</b></div>'
+      +'<input type="number" id="t-caja-'+col+'" min="0" placeholder="Conteo físico" onchange="calcCajaTurno()">'
+      +'<div style="font-size:11px;margin-top:2px" id="t-dif-'+col+'"></div></div>';
+  });
+  return out;
+};
+window._turnoCargarSaldos = async function(){
+  try{
+    var cajas=(EB().cajasMenores)||[]; var cols=['ltm3','ot','ph'];
+    var r=await sb.from('caja').select('caja,tipo,valor,estado_legal');
+    var mov=(r.data||[]).filter(function(x){ return x.estado_legal!=='Histórico'; });
+    var ENT=['Ingreso','Fondo','Reintegro'];
+    cajas.forEach(function(c,i){ if(i>2) return; var col=cols[i]; var s=0;
+      mov.forEach(function(m){ if(m.caja===c.id){ var v=Number(m.valor)||0; s+=(ENT.indexOf(m.tipo)>=0?v:-v); } });
+      window['_espCaja_'+col]=s;
+      var e=document.getElementById('t-esp-'+col); if(e) e.textContent='$'+s.toLocaleString('es-CO');
+    });
+    calcCajaTurno();
+  }catch(e){}
+};
 function calcCajaTurno() {
-  const ltm3 = Number(document.getElementById('t-caja-ltm3')?.value) || 0;
-  const ot   = Number(document.getElementById('t-caja-ot')?.value) || 0;
-  const ph   = Number(document.getElementById('t-caja-ph')?.value) || 0;
-  const total = ltm3 + ot + ph;
-  const el = document.getElementById('t-caja');
-  if (el) el.value = total;
+  var cols=['ltm3','ot','ph']; var total=0;
+  cols.forEach(function(col){
+    var inp=document.getElementById('t-caja-'+col); if(!inp) return;
+    var fis=Number(inp.value)||0; total+=fis;
+    var esp=window['_espCaja_'+col]; var d=document.getElementById('t-dif-'+col);
+    if(d){ if(esp==null || inp.value===''){ d.textContent=''; }
+      else { var dif=fis-esp; d.innerHTML = (dif===0) ? '<span style="color:#15803d">✓ cuadra</span>' : '<span style="color:#b91c1c">Descuadre: '+(dif>0?'+':'')+'$'+dif.toLocaleString('es-CO')+'</span>'; } }
+  });
+  var el=document.getElementById('t-caja'); if(el) el.value=total;
 }
 
 function fmtMoneyInput(el){ const d=(el.value||'').replace(/\D/g,''); el.value = d ? Number(d).toLocaleString('es-CO') : ''; }
