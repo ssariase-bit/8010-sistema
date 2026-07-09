@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-kl-sin-8010-b';
+const APP_VERSION = '2026-07-09-caja-fase1';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-caja-fase1', titulo:'Cajas — Fase 1: registro único de movimiento, separado por edificio (8010 y KL)',
+    afecta:'Caja / Financiero',
+    detalle:'Sol Santiago: nuevo formulario de Caja unificado, distinto por edificio. 8010: cajas LTM3 · OT (con subcategoría Arrendatarios/Insumos) · PH. KL: 8i8 Compras (Leguizamón) · 8i8 Administradores. Cada movimiento guarda caja, subcategoría, tipo, factura y estado de legalización, para conectar luego con el arqueo del turno (Fase 2) y el cierre por lotes (Fase 3). Requiere columnas caja/subcaja/estado_legal en la tabla caja (funciona con respaldo si aún no están).' },
   { fecha:'2026-07-09', version:'2026-07-09-kl-sin-8010-b', titulo:'Kubik sin referencias a 8010/LTM3 (auditoría completa) + adjunto en comunicado rápido + ventas en USD (TRM) + Comentarios "Dirigido a" a personas',
     afecta:'Kubik / Comunicaciones / Reservas / Comentarios',
     detalle:'Sol Santiago: (1) En Kubik ya no aparecen LTM3 ni 8010: se corrigieron los selectores de Reembolso por Lotes, Reembolso simple (Caja), Transportes (Empresa), Check List Carpetas (Tipo de negociación) y el datalist de cargos (muestran 8i8); la alerta de "NOVEDAD ALTA" por WhatsApp ya usa el nombre del edificio activo; y los módulos "Estado de Resultados" y "Ventas vs Presupuesto" (armados sobre el presupuesto 2026 y las entidades 80-10/LTM3/PH de 8010) quedan ocultos en Kubik. (2) El modal rápido "Nuevo comunicado" (botón flotante 📣) ahora permite adjuntar archivo. (3) Reservas en USD: campo TRM (aparece solo en USD) y el rack guarda el equivalente en pesos para que cuente en ventas. (4) En Comentarios el "Dirigido a" es por personas (marcar una o varias).' },
@@ -586,6 +589,12 @@ const EDIFICIOS = {
     mapaAptoA: {'501':'501A','502':'502A','601':'601A','602':'602A','701':'701A','702':'702A','801':'801A','802':'802A','901':'901A','902':'902A','1001':'1001A','1002':'1002A'},
     metrajes: { '01': {privado:96, total:132}, '02': {privado:90, total:126} },
     cajas: ['OT (8010 SAS)','LTM3 (LTM3 SAS)','PH (Propiedad Horizontal)'],
+    // Cajas menores 8010 (arqueo por caja física). OT tiene 2 subcategorías de gasto.
+    cajasMenores: [
+      { id:'LTM3', nombre:'LTM3 — Compras varios' },
+      { id:'OT',   nombre:'OT (8010) — Arrendatarios / Insumos', subcats:['Arrendatarios','Insumos'] },
+      { id:'PH',   nombre:'PH — Impuestos y gastos pequeños' }
+    ],
     facturarA: ['LTM3 SAS','8010 SAS','Particular','Otra'],
     // Restaurante del edificio (impuesto YA incluido en el precio -> se extrae). Magnifique factura impoconsumo 8%.
     restaurante: { nombre:'Magnifique', impuesto:'Impoconsumo', tasa:0.08, servicio:0, domicilio:0.15 },
@@ -608,6 +617,11 @@ const EDIFICIOS = {
     noEntregados: [],
     metrajes: {'201':100,'202':29,'203':56,'204':42,'204A':37,'301':100,'302':29,'303':56,'304':42,'304A':37,'401':100,'402':29,'403':56,'404':42,'404A':37,'501':100,'502':29,'503':56,'504':42,'504A':37,'601':100,'602':29,'603':56,'604':42,'604A':37,'701':100,'702':29,'703':56,'704':42,'704A':37,'801':100,'802':29,'803':56,'804':42,'804A':37,'901':100,'902':29,'903':56,'904':42,'904A':37,'PH1':130,'PH2':113},
     cajas: ['8I8 (8i8 Operadora SAS)'],
+    // KL: una sola compañía (8i8, mismo NIT) con 2 sub-cajas físicas.
+    cajasMenores: [
+      { id:'Compras',        nombre:'8i8 Compras (Leguizamón)' },
+      { id:'Administradores', nombre:'8i8 Administradores (recepción)' }
+    ],
     facturarA: ['8i8 Operadora SAS','Particular','Otra'],
     // Restaurante del edificio (impuesto YA incluido en el precio -> se extrae). Bagatelle factura IVA 19% + servicio 10%.
     restaurante: { nombre:'Bagatelle', impuesto:'IVA', tasa:0.19, servicio:0.10, domicilio:0.15 },
@@ -1391,21 +1405,8 @@ async function loadView(view) {
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'caja-informe':       await renderCajaInforme(); break;
-    case 'caja-list':          await renderList('caja','💰 Caja y Movimientos','caja-form',['fecha','tipo','concepto','area','empresa','valor','recibo_no','entregado_por','recibido_por','fecha_entrega'],['Fecha','Tipo','Concepto','Área','Caja / Razón Social','Valor','Recibo','Entregó','Recibió','Fecha entrega']); break;
-    case 'caja-form':          renderGenForm('caja','💰 Movimiento de Caja',[
-      {id:'fecha',label:'Fecha de creado (automática)',type:'date',default:TODAY,locked:true},
-      {id:'fecha_factura',label:'Fecha del recibo',type:'date'},
-      {id:'tipo',label:'Tipo',type:'select',opts:['Ingreso','Egreso','Provisional','Fondo','Reembolso','Entrega efectivo'],req:true},
-      {id:'concepto',label:'Concepto / Descripción',type:'text',req:true},
-      {id:'area',label:'Área',type:'select',opts:['Recepción','Mantenimiento','Housekeeping','Administración','General']},
-      {id:'empresa',label:'Caja / Razón Social',type:'select',opts:EB().cajas},
-      {id:'valor',label:'Valor ($)',type:'money',req:true},
-      {id:'recibo_no',label:'No. Recibo',type:'text'},
-      {id:'entregado_por',label:'Entregado por (admin que entrega)',type:'text'},
-      {id:'recibido_por',label:'Recibido por (Adri / Jonathan)',type:'text'},
-      {id:'fecha_entrega',label:'Fecha de entrega del efectivo',type:'date'},
-      {id:'observaciones',label:'Observaciones',type:'textarea'},
-    ]); break;
+    case 'caja-list':          await renderList('caja','💰 Caja y Movimientos','caja-form',['fecha','tipo','caja','subcaja','concepto','valor','recibo_no','estado_legal'],['Fecha','Tipo','Caja','Subcat.','Concepto','Valor','Factura','Legalización']); break;
+    case 'caja-form':          renderMovimientoCaja(); break;
     case 'visitantes-list':    await renderVisitantesList(); break;
     case 'visitantes-form':    renderGenForm('visitantes','👥 Registrar Visitante',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
@@ -7709,7 +7710,7 @@ async function generarInformeCaja(){
   if(res.error){ cont.innerHTML='<div style="color:#b91c1c">Error: '+res.error.message+'</div>'; return; }
   var rows = res.data || [];
   var ftipo=(document.getElementById('ci-tipo')||{}).value||'todos';
-  var _E=['Ingreso','Fondo'], _S=['Egreso','Reembolso','Entrega efectivo'];
+  var _E=['Ingreso','Fondo','Reintegro'], _S=['Egreso','Reembolso','Entrega efectivo'];
   if(ftipo!=='todos'){ rows=rows.filter(function(r){ if(ftipo==='prov') return r.tipo==='Provisional'; if(ftipo==='inegr') return r.tipo!=='Provisional'; if(ftipo==='ing') return _E.indexOf(r.tipo)>=0; if(ftipo==='entrega') return r.tipo==='Entrega efectivo'; if(ftipo==='egr') return _S.indexOf(r.tipo)>=0; return true; }); }
   var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var fmt = function(n){ return '$'+Math.round(Number(n)||0).toLocaleString('es-CO'); };
@@ -8048,6 +8049,74 @@ async function _enviarReembolso(id){
     var ov=document.getElementById('reemb-correo-ov'); if(ov) ov.remove();
   }catch(e){ showToast('Error: '+(e&&e.message||e),'error'); rst(); }
 }
+
+// ════════ CAJA MENOR — Fase 1: registro único de movimiento (separado por edificio) ════════
+window.renderMovimientoCaja = function(){
+  var _esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var kbk=(EDIFICIO_ACTIVO==='kubik');
+  var cajas=(EB().cajasMenores)||[];
+  var cajaOpts=cajas.map(function(c){ return '<option value="'+_esc(c.id)+'">'+_esc(c.nombre)+'</option>'; }).join('');
+  var titulo=kbk?'💰 Caja 8i8 — Nuevo movimiento':'💰 Caja 8010 — Nuevo movimiento';
+  document.getElementById('main-content').innerHTML=
+    '<div class="page-title">'+titulo+'</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Gasto, ingreso o reposición de caja menor. Los <b>gastos con factura</b> quedan listos para el cierre por lotes y alimentan el arqueo del turno.</div>'
+    +'<div class="card" style="max-width:740px">'
+    +'<div class="form-row col3">'
+      +'<div class="form-group"><label>Fecha</label><input type="date" id="mc-fecha" value="'+TODAY+'"></div>'
+      +'<div class="form-group"><label>Tipo *</label><select id="mc-tipo"><option>Egreso</option><option>Ingreso</option><option>Fondo</option><option>Reintegro</option></select></div>'
+      +'<div class="form-group"><label>Caja *</label><select id="mc-caja" onchange="_mcSubcats()">'+cajaOpts+'</select></div>'
+    +'</div>'
+    +'<div class="form-row col3">'
+      +'<div class="form-group" id="mc-subcaja-wrap" style="display:none"><label>Subcategoría</label><select id="mc-subcaja"></select></div>'
+      +'<div class="form-group"><label>Valor ($) *</label><input type="number" id="mc-valor" placeholder="0"></div>'
+      +'<div class="form-group"><label>No. Factura / Recibo</label><input id="mc-factura" placeholder="Ej: FV-123"></div>'
+    +'</div>'
+    +'<div class="form-group"><label>Concepto / Descripción *</label><input id="mc-concepto" placeholder="¿Qué se compró / movió?"></div>'
+    +'<div class="form-row col2">'
+      +'<div class="form-group"><label>Responsable (registra / entrega)</label><input id="mc-responsable" value="'+_esc((currentProfile&&currentProfile.nombre)||'')+'"></div>'
+      +'<div class="form-group"><label>Observaciones</label><input id="mc-obs"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:6px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="guardarMovCaja(this)">💾 Guardar movimiento</button> <button class="btn btn-outline" onclick="loadView(\'caja-list\')">Ver movimientos</button></div>'
+    +'</div>';
+  _mcSubcats();
+};
+window._mcSubcats=function(){
+  var sel=document.getElementById('mc-caja'); if(!sel) return;
+  var cajas=(EB().cajasMenores)||[];
+  var c=cajas.filter(function(x){return x.id===sel.value;})[0];
+  var wrap=document.getElementById('mc-subcaja-wrap'); var sub=document.getElementById('mc-subcaja');
+  if(c && c.subcats && c.subcats.length){ if(sub) sub.innerHTML=c.subcats.map(function(s){return '<option>'+s+'</option>';}).join(''); if(wrap) wrap.style.display=''; }
+  else { if(sub) sub.innerHTML=''; if(wrap) wrap.style.display='none'; }
+};
+window.guardarMovCaja=async function(btn){
+  var val=Number(document.getElementById('mc-valor').value)||0;
+  var concepto=(document.getElementById('mc-concepto').value||'').trim();
+  if(!val){ showToast('Falta el valor','error'); return; }
+  if(!concepto){ showToast('Falta el concepto','error'); return; }
+  var caja=document.getElementById('mc-caja').value;
+  var subWrap=document.getElementById('mc-subcaja-wrap');
+  var subcaja=(subWrap && subWrap.style.display!=='none')?(document.getElementById('mc-subcaja').value||null):null;
+  var tipo=document.getElementById('mc-tipo').value;
+  var esEgreso=/Egreso/i.test(tipo);
+  if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+  var base={ fecha:document.getElementById('mc-fecha').value||TODAY, tipo:tipo, concepto:concepto, valor:val,
+    recibo_no:(document.getElementById('mc-factura').value||'').trim()||null,
+    entregado_por:(document.getElementById('mc-responsable').value||'').trim()||null,
+    observaciones:(document.getElementById('mc-obs').value||'').trim()||null,
+    user_id:currentUser.id };
+  var row=Object.assign({}, base, { caja:caja, subcaja:subcaja, estado_legal:(esEgreso?'Pendiente de legalizar':null) });
+  var r=await sb.from('caja').insert(row);
+  if(r.error && /(could not find|does not exist|schema cache|column)/i.test(r.error.message||'')){
+    // Aún no existen las columnas nuevas: respaldo en 'empresa'
+    var fb=Object.assign({}, base, { empresa: caja+(subcaja?(' · '+subcaja):'') });
+    r=await sb.from('caja').insert(fb);
+    if(!r.error) showToast('Movimiento guardado. Falta crear las columnas caja/subcaja/estado_legal en la BD para el flujo completo (te paso el script).','info');
+  }
+  if(btn){ btn.disabled=false; btn.textContent='💾 Guardar movimiento'; }
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('✅ Movimiento guardado','success');
+  loadView('caja-list');
+};
 
 // ════════ REEMBOLSO POR LOTES — varios recibos en un solo reembolso (solicitud Sebastián) ════════
 function renderReembolsoLote(){
