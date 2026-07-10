@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-vb-cki-cko';
+const APP_VERSION = '2026-07-09-desayunos-cortesia';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-desayunos-cortesia', titulo:'"Desayunos" ahora dice "incluidos (cortesía)" para no confundir con el restaurante',
+    afecta:'Desayunos / Ingresos',
+    detalle:'Sol Santiago: el módulo, el formulario, el menú y la línea de ingresos de "Desayunos" ahora dicen "Desayunos incluidos (cortesía)", para diferenciarlos claramente de los desayunos que se venden/cobran por el restaurante (Bagatelle/Magnifique).' },
   { fecha:'2026-07-09', version:'2026-07-09-vb-cki-cko', titulo:'VB / comentario de Gerencia en el Histórico CKI / CKO',
     afecta:'CKI / CKO',
     detalle:'Sol Santiago: en el Histórico CKI/CKO ahora hay columna "Revisión Gerencia" con el botón ✔ Revisado (Visto Bueno) y 💬 Comentar por cada check-in/check-out, igual que en Novedades, Comentarios y Solicitudes.' },
@@ -826,7 +829,7 @@ const NAV_ITEMS = {
     { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'contratos-list', icon: '📄', label: 'Contratos' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
-    { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
+    { id: 'desayunos-list', icon: '☕', label: 'Desayunos incluidos' },
     { id: 'capsulas-list', icon: '🧴', label: 'Cápsulas Cortesía' },
     { id: 'prestamos-list', icon: '📦', label: 'Préstamos' },
     { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
@@ -895,7 +898,7 @@ const NAV_ITEMS = {
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
     { id: 'visitantes-form', icon: '➕', label: 'Registrar Visitante' },
-    { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
+    { id: 'desayunos-list', icon: '☕', label: 'Desayunos incluidos' },
     { id: 'prestamos-list', icon: '📦', label: 'Préstamos' },
     { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
@@ -946,8 +949,8 @@ const NAV_ITEMS = {
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
     { id: 'visitantes-form', icon: '👥', label: 'Registrar Visitante' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
-    { id: 'desayunos-form', icon: '☕', label: 'Registrar Desayuno' },
-    { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
+    { id: 'desayunos-form', icon: '☕', label: 'Registrar desayuno incluido' },
+    { id: 'desayunos-list', icon: '☕', label: 'Desayunos incluidos' },
     { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
     { id: 'prestamos-form', icon: '📦', label: 'Nuevo Préstamo' },
     { id: 'prestamos-list', icon: '💻', label: 'Préstamos' },
@@ -1099,7 +1102,7 @@ const MENU_COMPLETO = [
   { id: 'paquetes-list', icon: '📦', label: 'Paquetes / Encargos' },
   { id: 'maletas-list', icon: '🧳', label: 'Maletas en Bodega' },
   { id: 'entrega-llaves', icon: '🔑', label: 'Entrega de Llaves / Accesos' },
-  { id: 'desayunos-list', icon: '☕', label: 'Desayunos' },
+  { id: 'desayunos-list', icon: '☕', label: 'Desayunos incluidos' },
   { id: 'capsulas-list', icon: '🧴', label: 'Cápsulas Cortesía' },
   { id: 'loza-list', icon: '🍽️', label: 'Inventario de Loza' },
   { id: 'scape-list', icon: '💆', label: 'Masajes Scape' },
@@ -1462,8 +1465,8 @@ async function loadView(view) {
       {id:'guardado_por',label:'Guardado por',type:'text'},
       {id:'estado',label:'Estado',type:'select',opts:['En bodega','Entregada']},
     ]); break;
-    case 'desayunos-list':     await renderList('desayunos','☕ Desayunos Incluidos','desayunos-form',['fecha','apto','arrendatario','cantidad','valor'],['Fecha','Apto','Arrendatario','Cantidad','Valor']); break;
-    case 'desayunos-form':     renderGenForm('desayunos','☕ Registrar Desayuno',[
+    case 'desayunos-list':     await renderList('desayunos','☕ Desayunos incluidos (cortesía)','desayunos-form',['fecha','apto','arrendatario','cantidad','valor'],['Fecha','Apto','Arrendatario','Cantidad','Valor']); break;
+    case 'desayunos-form':     renderGenForm('desayunos','☕ Registrar desayuno incluido (cortesía)',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento',type:'text',req:true},
       {id:'arrendatario',label:'Arrendatario',type:'nombre3',req:true},
@@ -1770,7 +1773,7 @@ async function renderVentasLinea(){
     {k:'eve',lbl:'Eventos',cls:'k-naran',only8010:true},
     {k:'mag',lbl:magLbl,cls:'k-azul'},
     {k:'con',lbl:'Consumos',cls:'k-verde'},
-    {k:'des',lbl:'Desayunos',cls:'k-naran'},
+    {k:'des',lbl:'Desayunos incluidos',cls:'k-naran'},
     {k:'tra',lbl:'Transportes',cls:'k-rojo'}
   ].filter(c=> !c.only8010 || EDIFICIO_ACTIVO==='8010');
   const tot={}; LINES.forEach(c=>tot[c.k]=0);
