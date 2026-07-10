@@ -41,6 +41,8 @@ body{background:var(--gris);min-height:100vh}
 .form-group label{display:block;font-size:11px;font-weight:600;color:var(--gris-t);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
 #login-screen .form-group label{color:rgba(255,255,255,.5)}
 .form-group input,.form-group select,.form-group textarea{width:100%;border:1px solid var(--gris-b);border-radius:6px;padding:10px 14px;font-size:14px;color:#1F2937;transition:border .2s;background:var(--blanco)}
+/* Los checkboxes y radios NO deben estirarse al 100% (rompía la alineación de las listas de personal) */
+.form-group input[type=checkbox],.form-group input[type=radio],input[type=checkbox],input[type=radio]{width:auto;flex:0 0 auto;padding:0;border-radius:3px}
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--dorado);box-shadow:0 0 0 3px rgba(184,150,62,.12)}
 /* Login — inputs oscuros */
 #login-screen .form-group input{background:#1e1e1e;color:#eee;border-color:#333}
@@ -469,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-fix-chulo-ancho';
+const APP_VERSION = '2026-07-09-fix-chulo-global';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-fix-chulo-global', titulo:'Alineación de checkboxes corregida globalmente (todas las listas de personal)',
+    afecta:'Todo el sistema',
+    detalle:'Sol Santiago: se agregó una regla global de CSS para que los checkboxes y radios no se estiren al ancho completo. Así, en CUALQUIER parte donde se despliegue el listado de personal (o cualquier lista de opciones), el chulo y el texto quedan juntos y alineados a la izquierda.' },
   { fecha:'2026-07-09', version:'2026-07-09-fix-chulo-ancho', titulo:'Fix alineación real de las listas de personas (el checkbox se estiraba)',
     afecta:'Comunicaciones / Comentarios / Solicitudes',
     detalle:'Sol Santiago: el nombre quedaba tirado a la derecha porque un estilo global estiraba el checkbox al 100% del ancho. Se fijó el tamaño del chulo (16px) en los tres módulos; ahora el chulo y el nombre quedan juntos a la izquierda.' },
