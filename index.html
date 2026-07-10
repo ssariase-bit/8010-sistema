@@ -469,10 +469,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-reembolso-adjunto-lista';
+const APP_VERSION = '2026-07-09-solicitudes-lote1';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-solicitudes-lote1', titulo:'Solicitudes resueltas: parqueadero fuera de confirmación, Check List Turno 2, fecha al editar entregas',
+    afecta:'Confirmaciones / Check List / Entrega de efectivos / Novedades',
+    detalle:'Sol equipo: (Juanita KL) se quitó "1 parqueadero" de "Incluidos en la Tarifa" de la confirmación (se maneja por disponibilidad); y se quitaron del Check List del Turno 2 los reportes de miércoles y de viernes-sábado-domingo-festivos. (Juan 8010) al editar cualquier registro, los campos de fecha (incluida la fecha de entrega de efectivos) ahora salen como selector de fecha. (Sebastián 8010) la línea de tiempo de Novedades dice "Solicitada por" en vez de "Reportada por".' },
   { fecha:'2026-07-09', version:'2026-07-09-reembolso-adjunto-lista', titulo:'Listas de personas alineadas (chulo + nombre a la izquierda) en Comentarios, Comunicaciones y Solicitudes',
     afecta:'Comentarios / Comunicaciones / Solicitudes',
     detalle:'Sol Santiago: las listas de "Dirigido a" quedaron desalineadas (el chulo a un lado y el nombre a otro). Ahora cada persona es una fila limpia con el chulo y el nombre juntos a la izquierda, igual en los tres módulos.' },
@@ -3886,7 +3889,7 @@ window._accionInicialNov = function(t){ return String(t||'').split('\n📋')[0].
 window._renderTrazabilidadNov = function(n){
   var entradas = [];
   // 1) Reportada
-  entradas.push({ ic:'📝', t:'Reportada por '+(n.reportado_por||'—'), s: (n.created_at?fmtHour(n.created_at)+' · ':'')+fmtDate(n.fecha) });
+  entradas.push({ ic:'📝', t:'Solicitada por '+(n.reportado_por||'—'), s: (n.created_at?fmtHour(n.created_at)+' · ':'')+fmtDate(n.fecha) });
   // 2) Seguimientos anexados al campo de acción
   var log = String(n.tratamiento||'');
   var segs = log.split('\n📋 ').slice(1);
@@ -5290,7 +5293,6 @@ function generarConfirmacion(r) {
       <td>
         <ul class="incluidos">
           <li>Internet wifi de alta velocidad (en áreas sociales y privadas).</li>
-          <li>1 parqueadero.</li>
           <li>Servicios públicos.</li>
           ${_es8010c ? '<li>Llamadas a telefonía fija local ilimitada.</li>' : ''}
           <li>Bodega de equipaje.</li>
@@ -5692,9 +5694,12 @@ async function abrirEditarGen(tabla, id){
   const _MONEY_COLS=['valor','total_efectivo','caja_ltm3','caja_ot','caja_ph','salario'];
   const campos = Object.keys(r).filter(k=>!ocultar.includes(k)).map(k=>{
     const isMoney=_MONEY_COLS.includes(k);
-    const val = (isMoney && r[k]!=null && !isNaN(Number(r[k])) ? Math.round(Number(r[k])).toLocaleString('es-CO') : (r[k]==null?'':String(r[k]))).replace(/"/g,'&quot;');
+    const isDate=/^fecha/.test(k);
+    const raw = r[k]==null?'':String(r[k]);
+    const val = (isMoney && r[k]!=null && !isNaN(Number(r[k])) ? Math.round(Number(r[k])).toLocaleString('es-CO') : (isDate ? raw.slice(0,10) : raw)).replace(/"/g,'&quot;');
+    const _type = isDate ? 'date' : 'text';
     const _ex = isMoney ? ' inputmode="numeric" data-money="1" oninput="fmtMoneyInput(this)"' : '';
-    return `<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--gris-t);display:block;text-transform:capitalize">${k.replace(/_/g,' ')}</label><input id="edt-${k}"${_ex} value="${val}" style="width:100%;padding:7px 9px;border:1px solid #ccc;border-radius:6px;font-size:13px"></div>`;
+    return `<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--gris-t);display:block;text-transform:capitalize">${k.replace(/_/g,' ')}</label><input id="edt-${k}" type="${_type}"${_ex} value="${val}" style="width:100%;padding:7px 9px;border:1px solid #ccc;border-radius:6px;font-size:13px"></div>`;
   }).join('');
   let m=document.getElementById('modal-edit-gen'); if(!m){m=document.createElement('div');m.id='modal-edit-gen';document.body.appendChild(m);}
   m.setAttribute('data-tabla',tabla); m.setAttribute('data-id',id);
@@ -10034,10 +10039,8 @@ const CHECKLIST_KL = {
   ['2','Diligenciar tiempos de limpiezas de camareras y enviar por el S.O.'],
   ['2.1','Enviar reporte de salida del personal, en cuanto salga la última camarera.'],
   ['3','Cargar consumos del restaurante (Bagatelle) a la habitación, con firma del arrendatario al momento del cargo.'],
-  ['4','Todos los miércoles 6 pm, enviar reporte de apartamentos a Don Santiago.'],
-  ['5','Viernes, sábados, domingos y festivos a las 6 pm, enviar reporte de novedades a Don Santiago.'],
-  ['6','Actas.'],
-  ['6.1','Revisión inicial N° 2 del acta de entrega para los CKI del día siguiente.'],['6.2','Estar pendientes de los CKI del día.']
+  ['4','Actas.'],
+  ['4.1','Revisión inicial N° 2 del acta de entrega para los CKI del día siguiente.'],['4.2','Estar pendientes de los CKI del día.']
  ],
  'Turno 3': [
   ['1','Recibir turno al Turno 2.'],
