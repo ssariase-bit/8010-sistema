@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-10-huesped-adic-3campos';
+const APP_VERSION = '2026-07-10-dirigidos-gg-go';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-10', version:'2026-07-10-dirigidos-gg-go', titulo:'"Dirigido a": ahora incluye Gerencia General y Gerencia Operativa',
+    afecta:'Comentarios / Comunicaciones / Solicitudes',
+    detalle:'Sol Nancy (KL): en las listas de "Dirigido a" ahora aparecen Gerencia General (Santiago Arias) y Gerencia Operativa, en Kubik y 8010, para poder dirigirles preguntas.' },
   { fecha:'2026-07-10', version:'2026-07-10-huesped-adic-3campos', titulo:'Huésped adicional: nombre, primer apellido y segundo apellido separados',
     afecta:'Nueva Reserva',
     detalle:'Sol Santiago: en "Agregar huésped" (huéspedes adicionales) ahora hay tres campos separados —Nombre(s), Primer apellido y Segundo apellido— más el documento, igual que el huésped principal.' },
@@ -7047,7 +7050,8 @@ window.cambiarEstadoCom = async function(id,val,el){
 // Directorio de personas por edificio (para dirigir y notificar por correo)
 const _DIRECTORIO = {
   '8010': [
-    {n:'Fabio Malaver', e:'fabio.malaver@8010urbanliving.com'},
+    {n:'Santiago Arias (Gerencia General)', e:'santiago.arias@8010urbanliving.com'},
+    {n:'Fabio Malaver (Gerencia Operativa)', e:'fabio.malaver@8010urbanliving.com'},
     {n:'Cristina Cerviño', e:'cristina.cervino@8010urbanliving.com'},
     {n:'María José Tosta', e:'maria.tosta@8010urbanliving.com'},
     {n:'Sebastián Martínez', e:'sebastian.martinez@8010urbanliving.com'},
@@ -7059,6 +7063,8 @@ const _DIRECTORIO = {
     {n:'Natalia Muñoz (Eventos)', e:'natalia.munoz@8010urbanliving.com'}
   ],
   'kubik': [
+    {n:'Santiago Arias (Gerencia General)', e:'sariase@8i8op.com'},
+    {n:'Gerencia Operativa', e:'operativo@8i8op.com'},
     {n:'Carlos Andrés Jiménez', e:'admin4@8i8op.com'},
     {n:'Ricardo Vallejo', e:'admin2@8i8op.com'},
     {n:'Nancy Medina Pabón', e:'admin3@8i8op.com'},
