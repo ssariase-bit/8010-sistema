@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-msg-prereg-bilingue2';
+const APP_VERSION = '2026-07-10-huesped-adic-3campos';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-10', version:'2026-07-10-huesped-adic-3campos', titulo:'Huésped adicional: nombre, primer apellido y segundo apellido separados',
+    afecta:'Nueva Reserva',
+    detalle:'Sol Santiago: en "Agregar huésped" (huéspedes adicionales) ahora hay tres campos separados —Nombre(s), Primer apellido y Segundo apellido— más el documento, igual que el huésped principal.' },
   { fecha:'2026-07-09', version:'2026-07-09-msg-prereg-bilingue', titulo:'Mensaje del formulario del huésped: versión formal bilingüe (ES/EN)',
     afecta:'Reservas / Pre-registro',
     detalle:'Sol Santiago: el mensaje que se envía con el link del formulario de datos del huésped ahora es formal y bilingüe (español e inglés), con el nombre del edificio activo (Kubik o 8010).' },
@@ -6448,15 +6451,20 @@ window.combinarNombreReserva = function(){
   var h=document.getElementById('res-nombre'); if(h) h.value=full;
 };
 // Repetidor de huéspedes adicionales (Huésped 2, 3, ...)
-window._resAddHuesped = function(nombre, doc){
+window._resAddHuesped = function(nombre, ap1, ap2, doc){
   var box=document.getElementById('res-huesp-list'); if(!box) return;
   var a=function(s){return String(s==null?'':s).replace(/"/g,'&quot;');};
-  var div=document.createElement('div'); div.className='rh-row'; div.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:6px';
-  div.innerHTML='<span class="rh-lbl" style="font-size:11px;color:#6B7280;min-width:66px">Huésped</span><input type="text" class="rh-nombre" placeholder="Nombre completo" value="'+a(nombre)+'" style="flex:2;padding:6px;border:1px solid #ddd;border-radius:8px"><input type="text" class="rh-doc" placeholder="Documento (opcional)" value="'+a(doc)+'" style="flex:1;padding:6px;border:1px solid #ddd;border-radius:8px"><span onclick="this.closest(\'.rh-row\').remove();_resRenumHuesp()" title="Quitar" style="cursor:pointer;color:#C0392B">🗑️</span>';
+  var div=document.createElement('div'); div.className='rh-row'; div.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap';
+  div.innerHTML='<span class="rh-lbl" style="font-size:11px;color:#6B7280;min-width:66px">Huésped</span>'
+    +'<input type="text" class="rh-nombre" placeholder="Nombre(s)" value="'+a(nombre)+'" style="flex:1;min-width:100px;padding:6px;border:1px solid #ddd;border-radius:8px">'
+    +'<input type="text" class="rh-ap1" placeholder="Primer apellido" value="'+a(ap1)+'" style="flex:1;min-width:100px;padding:6px;border:1px solid #ddd;border-radius:8px">'
+    +'<input type="text" class="rh-ap2" placeholder="Segundo apellido" value="'+a(ap2)+'" style="flex:1;min-width:100px;padding:6px;border:1px solid #ddd;border-radius:8px">'
+    +'<input type="text" class="rh-doc" placeholder="Documento (opcional)" value="'+a(doc)+'" style="flex:1;min-width:100px;padding:6px;border:1px solid #ddd;border-radius:8px">'
+    +'<span onclick="this.closest(\'.rh-row\').remove();_resRenumHuesp()" title="Quitar" style="cursor:pointer;color:#C0392B">🗑️</span>';
   box.appendChild(div); _resRenumHuesp();
 };
 window._resRenumHuesp = function(){ var rows=document.querySelectorAll('#res-huesp-list .rh-row'); rows.forEach(function(r,i){ var s=r.querySelector('.rh-lbl'); if(s) s.textContent='Huésped '+(i+2); }); };
-window._resHuespExtra = function(){ var arr=[]; document.querySelectorAll('#res-huesp-list .rh-row').forEach(function(r){ var nm=((r.querySelector('.rh-nombre')||{}).value||'').trim(); var dc=((r.querySelector('.rh-doc')||{}).value||'').trim(); if(nm) arr.push(nm+(dc?(' ('+dc+')'):'')); }); return arr.join(', '); };
+window._resHuespExtra = function(){ var arr=[]; document.querySelectorAll('#res-huesp-list .rh-row').forEach(function(r){ var nm=[((r.querySelector('.rh-nombre')||{}).value||'').trim(), ((r.querySelector('.rh-ap1')||{}).value||'').trim(), ((r.querySelector('.rh-ap2')||{}).value||'').trim()].filter(Boolean).join(' '); var dc=((r.querySelector('.rh-doc')||{}).value||'').trim(); if(nm) arr.push(nm+(dc?(' ('+dc+')'):'')); }); return arr.join(', '); };
 
 window.onModalidadReserva = function(){
   var sel=document.getElementById('res-tipotarifa');
@@ -6496,7 +6504,7 @@ window.editarReserva = async function(id){
     if(r.tipo_tarifa==='TxM' && Number(r.tarifa)>0){ set('res-tarifa', Math.round(Number(r.tarifa)*30)); } // mostrar el canon mensual
     if(typeof calcReserva==='function') try{ calcReserva(); }catch(e){}
     if(typeof combinarNombreReserva==='function') combinarNombreReserva();
-    try{ var _box=document.getElementById('res-huesp-list'); if(_box){ _box.innerHTML=''; (String(r.huespedes_extra||'').split(',')).map(function(s){return s.trim();}).filter(Boolean).forEach(function(item){ var mm=item.match(/^(.*?)\s*\(([^)]+)\)\s*$/); if(mm) _resAddHuesped(mm[1].trim(),mm[2].trim()); else _resAddHuesped(item,''); }); } }catch(e){}
+    try{ var _box=document.getElementById('res-huesp-list'); if(_box){ _box.innerHTML=''; (String(r.huespedes_extra||'').split(',')).map(function(s){return s.trim();}).filter(Boolean).forEach(function(item){ var mm=item.match(/^(.*?)\s*\(([^)]+)\)\s*$/); if(mm) _resAddHuesped(mm[1].trim(),'','',mm[2].trim()); else _resAddHuesped(item,'','',''); }); } }catch(e){}
     if(typeof showToast==='function') showToast('Editando reserva de '+(r.nombre||'')+' — ajusta y guarda','success');
   },500);
 };
