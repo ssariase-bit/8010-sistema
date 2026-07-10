@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-fix-chulo-global';
+const APP_VERSION = '2026-07-09-vb-cki-cko';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-vb-cki-cko', titulo:'VB / comentario de Gerencia en el Histórico CKI / CKO',
+    afecta:'CKI / CKO',
+    detalle:'Sol Santiago: en el Histórico CKI/CKO ahora hay columna "Revisión Gerencia" con el botón ✔ Revisado (Visto Bueno) y 💬 Comentar por cada check-in/check-out, igual que en Novedades, Comentarios y Solicitudes.' },
   { fecha:'2026-07-09', version:'2026-07-09-fix-chulo-global', titulo:'Alineación de checkboxes corregida globalmente (todas las listas de personal)',
     afecta:'Todo el sistema',
     detalle:'Sol Santiago: se agregó una regla global de CSS para que los checkboxes y radios no se estiren al ancho completo. Así, en CUALQUIER parte donde se despliegue el listado de personal (o cualquier lista de opciones), el chulo y el texto quedan juntos y alineados a la izquierda.' },
@@ -11414,7 +11417,7 @@ function _histCKPintar(rows){
   var _e = (typeof esc==='function') ? esc : function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var ci=rows.filter(function(n){return _histCKTipo(n)==='CKI';}).length, co=rows.length-ci;
   body.innerHTML='<div style="font-size:11px;color:var(--gris-t);margin-bottom:8px">'+rows.length+' registro(s) · 🟢 '+ci+' CKI · 🔴 '+co+' CKO</div>'+
-    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Apto</th><th>Detalle</th><th>Por</th></tr></thead><tbody>'+
+    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Hora</th><th>Tipo</th><th>Apto</th><th>Detalle</th><th>Por</th><th>Revisión Gerencia</th></tr></thead><tbody>'+
     rows.map(function(n){
       var t=_histCKTipo(n); var aa=(typeof areaApto==='function'?areaApto(n):{apto:n.apto});
       var badge=t==='CKI'?'<span class="badge b-resuelto">🟢 CKI</span>':'<span class="badge b-alta">🔴 CKO</span>';
@@ -11424,7 +11427,8 @@ function _histCKPintar(rows){
         '<td>'+badge+'</td>'+
         '<td style="white-space:nowrap">'+apto+'</td>'+
         '<td style="max-width:460px;white-space:pre-wrap;font-size:12px">'+_e(String(n.descripcion||''))+'</td>'+
-        '<td style="white-space:nowrap">'+_e(n.reportado_por||'-')+'</td></tr>';
+        '<td style="white-space:nowrap">'+_e(n.reportado_por||'-')+'</td>'+
+        '<td style="min-width:150px">'+window._revGerCell('novedades', n)+'</td></tr>';
     }).join('')+'</tbody></table></div>';
 }
 function _histCKFiltrar(){
