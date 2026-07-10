@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-desayunos-cortesia';
+const APP_VERSION = '2026-07-09-msg-prereg-bilingue';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-msg-prereg-bilingue', titulo:'Mensaje del formulario del huésped: versión formal bilingüe (ES/EN)',
+    afecta:'Reservas / Pre-registro',
+    detalle:'Sol Santiago: el mensaje que se envía con el link del formulario de datos del huésped ahora es formal y bilingüe (español e inglés), con el nombre del edificio activo (Kubik o 8010).' },
   { fecha:'2026-07-09', version:'2026-07-09-desayunos-cortesia', titulo:'"Desayunos" ahora dice "incluidos (cortesía)" para no confundir con el restaurante',
     afecta:'Desayunos / Ingresos',
     detalle:'Sol Santiago: el módulo, el formulario, el menú y la línea de ingresos de "Desayunos" ahora dicen "Desayunos incluidos (cortesía)", para diferenciarlos claramente de los desayunos que se venden/cobran por el restaurante (Bagatelle/Magnifique).' },
@@ -12194,7 +12197,15 @@ function _pregNuevoToken(){ return 'pr'+Date.now().toString(36)+Math.random().to
 function _pregLink(token){ return location.origin + location.pathname + '?prereg=' + encodeURIComponent(token) + '&e=' + encodeURIComponent(EDIFICIO_ACTIVO); }
 function _pregMensaje(link){
   var nombreEd = (EDIFICIOS[EDIFICIO_ACTIVO] && EDIFICIOS[EDIFICIO_ACTIVO].nombre) || '8010 Urban Living';
-  return '¡Hola! Le escribimos de ' + nombreEd + '. Para agilizar su reserva, por favor complete sus datos en el siguiente formulario (toma 1 minuto):\n\n' + link + '\n\n¡Gracias!';
+  return 'Estimado(a) huésped:\n'
+    + 'Reciba un cordial saludo de ' + nombreEd + '.\n'
+    + 'Con el fin de completar el proceso de su reserva y garantizar una atención ágil a su llegada, agradecemos diligenciar sus datos en el siguiente formulario. El proceso tomará aproximadamente un minuto.\n'
+    + 'Cordialmente, Equipo ' + nombreEd + '\n\n'
+    + 'Dear Guest,\n'
+    + 'Warm greetings from ' + nombreEd + '.\n'
+    + 'To complete your reservation process and ensure a seamless arrival experience, kindly provide your information through the following form. The process will take approximately one minute.\n'
+    + 'Kind regards, ' + nombreEd + ' Team\n\n'
+    + link;
 }
 
 // ── Botón "Solicitar datos al huésped" ──
