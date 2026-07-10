@@ -469,10 +469,16 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-09-preregistro-completo';
+const APP_VERSION = '2026-07-09-reembolso-adjunto-lista';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-09', version:'2026-07-09-reembolso-adjunto-lista', titulo:'Listas de personas alineadas (chulo + nombre a la izquierda) en Comentarios, Comunicaciones y Solicitudes',
+    afecta:'Comentarios / Comunicaciones / Solicitudes',
+    detalle:'Sol Santiago: las listas de "Dirigido a" quedaron desalineadas (el chulo a un lado y el nombre a otro). Ahora cada persona es una fila limpia con el chulo y el nombre juntos a la izquierda, igual en los tres módulos.' },
+  { fecha:'2026-07-09', version:'2026-07-09-reembolso-adjunto', titulo:'Reembolso por Lotes: adjuntar el recibo escaneado por cada línea',
+    afecta:'Reembolsos',
+    detalle:'Sol Santiago: en Reembolso por Lotes cada recibo ahora tiene un campo para adjuntar el archivo escaneado (imagen o PDF). Al guardar, el escaneo se sube y queda enlazado a ese recibo; al aprobar el lote, Gerencia ve el enlace "📎 ver" de cada recibo. Requiere la columna adjunto en la tabla reembolsos (guarda igual si aún no está).' },
   { fecha:'2026-07-09', version:'2026-07-09-preregistro-completo', titulo:'Formulario del huésped: más datos y campos obligatorios',
     afecta:'Reservas / Pre-registro',
     detalle:'Sol Santiago: el formulario que llena el huésped/arrendatario (link) ahora pide: nombres y apellidos, tipo y número de documento, nacionalidad, ciudad, correo, teléfono, fecha de nacimiento, motivo del viaje, empresa a facturar, forma de pago y a quién se paga, placa del vehículo, contacto de emergencia, y adultos/niños/infantes. Los campos clave son OBLIGATORIOS (no deja enviar si faltan) para que la reserva llegue con la mayor información. Requiere columnas nuevas en la tabla prereg (guarda igual los básicos si aún no están).' },
@@ -6688,7 +6694,7 @@ window.renderSolicitudes = async function(filtro){
     '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">Nueva solicitud / aclaración</div></div>'+
     '<div style="font-size:12px;color:#666;margin:-2px 0 10px">Dirígela a una persona o departamento. Queda pendiente para que la resuelvan y respondan.</div>'+
     '<div class="form-row col3"><div class="form-group"><label>Quién la pide</label><input type="text" id="sol-solicitante" placeholder="Tú (se completa solo)"></div>'+
-    '<div class="form-group"><label>Dirigido a (marca una o varias personas)</label><div id="sol-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:6px;max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:0">'+(function(){var _sd=_destinos();var _e=function(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");};return _sd.people.map(function(p){return "<label style=\"display:flex;align-items:center;gap:6px;font-size:12.5px;padding:3px 4px;border-bottom:1px solid #f5f7fa;cursor:pointer\"><input type=\"checkbox\" class=\"sol-dir-chk\" value=\""+_e(p.n)+"\"> "+_e(p.n)+"</label>";}).join("")||"<span style=\"color:#999;font-size:12px\">Sin personas</span>";})()+'</div></div>'+
+    '<div class="form-group"><label>Dirigido a (marca una o varias personas)</label><div id="sol-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:6px;max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:0">'+(function(){var _sd=_destinos();var _e=function(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");};return _sd.people.map(function(p){return "<label style=\"display:flex;align-items:center;justify-content:flex-start;gap:8px;font-size:13px;padding:5px 8px;border-bottom:1px solid #eef2f6;cursor:pointer;text-align:left\"><input type=\"checkbox\" class=\"sol-dir-chk\" value=\""+_e(p.n)+"\"><span>"+_e(p.n)+"</span></label>";}).join("")||"<span style=\"color:#999;font-size:12px\">Sin personas</span>";})()+'</div></div>'+
     '<div class="form-group"><label>Prioridad</label><select id="sol-prioridad"><option>Alta</option><option selected>Media</option><option>Baja</option></select></div></div>'+
     '<div class="form-group"><label>Solicitud</label><textarea id="sol-desc" placeholder="Describe la solicitud... (puedes pegar una imagen con Ctrl+V)" style="min-height:70px"></textarea></div>'+
     '<div class="form-group"><label>Adjuntos (varios: imágenes, PDF, Excel…)</label><input type="file" multiple id="sol-files"><div style="font-size:11px;color:#888;margin-top:3px">Puedes seleccionar varios. También puedes pegar un pantallazo con Ctrl+V en la descripción.</div><div id="sol-img-preview" style="margin-top:6px"></div></div>'+
@@ -6743,7 +6749,7 @@ window._comTargetChecksHTML = async function(){
   try{ var _pr=await sb.from('personal').select('nombre').limit(800); ((_pr&&_pr.data)||[]).forEach(function(p){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); }); }catch(e){}
   try{ var _pf=await sb.from('profiles').select('nombre,edificios').limit(400); ((_pf&&_pf.data)||[]).forEach(function(p){ var eds=Array.isArray(p.edificios)?p.edificios:[]; if(eds.indexOf(EDIFICIO_ACTIVO)>-1){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); } }); }catch(e){}
   personas=[...new Set(personas)].sort(function(a,b){return a.localeCompare(b);});
-  var chk=function(v){ return '<label style="display:flex;align-items:center;gap:6px;font-weight:400;font-size:12.5px;padding:3px 6px;border-bottom:1px solid #f1f5f9;cursor:pointer"><input type="checkbox" class="com-dir-chk" value="'+esc(v)+'"> '+esc(v)+'</label>'; };
+  var chk=function(v){ return '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;font-weight:400;font-size:13px;padding:5px 8px;border-bottom:1px solid #eef2f6;cursor:pointer;text-align:left"><input type="checkbox" class="com-dir-chk" value="'+esc(v)+'"><span>'+esc(v)+'</span></label>'; };
   var html='';
   if(personas.length) html+='<div style="display:flex;flex-direction:column;gap:0;max-height:240px;overflow:auto">'+personas.map(chk).join('')+'</div>';
   else html='<span style="color:#999;font-size:12px">Sin personas en este edificio</span>';
@@ -6993,7 +6999,7 @@ window.renderComentariosGerencia = async function(filtro){
     '<div style="font-size:12px;color:#666;margin:-2px 0 10px">Hazla puntual a una persona o departamento. Queda abierta hasta que la resuelvan.</div>'+
     '<div class="form-group"><label>Pregunta o comentario</label><textarea id="comg-texto" placeholder="Escribe tu pregunta o aclaración..." style="min-height:60px"></textarea></div>'+
     '<div style="margin:-4px 0 8px"><label style="font-size:12px;color:#555;cursor:pointer">📎 <input type="file" id="comg-file" style="display:none" onchange="var s=document.getElementById(\'comg-file-name\'); if(s) s.textContent=this.files[0]?(\'  \'+this.files[0].name):\'\';"> Adjuntar archivo</label><span id="comg-file-name" style="font-size:11px;color:#1d4ed8"></span></div>'+
-    '<div class="form-row col3"><div class="form-group"><label>Dirigido a <span style="font-weight:400;color:#888;font-size:11px">(marca una o varias personas)</span></label><div style="margin-bottom:4px"><button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(true)">Marcar todos</button> <button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(false)">Ninguno</button></div><div id="comg-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;max-height:200px;overflow:auto;display:flex;flex-direction:column;gap:1px">'+(function(){var _cd=_destinos(); var _e=function(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");}; return _cd.people.map(function(p){return "<label style=\"display:inline-flex;align-items:center;gap:5px;font-weight:400;font-size:12.5px;padding:3px 9px;background:#f1f5f9;border-radius:8px;cursor:pointer;margin:2px\"><input type=\"checkbox\" class=\"comg-dir-chk\" value=\""+_e(p.e)+"\" data-nombre=\""+_e(p.n)+"\"> "+_e(p.n)+"</label>";}).join("");})()+'</div></div>'+
+    '<div class="form-row col3"><div class="form-group"><label>Dirigido a <span style="font-weight:400;color:#888;font-size:11px">(marca una o varias personas)</span></label><div style="margin-bottom:4px"><button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(true)">Marcar todos</button> <button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(false)">Ninguno</button></div><div id="comg-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;max-height:200px;overflow:auto;display:flex;flex-direction:column;gap:1px">'+(function(){var _cd=_destinos(); var _e=function(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");}; return _cd.people.map(function(p){return "<label style=\"display:flex;align-items:center;justify-content:flex-start;gap:8px;font-weight:400;font-size:13px;padding:5px 8px;border-bottom:1px solid #eef2f6;cursor:pointer;text-align:left\"><input type=\"checkbox\" class=\"comg-dir-chk\" value=\""+_e(p.e)+"\" data-nombre=\""+_e(p.n)+"\"><span>"+_e(p.n)+"</span></label>";}).join("");})()+'</div></div>'+
     '<div class="form-group"><label>Apto (opcional)</label><input type="text" id="comg-apto" placeholder="Ej: 301"></div>'+
     '<div class="form-group" style="display:flex;align-items:flex-end"><button class="btn btn-success" style="width:100%" onclick="nuevaPreguntaGerencia()">📨 Enviar pregunta</button></div></div></div>'+
     '<div class="card"><div class="card-header"><div class="card-title">'+all.length+' comentarios</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todos')+fbtn('dirigidos','Dirigidos')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (dirigido a, texto, apto...)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
@@ -7906,7 +7912,7 @@ window.aprobarLoteReembolso = async function(consec){
   var fmtF=function(f){ if(!f) return '-'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
   var total=rows.reduce(function(s,r){ return s+(Number(r.valor)||0); },0);
   var pend=rows.filter(function(r){ return !(r.estado==='Aprobado'||r.estado==='Pagado'||r.estado==='Reembolso recibido completo'||r.estado==='Reembolso recibido parcial'); }).length;
-  var tr=rows.map(function(r,i){ return '<tr><td style="padding:4px 8px;border-bottom:1px solid #eee">'+(i+1)+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee">'+fmtF(r.fecha)+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee">'+esc(r.descripcion||'')+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">'+_reembFmt(r.valor)+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:center;font-size:11px">'+esc(r.estado||'')+'</td></tr>'; }).join('');
+  var tr=rows.map(function(r,i){ return '<tr><td style="padding:4px 8px;border-bottom:1px solid #eee">'+(i+1)+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee">'+fmtF(r.fecha)+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee">'+esc(r.descripcion||'')+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">'+_reembFmt(r.valor)+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:center;font-size:11px">'+esc(r.estado||'')+'</td><td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:center">'+(r.adjunto?'<a href="'+esc(r.adjunto)+'" target="_blank" style="color:#1d4ed8;text-decoration:none">📎 ver</a>':'—')+'</td></tr>'; }).join('');
   var quien=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||(typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||'Gerencia';
   var cargo=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.rol==='gerente_general')?'Gerente General':((typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.cargo)||'');
   var firma=window._getFirma();
@@ -7916,7 +7922,7 @@ window.aprobarLoteReembolso = async function(consec){
   ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:760px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,.3)">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3 style="margin:0;font-size:18px">✅ Aprobar lote R-'+esc(consec)+'</h3><button onclick="var o=document.getElementById(\'lote-ap-ov\');if(o)o.remove();" style="border:none;background:none;font-size:22px;cursor:pointer;color:#888">×</button></div>'
     +'<div style="font-size:12px;color:#555;margin-bottom:10px">'+rows.length+' recibos · '+pend+' pendientes por aprobar · Total <b style="color:#1D3461">'+_reembFmt(total)+'</b></div>'
-    +'<div style="border:1px solid #e5e7eb;border-radius:8px;max-height:260px;overflow:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#1F3864;color:#fff"><th style="padding:6px 8px;text-align:left">No.</th><th style="padding:6px 8px;text-align:left">Fecha</th><th style="padding:6px 8px;text-align:left">Descripción</th><th style="padding:6px 8px;text-align:right">Valor</th><th style="padding:6px 8px">Estado</th></tr></thead><tbody>'+tr+'</tbody></table></div>'
+    +'<div style="border:1px solid #e5e7eb;border-radius:8px;max-height:260px;overflow:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#1F3864;color:#fff"><th style="padding:6px 8px;text-align:left">No.</th><th style="padding:6px 8px;text-align:left">Fecha</th><th style="padding:6px 8px;text-align:left">Descripción</th><th style="padding:6px 8px;text-align:right">Valor</th><th style="padding:6px 8px">Estado</th><th style="padding:6px 8px">Recibo</th></tr></thead><tbody>'+tr+'</tbody></table></div>'
     +'<div style="border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-bottom:14px;text-align:center;max-width:320px;margin-left:auto;margin-right:auto">'
       +'<div style="font-size:11px;color:#888;margin-bottom:6px">Autorizó (firma)</div>'
       +firmaHTML
@@ -8161,8 +8167,8 @@ function renderReembolsoLote(){
       +'<div class="form-group"><label>Observaciones</label><input id="lt-obs"></div>'
     +'</div></div>'
     +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px"><div style="font-weight:700;color:var(--azul)">Recibos</div><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" style="border-color:#1A5C2E;color:#1A5C2E" onclick="_loteCargarPendientes()">⬇️ Cargar gastos pendientes de la caja</button><button class="btn btn-outline btn-sm" onclick="_loteAddRow()">+ Añadir recibo</button></div></div>'
-    +'<div style="overflow-x:auto"><table class="tabla" id="lt-tabla"><thead><tr><th>Fecha recibo</th><th>No. Recibo</th><th>Descripción</th><th style="text-align:right">Valor ($)</th><th></th></tr></thead><tbody id="lt-rows"></tbody>'
-    +'<tfoot><tr style="background:var(--azul-c);font-weight:800"><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right" id="lt-total">$ 0</td><td></td></tr></tfoot></table></div></div>'
+    +'<div style="overflow-x:auto"><table class="tabla" id="lt-tabla"><thead><tr><th>Fecha recibo</th><th>No. Recibo</th><th>Descripción</th><th style="text-align:right">Valor ($)</th><th>📎 Recibo escaneado</th><th></th></tr></thead><tbody id="lt-rows"></tbody>'
+    +'<tfoot><tr style="background:var(--azul-c);font-weight:800"><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right" id="lt-total">$ 0</td><td></td><td></td></tr></tfoot></table></div></div>'
     +'<div style="display:flex;gap:8px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="_loteGuardar(this)">💾 Guardar reembolso (lote)</button></div>';
   window._loteRows=0; _loteAddRow(); _loteAddRow();
 }
@@ -8173,6 +8179,7 @@ function _loteAddRow(){
     +'<td><input class="lt-rec" style="width:90px;font-size:12px"></td>'
     +'<td><input class="lt-desc" style="width:100%;min-width:200px;font-size:12px"></td>'
     +'<td><input type="number" class="lt-val" style="width:110px;font-size:12px;text-align:right" oninput="_loteTotal()" value="0"></td>'
+    +'<td><input type="file" class="lt-file" accept="image/*,application/pdf,.pdf" style="font-size:11px;width:130px"></td>'
     +'<td><button class="btn btn-outline btn-sm" onclick="this.closest(\'tr\').remove();_loteTotal()" title="Quitar">🗑️</button></td>';
   tb.appendChild(tr);
 }
@@ -8206,20 +8213,33 @@ window._loteCargarPendientes=async function(){
 async function _loteGuardar(btn){
   var empresa=document.getElementById('lt-empresa').value.trim();
   if(!empresa){ showToast('Falta la empresa/proveedor','error'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
   var recibos=[];
-  document.querySelectorAll('#lt-rows .lt-row').forEach(function(tr){
+  var _rowsDom=[].slice.call(document.querySelectorAll('#lt-rows .lt-row'));
+  for(var i=0;i<_rowsDom.length;i++){ var tr=_rowsDom[i];
     var val=Number(tr.querySelector('.lt-val').value)||0;
     var desc=tr.querySelector('.lt-desc').value.trim();
-    if(val>0 || desc){ recibos.push({ fecha_factura:tr.querySelector('.lt-fec').value||null, recibo_no:tr.querySelector('.lt-rec').value.trim()||null, descripcion:desc||'(sin descripción)', valor:val }); }
-  });
-  if(!recibos.length){ showToast('Añade al menos un recibo con valor','error'); return; }
-  if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+    if(!(val>0 || desc)) continue;
+    var _adjU=null; var _fi=tr.querySelector('.lt-file');
+    if(_fi && _fi.files && _fi.files[0]){
+      if(btn) btn.textContent='Subiendo recibos…';
+      try{ var _f=_fi.files[0]; var _p='reembolsos/'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'_'+String(_f.name||'recibo').replace(/[^a-zA-Z0-9._-]/g,'_'); var _up=await sb.storage.from('adjuntos').upload(_p,_f,{cacheControl:'3600',upsert:false,contentType:_f.type||undefined}); if(!_up.error) _adjU=sb.storage.from('adjuntos').getPublicUrl(_p).data.publicUrl; }catch(e){}
+    }
+    recibos.push({ fecha_factura:(tr.querySelector('.lt-fec').value||null), recibo_no:(tr.querySelector('.lt-rec').value.trim()||null), descripcion:(desc||'(sin descripción)'), valor:val, adjunto:_adjU });
+  }
+  if(!recibos.length){ showToast('Añade al menos un recibo con valor','error'); if(btn){ btn.disabled=false; btn.textContent='💾 Guardar reembolso (lote)'; } return; }
+  if(btn) btn.textContent='Guardando…';
   // siguiente consecutivo
   var mx=await sb.from('reembolsos').select('consecutivo').eq('edificio',EDIFICIO_ACTIVO).order('consecutivo',{ascending:false}).limit(1);
   var consec=((mx.data&&mx.data[0]&&Number(mx.data[0].consecutivo))||0)+1;
   var base={ empresa:empresa, tipo:document.getElementById('lt-tipo').value, numero:document.getElementById('lt-numero').value.trim()||null, area:document.getElementById('lt-area').value, caja:document.getElementById('lt-caja').value, fecha:document.getElementById('lt-fecha').value||TODAY, entregado_por:document.getElementById('lt-entregado').value.trim()||null, aprobado_por:document.getElementById('lt-aprobado').value.trim()||null, observaciones:document.getElementById('lt-obs').value.trim()||null, estado:'Pendiente', consecutivo:consec, edificio:EDIFICIO_ACTIVO, user_id:currentUser.id };
-  var rows=recibos.map(function(r){ return Object.assign({}, base, { fecha_factura:r.fecha_factura, recibo_no:r.recibo_no, descripcion:r.descripcion, valor:r.valor }); });
+  var rows=recibos.map(function(r){ return Object.assign({}, base, { fecha_factura:r.fecha_factura, recibo_no:r.recibo_no, descripcion:r.descripcion, valor:r.valor, adjunto:r.adjunto }); });
   var resp=await sb.from('reembolsos').insert(rows);
+  if(resp.error && /(adjunto|could not find|does not exist|schema cache|column)/i.test(resp.error.message||'')){
+    var rows2=recibos.map(function(r){ return Object.assign({}, base, { fecha_factura:r.fecha_factura, recibo_no:r.recibo_no, descripcion:r.descripcion, valor:r.valor }); });
+    resp=await sb.from('reembolsos').insert(rows2);
+    if(!resp.error) showToast('Guardado, pero falta crear la columna "adjunto" en reembolsos para conservar los escaneos.','info');
+  }
   if(btn){ btn.disabled=false; btn.textContent='💾 Guardar reembolso (lote)'; }
   if(resp.error){ showToast('Error al guardar: '+resp.error.message,'error'); return; }
   // Fase 3: marcar los gastos de caja incluidos en este lote
