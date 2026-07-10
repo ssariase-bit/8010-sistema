@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-10-cki-cortesia-waconf';
+const APP_VERSION = '2026-07-10-guia-pdf-whatsapp';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-10', version:'2026-07-10-guia-pdf-whatsapp', titulo:'Guía en la confirmación: cómo enviar el PDF por WhatsApp',
+    afecta:'Confirmaciones',
+    detalle:'Sol Santiago: en la pantalla de confirmación se agregó una nota guía con los 3 pasos para enviar el PDF por WhatsApp (Imprimir/PDF → WhatsApp al huésped → adjuntar el PDF con el clip), ya que WhatsApp por enlace no adjunta automáticamente.' },
   { fecha:'2026-07-10', version:'2026-07-10-cki-cortesia-waconf', titulo:'CKI respeta noches de cortesía + confirmación por WhatsApp con el formato real',
     afecta:'CKI / Confirmaciones',
     detalle:'Sol Nancy: en el Check-In, si la reserva tiene noches de cortesía (tarifa 0 en el rack), ya NO las cobra — solo cobra las noches pagas, y muestra el aviso de cuántas son de cortesía. Sol Santiago: la confirmación que se envía por WhatsApp ahora lleva toda la información real de la reserva (confirmación, huésped, tipo de apto, personas, modalidad, fechas, tarifa, total, facturar a, observaciones). Nota: WhatsApp por enlace solo permite texto, no adjuntar el PDF.' },
@@ -5405,7 +5408,8 @@ function generarConfirmacion(r) {
     <a href="https://wa.me/${_telC}?text=${waMsg}" target="_blank" style="background:#25D366;color:white;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;text-decoration:none">💬 WhatsApp${_telC?' al huésped':''}</a>
     <a href="${guiaUrl}" target="_blank" style="background:#B8963E;color:white;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;text-decoration:none">📖 Guía de Comportamiento</a>
   </div>
-  <div class="no-print" style="height:52px"></div>`;
+  <div class="no-print" style="position:fixed;top:52px;left:0;right:0;background:#FEF9E7;border-bottom:1px solid #F1D89B;padding:7px 20px;font-size:11.5px;color:#6b5a1e;z-index:9998">💡 Para enviar el PDF por WhatsApp: 1) <b>Imprimir / PDF</b> y guárdalo · 2) <b>WhatsApp al huésped</b> (abre el chat con el texto) · 3) en WhatsApp, clip 📎 → <b>Documento</b> → adjunta el PDF guardado.</div>
+  <div class="no-print" style="height:92px"></div>`;
 
   const htmlConBotones = html.replace('<body>', '<body>' + botonesHTML);
 
