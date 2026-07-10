@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-10-dirigidos-gg-go';
+const APP_VERSION = '2026-07-10-cki-cortesia-waconf';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-10', version:'2026-07-10-cki-cortesia-waconf', titulo:'CKI respeta noches de cortesía + confirmación por WhatsApp con el formato real',
+    afecta:'CKI / Confirmaciones',
+    detalle:'Sol Nancy: en el Check-In, si la reserva tiene noches de cortesía (tarifa 0 en el rack), ya NO las cobra — solo cobra las noches pagas, y muestra el aviso de cuántas son de cortesía. Sol Santiago: la confirmación que se envía por WhatsApp ahora lleva toda la información real de la reserva (confirmación, huésped, tipo de apto, personas, modalidad, fechas, tarifa, total, facturar a, observaciones). Nota: WhatsApp por enlace solo permite texto, no adjuntar el PDF.' },
   { fecha:'2026-07-10', version:'2026-07-10-dirigidos-gg-go', titulo:'"Dirigido a": ahora incluye Gerencia General y Gerencia Operativa',
     afecta:'Comentarios / Comunicaciones / Solicitudes',
     detalle:'Sol Nancy (KL): en las listas de "Dirigido a" ahora aparecen Gerencia General (Santiago Arias) y Gerencia Operativa, en Kubik y 8010, para poder dirigirles preguntas.' },
@@ -5370,7 +5373,28 @@ function generarConfirmacion(r) {
   const _esKLc = _edN.indexOf('8010') === -1;
   const _telC = normTel(r.tel);
   const confirmMsg = `Estimado/a ${r.nombre},%0A%0AConfirmamos su reserva en ${_edN}:%0A%0AApartamento: ${r.apto}%0ACheck-in: ${r.checkin}%0ACheck-out: ${r.checkout}%0A${r.tipoTarifa==='TxD'?('Días: '+(Number(r.noches)+1)):('Noches: '+r.noches)}%0ATarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel} /${r.tipoTarifa==='TxD'?'día':'noche'}${conIVA?' + IVA':''}%0ATotal: $${((r.valorTotal>0?r.valorTotal:r.tarifa*((r.tipoTarifa==='TxD')?(Number(r.noches)+1):Number(r.noches)))).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}${_esKLc?'':'%0A%0APor favor revise la Guía de Comportamiento adjunta.'}%0A%0A${_edN}`;
-  const waMsg = encodeURIComponent(`*${_edN} — Confirmación de Reserva*\n\nEstimado/a ${r.nombre},\n\nSu reserva está confirmada:\n▪ Unidad: ${tipo}\n▪ Check-in: ${r.checkin}\n▪ Check-out: ${r.checkout}\n▪ Noches: ${r.noches}\n▪ Tarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n▪ Total: $${(r.tarifa*r.noches).toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n▪ Facturar a: ${r.cxcRazon||_razon}${_esKLc?'':`\n\n▪ Guía de Comportamiento: ${guiaUrl}`}\n\n_${_edN}_`);
+  const _modLbl = (r.tipoTarifa==='TxD')?'Por día':((r.tipoTarifa==='TxM')?'Canon mensual':'Por noche');
+  const _cantLbl = (r.tipoTarifa==='TxD')?'Días':'Noches';
+  const _cantVal = (r.tipoTarifa==='TxD')?(Number(r.noches)+1):r.noches;
+  const _totVal = (r.valorTotal>0?r.valorTotal:(r.tarifa*Number(r.noches)));
+  const waMsg = encodeURIComponent(
+    `*${_edN} — Confirmación de Reserva ${r.numero||''}*\n\n`+
+    `Estimado/a ${r.nombre}, su reserva está confirmada. Por favor verifique la información:\n\n`+
+    `▪ Confirmación: ${r.numero||'-'}\n`+
+    `▪ Huésped: ${r.nombre}\n`+
+    `▪ Apartamento: ${tipo}\n`+
+    (r.personas?`▪ Personas: ${r.personas}\n`:'')+
+    `▪ Modalidad de tarifa: ${_modLbl}\n`+
+    `▪ Check-in: ${r.checkin}\n`+
+    `▪ Check-out: ${r.checkout}\n`+
+    `▪ ${_cantLbl}: ${_cantVal}\n`+
+    `▪ Tarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''} /${(r.tipoTarifa==='TxD')?'día':'noche'}\n`+
+    `▪ Total: $${_totVal.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n`+
+    `▪ Facturar a: ${r.cxcRazon||_razon}`+
+    (r.obs?`\n▪ Observaciones: ${r.obs}`:'')+
+    (_esKLc?'':`\n\n▪ Guía de Comportamiento: ${guiaUrl}`)+
+    `\n\n_${_edN}_`
+  );
   const emailDest = r.email ? encodeURIComponent(r.email) : '';
 
   const botonesHTML = `
@@ -10753,6 +10777,7 @@ async function renderFormatoHuespedes(yArg, mArg) {
 // INFORME CKI — CHECK IN
 // ═══════════════════════════════════════════════════════════
 function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamiento) {
+  window._ckiNochesPagas=null; window._ckiNochesTotal=null; // reset desglose de cortesía
   const h = new Date().getHours();
   const saludo = h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches';
   const nombre = currentProfile?.nombre || '';
@@ -10840,6 +10865,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
         <div class="form-group"><label>Total</label><input type="number" id="cki-total" readonly style="background:#E2EFDA;font-weight:bold"></div>
         <div class="form-group"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;padding-top:8px"><input type="checkbox" id="cki-exento" onchange="calcCKI()" style="width:auto;margin:0"> Exento de IVA</label></div>
       </div>
+      <div id="cki-cortesia-hint" style="font-size:12px;color:#15803d;font-weight:600;margin:2px 0 6px"></div>
       <div class="form-row col3">
         <div class="form-group"><label>No. Factura</label><input type="text" id="cki-fv" placeholder="FV UL0000"></div>
         <div class="form-group"><label>Forma de pago</label>
@@ -10895,11 +10921,15 @@ function calcCKI() {
   const noches = _nochesCKI(fi, ff);
   // Cantidad a cobrar: por noche = noches; por día = noches + 1 (cuenta día de entrada y salida)
   let cantidad = unidad==='Días' ? (noches>0 ? noches+1 : 1) : (noches>0 ? noches : (tarifa>0?1:0));
+  // Cortesía / tarifas mixtas: si la reserva del rack trae noches de cortesía (tarifa 0), se cobran solo las pagas
+  let _cortesia = 0;
+  if(unidad!=='Días' && window._ckiNochesPagas!=null && window._ckiNochesTotal===noches){ _cortesia = Math.max(0, noches - window._ckiNochesPagas); cantidad = window._ckiNochesPagas; }
   const r2 = (n) => moneda === 'USD' ? Math.round(n*100)/100 : Math.round(n);
   const subtotal = r2(tarifa * cantidad);
   const iva = exento ? 0 : r2(tarifa * cantidad * 0.19);
   const total = r2(subtotal + iva);
   const set = (id,v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  var _hint=document.getElementById('cki-cortesia-hint'); if(_hint) _hint.textContent = _cortesia>0 ? ('☕ Incluye '+_cortesia+' noche(s) de cortesía (no se cobran). Se cobran '+cantidad+' noche(s).') : '';
   set('cki-noches', cantidad);
   set('cki-subtotal', subtotal);
   set('cki-iva', iva);
@@ -10939,9 +10969,26 @@ async function ckiAutollenar(){
     if(d.tratamiento){ var tr=document.getElementById('cki-tratamiento'); if(tr) tr.value=d.tratamiento; }
     if(d.telefono) window._telSet('cki-tel', d.telefono);
     var mEl=document.getElementById('cki-moneda'); if(mEl && d.moneda) mEl.value=d.moneda;
-    if(d.moneda==='USD' && d.tarifa_usd) set('cki-tarifa', d.tarifa_usd); else if(d.tarifa) set('cki-tarifa', d.tarifa);
+    // Desglose real desde el rack: noches pagas vs cortesía (tarifa 0), para no cobrar las de cortesía
+    window._ckiNochesPagas=null; window._ckiNochesTotal=null;
+    try{
+      if(d.checkin && d.checkout){
+        var _rk=await sb.from('rack').select('fecha,tarifa,tarifa_usd').eq('edificio',EDIFICIO_ACTIVO).eq('apto',apto).gte('fecha',d.checkin).lt('fecha',d.checkout).in('estado',['Ocupado','Check-in hoy','Completo','Sale de viaje']).limit(400);
+        var _rows=_rk.data||[];
+        if(_rows.length){
+          var _usd=(d.moneda==='USD');
+          var _tars=_rows.map(function(x){ return _usd?(Number(x.tarifa_usd)||0):(Number(x.tarifa)||0); });
+          var _pagas=_tars.filter(function(v){return v>0;});
+          window._ckiNochesTotal=_nochesCKI(d.checkin,d.checkout);
+          window._ckiNochesPagas=_pagas.length;
+          if(_pagas.length){ var _cnt={},_best=_pagas[0],_bc=0; _pagas.forEach(function(v){ _cnt[v]=(_cnt[v]||0)+1; if(_cnt[v]>_bc){_bc=_cnt[v];_best=v;} }); set('cki-tarifa', _best); }
+        }
+      }
+    }catch(e){}
+    if(!((document.getElementById('cki-tarifa')||{}).value)){ if(d.moneda==='USD' && d.tarifa_usd) set('cki-tarifa', d.tarifa_usd); else if(d.tarifa) set('cki-tarifa', d.tarifa); }
     if(typeof calcCKI==='function') calcCKI();
-    if(typeof showToast==='function') showToast('📋 Datos traídos de la reserva: '+(d.huesped||partes.nombre||apto),'success');
+    var _cortMsg=(window._ckiNochesPagas!=null && window._ckiNochesTotal!=null && window._ckiNochesTotal>window._ckiNochesPagas)?(' · ☕ '+(window._ckiNochesTotal-window._ckiNochesPagas)+' noche(s) de cortesía'):'';
+    if(typeof showToast==='function') showToast('📋 Datos traídos de la reserva: '+(d.huesped||partes.nombre||apto)+_cortMsg,'success');
   }catch(e){ /* silencioso */ }
 }
 function enviarBienvenidaCKI(){
