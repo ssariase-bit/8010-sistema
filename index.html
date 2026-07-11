@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-11-combo-color';
+const APP_VERSION = '2026-07-11-solicitudes-lote1';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-11', version:'2026-07-11-solicitudes-lote1', titulo:'Solicitudes: PH1/PH2, consecutivo de factura, nombre duplicado y área por defecto',
+    afecta:'Reservas (KL) · Facturación (KL) · Comunicaciones · Novedades (8010)',
+    detalle:'(1) Sol Cristina (KL): PH1 y PH2 sí estaban en el selector de Nueva Reserva, pero quedaban al final, después de 24 opciones combinadas, y no se encontraban. Ahora aparecen justo debajo de las individuales. (2) Sol Juanita (KL): al EDITAR una factura, el número que se escribía a mano se ignoraba y seguía saliendo el consecutivo viejo; ya se aplica, y la casilla ahora se precarga con el número actual para poder corregirlo. El consecutivo solo avanza si el número nuevo es mayor. (3) Sol Juanita (KL): su nombre salía duplicado en Comunicaciones porque estaba escrito distinto en la tabla de personal ("Juana Noguera") y en los usuarios del SO ("Juanita Noguera"); se corrigió el dato y además la lista ahora deduplica nombres aunque cambien tildes, mayúsculas o espacios. (4) Sol Sebastián (8010): en Novedades, el área por defecto pasa de Mantenimiento a Recepción.' },
   { fecha:'2026-07-11', version:'2026-07-11-combo-color', titulo:'Rack: la unidad combinada se pinta con su propio color',
     afecta:'Rack (KL y 8010)',
     detalle:'Sol Santiago: cuando dos apartamentos van unidos, sus celdas en el Rack se pintan del MISMO color, distinto al resto, para ver de un vistazo que son una sola unidad. Cada unidad combinada tiene su propio color (violeta, azul agua, rosa, ámbar, menta, arena), y la etiqueta del apto usa ese mismo color. El código de estado (IN/CKI/CKO) sigue visible en la celda.' },
@@ -3600,7 +3603,7 @@ async function renderNovedadForm() {
       <div class="form-row">
         <div class="form-group"><label>Hacia qué área va / la resuelve *</label>
           <select id="n-area">
-            <option ${EDIFICIO_ACTIVO==='kubik'?'':'selected'}>Mantenimiento</option><option>Recepción</option><option>Housekeeping</option>
+            <option ${EDIFICIO_ACTIVO==='kubik'?'':'selected'}>Recepción</option><option>Mantenimiento</option><option>Housekeeping</option>
             <option>Seguridad</option><option>Zonas comunes</option><option>Apartamento</option>
             <option>Financiero</option><option ${EDIFICIO_ACTIVO==='kubik'?'selected':''}>Administración</option><option>Gerencia</option><option>General</option>
           </select>
@@ -4774,7 +4777,9 @@ function _kubikAptoOptions(){
       comb+='<option value="'+c+f+'">'+cc.n+' · Piso '+f+' ('+us.join('+')+', '+cc.m2+' m²)</option>';
     });
   }
-  return '<optgroup label="Individuales">'+ind+'</optgroup><optgroup label="Combinadas (ocupan 2 aptos)">'+comb+'</optgroup>'+(ph?'<optgroup label="Penthouses">'+ph+'</optgroup>':'');
+  // Sol Cristina: los Penthouses quedaban al final, después de 24 combinadas, y no se encontraban.
+  // Van justo después de las individuales.
+  return '<optgroup label="Individuales">'+ind+'</optgroup>'+(ph?'<optgroup label="Penthouses">'+ph+'</optgroup>':'')+'<optgroup label="Combinadas (ocupan 2 aptos)">'+comb+'</optgroup>';
 }
 function renderNuevaReserva() {
   document.getElementById('main-content').innerHTML = `
@@ -6938,7 +6943,20 @@ window._comTargetChecksHTML = async function(){
   // (edificios: ["8010","kubik"]) aparece en ambos, sin mezclar el personal de cada edificio.
   try{ var _pr=await sb.from('personal').select('nombre').limit(800); ((_pr&&_pr.data)||[]).forEach(function(p){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); }); }catch(e){}
   try{ var _pf=await sb.from('profiles').select('nombre,edificios').limit(400); ((_pf&&_pf.data)||[]).forEach(function(p){ var eds=Array.isArray(p.edificios)?p.edificios:[]; if(eds.indexOf(EDIFICIO_ACTIVO)>-1){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); } }); }catch(e){}
-  personas=[...new Set(personas)].sort(function(a,b){return a.localeCompare(b);});
+  // Sol Juanita: salía duplicada porque venía escrita distinto en 'personal' y en 'profiles'.
+  // Se deduplica por nombre NORMALIZADO (sin tildes, sin mayúsculas, espacios colapsados),
+  // conservando la versión más completa del nombre.
+  (function(){
+    var norm=function(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); };
+    var vistos={}, uniq=[];
+    personas.forEach(function(n){
+      var k=norm(n); if(!k) return;
+      if(!vistos[k]){ vistos[k]=n; uniq.push(n); }
+      else if(String(n).length > String(vistos[k]).length){ var i=uniq.indexOf(vistos[k]); if(i>=0) uniq[i]=n; vistos[k]=n; }
+    });
+    personas=uniq;
+  })();
+  personas=personas.sort(function(a,b){return a.localeCompare(b);});
   var chk=function(v){ return '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;font-weight:400;font-size:13px;padding:5px 8px;border-bottom:1px solid #eef2f6;cursor:pointer;text-align:left"><input type="checkbox" class="com-dir-chk" style="width:16px;height:16px;flex:0 0 auto;margin:0" value="'+esc(v)+'"><span>'+esc(v)+'</span></label>'; };
   var html='';
   if(personas.length) html+='<div style="display:flex;flex-direction:column;gap:0;max-height:240px;overflow:auto">'+personas.map(chk).join('')+'</div>';
@@ -9364,6 +9382,9 @@ function _facPrefillFactura(ed){
   S('fac-cli-nombre',ed.cliente); S('fac-cli-nit',ed.cliente_nit); S('fac-cli-dir',ed.cliente_dir); S('fac-cli-email',ed.email); S('fac-cli-tel',ed.telefono);
   S('fac-reserva',ed.num_reserva); S('fac-apto',ed.apto); S('fac-huesped',ed.huesped); try{window._nombre3Split(document.getElementById('fac-huesped'));}catch(e){} S('fac-ci',ed.checkin); S('fac-co',ed.checkout); S('fac-pax',ed.pax);
   S('fac-fpago',ed.forma_pago); S('fac-mpago',ed.medio_pago); S('fac-abono',ed.abono); S('fac-obs',ed.observaciones);
+  // Sol Juanita: al editar, mostrar el N° actual en la casilla para poder corregirlo
+  // (la nota crédito lo limpia después, porque va con número nuevo).
+  S('fac-num-manual', ed.numero);
   var body=document.getElementById('fac-lineas'); if(body){ body.innerHTML=''; (ed.lineas||[]).forEach(function(l){ body.insertAdjacentHTML('beforeend',_facLineaRow(l.concepto,l.valor,l.tasa,l.desc,l.fecha)); }); if(!(ed.lineas||[]).length) _facAddLinea(); }
   _facRecalc();
 }
@@ -9389,11 +9410,21 @@ async function facturaGuardar(conPDF){
     fac.lineas=fac.lineas.map(function(l){ return Object.assign({},l,{valor:-Math.abs(Number(l.valor)||0),impuesto:-Math.abs(Number(l.impuesto)||0)}); });
     fac.subtotal=-Math.abs(fac.subtotal); fac.impuestos=-Math.abs(fac.impuestos); fac.total=-Math.abs(fac.total); fac.abono=0;
   }
+  var man=(document.getElementById('fac-num-manual')||{}).value.trim();
   if(!ed){
-    var man=(document.getElementById('fac-num-manual')||{}).value.trim();
     if(man){ fac.numero=man; var nn=parseInt((man.match(/\d+/g)||[]).pop()); if(nn){ try{ await sb.from('config').upsert({id:'ultima_factura_'+k,valor:String(nn),updated_at:new Date().toISOString()}); }catch(e){} } }
     else { fac.numero=await getNextFactura(k); }
     fac.fecha=TODAY;
+  } else if(man && man !== String(ed.numero||'').trim()){
+    // Sol Juanita: al EDITAR una factura, el número escrito a mano se ignoraba y seguía saliendo el
+    // consecutivo viejo. Ahora sí se aplica. El consecutivo solo avanza si el nuevo número es mayor.
+    fac.numero = man;
+    var nn2 = parseInt((man.match(/\d+/g)||[]).pop());
+    if(nn2){ try{
+      var _q = await sb.from('config').select('valor').eq('id','ultima_factura_'+k).single();
+      var _cur = parseInt((_q.data && _q.data.valor) || '0') || 0;
+      if(nn2 > _cur) await sb.from('config').upsert({id:'ultima_factura_'+k, valor:String(nn2), updated_at:new Date().toISOString()});
+    }catch(e){} }
   }
   async function _facSave(){ return ed ? sb.from('facturas').update(fac).eq('id',ed.id).select().single() : sb.from('facturas').insert(fac).select().single(); }
   var r=await _facSave();
