@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-11-kl-medio-pago';
+const APP_VERSION = '2026-07-11-8i8-banco';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-11', version:'2026-07-11-8i8-banco', titulo:'Facturación Kubik: cuenta bancaria de 8i8 Operadora parametrizada',
+    afecta:'Facturación (Kubik)',
+    detalle:'Se registró la cuenta de 8i8 OPERADORA SAS (Banco de Occidente, cuenta corriente 263-880932). Antes figuraba como "(por confirmar)" y por eso la factura de Kubik salía sin la línea "Pago a:". Ahora la factura la muestra completa.' },
   { fecha:'2026-07-11', version:'2026-07-11-kl-medio-pago', titulo:'Facturación KL: quitar la cuenta de 8010 del campo Medio de pago',
     afecta:'Facturación (Kubik)',
     detalle:'Sol Santiago (pregunta de Juanita): el campo "Medio de pago" mostraba de ejemplo "Acuerdo mutuo, Helm Bank...", que es la cuenta de LTM3/8010, y aparecía también en Kubik. Ahora el ejemplo es por edificio (en KL: Transferencia, Tarjeta, Efectivo) y se agregó una nota que aclara la diferencia entre medio de pago (por dónde entró la plata) y forma de pago (contado o crédito).' },
@@ -9242,7 +9245,7 @@ async function cotizacionEvento(id){
 var FISCAL={
   'LTM3':{razon:'LTM3 S.A.S',nit:'900.361.992-4',dir:'CARRERA 10 #80-36',ciudad:'BOGOTÁ',regimen:'RÉGIMEN COMÚN',resol:'18764083741516 del 20 de Noviembre 2023',rango:'LT 1414 a la LT 5000',prefijo:'LT',ciiu:'5512',ica:'13.8 *1000',banco:'Helm Bank · Cta. corriente N° 013-40531-1',conceptoAloja:'CANON DE ARRENDAMIENTO',tasaAloja:'Excluido'},
   '80-10':{razon:'8010 Ochenta Diez Urban Living SAS',nit:'900.683.855-5',dir:'CARRERA 10 #80-36',ciudad:'BOGOTÁ',regimen:'RÉGIMEN COMÚN',resol:'18764090799551 del 20 de Marzo 2025',rango:'UL 4104 a la UL 7000',prefijo:'UL',ciiu:'5512',ica:'13.8 *1000',banco:'Helm Bank · Cta. corriente N° 013-40531-1',conceptoAloja:'ALOJAMIENTO PLAN CORPORATIVO',tasaAloja:'Exento'},
-  '8i8':{razon:'8i8 OPERADORA SAS',nit:'902026873-8',dir:'CARRERA 14 # 88-49',ciudad:'BOGOTÁ',regimen:'RÉGIMEN COMÚN',resol:'FE 18764107923884 · vigencia 01 abril 2026 (2 años)',rango:'F8I8 1 a la F8I8 100000',prefijo:'F8I8',ciiu:'5512',ica:'13.8 *1000',banco:'(por confirmar)',conceptoAloja:'ALOJAMIENTO',tasaAloja:'19%'}
+  '8i8':{razon:'8i8 OPERADORA SAS',nit:'902026873-8',dir:'CARRERA 14 # 88-49',ciudad:'BOGOTÁ',regimen:'RÉGIMEN COMÚN',resol:'FE 18764107923884 · vigencia 01 abril 2026 (2 años)',rango:'F8I8 1 a la F8I8 100000',prefijo:'F8I8',ciiu:'5512',ica:'13.8 *1000',banco:'Banco de Occidente · Cta. corriente N° 263-880932',conceptoAloja:'ALOJAMIENTO',tasaAloja:'19%'}
 };
 var FAC_TASAS={'Excluido':0,'Exento':0,'0%':0,'5%':0.05,'8%':0.08,'19%':0.19};
 var FAC_CONCEPTOS=['Alojamiento','Canon de arrendamiento','Alquiler de Parqueadero','Restaurante / Alimentos','Minibar','Vinos','Comunicaciones','Sala / Evento','Spa','Lavandería','Transporte','Varios / Cash Advance','Consumos adicionales','Otro'];
