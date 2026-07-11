@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-11-8i8-banco';
+const APP_VERSION = '2026-07-11-unidad-combinada';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-11', version:'2026-07-11-unidad-combinada', titulo:'Unidad combinada: dos aptos se ven como uno solo (602-603)',
+    afecta:'Rack · Estado de Huéspedes (KL y 8010)',
+    detalle:'Sol Santiago: cuando un huésped toma dos apartamentos que se rentan como una sola unidad, ahora se muestra como UN solo apartamento (ej. "602-603"). En el Rack ambas filas se identifican con la unidad y su tarifa (aclarando en cuál apto se cobra, para que no parezca doble ni que el hermano está gratis: antes decía "Cortesía ($0)"). En Estado de Huéspedes las dos filas se fusionan en una sola entrada. Por dentro se siguen bloqueando los dos apartamentos, de modo que ocupación, ADR y RevPAR quedan reales (42 aptos de inventario).' },
   { fecha:'2026-07-11', version:'2026-07-11-8i8-banco', titulo:'Facturación Kubik: cuenta bancaria de 8i8 Operadora parametrizada',
     afecta:'Facturación (Kubik)',
     detalle:'Se registró la cuenta de 8i8 OPERADORA SAS (Banco de Occidente, cuenta corriente 263-880932). Antes figuraba como "(por confirmar)" y por eso la factura de Kubik salía sin la línea "Pago a:". Ahora la factura la muestra completa.' },
@@ -2453,8 +2456,12 @@ async function renderRack() {
     // Preferir el nombre del tipo declarado en la reserva si existe; si no, inferir por sufijos
     var info=null; for(var _i=0;_i<aps.length;_i++){ if(_tipoDeclarado[aps[_i]]){ info=_tipoDeclarado[aps[_i]]; break; } }
     if(!info) info=_nombreCombo(aps);
-    aps.forEach(function(a){ if(!_comboMap[a]) _comboMap[a]=info; });
+    // Sol Santiago: la unidad combinada se identifica como UN solo apartamento (ej. "602-603")
+    var _ordena = aps.slice().sort(function(a,b){ return String(a).localeCompare(String(b),undefined,{numeric:true}); });
+    var _unidad = _ordena.join('-');
+    aps.forEach(function(a){ if(!_comboMap[a]) _comboMap[a]=Object.assign({}, info, { unidad:_unidad, aptos:_ordena, principal:_ordena[0] }); });
   });
+  window._rackComboMap = _comboMap;
 
   // Generar filas del rack
   const filas = aptos.map(apto => {
@@ -2476,7 +2483,8 @@ async function renderRack() {
       const _fcT = String(d).padStart(2,'0')+'/'+String(month+1).padStart(2,'0');
       const _ocuT = ['Ocupado','Check-in hoy','Completo','Sale de viaje'].includes(est);
       const _ivaSuf = (rec && rec.iva === 'exento') ? ' + IVA' : ' + IVA';
-      let _tarT = !_ocuT ? '' : ((rec && rec.tarifa && Number(rec.tarifa)>0) ? '$'+Number(rec.tarifa).toLocaleString('es-CO')+'/noche'+_ivaSuf : 'Cortesía ($0)');
+      let _tarT = !_ocuT ? '' : ((rec && rec.tarifa && Number(rec.tarifa)>0) ? '$'+Number(rec.tarifa).toLocaleString('es-CO')+'/noche'+_ivaSuf
+        : (_combo ? 'Incluido en la unidad '+_combo.unidad+' — la tarifa se cobra en el '+_combo.principal : 'Cortesía ($0)'));
       if (est === 'Check-out hoy') {
         let _tot=0; const _hsp=rec && rec.huesped;
         for (let _p=d-1; _p>=1; _p--) {
@@ -2488,7 +2496,8 @@ async function renderRack() {
         _tarT = _tot>0 ? 'Total estadía: $'+_tot.toLocaleString('es-CO')+_ivaSuf : 'Total estadía: $0';
       }
       const _empT = rec?.empresa || (rec?.canal && rec.canal !== 'Particular' ? rec.canal : 'Particular');
-      const title = rec?.huesped ? `Apto ${apto} · ${_fcT} · ${rec.huesped} · ${_empT} · ${estTxt}${_tarT?' · '+_tarT:''}` : `Apto ${apto} · ${_fcT} · ${estTxt}`;
+      const _idU = _combo ? `Unidad ${_combo.unidad} (${_combo.nombre})` : `Apto ${apto}`;
+      const title = rec?.huesped ? `${_idU} · ${_fcT} · ${rec.huesped} · ${_empT} · ${estTxt}${_tarT?' · '+_tarT:''}` : `${_idU} · ${_fcT} · ${estTxt}`;
       // Sol Santiago: en vez de tooltip al pasar el mouse (mareador), al ESPICHAR la celda sale
       // un recuadro con la info y, dentro, un botón "✏️ Editar" (si tiene permiso).
       const onclick = rec?.id ? `mostrarInfoRack(this)` : (canEdit ? `crearDiaRack('${apto}','${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}')` : '');
@@ -2532,17 +2541,27 @@ async function renderRack() {
     // Tooltip enriquecido sobre la columna de nombre: apto · huésped · estado · tarifa diaria
     const _tarHoyTxt = (tarHoy && Number(tarHoy)>0) ? ' · $'+Number(tarHoy).toLocaleString('es-CO')+'/noche' : '';
     const _filaTitle = huesHoy ? `Apto ${apto} · ${huesHoy} · ${estHoy}${_tarHoyTxt}` : `Apto ${apto} · ${estHoy}`;
+    // Sol Santiago: unidad combinada = UN solo apartamento. La tarifa vive en el apto principal;
+    // el hermano la muestra igual (como tarifa de la unidad) aclarando dónde se cobra, para que
+    // nadie crea que está gratis ni que se cobra dos veces.
+    let _tarUnidad = 0, _esHermanoCombo = false;
+    if (_combo) {
+      _esHermanoCombo = (apto !== _combo.principal);
+      _tarUnidad = Number(rack[_combo.principal]?.[todayDay]?.tarifa) || Number(tarHoy) || 0;
+    }
 
     return `<tr ${_hl?'data-hl="1"':''} style="height:34px;${esVarianteA?'background:#fafafa;':''}${_hl?`outline:3px solid ${window._rkResaltar==='Check-in hoy'?'#0C447C':'#C2410C'};outline-offset:-2px;`:''}">
       <td style="position:sticky;left:0;background:${cmFila.bg};color:${cmFila.color};font-weight:800;padding:4px 8px;font-size:12px;border:1px solid #ccc;${_combo?`border-left:4px solid ${_COMBO_COLOR};`:''}white-space:nowrap;z-index:2;min-width:${APTO_W}px">
         ${esVarianteA ? `<span style="font-size:9px;color:#9CA3AF">↳</span> ` : ''}${apto}
-        ${_combo?`<div style="font-size:8px;font-weight:800;color:${_COMBO_COLOR};margin-top:1px;letter-spacing:.3px">🔗 ${_combo.sigla}</div>`:''}
+        ${_combo?`<div style="font-size:9px;font-weight:900;color:${_COMBO_COLOR};margin-top:1px;letter-spacing:-.2px" title="Unidad combinada ${_combo.unidad} (${_combo.nombre}) — es UN solo apartamento repartido en ${_combo.aptos.length} aptos físicos">🔗 ${_combo.unidad}</div><div style="font-size:7px;font-weight:700;color:${_COMBO_COLOR};opacity:.7">${_combo.sigla}</div>`:''}
       </td>
       <td style="position:sticky;left:${APTO_W}px;background:${cmFila.bg};color:${cmFila.color};padding:4px 8px;font-size:11px;border:1px solid #ccc;white-space:nowrap;z-index:2;min-width:${HUES_W}px;max-width:${HUES_W}px;overflow:hidden;text-overflow:ellipsis" title="${_filaTitle}">
         <div style="font-weight:600">${huesHoy || (estHoy==='Libre' && !aIncluidaHoy ? '<span style="color:#aaa;font-style:italic">Libre</span>':'')}${aIncluidaHoy?' <span style="font-size:9px;font-style:italic">· completo</span>':''}</div>
-        ${_combo?`<div style="display:inline-block;margin-top:2px;background:#EDE9FE;color:${_COMBO_COLOR};font-size:9px;font-weight:700;padding:1px 6px;border-radius:6px" title="Unidad combinada: se renta como una sola">🔗 ${_combo.nombre}</div>`:''}
+        ${_combo?`<div style="display:inline-block;margin-top:2px;background:#EDE9FE;color:${_COMBO_COLOR};font-size:9px;font-weight:700;padding:1px 6px;border-radius:6px" title="Unidad combinada: se renta como un solo apartamento (${_combo.nombre})">🔗 Unidad ${_combo.unidad}</div>`:''}
         ${_rHoy&&_rHoy.huespedes_extra?`<div style="font-size:9px;color:var(--gris-t)">+ ${_rHoy.huespedes_extra}</div>`:''}
-        ${tarHoy && !aIncluidaHoy ? `<div style="font-size:9px;opacity:.7">$${Number(tarHoy).toLocaleString('es-CO')}/noche</div>` : ''}
+        ${_combo
+          ? (_tarUnidad>0 ? `<div style="font-size:9px;opacity:.75">$${_tarUnidad.toLocaleString('es-CO')}/noche <span style="color:${_COMBO_COLOR};font-weight:700">· toda la unidad</span>${_esHermanoCombo?` <span style="font-style:italic">(se cobra en el ${_combo.principal})</span>`:''}</div>` : '')
+          : (tarHoy && !aIncluidaHoy ? `<div style="font-size:9px;opacity:.7">$${Number(tarHoy).toLocaleString('es-CO')}/noche</div>` : '')}
         ${varADeEste && ['Ocupado','Check-in hoy','Check-out hoy'].includes(estHoy) && canEdit ? `<div style="margin-top:2px"><button onclick="marcarCompletoDirecto('${rack[apto]?.[todayDay]?.id}','${apto}')" style="font-size:8px;background:${aCompletaHoy?'#15401a':'var(--naran)'};color:white;border:none;border-radius:3px;padding:1px 7px;cursor:pointer">${aCompletaHoy?'🏠 Completo ✓':'🏠 Marcar completo'}</button></div>` : ''}
       </td>
       ${celdas}
@@ -8917,6 +8936,21 @@ async function renderEstadoHuespedes() {
   const _aptoOrder = EB().aptosFull;
   const data = (rawData||[]).sort((a,b) => _aptoOrder.indexOf(a.apto) - _aptoOrder.indexOf(b.apto));
   const rows = (data||[]).filter(r => r.estado !== 'Libre');
+  // Sol Santiago: UNIDAD COMBINADA. Por dentro siguen siendo 2 aptos (para que ocupación/ADR/RevPAR
+  // sean reales), pero a la vista se muestra UNA sola entrada: "602-603".
+  (function(){
+    const _pisoDe = a => { a=String(a); if(/^PH/i.test(a)) return 'PH'; const m=a.match(/^(\d+?)(\d\d)([A-Z]?)$/); return m?m[1]:a; };
+    const _g = {};
+    rows.forEach(r=>{ const h=String(r.huesped||'').trim().toLowerCase(); if(!h) return; const k=h+'|'+_pisoDe(r.apto); (_g[k]=_g[k]||[]).push(r); });
+    Object.keys(_g).forEach(k=>{
+      const g=_g[k]; if(g.length<2) return;
+      const aps=g.map(x=>x.apto).sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+      const principal = g.find(x=>Number(x.tarifa)>0) || g[0];
+      principal._unidad = aps.join('-');
+      g.forEach(x=>{ if(x!==principal) x._comboOculto = true; });
+    });
+  })();
+  const rowsVis = rows.filter(r => !r._comboOculto);
   // Empresa/acompañantes de la reserva activa hoy (para reflejar en Estado de Huéspedes)
   let _resMap = {};
   try { const _rv = await sb.from('reservas').select('id,apto,empresa,acompanantes').eq('edificio', EDIFICIO_ACTIVO).lte('checkin', today).gte('checkout', today); (_rv.data||[]).forEach(x=>{ if(x.apto && !_resMap[x.apto]) _resMap[x.apto]=x; }); } catch(e){}
@@ -8934,15 +8968,15 @@ async function renderEstadoHuespedes() {
     </div>
     <div style="font-size:12px;color:var(--gris-t);margin-bottom:8px">💡 Haz clic en ✏️ para editar cualquier apto</div>
     <div class="card">
-      ${rows.length === 0
+      ${rowsVis.length === 0
         ? '<div class="empty"><div class="empty-icon">🏠</div><p>Sin huéspedes activos hoy</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
             <thead><tr>
               <th>Apto</th><th>Estado</th><th>Nombre</th><th>Apellido</th><th>2º Apellido</th><th>Canal</th>
               <th>Check-in</th><th>Check-out</th><th>Tarifa/Noche</th><th>PAX</th><th>Obs.</th><th></th>
             </tr></thead>
-            <tbody>${rows.map(r => `<tr>
-              <td><strong style="color:var(--azul);font-size:15px">${r.apto}</strong></td>
+            <tbody>${rowsVis.map(r => `<tr>
+              <td><strong style="color:var(--azul);font-size:15px">${r._unidad || r.apto}</strong>${r._unidad?`<div style="font-size:9px;font-weight:700;color:#7C3AED;margin-top:1px">🔗 unidad combinada</div>`:''}</td>
               <td><span class="badge b-${r.estado==='Ocupado'?'proceso':r.estado==='Check-in hoy'?'abierto':'alta'}">${r.estado}</span>${(typeof _ivaTag==='function'?_ivaTag(r.iva):'')}</td>
               <td><strong>${_titleCase(window._nombrePartes(r).nombre)||'-'}</strong>${(r.empresa||(_resMap[r.apto]&&_resMap[r.apto].empresa))?`<div style="font-size:10px;color:#666;margin-top:2px">🏢 ${String(r.empresa||_resMap[r.apto].empresa).replace(/</g,'&lt;')}</div>`:''}${(function(){window._paxMap=window._paxMap||{};var a=r.acomp_pax;try{a=Array.isArray(a)?a:(a?JSON.parse(a):[]);}catch(e){a=[];}if((!a||!a.length)&&(r.acompanantes||(_resMap[r.apto]&&_resMap[r.apto].acompanantes))){a=[{n:(r.acompanantes||_resMap[r.apto].acompanantes),e:'IN'}];}window._paxMap[r.id]=a||[];return '';})()}<div style="margin-top:3px"><div style="font-size:10px;color:#666">👥 Acompañantes:</div><div id="pax-${r.id}">${_paxHTML(r.id)}</div></div></td>
               <td>${_titleCase(window._nombrePartes(r).apellido1)||'-'}</td>
