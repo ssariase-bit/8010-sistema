@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-11-unidad-combinada';
+const APP_VERSION = '2026-07-11-combo-color';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-11', version:'2026-07-11-combo-color', titulo:'Rack: la unidad combinada se pinta con su propio color',
+    afecta:'Rack (KL y 8010)',
+    detalle:'Sol Santiago: cuando dos apartamentos van unidos, sus celdas en el Rack se pintan del MISMO color, distinto al resto, para ver de un vistazo que son una sola unidad. Cada unidad combinada tiene su propio color (violeta, azul agua, rosa, ámbar, menta, arena), y la etiqueta del apto usa ese mismo color. El código de estado (IN/CKI/CKO) sigue visible en la celda.' },
   { fecha:'2026-07-11', version:'2026-07-11-unidad-combinada', titulo:'Unidad combinada: dos aptos se ven como uno solo (602-603)',
     afecta:'Rack · Estado de Huéspedes (KL y 8010)',
     detalle:'Sol Santiago: cuando un huésped toma dos apartamentos que se rentan como una sola unidad, ahora se muestra como UN solo apartamento (ej. "602-603"). En el Rack ambas filas se identifican con la unidad y su tarifa (aclarando en cuál apto se cobra, para que no parezca doble ni que el hermano está gratis: antes decía "Cortesía ($0)"). En Estado de Huéspedes las dos filas se fusionan en una sola entrada. Por dentro se siguen bloqueando los dos apartamentos, de modo que ocupación, ADR y RevPAR quedan reales (42 aptos de inventario).' },
@@ -2426,6 +2429,17 @@ async function renderRack() {
   const _COMBO_SIGLA = {'Famili Residence':'Famili Residence','Family Residence':'Famili Residence','Two Residence':'Two Residence','Suite Deluxe':'Suite Deluxe','Combo':'Combo'};
   const _COMBO_SIG = {'Famili Residence':'FR','Family Residence':'FR','Two Residence':'TR','Suite Deluxe':'SD','Combo':'Combo'};
   const _COMBO_COLOR = '#7C3AED';
+  // Sol Santiago: cada unidad combinada tiene SU color, y los dos aptos de esa unidad se pintan
+  // igual, para ver de un vistazo que van juntos. Si hay varios combos, cada uno con su color.
+  const _COMBO_PAL = [
+    {bg:'#C4B5FD',fg:'#3C1874'},  // violeta
+    {bg:'#9FD8E8',fg:'#0E4A5C'},  // azul agua
+    {bg:'#F7C5D8',fg:'#7A1F45'},  // rosa
+    {bg:'#FBDCA0',fg:'#7A4B08'},  // ámbar
+    {bg:'#AEE0C8',fg:'#12503B'},  // menta
+    {bg:'#D9C3A5',fg:'#5C3B12'},  // arena
+  ];
+  const _comboColorDe = {}; let _comboIdx = 0; const _comboCel = {};
   const _comboMap = {};
   // Guardamos el 'tipo' de combo declarado en la reserva, pero NO lo usamos por sí solo para
   // marcar el combo (eso combinaba aptos que no lo estaban: p.ej. una reserva con tipo "Two
@@ -2459,7 +2473,12 @@ async function renderRack() {
     // Sol Santiago: la unidad combinada se identifica como UN solo apartamento (ej. "602-603")
     var _ordena = aps.slice().sort(function(a,b){ return String(a).localeCompare(String(b),undefined,{numeric:true}); });
     var _unidad = _ordena.join('-');
-    aps.forEach(function(a){ if(!_comboMap[a]) _comboMap[a]=Object.assign({}, info, { unidad:_unidad, aptos:_ordena, principal:_ordena[0] }); });
+    // Color propio de la unidad: los DOS aptos se pintan del MISMO color para que se vea que van juntos
+    if(!_comboColorDe[_unidad]){ _comboColorDe[_unidad] = _COMBO_PAL[_comboIdx % _COMBO_PAL.length]; _comboIdx++; }
+    var _col = _comboColorDe[_unidad];
+    var _dia = parseInt(String(k.split('|')[1]||'').split('-')[2]);
+    if(_dia) _ordena.forEach(function(a){ _comboCel[a+'|'+_dia] = _col; });
+    aps.forEach(function(a){ if(!_comboMap[a]) _comboMap[a]=Object.assign({}, info, { unidad:_unidad, aptos:_ordena, principal:_ordena[0], col:_col }); });
   });
   window._rackComboMap = _comboMap;
 
@@ -2506,8 +2525,10 @@ async function renderRack() {
       const _fechaCelda = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const _enRango = _cons && _cons.dias.includes(_fechaCelda);
       const _dispAqui = _enRango && _cons.disponibles.includes(apto);
-      const bgCelda = _dispAqui ? '#5EEAD4' : cm.bg;
-      const colCelda = _dispAqui ? '#065F46' : cm.color;
+      // Unidad combinada: los dos aptos comparten color en las celdas de esos días
+      const _cc = _comboCel[apto+'|'+d] || null;
+      const bgCelda = _dispAqui ? '#5EEAD4' : (_cc ? _cc.bg : cm.bg);
+      const colCelda = _dispAqui ? '#065F46' : (_cc ? _cc.fg : cm.color);
       const codeCelda = _dispAqui ? '✓' : (cm.code||'');
       const borderCelda = _dispAqui ? '2px solid #00838F' : border;
       const atenuar = (_enRango && !_dispAqui) ? 'opacity:.4;' : '';
@@ -2551,13 +2572,13 @@ async function renderRack() {
     }
 
     return `<tr ${_hl?'data-hl="1"':''} style="height:34px;${esVarianteA?'background:#fafafa;':''}${_hl?`outline:3px solid ${window._rkResaltar==='Check-in hoy'?'#0C447C':'#C2410C'};outline-offset:-2px;`:''}">
-      <td style="position:sticky;left:0;background:${cmFila.bg};color:${cmFila.color};font-weight:800;padding:4px 8px;font-size:12px;border:1px solid #ccc;${_combo?`border-left:4px solid ${_COMBO_COLOR};`:''}white-space:nowrap;z-index:2;min-width:${APTO_W}px">
+      <td style="position:sticky;left:0;background:${_combo?_combo.col.bg:cmFila.bg};color:${_combo?_combo.col.fg:cmFila.color};font-weight:800;padding:4px 8px;font-size:12px;border:1px solid #ccc;${_combo?`border-left:5px solid ${_combo.col.fg};`:''}white-space:nowrap;z-index:2;min-width:${APTO_W}px">
         ${esVarianteA ? `<span style="font-size:9px;color:#9CA3AF">↳</span> ` : ''}${apto}
-        ${_combo?`<div style="font-size:9px;font-weight:900;color:${_COMBO_COLOR};margin-top:1px;letter-spacing:-.2px" title="Unidad combinada ${_combo.unidad} (${_combo.nombre}) — es UN solo apartamento repartido en ${_combo.aptos.length} aptos físicos">🔗 ${_combo.unidad}</div><div style="font-size:7px;font-weight:700;color:${_COMBO_COLOR};opacity:.7">${_combo.sigla}</div>`:''}
+        ${_combo?`<div style="font-size:9px;font-weight:900;color:${_combo.col.fg};margin-top:1px;letter-spacing:-.2px" title="Unidad combinada ${_combo.unidad} (${_combo.nombre}) — es UN solo apartamento repartido en ${_combo.aptos.length} aptos físicos">🔗 ${_combo.unidad}</div><div style="font-size:7px;font-weight:700;color:${_combo.col.fg};opacity:.75">${_combo.sigla}</div>`:''}
       </td>
       <td style="position:sticky;left:${APTO_W}px;background:${cmFila.bg};color:${cmFila.color};padding:4px 8px;font-size:11px;border:1px solid #ccc;white-space:nowrap;z-index:2;min-width:${HUES_W}px;max-width:${HUES_W}px;overflow:hidden;text-overflow:ellipsis" title="${_filaTitle}">
         <div style="font-weight:600">${huesHoy || (estHoy==='Libre' && !aIncluidaHoy ? '<span style="color:#aaa;font-style:italic">Libre</span>':'')}${aIncluidaHoy?' <span style="font-size:9px;font-style:italic">· completo</span>':''}</div>
-        ${_combo?`<div style="display:inline-block;margin-top:2px;background:#EDE9FE;color:${_COMBO_COLOR};font-size:9px;font-weight:700;padding:1px 6px;border-radius:6px" title="Unidad combinada: se renta como un solo apartamento (${_combo.nombre})">🔗 Unidad ${_combo.unidad}</div>`:''}
+        ${_combo?`<div style="display:inline-block;margin-top:2px;background:${_combo.col.bg};color:${_combo.col.fg};border:1px solid ${_combo.col.fg};font-size:9px;font-weight:800;padding:1px 6px;border-radius:6px" title="Unidad combinada: se renta como un solo apartamento (${_combo.nombre})">🔗 Unidad ${_combo.unidad}</div>`:''}
         ${_rHoy&&_rHoy.huespedes_extra?`<div style="font-size:9px;color:var(--gris-t)">+ ${_rHoy.huespedes_extra}</div>`:''}
         ${_combo
           ? (_tarUnidad>0 ? `<div style="font-size:9px;opacity:.75">$${_tarUnidad.toLocaleString('es-CO')}/noche <span style="color:${_COMBO_COLOR};font-weight:700">· toda la unidad</span>${_esHermanoCombo?` <span style="font-style:italic">(se cobra en el ${_combo.principal})</span>`:''}</div>` : '')
