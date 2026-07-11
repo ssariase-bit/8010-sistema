@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-11-solicitudes-lote1';
+const APP_VERSION = '2026-07-11-solicitudes-lote2';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-11', version:'2026-07-11-solicitudes-lote2', titulo:'Solicitudes: cargos por edificio, total automático en cargos y cierre de New Pos',
+    afecta:'Control de Personal (8010) · Listado de Cargos · Check List de Turnos (Kubik)',
+    detalle:'(1) Sol Sebastián (8010): los cargos ahora son por edificio. En 8010 se quitaron Recepcionista, Capitán de Meseros y "Otro", y los cargos gerenciales pasan a ser los reales: Gerente General, Gerente Operativo y Gerente de Eventos. Kubik conserva su lista sin cambios. (2) Sol Sebastián: en Listado de Cargos, el Total ahora se calcula solo — suma transporte, lavandería, minibar, varios y salas, y le aplica el IVA seleccionado. El campo queda bloqueado y muestra la base usada. (3) Sol Juanita (KL): se agregó al Check List el cierre de turno en el New Pos (turnos 1 y 2) y el cierre del día en el New Pos antes de la auditoría de New Hotel (turno 3).' },
   { fecha:'2026-07-11', version:'2026-07-11-solicitudes-lote1', titulo:'Solicitudes: PH1/PH2, consecutivo de factura, nombre duplicado y área por defecto',
     afecta:'Reservas (KL) · Facturación (KL) · Comunicaciones · Novedades (8010)',
     detalle:'(1) Sol Cristina (KL): PH1 y PH2 sí estaban en el selector de Nueva Reserva, pero quedaban al final, después de 24 opciones combinadas, y no se encontraban. Ahora aparecen justo debajo de las individuales. (2) Sol Juanita (KL): al EDITAR una factura, el número que se escribía a mano se ignoraba y seguía saliendo el consecutivo viejo; ya se aplica, y la casilla ahora se precarga con el número actual para poder corregirlo. El consecutivo solo avanza si el número nuevo es mayor. (3) Sol Juanita (KL): su nombre salía duplicado en Comunicaciones porque estaba escrito distinto en la tabla de personal ("Juana Noguera") y en los usuarios del SO ("Juanita Noguera"); se corrigió el dato y además la lista ahora deduplica nombres aunque cambien tildes, mayúsculas o espacios. (4) Sol Sebastián (8010): en Novedades, el área por defecto pasa de Mantenimiento a Recepción.' },
@@ -669,7 +672,7 @@ const EDIFICIOS = {
     // Camareras + combinaciones de apoyo (Jaqueline apoya a la que necesite)
     camareras: ['Guillermina Sanabria','Leonor Moreno','Maria Duran','Martha Oyola','Jaqueline Bautista',
                 'Guillermina Sanabria + Jaqueline','Leonor Moreno + Jaqueline','Maria Duran + Jaqueline','Martha Oyola + Jaqueline'],
-    jornadas: { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 },
+    jornadas: { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Gerente General':540, 'Gerente Operativo':540, 'Gerente de Eventos':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 },
     indicadoresMes: {'2026-01':{noches:374,disp:651,adr:796301,ocu:0.5745},'2026-02':{noches:507,disp:588,adr:729055,ocu:0.8622},'2026-03':{noches:491,disp:651,adr:752681,ocu:0.7542},'2026-04':{noches:397,disp:630,adr:733852,ocu:0.6302},'2026-05':{noches:612,disp:651,adr:716838,ocu:0.9401},'2026-06':{noches:434,disp:630,adr:708910,ocu:0.6889},'2026-07':{noches:380,disp:651,adr:636366,ocu:0.5837},'2026-08':{noches:290,disp:651,adr:619572,ocu:0.4455},'2026-09':{noches:210,disp:630,adr:570174,ocu:0.3333},'2026-10':{noches:217,disp:651,adr:551781,ocu:0.3333},'2026-11':{noches:213,disp:630,adr:572487,ocu:0.3381},'2026-12':{noches:78,disp:651,adr:686969,ocu:0.1198}}
   },
   'kubik': {
@@ -1415,7 +1418,7 @@ async function loadView(view) {
       {id:'varios',label:'Varios ($)',type:'number',default:'0'},
       {id:'salas',label:'Salas ($)',type:'number',default:'0'},
       {id:'iva',label:'IVA',type:'select',opts:['19%','8%','5%']},
-      {id:'total',label:'Total ($)',type:'number',default:'0'},
+      {id:'total',label:'Total ($) — automático (base + IVA)',type:'number',default:'0'},
       {id:'observaciones',label:'Observaciones',type:'text'},
     ]); break;
     case 'entrega-efectivos-form': renderGenForm('entrega_efectivos','💵 Entrega de Efectivos',[
@@ -1642,7 +1645,7 @@ async function loadView(view) {
     case 'control-personal-form': renderGenForm('control_personal','⏱ Control de Ingreso Personal',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del empleado',type:'nombre3',req:true},
-      {id:'cargo',label:'Cargo',type:'select',opts:['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro']},
+      {id:'cargo',label:'Cargo',type:'select',opts:_CARGOS()},
       {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:25 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 2:20 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:50 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','8:00 AM - 5:00 PM','8:00 AM - 5:45 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
@@ -4764,6 +4767,13 @@ const _KUBIK_COMBOS = { 'FR':{n:'Famili Residence',m2:130,suf:['01','02']}, 'TR'
 function _kubikUnidad(apto){ apto=String(apto||'').trim(); if(_KUBIK_UNID[apto]) return Object.assign({suf:apto},_KUBIK_UNID[apto]); var m=/^(\d)(\d{2}A?)$/.exec(apto); if(!m) return null; var b=_KUBIK_UNID[m[2]]; if(!b) return null; return {n:b.n,m2:b.m2,piso:m[1],suf:m[2]}; }
 // Nombre comercial para mostrar junto al código (ej: "201 · Grand Residence")
 function _kubikLabel(apto){ if((((EB&&EB().nombre)||'').indexOf('8010')>-1)) return apto; var c=/^(FR|TR|SD)(\d+)$/.exec(String(apto||'')); if(c){ var cc=_KUBIK_COMBOS[c[1]]; return cc?(cc.n+' '+c[2]+' ('+cc.suf.map(function(s){return c[2]+s;}).join('+')+')'):apto; } var u=_kubikUnidad(apto); return u?(apto+' · '+u.n):apto; }
+// Sol Sebastián (8010): los cargos son por edificio. En 8010 no existen Recepcionista,
+// Capitán de Meseros ni "Otro", y los cargos gerenciales son los reales (GG / Operativa / Eventos).
+// Kubik conserva su propia lista. Se mantiene "Gerente" oculto en el histórico de registros viejos.
+function _CARGOS(){
+  if(EDIFICIO_ACTIVO==='8010') return ['Administrador','Camarera','Áreas Públicas','Mantenimiento','Mensajero','Chef','Gerente General','Gerente Operativo','Gerente de Eventos'];
+  return ['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro'];
+}
 function _kubikAptoOptions(){
   var ind='', comb='', ph='';
   (EB().aptosFull||[]).forEach(function(a){
@@ -5720,6 +5730,24 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     var _scalc=function(){ var pm=function(id){var e=document.getElementById(id); if(!e) return 0; var v=String(e.value||'').replace(/[^\d.-]/g,''); return parseFloat(v)||0;}; var st=document.getElementById('gf-saldo_total'); if(st){ st.value=pm('gf-master')+pm('gf-extras'); st.readOnly=true; st.style.background='#E2EFDA'; st.style.fontWeight='700'; st.title='Automatico: Master + Extras'; } };
     ['gf-master','gf-extras'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', _scalc); });
     _scalc();
+  }
+  // Sol Sebastián: Listado de Cargos — Total = (transporte + lavandería + minibar + varios + salas) + IVA
+  if (tabla === 'listado_cargos') {
+    var _lcalc=function(){
+      var pm=function(id){ var e=document.getElementById(id); if(!e) return 0; var v=String(e.value||'').replace(/[^\d.-]/g,''); return parseFloat(v)||0; };
+      var base = pm('gf-transporte')+pm('gf-lavanderia')+pm('gf-minibar')+pm('gf-varios')+pm('gf-salas');
+      var ivaEl = document.getElementById('gf-iva');
+      var pct = ivaEl ? (parseFloat(String(ivaEl.value||'').replace('%',''))||0) : 0;
+      var tot = document.getElementById('gf-total');
+      if(tot){
+        tot.value = Math.round(base*(1+pct/100));
+        tot.readOnly=true; tot.style.background='#E2EFDA'; tot.style.fontWeight='700';
+        tot.title='Automático: base $'+Math.round(base).toLocaleString('es-CO')+' + IVA '+pct+'%';
+      }
+    };
+    ['gf-transporte','gf-lavanderia','gf-minibar','gf-varios','gf-salas'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', _lcalc); });
+    var _ivaEl=document.getElementById('gf-iva'); if(_ivaEl) _ivaEl.addEventListener('change', _lcalc);
+    _lcalc();
   }
 }
 
@@ -10256,7 +10284,7 @@ _Sistema ${EB().nombre}_`;
 const CHECKLIST_KL = {
  'Turno 1': [
   ['1','Recibir turno al Auditor del día anterior.'],
-  ['1.1','Entrega de novedades abiertas.'],['1.2','Entrega de novedades internas.'],['1.3','Entrega del estado de apartamentos.'],['1.4','Conteo de llaves.'],['1.5','Arqueo de Caja.'],['1.6','Enviar cierre de turno por el S.O.'],
+  ['1.1','Entrega de novedades abiertas.'],['1.2','Entrega de novedades internas.'],['1.3','Entrega del estado de apartamentos.'],['1.4','Conteo de llaves.'],['1.5','Arqueo de Caja.'],['1.6','Enviar cierre de turno por el S.O.'],['1.7','Realizar el cierre de turno en el New Pos.'],
   ['2','Diligenciar ingreso de personal y enviarlo desde el S.O.'],
   ['3','Entregar novedades a camareras.'],
   ['3.1','Informar qué arrendatarios han salido para realizar limpiezas.'],['3.2','Informar si existe algún requerimiento de arrendatarios.'],['3.3','CKO que se tengan para el día.'],['3.4','CKI del día y del siguiente para su alistamiento.'],
@@ -10269,7 +10297,7 @@ const CHECKLIST_KL = {
  ],
  'Turno 2': [
   ['1','Recibir turno al Turno 1.'],
-  ['1.1','Entrega de novedades abiertas.'],['1.2','Entrega de novedades internas.'],['1.3','Entrega del estado de apartamentos.'],['1.4','Conteo de llaves.'],['1.5','Arqueo de Caja.'],['1.6','Enviar cierre de turno por el S.O.'],
+  ['1.1','Entrega de novedades abiertas.'],['1.2','Entrega de novedades internas.'],['1.3','Entrega del estado de apartamentos.'],['1.4','Conteo de llaves.'],['1.5','Arqueo de Caja.'],['1.6','Enviar cierre de turno por el S.O.'],['1.7','Realizar el cierre de turno en el New Pos.'],
   ['2','Diligenciar tiempos de limpiezas de camareras y enviar por el S.O.'],
   ['2.1','Enviar reporte de salida del personal, en cuanto salga la última camarera.'],
   ['3','Cargar consumos del restaurante (Bagatelle) a la habitación, con firma del arrendatario al momento del cargo.'],
@@ -10281,6 +10309,7 @@ const CHECKLIST_KL = {
   ['1.1','Entrega de novedades abiertas.'],['1.2','Entrega de novedades internas.'],['1.3','Entrega del estado de apartamentos.'],['1.4','Conteo de llaves.'],['1.5','Arqueo de Caja.'],['1.6','Enviar cierre de turno por el S.O.'],
   ['2','Realizar revisión del SIRE.'],
   ['2.1','Envíos de los registros de CKO.'],['2.2','Envíos de los registros de CKI.'],
+  ['2.3','Realizar el cierre del día en el New Pos (antes de la auditoría de New Hotel).'],
   ['3','Realizar revisión de las facturas.'],
   ['3.1','New Hotel.'],['3.2','Bythewave.'],
   ['4','Enviar archivo Seguimiento de cotizaciones a Cristina.'],
