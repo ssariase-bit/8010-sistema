@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-11-ventas-drilldown';
+const APP_VERSION = '2026-07-11-kl-medio-pago';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-11', version:'2026-07-11-kl-medio-pago', titulo:'Facturación KL: quitar la cuenta de 8010 del campo Medio de pago',
+    afecta:'Facturación (Kubik)',
+    detalle:'Sol Santiago (pregunta de Juanita): el campo "Medio de pago" mostraba de ejemplo "Acuerdo mutuo, Helm Bank...", que es la cuenta de LTM3/8010, y aparecía también en Kubik. Ahora el ejemplo es por edificio (en KL: Transferencia, Tarjeta, Efectivo) y se agregó una nota que aclara la diferencia entre medio de pago (por dónde entró la plata) y forma de pago (contado o crédito).' },
   { fecha:'2026-07-11', version:'2026-07-11-ventas-drilldown', titulo:'Dashboard: clic en las ventas para ver el detalle',
     afecta:'Dashboard',
     detalle:'Sol Santiago: en "Ventas del mes por categoría" ahora cada línea (Alojamiento, Salas, Alimentación/consumos de eventos, Consumos de huéspedes, Otros cargos) es clicable y abre el detalle de qué compone ese monto: por huésped y apto en Alojamiento (noches × tarifa), y registro por registro en las demás, con su % de participación.' },
@@ -9290,7 +9293,7 @@ function renderFacturaGen(){
   +'<div style="display:flex;gap:24px;justify-content:flex-end;padding:12px 4px;font-size:14px"><div>Subtotal: <strong id="fac-sub">$ 0</strong></div><div>Impuestos: <strong id="fac-imp">$ 0</strong></div><div>Total: <strong id="fac-tot" style="color:var(--verde)">$ 0</strong></div></div></div>'
   +'<div class="form-section"><div class="form-section-title">💳 Pago y notas</div><div class="form-row">'
   +'<div class="form-group"><label>Forma de pago</label><select id="fac-fpago"><option>Crédito</option><option>Contado</option><option>CxC (Cuentas por Cobrar)</option><option>Tarjeta crédito</option><option>Tarjeta débito</option><option>Transferencia</option><option>Efectivo</option></select></div>'
-  +'<div class="form-group"><label>Medio de pago</label><input type="text" id="fac-mpago" placeholder="Acuerdo mutuo, Helm Bank..."></div></div>'
+  +'<div class="form-group"><label>Medio de pago</label><input type="text" id="fac-mpago" placeholder="'+(EDIFICIO_ACTIVO==='kubik'?'Transferencia, Tarjeta, Efectivo...':'Acuerdo mutuo, Helm Bank...')+'"><div style="font-size:10px;color:var(--gris-t);margin-top:3px">Es <em>por dónde</em> entró la plata (transferencia, tarjeta, efectivo). La <em>forma de pago</em> es contado o crédito.</div></div></div>'
   +'<div class="form-row"><div class="form-group"><label>Pago / abono recibido ($) <span style="color:#6B7280;font-size:11px">cruza con los conceptos (saldo)</span></label><input type="number" id="fac-abono" oninput="_facRecalc()" placeholder="0"></div><div class="form-group" style="align-self:flex-end"><div style="font-size:13px;padding:8px 0">Saldo pendiente: <strong id="fac-saldo">$ 0</strong></div></div></div>'
   +'<div class="form-group"><label>Observaciones (desglose USD × TRM, tramos, etc.)</label><textarea id="fac-obs" placeholder="Ej: ALOJ USD 230 * TRM ($3.572,85) = $821.756 / EXENTO RESIDENCIA"></textarea></div></div>'
   +'<div class="form-actions"><button class="btn btn-success" onclick="facturaGuardar(true)">💾 '+(nc?'Generar Nota Crédito y ver PDF':(ed?'Actualizar y ver PDF':'Guardar y generar PDF'))+'</button> <button class="btn btn-outline" onclick="facturaGuardar(false)">'+(nc?'Solo guardar NC':(ed?'Actualizar':'Solo guardar'))+'</button>'+((ed||nc)?' <button class="btn btn-outline" onclick="window._facEdit=null;window._facNC=null;loadView(\'facturas-list\')">Cancelar</button>':'')+'</div>'
