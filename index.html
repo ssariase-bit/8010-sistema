@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-11-solicitudes-lote4';
+const APP_VERSION = '2026-07-11-revistas-nocturnas';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-11', version:'2026-07-11-revistas-nocturnas', titulo:'Nuevo módulo: Revistas Nocturnas de Seguridad',
+    afecta:'Revistas Nocturnas',
+    detalle:'Sol Ricardo: nuevo módulo para registrar las revistas nocturnas de seguridad, con fecha, turno, hora de la ronda, responsable, zonas/pisos revisados, resultado (Sin novedad / Con novedad), descripción del hallazgo, evidencia y observaciones. Queda en el menú junto al Check List de Turno, con listado, edición, envío por correo/WhatsApp y VB de Gerencia como los demás módulos. El responsable se elige del listado de personal.' },
   { fecha:'2026-07-11', version:'2026-07-11-solicitudes-lote4', titulo:'Solicitudes: color por persona, desayuno visible, acompañantes uno por uno y cotizaciones a comercial',
     afecta:'Novedades · Solicitudes · Comunicaciones · Estado de Huéspedes / Ocupación · Cotizaciones',
     detalle:'(1) Sol Sebastián: cada persona tiene ahora SU color, siempre el mismo, en Novedades, Solicitudes y Comunicaciones — se reconoce de un vistazo de quién es cada registro, en todo el sistema y no solo en un módulo. (2) Sol Sebastián: "desayuno incluido" ya se registraba en la reserva pero no se veía; ahora es una columna en Estado de Huéspedes / Ocupación, para que recepción y el restaurante lo consulten sin abrir la reserva. (3) Sol Sebastián: en el informe de Ocupación los acompañantes salen uno por uno, en líneas separadas (antes iban todos juntos separados por comas), tanto en el envío por WhatsApp como en la tabla impresa. (4) Sol Ricardo: el desplegable con los nombres del personal quedó transversal — aparece en todo campo donde se escriba una persona a mano (responsable, entregado por, recibido por, encargado, asignado...). (5) Sol Juanita: "Enviar selección por correo" en Cotizaciones abría un correo SIN destinatario y desde el correo del administrador de turno. Ahora va dirigido a comercial (Kubik: comercial@8i8op.com · 8010: mercadeo) y se envía desde el correo corporativo del sistema, confirmando antes el destinatario.' },
@@ -717,7 +720,7 @@ function EB(){ return EDIFICIOS[EDIFICIO_ACTIVO]; } // atajo al edificio activo
 const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitantes',
   'mantenimiento','control_personal','turnos','personal','contratos','transportes',
   'reembolsos','prestamos_tec','maletas','entrega_efectivos','capsulas','caja',
-  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes','consumos','semana_seguimiento','checklist_turnos','inventario_loza','masajes_scape']);
+  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes','consumos','semana_seguimiento','checklist_turnos','inventario_loza','masajes_scape','revistas_nocturnas']);
 (function(){
   const _from = sb.from.bind(sb);
   window._sbFromRaw = _from; // acceso al from sin filtro de edificio (para vistas multi-edificio o de un edificio fijo)
@@ -869,6 +872,7 @@ const NAV_ITEMS = {
     { id: 'ocupacion', icon: '🏨', label: 'Ocupación' },
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
+    { id: 'revistas-list', icon: '🌙', label: 'Revistas Nocturnas' },
     { id: 'contratos-list', icon: '📄', label: 'Contratos' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
     { id: 'desayunos-list', icon: '☕', label: 'Desayunos incluidos' },
@@ -938,6 +942,7 @@ const NAV_ITEMS = {
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
+    { id: 'revistas-list', icon: '🌙', label: 'Revistas Nocturnas' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
     { id: 'visitantes-form', icon: '➕', label: 'Registrar Visitante' },
     { id: 'desayunos-list', icon: '☕', label: 'Desayunos incluidos' },
@@ -989,6 +994,7 @@ const NAV_ITEMS = {
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
+    { id: 'revistas-list', icon: '🌙', label: 'Revistas Nocturnas' },
     { id: 'visitantes-form', icon: '👥', label: 'Registrar Visitante' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
     { id: 'desayunos-form', icon: '☕', label: 'Registrar desayuno incluido' },
@@ -1028,6 +1034,7 @@ const NAV_ITEMS = {
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
+    { id: 'revistas-list', icon: '🌙', label: 'Revistas Nocturnas' },
     { id: 'formato-huespedes', icon: '🏨', label: 'Formato Huéspedes' },
     { section: 'Comercial' },
     { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
@@ -1056,6 +1063,7 @@ const NAV_ITEMS = {
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
+    { id: 'revistas-list', icon: '🌙', label: 'Revistas Nocturnas' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
@@ -1081,6 +1089,7 @@ rrhh: [
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
+    { id: 'revistas-list', icon: '🌙', label: 'Revistas Nocturnas' },
     { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
@@ -1103,6 +1112,7 @@ rrhh: [
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
     { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },    { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
+    { id: 'revistas-list', icon: '🌙', label: 'Revistas Nocturnas' },
     { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
     { section: 'Auditoría' },
     { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
@@ -1138,6 +1148,7 @@ const MENU_COMPLETO = [
   { id: 'ocupacion', icon: '🏨', label: 'Ocupación' },
     { id: 'semana-info', icon: '📅', label: 'Información de la Semana' },
   { id: 'revision-apto', icon: '🧹', label: 'Revisión de Apartamento' },  { id: 'checklist-turnos', icon: '☑️', label: 'Check List de Turno' },
+    { id: 'revistas-list', icon: '🌙', label: 'Revistas Nocturnas' },
   { id: 'formato-huespedes', icon: '📅', label: 'Calendario Huéspedes' },
   { id: 'contratos-list', icon: '📄', label: 'Contratos' },
   { id: 'visitantes-list', icon: '👥', label: 'Visitantes' },
@@ -1574,6 +1585,21 @@ async function loadView(view) {
       {id:'punto_final',label:'Punto final',type:'text'},
       {id:'valor',label:'Valor ($)',type:'money',req:true},
       {id:'empresa',label:'Empresa',type:'select',opts:(EB().facturarA||[]).filter(function(x){return x!=='Particular'&&x!=='Otra';}).concat(['Personal','Uber','Didi','Taxi'])},
+    ]); break;
+    // Sol Ricardo (Kubik): registro de las revistas nocturnas de seguridad.
+    case 'revistas-list': await renderList('revistas_nocturnas','🌙 Revistas Nocturnas de Seguridad','revistas-form',
+      ['fecha','turno','hora','responsable','zonas','resultado','descripcion'],
+      ['Fecha','Turno','Hora','Responsable','Zonas revisadas','Resultado','Hallazgo']); break;
+    case 'revistas-form': renderGenForm('revistas_nocturnas','🌙 Registrar Revista Nocturna',[
+      {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
+      {id:'turno',label:'Turno',type:'select',default:'Turno 3',opts:['Turno 3','Turno 1','Turno 2'],req:true},
+      {id:'hora',label:'Hora de la ronda',type:'time',req:true},
+      {id:'responsable',label:'Responsable de la ronda',type:'text',req:true},
+      {id:'zonas',label:'Zonas / pisos revisados',type:'text',req:true},
+      {id:'resultado',label:'Resultado',type:'select',default:'Sin novedad',opts:['Sin novedad','Con novedad'],req:true},
+      {id:'descripcion',label:'Descripción del hallazgo (si hubo novedad)',type:'textarea'},
+      {id:'foto',label:'Foto / evidencia (enlace)',type:'text'},
+      {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'requisiciones-list': await renderList('requisiciones','🛒 Requisiciones de Compra','requisiciones-form',['fecha','area','solicitado_por','articulo','cantidad_solicitada','cantidad_recibida','estado'],['Fecha','Área','Solicitó','Artículo','Solicitado','Recibido','Estado']); break;
     case 'requisiciones-form': renderGenForm('requisiciones','🛒 Nueva Requisición de Compra',[
