@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-11-solicitudes-lote3';
+const APP_VERSION = '2026-07-11-solicitudes-lote4';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-11', version:'2026-07-11-solicitudes-lote4', titulo:'Solicitudes: color por persona, desayuno visible, acompañantes uno por uno y cotizaciones a comercial',
+    afecta:'Novedades · Solicitudes · Comunicaciones · Estado de Huéspedes / Ocupación · Cotizaciones',
+    detalle:'(1) Sol Sebastián: cada persona tiene ahora SU color, siempre el mismo, en Novedades, Solicitudes y Comunicaciones — se reconoce de un vistazo de quién es cada registro, en todo el sistema y no solo en un módulo. (2) Sol Sebastián: "desayuno incluido" ya se registraba en la reserva pero no se veía; ahora es una columna en Estado de Huéspedes / Ocupación, para que recepción y el restaurante lo consulten sin abrir la reserva. (3) Sol Sebastián: en el informe de Ocupación los acompañantes salen uno por uno, en líneas separadas (antes iban todos juntos separados por comas), tanto en el envío por WhatsApp como en la tabla impresa. (4) Sol Ricardo: el desplegable con los nombres del personal quedó transversal — aparece en todo campo donde se escriba una persona a mano (responsable, entregado por, recibido por, encargado, asignado...). (5) Sol Juanita: "Enviar selección por correo" en Cotizaciones abría un correo SIN destinatario y desde el correo del administrador de turno. Ahora va dirigido a comercial (Kubik: comercial@8i8op.com · 8010: mercadeo) y se envía desde el correo corporativo del sistema, confirmando antes el destinatario.' },
   { fecha:'2026-07-11', version:'2026-07-11-solicitudes-lote3', titulo:'Solicitudes: listado de empleados, arrastre del arrendatario y provisionales en caja',
     afecta:'Control de Personal · Listado de Cargos · Cuadro de Saldos · Caja',
     detalle:'(1) Sol Sebastián: en Control de Ingreso de Personal se había perdido el listado de empleados — al pasar el nombre a tres casillas (nombre · apellido · 2º apellido), la lista quedó asociada a un campo oculto. Se agregó un selector "Elegir empleado del listado" que rellena las tres casillas automáticamente. (2) Sol Sebastián: en Listado de Cargos y en el Cuadro de Saldos, al elegir el apartamento se arrastra el arrendatario desde el Rack (nombre, apellidos y empresa), igual que en el informe de CKI/CKO. (3) Sol Sebastián: en Caja, los Egresos tienen ahora la casilla "Es un provisional". El movimiento sigue descontando de la caja (por eso cuadra el arqueo) pero queda marcado como Provisional y NO lo arrastra el reembolso por lotes, que solo toma los gastos pendientes de legalizar.' },
@@ -4020,7 +4023,7 @@ async function renderNovedadesList(filtro='', fechaSel='') {
               <td style="max-width:280px">${n.descripcion}${(function(){var a=window._accionInicialNov(n.tratamiento); if(!a) return ''; if(String(n.descripcion||'').includes('Acción tomada')) return ''; return `<div style="margin-top:6px;background:#eafaf1;border-left:3px solid #27ae60;border-radius:6px;padding:6px 8px;font-size:11px;line-height:1.5"><strong>✅ Acción tomada:</strong> ${a}</div>`;})()}</td>
               <td>${badgePrio(n.prioridad)}</td>
               <td>${badgeEst(n.estado)}</td>
-              <td>${n.reportado_por||'-'}</td>
+              <td>${n.reportado_por?_chipPersona(n.reportado_por):'-'}</td>
               <td style="min-width:150px">${window._revGerCell('novedades', n)}</td>
               <td>
                 <div style="display:inline-grid;gap:4px;width:104px">
@@ -4115,8 +4118,8 @@ async function verNovedad(id) {
         <div><strong>Turno:</strong> ${n.turno||'-'}</div>
         <div><strong>Hacia área / resuelve:</strong> ${areaApto(n).area}</div>
         <div><strong>Apto/Ubic.:</strong> ${areaApto(n).apto||'-'}</div>
-        <div><strong>Solicitó:</strong> ${n.reportado_por||'-'}</div>
-        <div><strong>Toma la solicitud:</strong> ${n.gestionado_por||'— Sin asignar'}</div>
+        <div><strong>Solicitó:</strong> ${n.reportado_por?_chipPersona(n.reportado_por):'-'}</div>
+        <div><strong>Toma la solicitud:</strong> ${n.gestionado_por?_chipPersona(n.gestionado_por):'— Sin asignar'}</div>
         <div><strong>Prioridad:</strong> <span class="badge b-${(n.prioridad||'').toLowerCase()}">${n.prioridad||'-'}</span></div>
         <div><strong>Estado:</strong> ${badgeEst(n.estado)}</div>
         ${n.resuelto_por?`<div><strong>Resuelta por:</strong> ${n.resuelto_por}</div>`:''}
@@ -4776,6 +4779,28 @@ function _kubikLabel(apto){ if((((EB&&EB().nombre)||'').indexOf('8010')>-1)) ret
 function _CARGOS(){
   if(EDIFICIO_ACTIVO==='8010') return ['Administrador','Camarera','Áreas Públicas','Mantenimiento','Mensajero','Chef','Gerente General','Gerente Operativo','Gerente de Eventos'];
   return ['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro'];
+}
+// Sol Sebastián: cada persona tiene SU color, siempre el mismo, para reconocer de un vistazo de quién
+// es cada registro. Se deriva del nombre (hash estable), así funciona con cualquier persona nueva sin
+// tener que configurarla. Se usa en Novedades, Seguimientos, Comentarios y Comunicaciones.
+const _PAL_PERSONA = [
+  {bg:'#DBEAFE',fg:'#1E3A8A'}, {bg:'#DCFCE7',fg:'#14532D'}, {bg:'#FEF3C7',fg:'#78350F'},
+  {bg:'#FCE7F3',fg:'#831843'}, {bg:'#EDE9FE',fg:'#4C1D95'}, {bg:'#CCFBF1',fg:'#134E4A'},
+  {bg:'#FFE4E6',fg:'#881337'}, {bg:'#E0E7FF',fg:'#312E81'}, {bg:'#FEF9C3',fg:'#713F12'},
+  {bg:'#D1FAE5',fg:'#065F46'}
+];
+function _colorPersona(nombre){
+  var s=String(nombre||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+  if(!s) return {bg:'#F1F5F9',fg:'#475569'};
+  var h=0; for(var i=0;i<s.length;i++){ h=((h<<5)-h+s.charCodeAt(i))|0; }
+  return _PAL_PERSONA[Math.abs(h)%_PAL_PERSONA.length];
+}
+// Chip con el nombre en su color (mismo color en todos los módulos)
+function _chipPersona(nombre){
+  if(!nombre) return '';
+  var c=_colorPersona(nombre);
+  var esc=String(nombre).replace(/</g,'&lt;');
+  return '<span style="display:inline-block;background:'+c.bg+';color:'+c.fg+';border:1px solid '+c.fg+'33;font-size:11px;font-weight:700;padding:1px 8px;border-radius:10px;white-space:nowrap">'+esc+'</span>';
 }
 function _kubikAptoOptions(){
   var ind='', comb='', ph='';
@@ -5772,6 +5797,23 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     var _ivaEl=document.getElementById('gf-iva'); if(_ivaEl) _ivaEl.addEventListener('change', _lcalc);
     _lcalc();
   }
+  // Sol Ricardo: desplegable con los nombres del personal. Se aplica de forma transversal: cualquier
+  // campo de texto donde se escriba una persona a mano (responsable, entregado por, recibido por,
+  // encargado, asignado, revisado por...) queda con la lista del personal del edificio.
+  (async function(){
+    try{
+      var _campos = Array.prototype.slice.call(document.querySelectorAll('#main-content input[type="text"], #main-content input:not([type])'))
+        .filter(function(e){ return /responsable|entregado|entrego|recibido|recibio|recibe|encargado|asignado|revisado|realiza|autoriza|solicita/i.test(e.id||''); });
+      if(!_campos.length) return;
+      var _pe = await sb.from('personal').select('nombre').limit(800);
+      var _nombres = [...new Set([].concat(EB().camareras||[], ((_pe.data)||[]).map(function(x){return x.nombre;})).filter(Boolean))].sort(function(a,b){return String(a).localeCompare(b);});
+      if(!_nombres.length) return;
+      var _dl = document.getElementById('dl-personal-gen');
+      if(!_dl){ _dl=document.createElement('datalist'); _dl.id='dl-personal-gen'; document.body.appendChild(_dl); }
+      _dl.innerHTML = _nombres.map(function(n){ return '<option value="'+String(n).replace(/"/g,'&quot;')+'">'; }).join('');
+      _campos.forEach(function(e){ e.setAttribute('list','dl-personal-gen'); e.setAttribute('autocomplete','off'); if(!e.placeholder) e.placeholder='Escribe o elige del personal'; });
+    }catch(e){}
+  })();
   // Sol Sebastián: al elegir el apartamento, arrastrar el arrendatario (nombre y apellidos) y la
   // empresa desde el Rack, igual que hace el informe de CKI/CKO. Evita redigitar y evita errores.
   if (tabla === 'listado_cargos' || tabla === 'saldos_aptos') {
@@ -6655,7 +6697,7 @@ window._cotEnhance = function(){
   });
 };
 window.cotToggleAll = function(cb){ document.querySelectorAll('#cot-tabla .cot-chk').forEach(function(x){ x.checked=cb.checked; }); };
-window.enviarCotSeleccion = function(testMode){
+window.enviarCotSeleccion = function(testMode, btn){
   var boxes=document.querySelectorAll('#cot-tabla .cot-chk:checked');
   if(!boxes.length){ if(typeof showToast==='function') showToast('Selecciona al menos una cotización','error'); return; }
   var getCell=function(tds,i){ var td=tds[i]; if(!td) return ''; var sel=td.querySelector('select'); if(sel) return sel.value; return td.innerText.replace(/\s+/g,' ').trim(); };
@@ -6667,9 +6709,15 @@ window.enviarCotSeleccion = function(testMode){
   });
   var cuerpo='Buen día,\n\nComparto las siguientes cotizaciones / leads:\n\n'+lineas.join('\n\n')+'\n\nGracias.';
   var asunto='Cotizaciones / Leads ('+boxes.length+')';
-  var url='mailto:?subject='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(cuerpo);
-  if(testMode) return url;
-  window.location.href=url;
+  // Sol Juanita: el correo se abría SIN destinatario (mailto vacío) y salía desde el cliente de correo
+  // del administrador de turno. Ahora va dirigido a comercial/mercadeo del edificio y se envía desde
+  // el correo corporativo del sistema. Se confirma el destinatario antes de enviar.
+  var dest = (EDIFICIO_ACTIVO==='kubik')
+    ? { to:['comercial@8i8op.com'], cc:[] }
+    : { to:['cristina.cervino@8010urbanliving.com'], cc:['maria.tosta@8010urbanliving.com'] };
+  if(testMode) return dest;
+  if(!confirm('Se enviará a: '+dest.to.join(', ')+(dest.cc.length?('\nCopia: '+dest.cc.join(', ')):'')+'\n\n'+boxes.length+' cotización(es) seleccionada(s).\n\n¿Continuar?')) return;
+  return enviarInformeCorreo(asunto, cuerpo, (typeof btn!=='undefined'?btn:null), null, dest);
 };
 (function(){ if(typeof cotRenderTabla==='function' && !window._cotWrapped){ var _o=cotRenderTabla; window.cotRenderTabla=function(){ _o.apply(this,arguments); try{window._cotEnhance();}catch(e){} }; window._cotWrapped=true; } })();
 
@@ -6956,7 +7004,7 @@ window.renderSolicitudes = async function(filtro){
     img=(img||_sadj)?(img+_sadj):'<span style="color:#bbb">—</span>';
     var resp=r.respuesta?('<span style="color:#166534">'+esc(r.respuesta)+'</span>'):(r.estado==='Hecho'?'<span style="color:#b91c1c;font-size:11px;font-weight:600">⚠️ sin registrar qué se hizo</span>':'<span style="color:#bbb">—</span>');
     var _ds=!!(r.dirigido_a&&String(r.dirigido_a).trim()); var _dc=_ds?('<span style="background:#fde68a;color:#92400e;font-size:11px;padding:1px 8px;border-radius:8px;font-weight:600">⭐ → '+esc(r.dirigido_a)+'</span>'):'<span style="color:#bbb">—</span>';
-    return '<tr style="vertical-align:top'+(_ds?';background:#FFFBEB':'')+'"><td style="white-space:nowrap">'+fmtD(r.created_at)+'</td><td>'+esc(r.solicitante||'-')+'</td><td>'+_dc+'</td><td style="max-width:240px">'+esc(r.descripcion||'')+'</td><td><span style="background:'+priColor(r.prioridad)+';padding:1px 8px;border-radius:8px;font-size:11px">'+esc(r.prioridad||'')+'</span></td><td>'+img+'</td><td>'+estSel+'</td><td style="max-width:200px;font-size:12px">'+resp+'</td><td style="min-width:150px">'+window._revGerCell('solicitudes', r)+'</td><td style="white-space:nowrap"><span title="Responder / qué se hizo" style="cursor:pointer" onclick="responderSolicitud(\''+r.id+'\')">✍️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarSolicitud(\''+r.id+'\')">🗑️</span></td></tr>';
+    return '<tr style="vertical-align:top'+(_ds?';background:#FFFBEB':'')+'"><td style="white-space:nowrap">'+fmtD(r.created_at)+'</td><td>'+(r.solicitante?_chipPersona(r.solicitante):'-')+'</td><td>'+_dc+'</td><td style="max-width:240px">'+esc(r.descripcion||'')+'</td><td><span style="background:'+priColor(r.prioridad)+';padding:1px 8px;border-radius:8px;font-size:11px">'+esc(r.prioridad||'')+'</span></td><td>'+img+'</td><td>'+estSel+'</td><td style="max-width:200px;font-size:12px">'+resp+'</td><td style="min-width:150px">'+window._revGerCell('solicitudes', r)+'</td><td style="white-space:nowrap"><span title="Responder / qué se hizo" style="cursor:pointer" onclick="responderSolicitud(\''+r.id+'\')">✍️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarSolicitud(\''+r.id+'\')">🗑️</span></td></tr>';
   }).join('');
   var fbtn=function(v,l){ var on=(window._solFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderSolicitudes(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML=
@@ -7078,7 +7126,7 @@ window.renderComunicaciones = async function(filtro){
     var delBtn = (puede || c.autor===yo) ? '<span title="Archivar" style="cursor:pointer;color:#9a4a40;font-size:13px;margin-left:8px" onclick="archivarComunicacion(\''+c.id+'\')">🗑️</span>' : '';
     return '<div style="border:1px solid #e2e4e8;border-left:4px solid '+ts.bd+';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
-      + '<div>'+prioBadge+' <span style="font-size:11px;color:#666">· '+esc(c.autor||'')+' · '+fmt(c.created_at)+' · Para: <strong>'+esc(c.dirigido_a||'Todos')+'</strong></span></div>'
+      + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+prioBadge+' '+_chipPersona(c.autor||'')+' <span style="font-size:11px;color:#666">· '+fmt(c.created_at)+' · Para: <strong>'+esc(c.dirigido_a||'Todos')+'</strong></span></div>'
       + '<div style="display:flex;gap:4px;align-items:center">'+readBtn+delBtn+'</div></div>'
       + (c.titulo?'<div style="font-weight:700;margin-top:6px">'+esc(c.titulo)+'</div>':'')
       + '<div style="font-size:14px;margin-top:6px;white-space:pre-wrap;line-height:1.5">'+esc(c.mensaje)+'</div>'
@@ -9080,7 +9128,7 @@ async function renderEstadoHuespedes() {
   const rowsVis = rows.filter(r => !r._comboOculto);
   // Empresa/acompañantes de la reserva activa hoy (para reflejar en Estado de Huéspedes)
   let _resMap = {};
-  try { const _rv = await sb.from('reservas').select('id,apto,empresa,acompanantes').eq('edificio', EDIFICIO_ACTIVO).lte('checkin', today).gte('checkout', today); (_rv.data||[]).forEach(x=>{ if(x.apto && !_resMap[x.apto]) _resMap[x.apto]=x; }); } catch(e){}
+  try { const _rv = await sb.from('reservas').select('id,apto,empresa,acompanantes,desayuno').eq('edificio', EDIFICIO_ACTIVO).lte('checkin', today).gte('checkout', today); (_rv.data||[]).forEach(x=>{ if(x.apto && !_resMap[x.apto]) _resMap[x.apto]=x; }); } catch(e){}
 
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
@@ -9100,7 +9148,7 @@ async function renderEstadoHuespedes() {
         : `<div style="overflow-x:auto"><table class="tabla">
             <thead><tr>
               <th>Apto</th><th>Estado</th><th>Nombre</th><th>Apellido</th><th>2º Apellido</th><th>Canal</th>
-              <th>Check-in</th><th>Check-out</th><th>Tarifa/Noche</th><th>PAX</th><th>Obs.</th><th></th>
+              <th>Check-in</th><th>Check-out</th><th>Tarifa/Noche</th><th>Desayuno</th><th>PAX</th><th>Obs.</th><th></th>
             </tr></thead>
             <tbody>${rowsVis.map(r => `<tr>
               <td><strong style="color:var(--azul);font-size:15px">${r._unidad || r.apto}</strong>${r._unidad?`<div style="font-size:9px;font-weight:700;color:#7C3AED;margin-top:1px">🔗 unidad combinada</div>`:''}</td>
@@ -9111,7 +9159,9 @@ async function renderEstadoHuespedes() {
               <td>${r.canal||'-'}</td>
               <td>${r.checkin ? fmtDate(r.checkin) : '-'}</td>
               <td>${r.checkout ? fmtDate(r.checkout) : '-'}</td>
-              <td>${r.moneda==='USD' && r.tarifa_usd ? 'USD $'+fmtNum(r.tarifa_usd)+'<div style="font-size:9px;color:#888">≈ $'+fmtNum(r.tarifa)+' COP</div>' : (r.tarifa ? '$'+fmtNum(r.tarifa) : '-')}</td><td style="text-align:center"><input type="number" min="0" value="${r.pax!=null?r.pax:''}" onchange="guardarPaxHuesped('${r.id}','${r.apto}',this.value)" placeholder="-" title="PAX en casa" style="width:55px;padding:4px;font-size:13px;text-align:center"></td>
+              <td>${r.moneda==='USD' && r.tarifa_usd ? 'USD $'+fmtNum(r.tarifa_usd)+'<div style="font-size:9px;color:#888">≈ $'+fmtNum(r.tarifa)+' COP</div>' : (r.tarifa ? '$'+fmtNum(r.tarifa) : '-')}</td>
+              <td style="text-align:center">${(function(){var d=(_resMap[r.apto]&&_resMap[r.apto].desayuno)||''; return String(d).toLowerCase()==='si' ? '<span style="background:#DCFCE7;color:#14532D;font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap">🥐 Incluido</span>' : '<span style="color:#bbb;font-size:11px">—</span>';})()}</td>
+              <td style="text-align:center"><input type="number" min="0" value="${r.pax!=null?r.pax:''}" onchange="guardarPaxHuesped('${r.id}','${r.apto}',this.value)" placeholder="-" title="PAX en casa" style="width:55px;padding:4px;font-size:13px;text-align:center"></td>
               <td style="max-width:170px"><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Nota del huésped..." title="Se guarda sola al salir del campo" style="width:160px;padding:4px;font-size:11px" onchange="guardarNotaHuesped('${r.id}','${r.apto}',this.value)"><input value="${String(r.seguimiento||'').replace(/"/g,'&quot;')}" placeholder="📌 Seguimiento..." title="Seguimiento — se guarda solo al salir" style="width:160px;padding:4px;font-size:11px;margin-top:3px" onchange="guardarSeguimiento('${r.id}',this.value)"></td>
               <td>${_esKL?`<input id="tel-${r.id}" value="${r.telefono||''}" placeholder="📱 WhatsApp" title="WhatsApp del huésped — se guarda solo al salir del campo" style="width:108px;padding:4px;font-size:11px" onchange="guardarTelHuesped('${r.id}','${r.apto}',this.value)"> <input id="dc-${r.id}" data-nombre="${String(r.huesped||'').replace(/"/g,'')}" data-tratamiento="${r.tratamiento||''}" data-tel="${r.telefono||''}" placeholder="Cód. puerta" style="width:84px;padding:4px;font-size:11px"> <button onclick="waBienvenida('dc-${r.id}')" class="btn btn-sm" style="background:#25D366;color:#fff">💬 Bienvenida</button> <button onclick="waAnuncio('dc-${r.id}')" class="btn btn-sm" style="background:#1D3461;color:#fff">📢</button> `:''}<button onclick="openAptoModal('${r.id}','${r.apto}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
             </tr>`).join('')}
@@ -9138,6 +9188,24 @@ function paxAdd(id){ window._paxMap[id]=window._paxMap[id]||[]; window._paxMap[i
 function paxDel(id,i){ if(!window._paxMap[id]) return; window._paxMap[id].splice(i,1); _paxRefresh(id); _paxSave(id); }
 function paxSet(id,i,k,v){ if(!window._paxMap[id]||!window._paxMap[id][i]) return; window._paxMap[id][i][k]=v; _paxSave(id); }
 function _paxStr(r){ var a=r&&r.acomp_pax; try{ a=Array.isArray(a)?a:(a?JSON.parse(a):[]); }catch(e){ a=[]; } if(a&&a.length){ var t=a.map(function(p){return (p.n||'')+(p.e?(' ('+p.e+')'):'');}).filter(function(x){return x.replace(/[()A-Za-zñ ]/g,'').length>=0 && x.trim() && x.trim()!=='(IN)';}); return t.join(', '); } return (r&&r.acompanantes)||''; }
+// Sol Sebastián: en el informe de Ocupación los acompañantes deben ir UNO POR UNO (una línea cada
+// uno), no todos juntos separados por comas. Devuelve la lista para pintarla en líneas.
+function _paxLista(r){
+  var a=r&&r.acomp_pax;
+  try{ a=Array.isArray(a)?a:(a?JSON.parse(a):[]); }catch(e){ a=[]; }
+  var out=[];
+  if(a&&a.length){
+    a.forEach(function(p){
+      var n=String((p&&p.n)||'').trim(); if(!n) return;
+      var e=String((p&&p.e)||'').trim();
+      out.push(n+(e&&e!=='IN'?(' ('+e+')'):''));
+    });
+  }
+  if(!out.length && r && r.acompanantes){
+    String(r.acompanantes).split(/[,;]|\sy\s/).forEach(function(s){ var t=String(s).trim(); if(t) out.push(t); });
+  }
+  return out;
+}
 function guardarSeguimiento(id,val){ sb.from('rack').update({seguimiento:String(val||'').trim()}).eq('id',id).then(function(r){ if(r.error){ if(typeof showToast==='function') showToast('Error seguimiento: '+r.error.message,'error'); } else if(typeof showToast==='function') showToast('Seguimiento guardado','success'); }); }
 
 
@@ -12006,7 +12074,7 @@ async function renderComercial() {
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
       <div class="page-title" style="margin-bottom:0">📞 Comercial — Cotizaciones / Leads</div>
-      <button class="btn btn-success btn-sm" onclick="loadView('comercial-form')" style="padding:10px 20px">+ Nueva Cotización</button><button class="btn btn-outline btn-sm" onclick="enviarCotSeleccion()" style="padding:10px 20px;margin-left:8px">📧 Enviar selección por correo</button>
+      <button class="btn btn-success btn-sm" onclick="loadView('comercial-form')" style="padding:10px 20px">+ Nueva Cotización</button><button class="btn btn-outline btn-sm" onclick="enviarCotSeleccion(false,this)" style="padding:10px 20px;margin-left:8px">📧 Enviar selección por correo</button>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${chips}
       ${filtro?`<span onclick="cotFiltrarEstado('')" style="cursor:pointer;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;background:#E5E7EB;color:#374151">✕ Quitar filtro</span>`:''}
@@ -12124,7 +12192,7 @@ async function compartirEstadoHuespedes() {
 *Ocupación: ${ocupadas} de ${_tot} (${Math.round(ocupadas/_tot*100)}%)*
 🟢 Ocupados: ${ocu}   🔵 Check-in: ${cki}   🟠 Check-out: ${cko}   ⚪ Libres: ${libres}
 
-${rows.map(r=>{const est=(r.checkin||r.checkout)?` · 🗓 ${r.checkin?fmtDate(r.checkin):'—'} a ${r.checkout?fmtDate(r.checkout):'—'}`:'';return `*${r.apto}* · ${_titleCase(r.huesped)||'—'} · ${r.estado}${est}${(function(){var sx=_paxStr(r);return sx?'\n    👥 '+sx:'';})()}${r.observaciones?'\n    '+r.observaciones:''}`;}).join('\n')}
+${rows.map(r=>{const est=(r.checkin||r.checkout)?` · 🗓 ${r.checkin?fmtDate(r.checkin):'—'} a ${r.checkout?fmtDate(r.checkout):'—'}`:'';return `*${r.apto}* · ${_titleCase(r.huesped)||'—'} · ${r.estado}${est}${(function(){var lx=_paxLista(r);return lx.length?('\n    👥 Acompañantes:\n'+lx.map(function(p){return '       · '+p;}).join('\n')):'';})()}${r.observaciones?'\n    '+r.observaciones:''}`;}).join('\n')}
 
 _Sistema ${EB().nombre}_`;
   compartirInforme('Estado de Huéspedes — ' + fmtDate(_d), txt);
@@ -12468,7 +12536,7 @@ async function tablaEstadoHuespedes() {
       <td style="text-align:left">${libre?'<i style="color:#bbb">Libre</i>':esc(window._nombrePartes(r).nombre||'—')}</td>
       <td style="text-align:left">${libre?'':esc(window._nombrePartes(r).apellido1||'')}</td>
       <td style="text-align:left">${libre?'':esc(window._nombrePartes(r).apellido2||'')}</td>
-      <td style="text-align:left">${(function(){var px=_paxStr(r);return px?('<b>👥 '+esc(px)+'</b><br>'):'';})()}${esc((r.observaciones||'').trim()).replace(/\n/g,'<br>')}${(r.seguimiento||'').trim()?('<br><i>📌 '+esc(r.seguimiento.trim())+'</i>'):''}</td>
+      <td style="text-align:left">${(function(){var lx=_paxLista(r);return lx.length?('<b>👥 Acompañantes:</b><br>'+lx.map(function(p){return '&nbsp;&nbsp;· '+esc(p);}).join('<br>')+'<br>'):'';})()}${esc((r.observaciones||'').trim()).replace(/\n/g,'<br>')}${(r.seguimiento||'').trim()?('<br><i>📌 '+esc(r.seguimiento.trim())+'</i>'):''}</td>
       <td>${esc(estadia)}</td>
       <td>${esc(r.estado||'')}</td>
     </tr>`;}).join('');
