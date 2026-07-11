@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-10-guia-pdf-whatsapp';
+const APP_VERSION = '2026-07-11-ventas-drilldown';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-11', version:'2026-07-11-ventas-drilldown', titulo:'Dashboard: clic en las ventas para ver el detalle',
+    afecta:'Dashboard',
+    detalle:'Sol Santiago: en "Ventas del mes por categoría" ahora cada línea (Alojamiento, Salas, Alimentación/consumos de eventos, Consumos de huéspedes, Otros cargos) es clicable y abre el detalle de qué compone ese monto: por huésped y apto en Alojamiento (noches × tarifa), y registro por registro en las demás, con su % de participación.' },
   { fecha:'2026-07-10', version:'2026-07-10-guia-pdf-whatsapp', titulo:'Guía en la confirmación: cómo enviar el PDF por WhatsApp',
     afecta:'Confirmaciones',
     detalle:'Sol Santiago: en la pantalla de confirmación se agregó una nota guía con los 3 pasos para enviar el PDF por WhatsApp (Imprimir/PDF → WhatsApp al huésped → adjuntar el PDF con el clip), ya que WhatsApp por enlace no adjunta automáticamente.' },
@@ -1937,7 +1940,7 @@ async function renderDashboard() {
   // Cargar todo en paralelo
   const [rHoy, rMes, novRes, mantRes, turnosHoy, turnosUlt] = await Promise.all([
     sb.from('rack').select('*').eq('fecha', TODAY).eq('edificio', EDIFICIO_ACTIVO).order('estado', { ascending: true }),
-    sb.from('rack').select('apto,estado,tarifa').eq('edificio', EDIFICIO_ACTIVO).gte('fecha', monthStart).lte('fecha', monthEnd),
+    sb.from('rack').select('apto,estado,tarifa,huesped,fecha').eq('edificio', EDIFICIO_ACTIVO).gte('fecha', monthStart).lte('fecha', monthEnd),
     sb.from('novedades').select('*').in('estado',['Abierto','En proceso','Escalado']).order('created_at',{ascending:false}),
     sb.from('mantenimiento').select('*').in('estado',['Pendiente','En proceso']).gte('fecha', new Date(Date.now()-90*24*60*60*1000).toISOString().split('T')[0]).order('created_at',{ascending:false}),
     sb.from('turnos').select('*').eq('fecha', TODAY).order('created_at',{ascending:false}),
@@ -1989,13 +1992,14 @@ async function renderDashboard() {
   // ── VENTAS DEL MES POR CATEGORÍA (neto, sin impuestos) ────
   // Alojamiento = rack (ventasMes). Las demás vienen de sus módulos.
   let vSalas=0, vEvAlim=0, vConsumos=0, vOtros=0;
+  let _evd=[], _cod=[], _lcd=[];
   try{
     const [evRes, coRes, lcRes] = await Promise.all([
-      sb.from('eventos').select('val_sala,val_alimentacion,val_consumos,fecha_inicio').eq('edificio',EDIFICIO_ACTIVO).gte('fecha_inicio',monthStart).lte('fecha_inicio',monthEnd+'T23:59:59'),
-      sb.from('consumos').select('valor,fecha').gte('fecha',monthStart).lte('fecha',monthEnd),
-      sb.from('listado_cargos').select('salas,minibar,varios,lavanderia,transporte,fecha').gte('fecha',monthStart).lte('fecha',monthEnd),
+      sb.from('eventos').select('*').eq('edificio',EDIFICIO_ACTIVO).gte('fecha_inicio',monthStart).lte('fecha_inicio',monthEnd+'T23:59:59'),
+      sb.from('consumos').select('*').gte('fecha',monthStart).lte('fecha',monthEnd),
+      sb.from('listado_cargos').select('*').gte('fecha',monthStart).lte('fecha',monthEnd),
     ]);
-    const _evd=evRes.data||[], _cod=coRes.data||[], _lcd=lcRes.data||[];
+    _evd=evRes.data||[]; _cod=coRes.data||[]; _lcd=lcRes.data||[];
     vSalas    = _evd.reduce((s,x)=>s+(Number(x.val_sala)||0),0) + _lcd.reduce((s,x)=>s+(Number(x.salas)||0),0);
     vEvAlim   = _evd.reduce((s,x)=>s+(Number(x.val_alimentacion)||0)+(Number(x.val_consumos)||0),0);
     vConsumos = _cod.reduce((s,x)=>s+(Number(x.valor)||0),0);
@@ -2003,7 +2007,46 @@ async function renderDashboard() {
   }catch(_e){}
   const vAlojamiento = ventasMes;
   const vTotalCat = vAlojamiento + vSalas + vEvAlim + vConsumos + vOtros;
-  const _catRow = (lbl,val,col)=>`<tr><td style="padding:7px 10px;border-bottom:1px solid #EEE">${lbl}</td><td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;font-weight:600;color:${col||'#1a1a1a'}">$${fmtNum(val)}</td><td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;color:var(--gris-t);font-size:12px">${vTotalCat>0?Math.round(val/vTotalCat*100):0}%</td></tr>`;
+
+  // ── DETALLE DE VENTAS (Sol Santiago: clic en cada línea para ver de qué se compone) ──
+  (function(){
+    const _evNom = x => (x.cliente || x.evento || x.nombre || x.titulo || x.empresa || 'Evento');
+    // Alojamiento: agrupado por huésped + apto
+    const _gA = {};
+    conTarifaMes.forEach(r=>{
+      const k = (r.huesped||'—')+'|'+r.apto;
+      if(!_gA[k]) _gA[k] = { desc:(r.huesped||'Sin nombre'), sub:'Apto '+r.apto, noches:0, tarifa:Number(r.tarifa)||0, valor:0 };
+      _gA[k].noches++; _gA[k].valor += Number(r.tarifa)||0;
+    });
+    const aloj = Object.values(_gA).map(v=>({ desc:v.desc, sub:v.sub+' · '+v.noches+' noche'+(v.noches>1?'s':'')+' × $'+fmtNum(Math.round(v.valor/v.noches)), valor:v.valor }));
+    // Salas: eventos (val_sala) + listado de cargos (salas)
+    const salas = [];
+    _evd.forEach(x=>{ const v=Number(x.val_sala)||0; if(v>0) salas.push({ desc:_evNom(x), sub:'Evento · '+(x.fecha_inicio||'').split('T')[0], valor:v }); });
+    _lcd.forEach(x=>{ const v=Number(x.salas)||0; if(v>0) salas.push({ desc:'Sala — Apto '+(x.apto||'—'), sub:'Listado de cargos · '+(x.fecha||''), valor:v }); });
+    // Alimentación / consumos de eventos
+    const evalim = [];
+    _evd.forEach(x=>{ const v=(Number(x.val_alimentacion)||0)+(Number(x.val_consumos)||0); if(v>0) evalim.push({ desc:_evNom(x), sub:'Evento · '+(x.fecha_inicio||'').split('T')[0], valor:v }); });
+    // Consumos de huéspedes
+    const consumos = _cod.filter(x=>(Number(x.valor)||0)>0).map(x=>({ desc:(x.huesped||'Sin nombre'), sub:'Apto '+(x.apto||'—')+' · '+(x.fecha||''), valor:Number(x.valor)||0 }));
+    // Otros cargos (desglosado por tipo)
+    const otros = [];
+    _lcd.forEach(x=>{
+      [['minibar','Minibar'],['varios','Varios'],['lavanderia','Lavandería'],['transporte','Transporte']].forEach(p=>{
+        const v = Number(x[p[0]])||0;
+        if(v>0) otros.push({ desc:p[1]+' — Apto '+(x.apto||'—'), sub:(x.huesped||'')+(x.huesped?' · ':'')+(x.fecha||''), valor:v });
+      });
+    });
+    const _ord = a => a.sort((p,q)=>q.valor-p.valor);
+    window._dashDet = {
+      aloj:     { titulo:'🛏️ Alojamiento',  color:'#1F7A3D', fuente:'Rack — tarifa cobrada por noche', items:_ord(aloj) },
+      salas:    { titulo:'🤝 Salas de juntas', color:'#1D3461', fuente:'Eventos + Listado de cargos', items:_ord(salas) },
+      evalim:   { titulo:'🍽️ Alimentación / consumos de eventos', color:'#7C3AED', fuente:'Módulo Eventos', items:_ord(evalim) },
+      consumos: { titulo:'🧴 Consumos de huéspedes', color:'#B8963E', fuente:'Módulo Consumos', items:_ord(consumos) },
+      otros:    { titulo:'📋 Otros cargos', color:'#92400E', fuente:'Listado de cargos', items:_ord(otros) },
+    };
+  })();
+
+  const _catRow = (lbl,val,col,key)=>`<tr onclick="_ventasDetalle('${key}')" style="cursor:pointer" title="Clic para ver el detalle" onmouseover="this.style.background='#F7F5F3'" onmouseout="this.style.background=''"><td style="padding:7px 10px;border-bottom:1px solid #EEE">${lbl} <span style="color:var(--gris-t);font-size:11px">▸ ver detalle</span></td><td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;font-weight:600;color:${col||'#1a1a1a'}">$${fmtNum(val)}</td><td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;color:var(--gris-t);font-size:12px">${vTotalCat>0?Math.round(val/vTotalCat*100):0}%</td></tr>`;
 
   // ── NOVEDADES ─────────────────────────────────────────────
   const novAltas = novs.filter(n=>n.prioridad==='Alta').length;
@@ -2107,11 +2150,11 @@ async function renderDashboard() {
             <th style="padding:7px 10px;text-align:right;color:var(--gris-t);font-size:11px;text-transform:uppercase;border-bottom:2px solid #E7E3E0">%</th>
           </tr></thead>
           <tbody>
-            ${_catRow('🛏️ Alojamiento', vAlojamiento, '#1F7A3D')}
-            ${_catRow('🤝 Salas de juntas', vSalas, '#1D3461')}
-            ${_catRow('🍽️ Alimentación / consumos de eventos', vEvAlim, '#7C3AED')}
-            ${_catRow('🧴 Consumos de huéspedes', vConsumos, '#B8963E')}
-            ${_catRow('📋 Otros cargos (minibar, varios, lavandería, transporte)', vOtros, '#92400E')}
+            ${_catRow('🛏️ Alojamiento', vAlojamiento, '#1F7A3D', 'aloj')}
+            ${_catRow('🤝 Salas de juntas', vSalas, '#1D3461', 'salas')}
+            ${_catRow('🍽️ Alimentación / consumos de eventos', vEvAlim, '#7C3AED', 'evalim')}
+            ${_catRow('🧴 Consumos de huéspedes', vConsumos, '#B8963E', 'consumos')}
+            ${_catRow('📋 Otros cargos (minibar, varios, lavandería, transporte)', vOtros, '#92400E', 'otros')}
           </tbody>
           <tfoot><tr>
             <td style="padding:10px;font-weight:800;border-top:2px solid #1a1a1a">TOTAL VENTAS DEL MES</td>
@@ -2596,6 +2639,46 @@ function mostrarListaCK(est) {
       <strong style="min-width:58px;color:${color};font-size:15px">${r.apto}</strong>
       <span style="flex:1;font-size:13px;${r.huesped?'':'color:#999;font-style:italic'}">${_titleCase(r.huesped) || 'sin nombre'}</span>
     </div>`).join('') : '<div style="color:#999;padding:10px 0">Ninguno por hoy ✅</div>'}
+    <button onclick="document.body.removeChild(this.closest('[style*=fixed]'))" style="margin-top:16px;background:#1D3461;color:white;border:none;border-radius:8px;padding:10px 18px;cursor:pointer;font-weight:600;width:100%">Cerrar</button>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+// Detalle de una categoría de ventas del Dashboard (clic en la fila) — Sol Santiago
+function _ventasDetalle(key){
+  const d = (window._dashDet || {})[key];
+  if(!d){ showToast('Sin detalle disponible','error'); return; }
+  const items = d.items || [];
+  const total = items.reduce((s,x)=>s+(Number(x.valor)||0),0);
+  const esc = s => window._escH ? window._escH(String(s==null?'':s)) : String(s==null?'':s);
+  const m = document.createElement('div');
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  m.onclick = e => { if(e.target===m) document.body.removeChild(m); };
+  const filas = items.length ? items.map(x=>`<tr>
+      <td style="padding:8px 10px;border-bottom:1px solid #EEE">
+        <div style="font-weight:600;font-size:13px">${esc(x.desc)}</div>
+        ${x.sub?`<div style="color:var(--gris-t);font-size:11px">${esc(x.sub)}</div>`:''}
+      </td>
+      <td style="padding:8px 10px;border-bottom:1px solid #EEE;text-align:right;font-weight:700;color:${d.color};white-space:nowrap">$${fmtNum(x.valor)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #EEE;text-align:right;color:var(--gris-t);font-size:11px">${total>0?Math.round(x.valor/total*100):0}%</td>
+    </tr>`).join('')
+    : '<tr><td colspan="3" style="padding:18px;text-align:center;color:#999">No hay movimientos en este mes</td></tr>';
+  m.innerHTML = `<div style="background:white;border-radius:16px;padding:22px 24px;max-width:620px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-size:16px;font-weight:800;color:${d.color}">${d.titulo}</div>
+    <div style="color:var(--gris-t);font-size:11px;margin-bottom:12px">${esc(d.fuente)} · ${items.length} registro${items.length===1?'':'s'} del mes</div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="padding:6px 10px;text-align:left;color:var(--gris-t);font-size:10px;text-transform:uppercase;border-bottom:2px solid #E7E3E0">Concepto</th>
+        <th style="padding:6px 10px;text-align:right;color:var(--gris-t);font-size:10px;text-transform:uppercase;border-bottom:2px solid #E7E3E0">Valor</th>
+        <th style="padding:6px 10px;text-align:right;color:var(--gris-t);font-size:10px;text-transform:uppercase;border-bottom:2px solid #E7E3E0">%</th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+      <tfoot><tr>
+        <td style="padding:10px;font-weight:800;border-top:2px solid #1a1a1a">TOTAL</td>
+        <td style="padding:10px;text-align:right;font-weight:800;font-size:15px;color:${d.color};border-top:2px solid #1a1a1a">$${fmtNum(total)}</td>
+        <td style="padding:10px;text-align:right;font-weight:800;border-top:2px solid #1a1a1a">100%</td>
+      </tr></tfoot>
+    </table>
     <button onclick="document.body.removeChild(this.closest('[style*=fixed]'))" style="margin-top:16px;background:#1D3461;color:white;border:none;border-radius:8px;padding:10px 18px;cursor:pointer;font-weight:600;width:100%">Cerrar</button>
   </div>`;
   document.body.appendChild(m);
