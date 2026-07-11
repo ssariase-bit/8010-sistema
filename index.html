@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-11-solicitudes-lote2';
+const APP_VERSION = '2026-07-11-solicitudes-lote3';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-11', version:'2026-07-11-solicitudes-lote3', titulo:'Solicitudes: listado de empleados, arrastre del arrendatario y provisionales en caja',
+    afecta:'Control de Personal · Listado de Cargos · Cuadro de Saldos · Caja',
+    detalle:'(1) Sol Sebastián: en Control de Ingreso de Personal se había perdido el listado de empleados — al pasar el nombre a tres casillas (nombre · apellido · 2º apellido), la lista quedó asociada a un campo oculto. Se agregó un selector "Elegir empleado del listado" que rellena las tres casillas automáticamente. (2) Sol Sebastián: en Listado de Cargos y en el Cuadro de Saldos, al elegir el apartamento se arrastra el arrendatario desde el Rack (nombre, apellidos y empresa), igual que en el informe de CKI/CKO. (3) Sol Sebastián: en Caja, los Egresos tienen ahora la casilla "Es un provisional". El movimiento sigue descontando de la caja (por eso cuadra el arqueo) pero queda marcado como Provisional y NO lo arrastra el reembolso por lotes, que solo toma los gastos pendientes de legalizar.' },
   { fecha:'2026-07-11', version:'2026-07-11-solicitudes-lote2', titulo:'Solicitudes: cargos por edificio, total automático en cargos y cierre de New Pos',
     afecta:'Control de Personal (8010) · Listado de Cargos · Check List de Turnos (Kubik)',
     detalle:'(1) Sol Sebastián (8010): los cargos ahora son por edificio. En 8010 se quitaron Recepcionista, Capitán de Meseros y "Otro", y los cargos gerenciales pasan a ser los reales: Gerente General, Gerente Operativo y Gerente de Eventos. Kubik conserva su lista sin cambios. (2) Sol Sebastián: en Listado de Cargos, el Total ahora se calcula solo — suma transporte, lavandería, minibar, varios y salas, y le aplica el IVA seleccionado. El campo queda bloqueado y muestra la base usada. (3) Sol Juanita (KL): se agregó al Check List el cierre de turno en el New Pos (turnos 1 y 2) y el cierre del día en el New Pos antes de la auditoría de New Hotel (turno 3).' },
@@ -5690,8 +5693,28 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
         const [cp, pe] = await Promise.all([ sb.from('control_personal').select('nombre'), sb.from('personal').select('nombre') ]);
         // Incluye también las camareras y duplas de apoyo del edificio (para registrar ingresos/horarios)
         const nombres = [...new Set([...(EB().camareras||[]), ...(cp.data||[]).map(x=>x.nombre), ...(pe.data||[]).map(x=>x.nombre)].filter(Boolean))].sort((a,b)=>String(a).localeCompare(b));
-        const inp = document.getElementById('gf-nombre');
-        if (inp){ let dl=document.getElementById('dl-nombres'); if(!dl){dl=document.createElement('datalist');dl.id='dl-nombres';inp.parentNode.appendChild(dl);} dl.innerHTML=nombres.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}">`).join(''); inp.setAttribute('list','dl-nombres'); inp.setAttribute('autocomplete','off'); }
+        // Sol Sebastián: al pasar el nombre a 3 casillas (nombre · apellido · 2º apellido), el listado
+        // de empleados quedaba pegado al campo oculto y desapareció. Se agrega un selector visible que
+        // rellena las 3 casillas al elegir el empleado.
+        const _n1 = document.getElementById('gf-nombre__n');
+        if (_n1 && !document.getElementById('gf-nombre-pick')) {
+          const grp = _n1.closest('.form-group') || _n1.parentNode;
+          const fila = grp.querySelector('div[style*="display:flex"]');
+          const wrap = document.createElement('div');
+          wrap.style.cssText = 'margin-bottom:6px';
+          wrap.innerHTML = '<select id="gf-nombre-pick" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:13px">'
+            + '<option value="">— Elegir empleado del listado —</option>'
+            + nombres.map(function(n){ var s=String(n); return '<option value="'+s.replace(/"/g,'&quot;')+'">'+s.replace(/</g,'&lt;')+'</option>'; }).join('')
+            + '</select>';
+          if (fila) grp.insertBefore(wrap, fila); else grp.appendChild(wrap);
+          document.getElementById('gf-nombre-pick').addEventListener('change', function(){
+            var v = this.value; if(!v) return;
+            var p = (typeof window._splitNombre==='function') ? window._splitNombre(v) : {nombre:v,apellido1:'',apellido2:''};
+            var S=function(id,val){ var e=document.getElementById(id); if(e) e.value=(val||''); };
+            S('gf-nombre__n', p.nombre); S('gf-nombre__a1', p.apellido1); S('gf-nombre__a2', p.apellido2);
+            try{ window._nombre3Sync('gf-nombre'); }catch(e){}
+          });
+        }
       } catch(e){}
     })();
     ['gf-horario','gf-marcacion_ingreso','gf-marcacion_salida','gf-jornada_base'].forEach(id => {
@@ -5748,6 +5771,30 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     ['gf-transporte','gf-lavanderia','gf-minibar','gf-varios','gf-salas'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', _lcalc); });
     var _ivaEl=document.getElementById('gf-iva'); if(_ivaEl) _ivaEl.addEventListener('change', _lcalc);
     _lcalc();
+  }
+  // Sol Sebastián: al elegir el apartamento, arrastrar el arrendatario (nombre y apellidos) y la
+  // empresa desde el Rack, igual que hace el informe de CKI/CKO. Evita redigitar y evita errores.
+  if (tabla === 'listado_cargos' || tabla === 'saldos_aptos') {
+    var _apE = document.getElementById('gf-apto');
+    if (_apE) _apE.addEventListener('change', async function(){
+      var ap = String(_apE.value||'').trim(); if(!ap) return;
+      var base = 'gf-arrendatario';
+      if(!document.getElementById(base+'__n')) return;
+      try{
+        var q = await sb.from('rack').select('huesped,nombre,apellido1,apellido2,empresa')
+          .eq('edificio',EDIFICIO_ACTIVO).eq('apto',ap).eq('fecha',TODAY)
+          .in('estado',['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje']).limit(1);
+        var r = (q.data||[])[0];
+        if(!r){ showToast('El apto '+ap+' no tiene huésped hoy en el Rack','info'); return; }
+        var p = (typeof window._nombrePartes==='function') ? window._nombrePartes(r)
+              : {nombre:r.nombre||'', apellido1:r.apellido1||'', apellido2:r.apellido2||''};
+        var setv=function(id,v){ var e=document.getElementById(id); if(e) e.value=(v==null?'':v); };
+        setv(base+'__n', p.nombre||''); setv(base+'__a1', p.apellido1||''); setv(base+'__a2', p.apellido2||'');
+        try{ window._nombre3Sync(base); }catch(e){}
+        if(document.getElementById('gf-empresa') && r.empresa) setv('gf-empresa', r.empresa);
+        showToast('Arrendatario cargado desde el Rack: '+(r.huesped||''),'success');
+      }catch(e){}
+    });
   }
 }
 
@@ -8327,7 +8374,8 @@ window.renderMovimientoCaja = function(){
     +'<div class="card" style="max-width:740px">'
     +'<div class="form-row col3">'
       +'<div class="form-group"><label>Fecha</label><input type="date" id="mc-fecha" value="'+TODAY+'"></div>'
-      +'<div class="form-group"><label>Tipo *</label><select id="mc-tipo"><option>Egreso</option><option>Ingreso</option><option>Fondo</option><option>Reintegro</option></select></div>'
+      +'<div class="form-group"><label>Tipo *</label><select id="mc-tipo" onchange="_mcProvToggle()"><option>Egreso</option><option>Ingreso</option><option>Fondo</option><option>Reintegro</option></select>'
+        +'<label id="mc-prov-wrap" style="display:flex;align-items:center;gap:6px;font-weight:400;font-size:12px;margin-top:5px;cursor:pointer"><input type="checkbox" id="mc-provisional" style="width:16px;height:16px;flex:0 0 auto;margin:0"><span>Es un <strong>provisional</strong> (sale de la caja pero se repone; no entra al reembolso)</span></label></div>'
       +'<div class="form-group"><label>Caja *</label><select id="mc-caja" onchange="_mcSubcats()">'+cajaOpts+'</select></div>'
     +'</div>'
     +'<div class="form-row col3">'
@@ -8342,7 +8390,16 @@ window.renderMovimientoCaja = function(){
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-top:6px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="guardarMovCaja(this)">💾 Guardar movimiento</button> <button class="btn btn-outline" onclick="loadView(\'caja-list\')">Ver movimientos</button></div>'
     +'</div>';
-  _mcSubcats();
+  _mcSubcats(); _mcProvToggle();
+};
+// Sol Sebastián: la casilla de "provisional" solo aplica a Egresos.
+window._mcProvToggle=function(){
+  var t=(document.getElementById('mc-tipo')||{}).value||'';
+  var w=document.getElementById('mc-prov-wrap');
+  var c=document.getElementById('mc-provisional');
+  var esEg=/Egreso/i.test(t);
+  if(w) w.style.display = esEg ? 'flex' : 'none';
+  if(!esEg && c) c.checked=false;
 };
 window._mcSubcats=function(){
   var sel=document.getElementById('mc-caja'); if(!sel) return;
@@ -8368,7 +8425,10 @@ window.guardarMovCaja=async function(btn){
     entregado_por:(document.getElementById('mc-responsable').value||'').trim()||null,
     observaciones:(document.getElementById('mc-obs').value||'').trim()||null,
     user_id:currentUser.id };
-  var row=Object.assign({}, base, { caja:caja, subcaja:subcaja, estado_legal:(esEgreso?'Pendiente de legalizar':null) });
+  // Sol Sebastián: los provisionales salen de la caja (por eso van como Egreso) pero NO son un gasto
+  // a legalizar, así que se marcan aparte y no los barre el reembolso por lotes.
+  var _prov = !!(document.getElementById('mc-provisional') && document.getElementById('mc-provisional').checked);
+  var row=Object.assign({}, base, { caja:caja, subcaja:subcaja, estado_legal:(esEgreso ? (_prov ? 'Provisional' : 'Pendiente de legalizar') : null) });
   var r=await sb.from('caja').insert(row);
   if(r.error && /(could not find|does not exist|schema cache|column)/i.test(r.error.message||'')){
     // Aún no existen las columnas nuevas: respaldo en 'empresa'
