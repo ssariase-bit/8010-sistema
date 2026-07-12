@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-destinatarios';
+const APP_VERSION = '2026-07-12-8010-sin-llaves';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-8010-sin-llaves', titulo:'Informe de Turno: 8010 sin llaves de acceso',
+    afecta:'Informe de Turno (8010)',
+    detalle:'Sol Santiago: en 8010 no hay llaves de acceso, pero el Informe de Turno pedía igual el número de llaves entregadas. Se retiró la casilla en 8010 y la línea correspondiente ya no sale en el informe que se envía; la sección queda solo con sombrillas. En Kubik no cambia nada.' },
   { fecha:'2026-07-12', version:'2026-07-12-destinatarios', titulo:'Comunicados: se corrige la lista de destinatarios (personas duplicadas y usuarios que no van)',
     afecta:'Comunicaciones · Comentarios · Solicitudes',
     detalle:'Sol Santiago: en "Dirigido a" aparecían personas repetidas y usuarios que no deben recibir comunicados. (1) La misma persona salía dos veces cuando su nombre estaba escrito distinto en el registro de Personal y en el usuario del sistema — por ejemplo "Juan Fernando Martínez" y "Juan Martinez". Ahora cada usuario se resuelve contra el registro oficial de Personal: si su nombre corresponde a alguien ya registrado, se usa ESE nombre y no se agrega otra vez. (2) Se pueden excluir usuarios que conservan su acceso al sistema pero no deben recibir comunicados. (3) Se omite el personal marcado como Inactivo, de modo que los registros duplicados o retirados ya no aparecen.' },
@@ -3372,9 +3375,12 @@ function renderTurnoForm() {
       </div>
 
       <div class="form-section">
-        <div class="form-section-title">🔑 Entrega de turno (llaves / sombrillas)</div>
+        <!-- Sol Santiago: en 8010 no hay llaves de acceso, así que la casilla no se muestra. -->
+        <div class="form-section-title">🔑 Entrega de turno${EDIFICIO_ACTIVO==='8010' ? ' (sombrillas)' : ' (llaves / sombrillas)'}</div>
         <div class="form-row col3">
-          <div class="form-group"><label>Llaves de acceso entregadas</label><input type="number" id="t-llaves" min="0" placeholder="0"></div>
+          ${EDIFICIO_ACTIVO==='8010'
+            ? '<input type="hidden" id="t-llaves" value="">'
+            : '<div class="form-group"><label>Llaves de acceso entregadas</label><input type="number" id="t-llaves" min="0" placeholder="0"></div>'}
           <div class="form-group"><label>Sombrillas disponibles</label><input type="number" id="t-sombrillas" min="0" placeholder="0"></div>
           <div class="form-group"><label>Sombrillas en préstamo</label><input type="number" id="t-sombrillas-prest" min="0" placeholder="0"></div>
         </div>
@@ -3595,8 +3601,8 @@ async function enviarTurno() {
 ${(function(){ var cs=(EB().cajasMenores)||[]; var vals=[cajaLTM3,cajaOT,cajaPH]; return '▪ Cajas (físico): '+cs.map(function(c,i){ return c.id+' $'+vals[i]; }).join(' | '); })()}
 ▪ Total caja: $${caja}${(Number(llaves)||Number(sombDisp)||Number(sombPrest)) ? `
 
-*ENTREGA DE TURNO:*
-▪ Llaves de acceso: ${llaves}
+*ENTREGA DE TURNO:*${(EDIFICIO_ACTIVO!=='8010' && Number(llaves)) ? `
+▪ Llaves de acceso: ${llaves}` : ''}
 ▪ Sombrillas: ${sombDisp} disponibles | ${sombPrest} en préstamo` : ''}
 
 *NOVEDADES:*
