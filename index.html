@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-ventas-por-compania';
+const APP_VERSION = '2026-07-12-entidad-en-reserva';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-entidad-en-reserva', titulo:'La reserva ahora guarda la compañía que factura (8010)',
+    afecta:'Nueva Reserva · Rack · Resumen de Ventas (8010)',
+    detalle:'Sol Santiago: el reparto del ingreso entre LTM3 y 80-10 SAS dependía de una lista de contratos escrita dentro del sistema, de modo que un contrato nuevo se habría ido a 80-10 por defecto sin que nadie lo notara. Ahora la reserva pregunta explícitamente la COMPAÑÍA QUE FACTURA (80-10 Urban Living SAS · alojamiento, o LTM3 S.A.S · canon de arrendamiento) y el dato queda guardado en la reserva y en el rack. El Resumen de Ventas y el Estado de Resultados leen ese campo. Se rellenaron los 2.478 registros históricos de los ocho contratos de arrendamiento vigentes y el resto quedó como alojamiento; las cifras cuadran exactamente con lo cargado en el Estado de Resultados. La lista de contratos queda solo como respaldo para registros antiguos. En Kubik no aplica: allí factura una sola sociedad.' },
   { fecha:'2026-07-12', version:'2026-07-12-ventas-por-compania', titulo:'Resumen de Ventas: alojamiento separado por compañía (LTM3 y 80-10 SAS)',
     afecta:'Resumen de Ventas (8010)',
     detalle:'Sol Santiago: en 8010 facturan dos compañías y el Resumen de Ventas las mostraba juntas. Ahora el alojamiento se desglosa por compañía: LTM3 S.A.S (canon de arrendamiento, excluido de IVA) y 80-10 Ochenta Diez Urban Living SAS (alojamiento / plan corporativo, gravado), con noches, valor y participación de cada una. La compañía la define el TIPO DE CONTRATO y no la duración de la estadía —validado con Fabio: hay contratos de varios meses que son 80-10—, por lo que el sistema lleva la relación de contratos de arrendamiento vigentes; toda estadía que no corresponda a uno de ellos se toma como alojamiento (80-10). Las cifras cuadran exactamente con los ingresos cargados en el Estado de Resultados.' },
@@ -4999,6 +5002,18 @@ function renderNuevaReserva() {
               <option value="encima">IVA 19% (se suma)</option><option value="exento">Exento de IVA</option><option value="excluido">Excluido (canon de arrendamiento)</option>
             </select>
           </div>
+          ${EDIFICIO_ACTIVO==='8010' ? `
+          <!-- Sol Santiago: en 8010 facturan dos compañías. La entidad la define el TIPO DE CONTRATO,
+               no la duración ni el IVA (hay contratos de arrendamiento largos y alojamientos
+               corporativos igual de largos). Por eso se pregunta explícitamente en la reserva. -->
+          <div class="form-group">
+            <label>Compañía que factura *</label>
+            <select id="res-entidad" style="font-weight:600">
+              <option value="80-10">80-10 Urban Living SAS — Alojamiento</option>
+              <option value="LTM3">LTM3 S.A.S — Canon de arrendamiento</option>
+            </select>
+            <div style="font-size:11px;color:#6B7280;margin-top:3px">Define en qué sociedad entra el ingreso. Lo determina el contrato, no cuánto dure la estadía.</div>
+          </div>` : ''}
           <div class="form-group">
             <label id="res-tarifa-lbl">Tarifa por noche *</label>
             <div style="display:flex;gap:6px;align-items:center">
@@ -5276,6 +5291,9 @@ async function guardarReserva() {
   const noches  = Number(document.getElementById('res-noches').value) || 0;
   const canal   = document.getElementById('res-canal').value;
   const iva     = document.getElementById('res-iva')?.value || 'incluido';
+  // Sol Santiago: en 8010 la reserva guarda la compañía que factura (LTM3 arriendo · 80-10 alojamiento).
+  // En Kubik no aplica: allá factura una sola sociedad (8i8 Operadora).
+  const _entR   = (EDIFICIO_ACTIVO==='8010') ? ((document.getElementById('res-entidad')?.value) || '80-10') : null;
   const _telR   = window._telFull('res-tel');
   const porNoche = document.getElementById('res-pornoche-toggle')?.checked;
   const tarifasNoche = {};
@@ -5319,11 +5337,11 @@ async function guardarReserva() {
     const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
     const tNocheCOP = (_esUSDr && _trmR>0) ? Math.round(tNoche*_trmR) : tNoche; // USD→COP para que cuente en ventas
-    for (const _a of _aptosW2){ const _sib=(_adjSel.length>0 && _a!==apto); const _tA=_sib?null:(tNocheCOP||null); const _tU=(_esUSDr && !_sib)?(tNoche||null):null; rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) }); }
+    for (const _a of _aptosW2){ const _sib=(_adjSel.length>0 && _a!==apto); const _tA=_sib?null:(tNocheCOP||null); const _tU=(_esUSDr && !_sib)?(tNoche||null):null; rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) }); }
   }
   // Día de check-out
   const dco = new Date(co);
-  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) });
+  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) });
 
   // Guardia anti-borrado: avisar si esas fechas ya tienen una reserva de OTRO huésped (evita sobrescribir por error)
   try{
@@ -5390,7 +5408,7 @@ async function guardarReserva() {
   // Sol Andrés/María José: reflejar "Incluye desayuno" en las observaciones de la confirmación
   if ((document.getElementById('res-desayuno')?.value) === 'Si') { resData.obs = (resData.obs?resData.obs+' | ':'') + 'Incluye desayuno'; }
   if (typeof _adjSel!=='undefined' && _adjSel.length>0) { resData.obs = (resData.obs?resData.obs+' | ':'') + 'Combo unido: ' + _aptosW2.join(' + '); }
-  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, apto: resData.apto, config: resData.config, moneda: resData.moneda, tarifa_usd: resData.tarifa_usd||null, trm: resData.trm||null, tipo_apto_manual: resData.tipoAptoManual||null, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, huespedes_extra: _he2, numero: resData.numero, empresa: resData.empresa, pagador: resData.pagador, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, desayuno: (document.getElementById('res-desayuno')?.value || 'No'), user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',pagador:'Quién paga',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insR=await sb.from('reservas').insert(_rvRow).select('id').single(); if(_insR.error){ showToast('⚠️ Quedó en el rack pero NO se guardó en Reservas: '+_insR.error.message,'error'); } var _insH=(_insR.data)||{}; if(_insH.id){ try{ await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); }catch(_eh){} } } } catch(_e){ showToast('⚠️ Reserva en el rack, pero falló el registro en Reservas: '+(_e&&_e.message||_e),'error'); }
+  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, entidad: _entR, apto: resData.apto, config: resData.config, moneda: resData.moneda, tarifa_usd: resData.tarifa_usd||null, trm: resData.trm||null, tipo_apto_manual: resData.tipoAptoManual||null, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, huespedes_extra: _he2, numero: resData.numero, empresa: resData.empresa, pagador: resData.pagador, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, desayuno: (document.getElementById('res-desayuno')?.value || 'No'), user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',pagador:'Quién paga',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insR=await sb.from('reservas').insert(_rvRow).select('id').single(); if(_insR.error){ showToast('⚠️ Quedó en el rack pero NO se guardó en Reservas: '+_insR.error.message,'error'); } var _insH=(_insR.data)||{}; if(_insH.id){ try{ await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); }catch(_eh){} } } } catch(_e){ showToast('⚠️ Reserva en el rack, pero falló el registro en Reservas: '+(_e&&_e.message||_e),'error'); }
   setTimeout(() => {
     if(confirm('¿Deseas generar la Confirmación de Reserva ahora?')) {
       generarConfirmacion(resData);
@@ -6901,6 +6919,7 @@ window.editarReserva = async function(id){
     set('res-apto',r.apto); set('res-checkin',r.checkin); set('res-checkout',r.checkout);
     set('res-tarifa',r.tarifa); set('res-noches',r.noches); set('res-canal',r.canal);
     set('res-iva',r.iva); set('res-moneda',r.moneda); set('res-config',r.config); set('res-desayuno', r.desayuno||'No');
+    set('res-entidad', r.entidad||'80-10');   // compañía que factura (solo 8010)
     set('res-tipotarifa',r.tipo_tarifa); set('res-pago',r.pago); set('res-estadopago',r.estado_pago);
     set('res-num-reserva',r.num_reserva); set('res-cxc-tipo',r.cxc_tipo); set('res-cxc-razon',r.cxc_razon);
     set('res-personas',r.personas); set('res-obs',r.obs); set('res-firmante',r.firmante);
@@ -10066,8 +10085,11 @@ const CONTRATOS_LTM3_8010 = [
   {apto:'701',  ap:'rincon'},   {apto:'801',  ap:'correa'},
   {apto:'901',  ap:'zavala'},   {apto:'1101', ap:'mayer'},
 ];
-function _entidad8010(apto, huesped){
+// La entidad viene guardada en la reserva (campo 'entidad' del rack). La lista de contratos queda
+// solo como respaldo, por si alguna fila histórica no lo tiene.
+function _entidad8010(apto, huesped, entidad){
   if(EDIFICIO_ACTIVO!=='8010') return null;
+  if(entidad==='LTM3' || entidad==='80-10') return entidad;   // lo que diga la reserva manda
   var h=String(huesped||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
   var c=CONTRATOS_LTM3_8010.find(function(c){ return c.apto===String(apto) && h.indexOf(c.ap)>=0; });
   return c ? 'LTM3' : '80-10';
@@ -10085,7 +10107,7 @@ function _alojaDe(rk){
     var r=map[k]; if(!window._esVentaAloja(r)) return;
     var v=Number(r.tarifa)||0;
     aloja+=v; noches++;
-    var e=_entidad8010(r.apto, r.huesped);
+    var e=_entidad8010(r.apto, r.huesped, r.entidad);
     if(e && ent[e]){ ent[e].v+=v; ent[e].n++; }
   });
   return {aloja:aloja, noches:noches, ent:ent};
@@ -10101,7 +10123,7 @@ async function renderResumenVentas(){
   var edis=(EDIFICIO_ACTIVO==='kubik')?[{id:'kubik',nom:'Kubik Living 8i8'}]:[{id:'8010',nom:'8010 Urban Living'}]; var rows=[];
   for(var i=0;i<edis.length;i++){
     var e=edis[i];
-    var rkR=await _rackRango('apto,fecha,estado,tarifa,tipo,huesped,updated_at', ini, fin, e.id);
+    var rkR=await _rackRango('apto,fecha,estado,tarifa,tipo,huesped,entidad,updated_at', ini, fin, e.id);
     var csR=await sb.from('consumos').select('valor').eq('edificio',e.id).gte('fecha',ini).lte('fecha',fin);
     var evR = e.id==='8010' ? await sb.from('eventos').select('total').eq('edificio','8010').gte('fecha_inicio',ini).lte('fecha_inicio',fin) : {data:[]};
     var aloj=_alojaDe(rkR.data||[]);
