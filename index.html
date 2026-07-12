@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-ventas-sin-mezcla';
+const APP_VERSION = '2026-07-12-ventas-por-compania';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-ventas-por-compania', titulo:'Resumen de Ventas: alojamiento separado por compañía (LTM3 y 80-10 SAS)',
+    afecta:'Resumen de Ventas (8010)',
+    detalle:'Sol Santiago: en 8010 facturan dos compañías y el Resumen de Ventas las mostraba juntas. Ahora el alojamiento se desglosa por compañía: LTM3 S.A.S (canon de arrendamiento, excluido de IVA) y 80-10 Ochenta Diez Urban Living SAS (alojamiento / plan corporativo, gravado), con noches, valor y participación de cada una. La compañía la define el TIPO DE CONTRATO y no la duración de la estadía —validado con Fabio: hay contratos de varios meses que son 80-10—, por lo que el sistema lleva la relación de contratos de arrendamiento vigentes; toda estadía que no corresponda a uno de ellos se toma como alojamiento (80-10). Las cifras cuadran exactamente con los ingresos cargados en el Estado de Resultados.' },
   { fecha:'2026-07-12', version:'2026-07-12-ventas-sin-mezcla', titulo:'Resumen de Ventas: se elimina la referencia al otro edificio',
     afecta:'Resumen de Ventas',
     detalle:'Sol Santiago: el indicador principal decía "TOTAL COMPAÑÍA · 8010 + Kubik" aunque las cifras corresponden únicamente al edificio activo, lo que hacía pensar que se estaban mezclando los dos. Los datos siempre fueron solo del edificio en el que se está; era la etiqueta la que estaba mal. Ahora el indicador dice "TOTAL DEL MES" y nombra el edificio que se está consultando, sin mencionar al otro. La nota al pie también aclara que las cifras son del edificio activo.' },
@@ -10051,6 +10054,24 @@ async function renderIngresos(){
 
 // ═══════════════════════════════════════════════════════════
 // ═══ RESUMEN DE VENTAS — SOLO del edificio activo (nunca se mezclan los dos) ═══
+// Sol Santiago: en 8010 facturan DOS compañías y el alojamiento debe verse separado por cada una:
+//   · LTM3 S.A.S            → canon de arrendamiento (excluido de IVA)
+//   · 80-10 Urban Living SAS → alojamiento / plan corporativo (gravado)
+// Lo que define la entidad NO es la duración de la estadía sino el tipo de contrato (validado con
+// Fabio: hay contratos de 6 meses que son 80-10). Por eso se lleva la relación de contratos vigentes.
+// Las estadías que no correspondan a un contrato de arrendamiento son alojamiento → 80-10.
+const CONTRATOS_LTM3_8010 = [
+  {apto:'301',  ap:'suarez'},   {apto:'304',  ap:'patino'},
+  {apto:'502',  ap:'zulma'},    {apto:'602',  ap:'lopera'},
+  {apto:'701',  ap:'rincon'},   {apto:'801',  ap:'correa'},
+  {apto:'901',  ap:'zavala'},   {apto:'1101', ap:'mayer'},
+];
+function _entidad8010(apto, huesped){
+  if(EDIFICIO_ACTIVO!=='8010') return null;
+  var h=String(huesped||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  var c=CONTRATOS_LTM3_8010.find(function(c){ return c.apto===String(apto) && h.indexOf(c.ap)>=0; });
+  return c ? 'LTM3' : '80-10';
+}
 function _alojaDe(rk){
   var PRI={'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1};
   var map={};
@@ -10059,9 +10080,15 @@ function _alojaDe(rk){
     var pr=PRI[r.estado]||0, pc=PRI[c.estado]||0;
     if(pr>pc) map[k]=r; else if(pr===pc){ var tr=r.updated_at||r.created_at||'', tc=c.updated_at||c.created_at||''; if(tr>tc) map[k]=r; }
   });
-  var aloja=0, noches=0;
-  Object.keys(map).forEach(function(k){ var r=map[k]; if(!window._esVentaAloja(r)) return; aloja+=(Number(r.tarifa)||0); noches++; });
-  return {aloja:aloja, noches:noches};
+  var aloja=0, noches=0, ent={'80-10':{v:0,n:0}, 'LTM3':{v:0,n:0}};
+  Object.keys(map).forEach(function(k){
+    var r=map[k]; if(!window._esVentaAloja(r)) return;
+    var v=Number(r.tarifa)||0;
+    aloja+=v; noches++;
+    var e=_entidad8010(r.apto, r.huesped);
+    if(e && ent[e]){ ent[e].v+=v; ent[e].n++; }
+  });
+  return {aloja:aloja, noches:noches, ent:ent};
 }
 async function renderResumenVentas(){
   var _rolOK = currentProfile && (currentProfile.rol==='gerente_general'||currentProfile.rol==='asesora');
@@ -10074,13 +10101,26 @@ async function renderResumenVentas(){
   var edis=(EDIFICIO_ACTIVO==='kubik')?[{id:'kubik',nom:'Kubik Living 8i8'}]:[{id:'8010',nom:'8010 Urban Living'}]; var rows=[];
   for(var i=0;i<edis.length;i++){
     var e=edis[i];
-    var rkR=await _rackRango('apto,fecha,estado,tarifa,tipo,updated_at', ini, fin, e.id);
+    var rkR=await _rackRango('apto,fecha,estado,tarifa,tipo,huesped,updated_at', ini, fin, e.id);
     var csR=await sb.from('consumos').select('valor').eq('edificio',e.id).gte('fecha',ini).lte('fecha',fin);
     var evR = e.id==='8010' ? await sb.from('eventos').select('total').eq('edificio','8010').gte('fecha_inicio',ini).lte('fecha_inicio',fin) : {data:[]};
     var aloj=_alojaDe(rkR.data||[]);
     var cons=(csR.data||[]).reduce(function(s,c){return s+(Number(c.valor)||0);},0);
     var evts=(evR.data||[]).reduce(function(s,x){return s+(Number(x.total)||0);},0);
-    rows.push({nom:e.nom, aloja:aloj.aloja, noches:aloj.noches, cons:cons, evts:evts, total:aloj.aloja+cons+evts});
+    rows.push({nom:e.nom, aloja:aloj.aloja, noches:aloj.noches, cons:cons, evts:evts, total:aloj.aloja+cons+evts, ent:aloj.ent});
+  }
+  // 8010: desglose del alojamiento por compañía (LTM3 arriendo · 80-10 SAS alojamiento)
+  var _entRow='';
+  if(EDIFICIO_ACTIVO==='8010' && rows[0] && rows[0].ent){
+    var E=rows[0].ent;
+    var _f=function(n){return '$'+Math.round(n||0).toLocaleString('es-CO');};
+    _entRow='<div class="card" style="margin-bottom:16px"><div class="card-header"><div class="card-title">🏢 Alojamiento por compañía</div></div>'
+      +'<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Compañía</th><th>Concepto</th><th style="text-align:right">Noches</th><th style="text-align:right">Alojamiento</th><th style="text-align:right">Participación</th></tr></thead><tbody>'
+      +'<tr><td style="font-weight:700;color:#1D3461">80-10 Ochenta Diez Urban Living SAS</td><td style="font-size:12px;color:var(--gris-t)">Alojamiento / plan corporativo <span style="color:#92400E">· gravado</span></td><td style="text-align:right">'+E['80-10'].n+'</td><td style="text-align:right;font-weight:700">'+_f(E['80-10'].v)+'</td><td style="text-align:right">'+(rows[0].aloja?Math.round(E['80-10'].v/rows[0].aloja*100):0)+'%</td></tr>'
+      +'<tr><td style="font-weight:700;color:#1A5C2E">LTM3 S.A.S</td><td style="font-size:12px;color:var(--gris-t)">Canon de arrendamiento <span style="color:#1A5C2E">· excluido de IVA</span></td><td style="text-align:right">'+E['LTM3'].n+'</td><td style="text-align:right;font-weight:700">'+_f(E['LTM3'].v)+'</td><td style="text-align:right">'+(rows[0].aloja?Math.round(E['LTM3'].v/rows[0].aloja*100):0)+'%</td></tr>'
+      +'<tr style="background:var(--azul-c);font-weight:800"><td colspan="2" style="color:var(--azul)">TOTAL ALOJAMIENTO</td><td style="text-align:right">'+rows[0].noches+'</td><td style="text-align:right;color:#1A5C2E">'+_f(rows[0].aloja)+'</td><td style="text-align:right">100%</td></tr>'
+      +'</tbody></table></div>'
+      +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">La compañía la define el <strong>tipo de contrato</strong>, no la duración de la estadía: hay contratos de varios meses que son alojamiento corporativo (80-10). Las estadías sin contrato de arrendamiento se toman como alojamiento (80-10).</p></div>';
   }
   var f$=function(n){return '$'+Math.round(n||0).toLocaleString('es-CO');};
   var gA=0,gC=0,gE=0,gT=0; rows.forEach(function(r){gA+=r.aloja;gC+=r.cons;gE+=r.evts;gT+=r.total;});
@@ -10094,6 +10134,7 @@ async function renderResumenVentas(){
     +'<div style="flex:1;min-width:140px;background:#fff;border:1px solid var(--gris-b);border-radius:10px;padding:16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Eventos</div><div style="font-size:20px;font-weight:800;color:#7C3AED;margin-top:4px;white-space:nowrap">'+f$(gE)+'</div></div>'
     +'<div style="flex:1;min-width:140px;background:#fff;border:1px solid var(--gris-b);border-radius:10px;padding:16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Consumos</div><div style="font-size:20px;font-weight:800;color:#B8963E;margin-top:4px;white-space:nowrap">'+f$(gC)+'</div></div>'
     +'</div>'
+    + _entRow
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Edificio</th><th style="text-align:right">Alojamiento</th><th style="text-align:right">Eventos</th><th style="text-align:right">Consumos</th><th style="text-align:right">Total</th></tr></thead><tbody>'+tr
     +'<tr style="background:var(--azul-c);font-weight:800"><td style="color:var(--azul)">TOTAL</td><td style="text-align:right">'+f$(gA)+'</td><td style="text-align:right">'+f$(gE)+'</td><td style="text-align:right">'+f$(gC)+'</td><td style="text-align:right;color:#1A5C2E">'+f$(gT)+'</td></tr>'
     +'</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:10px">Cifras del edificio activo. Alojamiento = noches con tarifa del rack. Consumos registrados en el CKO.'+(EDIFICIO_ACTIVO==='8010'?' Eventos = eventos realizados.':'')+'</p></div>';
