@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-coment-autoria';
+const APP_VERSION = '2026-07-12-recargos-y-rack8010';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-recargos-y-rack8010', titulo:'Recargos nocturnos y dominicales en Horas Extra + corrección del rack de 8010',
+    afecta:'Cuadro de Horas Extra · Rack (8010) · Control de Personal (8010) · Menú',
+    detalle:'(1) Sol Sebastián y administradores 8010: el Cuadro de Horas Extra solo pagaba las horas extra. Las horas ORDINARIAS del turno trabajadas de noche (7pm–6am) o en domingo/festivo generan recargo por ley y no se reflejaban en ninguna parte. Ahora el cuadro los calcula y los suma al total: recargo nocturno +35%, dominical/festivo +90% (desde jul-2026), y si el turno ordinario es nocturno en domingo o festivo se suman ambos. Se agregaron las columnas de horas con recargo, el pago de recargos y el total. (2) Sol Sebastián: en el rack de 8010 la "unidad combinada" no aplica — un apto con su habitación A (501 + 501A) ya tiene su propio concepto, "Apto completo", y el color del combo lo estaba pisando. En 8010 ya no se marca como unidad combinada; en Kubik se mantiene (602+603, Suite Deluxe 504+504A). Además el rack trae ahora una leyenda que explica los colores de las unidades combinadas. (3) Aclaración de Sebastián sobre los cargos de 8010: se reintegró Capitán de Meseros (escribió "mesero" queriendo decir "mensajero") y se retiraron Mensajero y los cargos gerenciales, ya que no se registra su ingreso. (4) El módulo de Revistas Nocturnas es de Kubik y ya no aparece en 8010.' },
   { fecha:'2026-07-12', version:'2026-07-12-coment-autoria', titulo:'Comentarios: el numerito rojo contaba como pendientes comentarios ya respondidos',
     afecta:'Comentarios',
     detalle:'Sol Santiago: el contador seguía marcando como "sin responder" comentarios que sí habían sido respondidos. La causa: el comentario se firma con el nombre más el cargo ("Santiago Arias (Gerencia General)") y con el correo corporativo del edificio, mientras que el perfil del usuario tiene el nombre sin cargo y un correo de acceso distinto; al no coincidir ninguno de los dos, el sistema creía que la respuesta la había escrito otra persona y la seguía contando. Ahora la comparación ignora el cargo entre paréntesis, tildes y mayúsculas, y además reconoce el correo del directorio del edificio. Verificado contra los datos: el contador pasó de 2 a 1, quedando solo el que realmente está sin responder.' },
@@ -1229,10 +1232,13 @@ window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','no
 window._ITEMS_SISTEMA = ['import-rack','changelog'];
 // Módulos construidos sobre el presupuesto 2026 y las entidades 80-10 / LTM3 / PH (solo 8010): no se muestran en Kubik
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
+// Las revistas nocturnas son un proceso de seguridad de Kubik (Sol Ricardo). En 8010 no aplica.
+window._ITEMS_SOLO_KUBIK = ['revistas-list'];
 window._itemPermitido = function(it){
   var _rol = currentProfile && currentProfile.rol;
   if(it.roles && it.roles.indexOf(_rol)<0) return false;
   if(window._ITEMS_SOLO_8010.indexOf(it.id)>-1 && (typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')) return false;
+  if(window._ITEMS_SOLO_KUBIK.indexOf(it.id)>-1 && (typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO!=='kubik')) return false;
   if(window._ITEMS_CONFID.indexOf(it.id)>-1 && !window._puedeConfidencial()) return false;
   if(window._ITEMS_SISTEMA.indexOf(it.id)>-1 && !window._puedeSistema()) return false;
   return true;
@@ -2514,6 +2520,14 @@ async function renderRack() {
   });
   Object.keys(_porHF).forEach(function(k){
     var aps=[..._porHF[k]]; if(aps.length<2) return;
+    // Sol Sebastián (8010): en 8010 un apto con su habitación A (501 + 501A) NO es una "unidad
+    // combinada": eso ya tiene su propio concepto, "Apto completo", con su color. Marcarlo como combo
+    // pisaba ese color y generaba confusión. Solo se marca combo cuando son apartamentos DISTINTOS.
+    // (En Kubik sí aplica: la Suite Deluxe es 504 + 504A, por eso la regla es solo para 8010.)
+    if(EDIFICIO_ACTIVO==='8010'){
+      var _bases={}; aps.forEach(function(a){ _bases[String(a).replace(/A$/,'')]=1; });
+      if(Object.keys(_bases).length < 2) return;
+    }
     // Preferir el nombre del tipo declarado en la reserva si existe; si no, inferir por sufijos
     var info=null; for(var _i=0;_i<aps.length;_i++){ if(_tipoDeclarado[aps[_i]]){ info=_tipoDeclarado[aps[_i]]; break; } }
     if(!info) info=_nombreCombo(aps);
@@ -2690,6 +2704,16 @@ async function renderRack() {
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           ${Object.entries(colorMap).filter(([k])=>k!=='Bloqueado').map(([k,v])=>`<span style="display:flex;align-items:center;gap:4px;font-size:11px"><span style="display:inline-block;width:16px;height:16px;background:${v.bg};border:1px solid #ccc;border-radius:3px"></span>${k}</span>`).join('')}
         </div>
+        ${(function(){
+          // Sol Sebastián: explicar qué significan los colores distintos de las unidades combinadas.
+          var us=Object.keys(_comboColorDe);
+          if(!us.length) return '';
+          return '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #ddd">'
+            +'<div style="font-size:11px;color:var(--gris-t);margin-bottom:5px">🔗 <strong>Unidades combinadas</strong> — dos apartamentos que se rentan como uno solo. Los dos se pintan del mismo color y la tarifa se cobra en el primero, para no contarla dos veces. Por dentro siguen bloqueando los dos aptos, así la ocupación y el ADR quedan reales.</div>'
+            +'<div style="display:flex;gap:10px;flex-wrap:wrap">'
+            + us.map(function(u){ var c=_comboColorDe[u]; return '<span style="display:flex;align-items:center;gap:4px;font-size:11px"><span style="display:inline-block;width:16px;height:16px;background:'+c.bg+';border:1px solid '+c.fg+';border-radius:3px"></span>'+u+'</span>'; }).join('')
+            +'</div></div>';
+        })()}
       </div>
       <div style="overflow-x:auto;overflow-y:auto;max-height:70vh">
         <table style="border-collapse:collapse;font-size:11px">
@@ -4812,7 +4836,10 @@ function _kubikLabel(apto){ if((((EB&&EB().nombre)||'').indexOf('8010')>-1)) ret
 // Capitán de Meseros ni "Otro", y los cargos gerenciales son los reales (GG / Operativa / Eventos).
 // Kubik conserva su propia lista. Se mantiene "Gerente" oculto en el histórico de registros viejos.
 function _CARGOS(){
-  if(EDIFICIO_ACTIVO==='8010') return ['Administrador','Camarera','Áreas Públicas','Mantenimiento','Mensajero','Chef','Gerente General','Gerente Operativo','Gerente de Eventos'];
+  // 8010 (aclaración de Sebastián): no se registra ingreso de Recepcionista, Mensajero, "Otro" ni de
+  // los gerentes. Sí de Capitán de Meseros (Miguel Moreno) — en la solicitud anterior escribió
+  // "mesero" queriendo decir "mensajero".
+  if(EDIFICIO_ACTIVO==='8010') return ['Administrador','Camarera','Áreas Públicas','Mantenimiento','Chef','Capitán de Meseros'];
   return ['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro'];
 }
 // Sol Sebastián: cada persona tiene SU color, siempre el mismo, para reconocer de un vistazo de quién
@@ -7876,6 +7903,35 @@ function clasificaExtra(salida, extraMin, fecha){
   return out;
 }
 
+// Sol Sebastián (8010): el cuadro solo pagaba HORAS EXTRA. Las horas ORDINARIAS del turno trabajadas
+// de noche (7pm–6am) o en domingo/festivo generan RECARGO por ley y no se reflejaban en ninguna parte.
+// Esta función clasifica los minutos ordinarios (el turno, descontando las extras que van al final).
+function clasificaOrdinarias(ingreso, salida, extraMin, fecha){
+  const out = { ord_noct:0, ord_fest_diur:0, ord_fest_noct:0, ord_diur:0 };
+  const ing = _timeToMin(ingreso), sal = _timeToMin(salida);
+  if (ing==null || sal==null) return out;
+  let salAdj = (sal < ing) ? sal + 1440 : sal;          // turno que cruza medianoche
+  const fin = salAdj - (Number(extraMin)||0);           // las extras se ubican al final del turno
+  if (fin <= ing) return out;
+  const d = new Date(fecha+'T00:00:00');
+  const esFest = d.getDay()===0 || FESTIVOS_2026.includes(fecha);
+  let diur=0, noct=0;
+  for (let m=ing; m<fin; m++){
+    const hm = ((m%1440)+1440)%1440;
+    if (hm>=1140 || hm<360) noct++; else diur++;        // noche: 7pm–6am
+  }
+  if (esFest){ out.ord_fest_diur=diur; out.ord_fest_noct=noct; }
+  else { out.ord_diur=diur; out.ord_noct=noct; }
+  return out;
+}
+// Recargos (se suman SOBRE el salario que ya se paga, por eso el factor es solo el recargo)
+function factorRecargo(tipo, fechaStr){
+  const domRec = (fechaStr >= '2026-07-01') ? 0.90 : 0.80;
+  if (tipo==='ord_noct')      return 0.35;              // recargo nocturno
+  if (tipo==='ord_fest_diur') return domRec;            // dominical/festivo
+  if (tipo==='ord_fest_noct') return domRec + 0.35;     // dominical/festivo + nocturno
+  return 0;                                             // ordinaria diurna: ya está en el salario
+}
 async function renderCuadroExtras(){
   const now = new Date();
   const year = (window._ceYear!=null) ? window._ceYear : now.getFullYear();
@@ -7910,12 +7966,17 @@ async function renderCuadroExtras(){
   regs.forEach(r => {
     if (!r.marcacion_salida) return;
     const extra = calcExtraMin(r.cargo, r.horario, r.marcacion_ingreso, r.marcacion_salida, r.jornada_base).extra;
-    if (extra<=0) return;
     const c = clasificaExtra(r.marcacion_salida, extra, r.fecha);
+    // Recargos sobre las horas ORDINARIAS del turno (nocturno / dominical / festivo)
+    const o = clasificaOrdinarias(r.marcacion_ingreso, r.marcacion_salida, extra, r.fecha);
+    // Si no tiene ni extras ni recargos, no aporta nada al cuadro
+    if (extra<=0 && !o.ord_noct && !o.ord_fest_diur && !o.ord_fest_noct) return;
     const mp = resolverPers(r.nombre);
     const k = mp ? norm(mp.nombre) : norm(r.nombre);
-    if (!acc[k]) acc[k] = { nombre: mp?mp.nombre:r.nombre, cargo: mp?mp.cargo:r.cargo, min:{diurna:0,nocturna:0,diurna_fest:0,nocturna_fest:0}, salario: mp?mp.salario:0 };
+    if (!acc[k]) acc[k] = { nombre: mp?mp.nombre:r.nombre, cargo: mp?mp.cargo:r.cargo, min:{diurna:0,nocturna:0,diurna_fest:0,nocturna_fest:0}, rec:{ord_noct:0,ord_fest_diur:0,ord_fest_noct:0}, salario: mp?mp.salario:0 };
+    if (!acc[k].rec) acc[k].rec = {ord_noct:0,ord_fest_diur:0,ord_fest_noct:0};
     acc[k].min.diurna+=c.diurna; acc[k].min.nocturna+=c.nocturna; acc[k].min.diurna_fest+=c.diurna_fest; acc[k].min.nocturna_fest+=c.nocturna_fest;
+    acc[k].rec.ord_noct+=o.ord_noct; acc[k].rec.ord_fest_diur+=o.ord_fest_diur; acc[k].rec.ord_fest_noct+=o.ord_fest_noct;
   });
 
   // Horas Extra: los autorizados ven las de TODOS; el resto del personal ve SOLO las suyas.
@@ -7927,12 +7988,20 @@ async function renderCuadroExtras(){
   const _verSal = true; // autorizados: $ de todos · empleado: solo su propia fila (su $)
   let totalPagar = 0;
   const hm = m => (m/60).toFixed(2).replace('.',',')+'h';
+  let totalExtras = 0, totalRecargos = 0;
   const filas = _accList.map(e => {
     const vh = e.salario>0 ? e.salario/240 : 0;
     const pago = t => (e.min[t]/60) * vh * factorExtraNomina(t, ini);
-    const pagoTotal = pago('diurna')+pago('nocturna')+pago('diurna_fest')+pago('nocturna_fest');
-    totalPagar += pagoTotal;
+    const pagoExtras = pago('diurna')+pago('nocturna')+pago('diurna_fest')+pago('nocturna_fest');
+    // Recargos sobre horas ordinarias (nocturno / dominical / festivo)
+    const _r = e.rec || {ord_noct:0,ord_fest_diur:0,ord_fest_noct:0};
+    const pagoRec = t => (_r[t]/60) * vh * factorRecargo(t, ini);
+    const pagoRecargos = pagoRec('ord_noct')+pagoRec('ord_fest_diur')+pagoRec('ord_fest_noct');
+    const pagoTotal = pagoExtras + pagoRecargos;
+    totalExtras += pagoExtras; totalRecargos += pagoRecargos; totalPagar += pagoTotal;
     const totMin = e.min.diurna+e.min.nocturna+e.min.diurna_fest+e.min.nocturna_fest;
+    const recNocMin = _r.ord_noct + _r.ord_fest_noct;
+    const recFestMin = _r.ord_fest_diur + _r.ord_fest_noct;
     return `<tr>
       <td><strong>${e.nombre||'-'}</strong></td>
       <td>${e.cargo||'-'}</td>
@@ -7941,7 +8010,11 @@ async function renderCuadroExtras(){
       <td>${hm(e.min.nocturna)}</td>
       <td>${hm(e.min.diurna_fest+e.min.nocturna_fest)}</td>
       <td><strong>${hm(totMin)}</strong></td>
-      ${_verSal?`<td style="font-weight:700;color:var(--verde)">$${fmtNum(Math.round(pagoTotal))}</td>`:''}
+      ${_verSal?`<td style="color:#1D3461">$${fmtNum(Math.round(pagoExtras))}</td>`:''}
+      <td title="Horas ordinarias del turno trabajadas de noche (7pm–6am)">${recNocMin?hm(recNocMin):'—'}</td>
+      <td title="Horas ordinarias del turno trabajadas en domingo o festivo">${recFestMin?hm(recFestMin):'—'}</td>
+      ${_verSal?`<td style="color:#92400E">$${fmtNum(Math.round(pagoRecargos))}</td>`:''}
+      ${_verSal?`<td style="font-weight:800;color:var(--verde)">$${fmtNum(Math.round(pagoTotal))}</td>`:''}
     </tr>`;
   }).join('');
 
@@ -7954,13 +8027,13 @@ async function renderCuadroExtras(){
       <button onclick="window._ceMes=(${month}+1)%12;window._ceYear=${month===11?year+1:year};loadView('cuadro-extras')" class="btn btn-outline btn-sm">▶</button>
       <button onclick="window.print()" class="btn btn-outline btn-sm">🖨️ Imprimir</button>${barraCompartir()}
     </div>
-    ${_verSal?`<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Valor hora = salario ÷ 240. Extra diurna 25%, nocturna (desde 7pm) 75%, festivo/dominical +${ini>='2026-07-01'?'90':'80'}%. Verifica salarios en Personal y los festivos.</div>`:''}
+    ${_verSal?`<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Valor hora = salario ÷ 240. <strong>Horas extra:</strong> diurna +25%, nocturna (desde 7pm) +75%, festivo/dominical +${ini>='2026-07-01'?'90':'80'}%. <strong>Recargos sobre las horas ordinarias del turno:</strong> nocturno (7pm–6am) +35%, dominical/festivo +${ini>='2026-07-01'?'90':'80'}%, y si es de noche en domingo/festivo se suman. Verifica salarios en Personal y los festivos.</div>`:''}
     <div class="card">
       ${filas ? `<div style="overflow-x:auto"><table class="tabla">
-        <thead><tr><th>Empleado</th><th>Cargo</th>${_verSal?'<th>Salario</th>':''}<th>Extra diurna</th><th>Extra nocturna</th><th>Festivo/dom.</th><th>Total extra</th>${_verSal?'<th>A pagar</th>':''}</tr></thead>
+        <thead><tr><th>Empleado</th><th>Cargo</th>${_verSal?'<th>Salario</th>':''}<th>Extra diurna</th><th>Extra nocturna</th><th>Extra fest./dom.</th><th>Total extra</th>${_verSal?'<th>Pago extras</th>':''}<th title="Horas ordinarias del turno trabajadas de noche">Rec. nocturno</th><th title="Horas ordinarias del turno en domingo o festivo">Rec. dom./fest.</th>${_verSal?'<th>Pago recargos</th>':''}${_verSal?'<th>TOTAL</th>':''}</tr></thead>
         <tbody>${filas}</tbody>
-        ${_verSal?`<tfoot><tr style="background:var(--azul-c);font-weight:700"><td colspan="7" style="text-align:right">TOTAL A PAGAR</td><td style="color:var(--verde)">$${fmtNum(Math.round(totalPagar))}</td></tr></tfoot>`:''}
-      </table></div>` : '<div class="empty"><div class="empty-icon">⏲️</div><p>Sin horas extra registradas este mes</p></div>'}
+        ${_verSal?`<tfoot><tr style="background:var(--azul-c);font-weight:700"><td colspan="7" style="text-align:right">TOTALES</td><td style="color:#1D3461">$${fmtNum(Math.round(totalExtras))}</td><td colspan="2"></td><td style="color:#92400E">$${fmtNum(Math.round(totalRecargos))}</td><td style="color:var(--verde);font-size:15px">$${fmtNum(Math.round(totalPagar))}</td></tr></tfoot>`:''}
+      </table></div>` : '<div class="empty"><div class="empty-icon">⏲️</div><p>Sin horas extra ni recargos registrados este mes</p></div>'}
     </div>`;
 }
 
