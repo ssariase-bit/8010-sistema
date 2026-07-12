@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-entidad-en-reserva';
+const APP_VERSION = '2026-07-12-contrato-indefinido';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-contrato-indefinido', titulo:'Personal: todos los contratos quedan a término indefinido',
+    afecta:'Personal / RRHH',
+    detalle:'Sol Santiago: todo el personal está contratado a término indefinido, pero el dato estaba vacío en 22 de los 23 registros. Se completó en ambos edificios y el formulario ahora trae "Indefinido" por defecto, de modo que no vuelva a quedar en blanco. Se conservan las demás modalidades por si en algún momento se contrata bajo otra figura.' },
   { fecha:'2026-07-12', version:'2026-07-12-entidad-en-reserva', titulo:'La reserva ahora guarda la compañía que factura (8010)',
     afecta:'Nueva Reserva · Rack · Resumen de Ventas (8010)',
     detalle:'Sol Santiago: el reparto del ingreso entre LTM3 y 80-10 SAS dependía de una lista de contratos escrita dentro del sistema, de modo que un contrato nuevo se habría ido a 80-10 por defecto sin que nadie lo notara. Ahora la reserva pregunta explícitamente la COMPAÑÍA QUE FACTURA (80-10 Urban Living SAS · alojamiento, o LTM3 S.A.S · canon de arrendamiento) y el dato queda guardado en la reserva y en el rack. El Resumen de Ventas y el Estado de Resultados leen ese campo. Se rellenaron los 2.478 registros históricos de los ocho contratos de arrendamiento vigentes y el resto quedó como alojamiento; las cifras cuadran exactamente con lo cargado en el Estado de Resultados. La lista de contratos queda solo como respaldo para registros antiguos. En Kubik no aplica: allí factura una sola sociedad.' },
@@ -1676,7 +1679,9 @@ async function loadView(view) {
       {id:'email',label:'Email',type:'email'},
       {id:'salario',label:'Salario mensual ($)',type:'number',default:'0'},
       {id:'fecha_ingreso',label:'Fecha ingreso',type:'date'},
-      {id:'tipo_contrato',label:'Tipo contrato',type:'select',opts:['Prestación servicios','Laboral fijo','Laboral indefinido','Temporal']},
+      // Sol Santiago: todo el personal está a término indefinido. Queda por defecto y se conservan
+      // las demás opciones por si en algún momento se contrata bajo otra modalidad.
+      {id:'tipo_contrato',label:'Tipo contrato',type:'select',default:'Indefinido',opts:['Indefinido','Prestación servicios','Laboral fijo','Temporal']},
       {id:'estado',label:'Estado',type:'select',opts:['Activo','Inactivo','Vacaciones','Incapacidad']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
