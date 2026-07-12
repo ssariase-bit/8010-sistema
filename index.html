@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-solo-kubik';
+const APP_VERSION = '2026-07-12-ventas-sin-mezcla';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-ventas-sin-mezcla', titulo:'Resumen de Ventas: se elimina la referencia al otro edificio',
+    afecta:'Resumen de Ventas',
+    detalle:'Sol Santiago: el indicador principal decía "TOTAL COMPAÑÍA · 8010 + Kubik" aunque las cifras corresponden únicamente al edificio activo, lo que hacía pensar que se estaban mezclando los dos. Los datos siempre fueron solo del edificio en el que se está; era la etiqueta la que estaba mal. Ahora el indicador dice "TOTAL DEL MES" y nombra el edificio que se está consultando, sin mencionar al otro. La nota al pie también aclara que las cifras son del edificio activo.' },
   { fecha:'2026-07-12', version:'2026-07-12-solo-kubik', titulo:'8010: se retiran los módulos que son solo de Kubik',
     afecta:'Menú (8010)',
     detalle:'Sol Santiago: hay procesos que son únicamente de Kubik y estaban apareciendo también en 8010. Se retiraron del menú de 8010: Entrega de Llaves / Accesos, Inventario de Loza, Check List de Turno y Revistas Nocturnas. Si se intenta entrar directamente, el sistema indica que el módulo aplica solo a Kubik. Adicionalmente, el Informe de Turno de 8010 ya no pide el número de llaves de acceso. En Kubik no cambia nada.' },
@@ -10047,7 +10050,7 @@ async function renderIngresos(){
 }
 
 // ═══════════════════════════════════════════════════════════
-// ═══ RESUMEN DE VENTAS — consolidado compañía (8010 + Kubik) ═══
+// ═══ RESUMEN DE VENTAS — SOLO del edificio activo (nunca se mezclan los dos) ═══
 function _alojaDe(rk){
   var PRI={'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Sale de viaje':5,'No Show':4,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'Libre':1};
   var map={};
@@ -10084,14 +10087,16 @@ async function renderResumenVentas(){
   var tr=rows.filter(function(r){return (Number(r.total)||0)>0;}).map(function(r){return '<tr><td style="font-weight:600">'+r.nom+'</td><td style="text-align:right">'+f$(r.aloja)+'<div style="font-size:10px;color:#999">'+r.noches+' noches</div></td><td style="text-align:right">'+(r.evts?f$(r.evts):'—')+'</td><td style="text-align:right">'+(r.cons?f$(r.cons):'—')+'</td><td style="text-align:right;font-weight:700;color:#1A5C2E">'+f$(r.total)+'</td></tr>';}).join('');
   document.getElementById('main-content').innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px"><div class="page-title" style="margin-bottom:0">💵 Resumen de Ventas — '+_MN+' '+Y+'</div><input type="month" value="'+mesSel+'" onchange="window._resVentasMes=this.value;renderResumenVentas()" style="padding:8px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px"></div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">'
-    +'<div style="flex:1;min-width:170px;background:#fff;border:2px solid #1A5C2E;border-radius:10px;padding:16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">TOTAL COMPAÑÍA</div><div style="font-size:24px;font-weight:800;color:#1A5C2E;margin-top:4px;white-space:nowrap">'+f$(gT)+'</div><div style="font-size:11px;color:var(--gris-t)">8010 + Kubik</div></div>'
+    // Sol Santiago: el KPI decía "TOTAL COMPAÑÍA · 8010 + Kubik" aunque los datos son SOLO del
+    // edificio activo. Se nombra el edificio que se está viendo, sin mencionar al otro.
+    +'<div style="flex:1;min-width:170px;background:#fff;border:2px solid #1A5C2E;border-radius:10px;padding:16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">TOTAL DEL MES</div><div style="font-size:24px;font-weight:800;color:#1A5C2E;margin-top:4px;white-space:nowrap">'+f$(gT)+'</div><div style="font-size:11px;color:var(--gris-t)">'+((edis[0]&&edis[0].nom)||'')+'</div></div>'
     +'<div style="flex:1;min-width:140px;background:#fff;border:1px solid var(--gris-b);border-radius:10px;padding:16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Alojamiento</div><div style="font-size:20px;font-weight:800;color:var(--azul);margin-top:4px;white-space:nowrap">'+f$(gA)+'</div></div>'
     +'<div style="flex:1;min-width:140px;background:#fff;border:1px solid var(--gris-b);border-radius:10px;padding:16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Eventos</div><div style="font-size:20px;font-weight:800;color:#7C3AED;margin-top:4px;white-space:nowrap">'+f$(gE)+'</div></div>'
     +'<div style="flex:1;min-width:140px;background:#fff;border:1px solid var(--gris-b);border-radius:10px;padding:16px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Consumos</div><div style="font-size:20px;font-weight:800;color:#B8963E;margin-top:4px;white-space:nowrap">'+f$(gC)+'</div></div>'
     +'</div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Edificio</th><th style="text-align:right">Alojamiento</th><th style="text-align:right">Eventos</th><th style="text-align:right">Consumos</th><th style="text-align:right">Total</th></tr></thead><tbody>'+tr
-    +'<tr style="background:var(--azul-c);font-weight:800"><td style="color:var(--azul)">TOTAL COMPAÑÍA</td><td style="text-align:right">'+f$(gA)+'</td><td style="text-align:right">'+f$(gE)+'</td><td style="text-align:right">'+f$(gC)+'</td><td style="text-align:right;color:#1A5C2E">'+f$(gT)+'</td></tr>'
-    +'</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:10px">Alojamiento = noches con tarifa del rack. Eventos solo 8010. Consumos registrados en CKO.</p></div>';
+    +'<tr style="background:var(--azul-c);font-weight:800"><td style="color:var(--azul)">TOTAL</td><td style="text-align:right">'+f$(gA)+'</td><td style="text-align:right">'+f$(gE)+'</td><td style="text-align:right">'+f$(gC)+'</td><td style="text-align:right;color:#1A5C2E">'+f$(gT)+'</td></tr>'
+    +'</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:10px">Cifras del edificio activo. Alojamiento = noches con tarifa del rack. Consumos registrados en el CKO.'+(EDIFICIO_ACTIVO==='8010'?' Eventos = eventos realizados.':'')+'</p></div>';
 }
 // ═══════════════════════════════════════════════════════════
 // ═══ VENTAS vs PRESUPUESTO 2026 — 8010 (Aptos / Eventos / Total) ═══
