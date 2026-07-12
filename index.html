@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-coment-sin-responder';
+const APP_VERSION = '2026-07-12-coment-autoria';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-coment-autoria', titulo:'Comentarios: el numerito rojo contaba como pendientes comentarios ya respondidos',
+    afecta:'Comentarios',
+    detalle:'Sol Santiago: el contador seguía marcando como "sin responder" comentarios que sí habían sido respondidos. La causa: el comentario se firma con el nombre más el cargo ("Santiago Arias (Gerencia General)") y con el correo corporativo del edificio, mientras que el perfil del usuario tiene el nombre sin cargo y un correo de acceso distinto; al no coincidir ninguno de los dos, el sistema creía que la respuesta la había escrito otra persona y la seguía contando. Ahora la comparación ignora el cargo entre paréntesis, tildes y mayúsculas, y además reconoce el correo del directorio del edificio. Verificado contra los datos: el contador pasó de 2 a 1, quedando solo el que realmente está sin responder.' },
   { fecha:'2026-07-12', version:'2026-07-12-coment-sin-responder', titulo:'Comentarios: el numerito rojo lleva directo a los que esperan respuesta',
     afecta:'Comentarios',
     detalle:'Sol Santiago: el contador rojo de Comentarios avisaba cuántos estaban esperando respuesta, pero no había forma de aislarlos: el filtro "Dirigidos" mostraba TODOS los dirigidos (22), no los pendientes. Ahora: (1) nuevo filtro "🔴 Sin responder (N)" que muestra exactamente los que cuenta el numerito — el último comentario de cada novedad, dirigido a alguien y sin respuesta propia; (2) al hacer clic en el numerito rojo se abren directamente; (3) si hay pendientes, Comentarios abre por defecto en ese filtro. De paso se corrigió que Comentarios y Comunicaciones compartían la misma variable de filtro y se pisaban entre sí.' },
@@ -7359,9 +7362,8 @@ window.renderComentariosGerencia = async function(filtro){
   filtro=(filtro===undefined?(window._cmFiltro||''):filtro);
   var res=await sb.from('novedades').select('id,fecha,area,apto,descripcion,comentarios,estado,comentario_gerencia,revisado_por,revisado_at').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(600);
   // Los que cuenta el badge: el ÚLTIMO comentario de cada novedad, dirigido a alguien, que no escribí yo.
-  var _esMio=function(cm){ return !!((cm.autor_email && typeof currentUser!=='undefined' && currentUser && cm.autor_email===currentUser.email) || (cm.autor && typeof currentProfile!=='undefined' && currentProfile && cm.autor===currentProfile.nombre)); };
   var _pendientes=[];
-  (res.data||[]).forEach(function(n){ var arr=Array.isArray(n.comentarios)?n.comentarios:[]; if(!arr.length) return; var last=arr[arr.length-1]; if(!last||!last.dirigido_a) return; if(!_esMio(last)) _pendientes.push({n:n, cm:last}); });
+  (res.data||[]).forEach(function(n){ var arr=Array.isArray(n.comentarios)?n.comentarios:[]; if(!arr.length) return; var last=arr[arr.length-1]; if(!last||!last.dirigido_a) return; if(!window._cmEsMio(last)) _pendientes.push({n:n, cm:last}); });
   var _pendN=_pendientes.length;
   if(_auto && _pendN>0) filtro='pendientes';
   window._cmFiltro=filtro;
@@ -7504,6 +7506,26 @@ window.nuevaPreguntaGerencia = async function(){
   renderComentariosGerencia();
 };
 window._alarmaShown = false;
+// Sol Santiago: el badge contaba como "sin responder" comentarios que él MISMO había respondido.
+// La causa: el comentario se firma con el nombre + cargo ("Santiago Arias (Gerencia General)") y con
+// el correo corporativo del edificio (sariase@8i8op.com), mientras que el perfil dice "Santiago Arias"
+// y el login es otro. Al no coincidir ninguno de los dos, el sistema creía que era de otra persona.
+// Ahora la comparación ignora el cargo entre paréntesis, tildes y mayúsculas, y además acepta el
+// correo del directorio del edificio.
+window._cmEsMio = function(cm){
+  if(!cm) return false;
+  var norm=function(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\([^)]*\)/g,'').replace(/\s+/g,' ').trim(); };
+  var yo = norm((typeof currentProfile!=='undefined' && currentProfile && currentProfile.nombre) || '');
+  if(yo && norm(cm.autor) === yo) return true;
+  var mail = String((typeof currentUser!=='undefined' && currentUser && currentUser.email) || '').toLowerCase().trim();
+  var aut  = String(cm.autor_email||'').toLowerCase().trim();
+  if(mail && aut && aut === mail) return true;
+  try{
+    var de = (typeof _dirEmail==='function') ? _dirEmail((currentProfile && currentProfile.nombre) || '') : null;
+    if(de && aut && aut === String(de).toLowerCase().trim()) return true;
+  }catch(e){}
+  return false;
+};
 window._alarmaComentarios = async function(conToast){
   try{
     if(typeof sb==='undefined'||typeof EDIFICIO_ACTIVO==='undefined') return 0;
@@ -7511,7 +7533,7 @@ window._alarmaComentarios = async function(conToast){
     if(!link) return 0;
     var res=await sb.from('novedades').select('comentarios').eq('edificio',EDIFICIO_ACTIVO).limit(600);
     var pend=0;
-    (res.data||[]).forEach(function(n){ var arr=Array.isArray(n.comentarios)?n.comentarios:[]; if(arr.length){ var last=arr[arr.length-1]; if(!last||!last.dirigido_a) return; var mio=((last.autor_email&&typeof currentUser!=='undefined'&&currentUser&&last.autor_email===currentUser.email)||(last.autor&&typeof currentProfile!=='undefined'&&currentProfile&&last.autor===currentProfile.nombre)); if(!mio) pend++; } });
+    (res.data||[]).forEach(function(n){ var arr=Array.isArray(n.comentarios)?n.comentarios:[]; if(arr.length){ var last=arr[arr.length-1]; if(!last||!last.dirigido_a) return; if(!window._cmEsMio(last)) pend++; } });
     var old=link.querySelector('.com-badge'); if(old) old.remove();
     if(pend>0){ var b=document.createElement('span'); b.className='com-badge'; b.textContent=pend;
       b.title='Ver los '+pend+' comentario'+(pend>1?'s':'')+' que esperan respuesta';
