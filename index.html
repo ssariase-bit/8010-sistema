@@ -471,13 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-8010-sin-loza';
+const APP_VERSION = '2026-07-12-solo-kubik';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
-  { fecha:'2026-07-12', version:'2026-07-12-8010-sin-loza', titulo:'8010: se retira el Inventario de Loza',
+  { fecha:'2026-07-12', version:'2026-07-12-solo-kubik', titulo:'8010: se retiran los módulos que son solo de Kubik',
     afecta:'Menú (8010)',
-    detalle:'Sol Santiago: el Inventario de Loza es un proceso de Kubik y no aplica en 8010. Ya no aparece en el menú de 8010. En Kubik sigue igual.' },
+    detalle:'Sol Santiago: hay procesos que son únicamente de Kubik y estaban apareciendo también en 8010. Se retiraron del menú de 8010: Entrega de Llaves / Accesos, Inventario de Loza, Check List de Turno y Revistas Nocturnas. Si se intenta entrar directamente, el sistema indica que el módulo aplica solo a Kubik. Adicionalmente, el Informe de Turno de 8010 ya no pide el número de llaves de acceso. En Kubik no cambia nada.' },
   { fecha:'2026-07-12', version:'2026-07-12-8010-sin-llaves', titulo:'Informe de Turno: 8010 sin llaves de acceso',
     afecta:'Informe de Turno (8010)',
     detalle:'Sol Santiago: en 8010 no hay llaves de acceso, pero el Informe de Turno pedía igual el número de llaves entregadas. Se retiró la casilla en 8010 y la línea correspondiente ya no sale en el informe que se envía; la sección queda solo con sombrillas. En Kubik no cambia nada.' },
@@ -1250,9 +1250,9 @@ window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','no
 window._ITEMS_SISTEMA = ['import-rack','changelog'];
 // Módulos construidos sobre el presupuesto 2026 y las entidades 80-10 / LTM3 / PH (solo 8010): no se muestran en Kubik
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
-// Módulos que solo aplican en Kubik: las revistas nocturnas son un proceso de seguridad de KL
-// (Sol Ricardo) y el inventario de loza es de KL (Sol Santiago). En 8010 no aplican.
-window._ITEMS_SOLO_KUBIK = ['revistas-list','loza-list'];
+// Sol Santiago: procesos que son ÚNICAMENTE de Kubik. En 8010 no existen y no deben aparecer:
+// entrega de llaves/accesos, inventario de loza, check list de turnos y revistas nocturnas.
+window._ITEMS_SOLO_KUBIK = ['revistas-list','loza-list','entrega-llaves','checklist-turnos'];
 window._itemPermitido = function(it){
   var _rol = currentProfile && currentProfile.rol;
   if(it.roles && it.roles.indexOf(_rol)<0) return false;
@@ -1368,7 +1368,10 @@ async function loadView(view) {
     case 'informe-cko':     renderInformeCKO(); break;
     case 'historico-ck':    renderHistoricoCK(); break;
     case 'informe-noshow':  await renderInformeNoShows(); break;
-    case 'entrega-llaves':  renderEntregaLlaves(); break;
+    case 'entrega-llaves':
+      // Sol Santiago: la entrega de llaves/accesos es solo de Kubik. En 8010 no hay llaves.
+      if (EDIFICIO_ACTIVO !== 'kubik') { document.getElementById('main-content').innerHTML = '<div class="page-title">🔑 Entrega de Llaves / Accesos</div><div class="card" style="max-width:520px"><p style="font-size:14px">Este módulo aplica únicamente a <strong>Kubik Living</strong>. En 8010 no se manejan llaves de acceso.</p></div>'; break; }
+      renderEntregaLlaves(); break;
     case 'entrega-efectivos': await renderEntregaEfectivos(); break;
 
     // Facturación (seguimiento de facturas por reserva)
@@ -10702,7 +10705,8 @@ const CHECKLIST_KL = {
  ]
 };
 async function renderChecklistTurnos(){
-  if(EDIFICIO_ACTIVO!=='kubik'){ document.getElementById('main-content').innerHTML = '<div class="page-title">☑️ Check List de Turno</div><div class="card" style="max-width:520px"><p style="font-size:14px">Por ahora el check list está definido para <strong>Kubik Living</strong>. Cambia de edificio para usarlo, o pídele a gerencia cargar las tareas de 8010.</p></div>'; return; }
+  // Sol Santiago: el check list de turnos es un proceso propio de Kubik. En 8010 no aplica.
+  if(EDIFICIO_ACTIVO!=='kubik'){ document.getElementById('main-content').innerHTML = '<div class="page-title">☑️ Check List de Turno</div><div class="card" style="max-width:520px"><p style="font-size:14px">Este módulo aplica únicamente a <strong>Kubik Living</strong>. En 8010 no se maneja check list de turnos.</p></div>'; return; }
   const fecha = window._clFecha || TODAY; window._clFecha = fecha;
   const turno = window._clTurno || 'Turno 1'; window._clTurno = turno;
   const { data } = await sb.from('checklist_turnos').select('*').eq('fecha',fecha).eq('turno',turno);
