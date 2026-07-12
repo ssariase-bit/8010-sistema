@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-extras-ranking';
+const APP_VERSION = '2026-07-12-actas-y-ot';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-actas-y-ot', titulo:'Novedades: las actas quedan en su propia pestaña · OT sin costo',
+    afecta:'Novedades · Mantenimiento',
+    detalle:'(1) Sol Santiago: las actas (inicial, final, de ingreso, de entrega) no son novedades y estaban inundando el listado — eran 98 de 521 registros. Ahora Novedades abre mostrando SOLO las novedades reales, y las actas tienen su propia pestaña "📄 Actas", con el conteo a la vista. Queda también la vista "Todo junto". Al registrar, el área "Actas" clasifica el registro automáticamente. (2) Sol Santiago: se retiró el campo "Costo estimado" de las órdenes de trabajo y la columna Costo del listado — el mantenimiento es casi todo in-house y el dato no aportaba. El histórico no se borra: el campo se conserva en la base y en las OT que ya lo tenían.' },
   { fecha:'2026-07-12', version:'2026-07-12-extras-ranking', titulo:'Horas Extra: ranking por valor, con puesto y podio',
     afecta:'Cuadro de Horas Extra',
     detalle:'Sol Santiago: el cuadro ordena de mayor a menor por el VALOR a pagar (horas extra + recargos), que es lo que realmente pesa, y usa las horas acumuladas como desempate o cuando no hay salario cargado. Cada fila muestra su puesto y los tres primeros quedan resaltados, para identificar de inmediato en quién se está concentrando el sobrecosto.' },
@@ -3680,7 +3683,9 @@ async function renderNovedadForm() {
             <option ${EDIFICIO_ACTIVO==='kubik'?'':'selected'}>Recepción</option><option>Mantenimiento</option><option>Housekeeping</option>
             <option>Seguridad</option><option>Zonas comunes</option><option>Apartamento</option>
             <option>Financiero</option><option ${EDIFICIO_ACTIVO==='kubik'?'selected':''}>Administración</option><option>Gerencia</option><option>General</option>
+            <option>Actas</option>
           </select>
+          <div style="font-size:10px;color:var(--gris-t);margin-top:3px">Si es un acta (inicial, final, de ingreso o de entrega), elige <strong>Actas</strong>: no ensucia el listado de novedades.</div>
         </div>
         <div class="form-group"><label>¿Dónde fue? (apto / ubicación)</label>
           <input type="text" id="n-apto" placeholder="Ej: 301, Lobby, Terraza...">
@@ -3830,9 +3835,10 @@ function renderMantForm(ot) {
       <div class="form-group"><label>Descripción del trabajo</label>
         <textarea id="ot-desc" placeholder="Describe detalladamente qué se debe hacer o qué ocurrió..." style="min-height:120px">${h(e.descripcion)}</textarea>
       </div>
-      <div class="form-group"><label>Costo estimado ($)</label>
-        <input type="number" id="ot-costo" value="${e.costo!=null?e.costo:''}" placeholder="0 si aún no se sabe">
-      </div>
+      <!-- Sol Santiago: se retira el "Costo estimado" de las OT — el mantenimiento es casi todo
+           in-house, así que el campo no aportaba y solo estorbaba. El dato histórico no se borra:
+           el campo sigue en la base y se conserva en las OT que ya lo tenían. -->
+      <input type="hidden" id="ot-costo" value="${e.costo!=null?e.costo:''}">
       <div class="form-actions">
         <button class="btn btn-outline btn-sm" onclick="loadView('mantenimiento-list')">Cancelar</button>
         <button class="btn btn-success" onclick="${ot?`guardarOT('${e.id}')`:'enviarOT()'}" style="min-width:180px">${ot?'💾 Guardar cambios':'📤 Abrir Orden de Trabajo'}</button>
@@ -4047,13 +4053,27 @@ function _esNovedadCK(n){
   return /^CKI\b/.test(a) || /^CKO\b/.test(a) || d.indexOf('✅ Check-in realizado')===0 || /Realiza CKO/.test(d);
 }
 
+// Sol Santiago: las actas (inicial, final, de ingreso, de entrega) NO son novedades y estaban
+// inundando el listado. Se identifican para poder separarlas en su propia pestaña.
+window._esActaNov = function(n){
+  const area = String((n&&n.area)||'').toLowerCase();
+  if (area.indexOf('acta') >= 0) return true;
+  const d = String((n&&n.descripcion)||'').toLowerCase();
+  return /acta\s+(final|inicial|de\s+(ingreso|entrega|salida))/.test(d) || /^\s*actas?\b/.test(d);
+};
 async function renderNovedadesList(filtro='', fechaSel='') {
   window._novFecha = fechaSel || '';
   const q = sb.from('novedades').select('*').order('created_at', { ascending: false }).limit(200);
   if (filtro === 'abiertas') q.in('estado', ['Abierto','En proceso','Escalado']);
   if (fechaSel) q.eq('fecha', fechaSel);
   const { data } = await q;
-  const rows = (data || []).filter(n=>!_esNovedadCK(n));
+  const _base = (data || []).filter(n=>!_esNovedadCK(n));
+  const _nActas = _base.filter(window._esActaNov).length;
+  const _nNov = _base.length - _nActas;
+  // Por defecto se ven SOLO las novedades reales; las actas tienen su propia pestaña.
+  const rows = (filtro === 'actas') ? _base.filter(window._esActaNov)
+             : (filtro === 'todas') ? _base
+             : _base.filter(n=>!window._esActaNov(n));
   await window._cargarAptoNombres();
 
   const badgeEst = e => {
@@ -4064,11 +4084,16 @@ async function renderNovedadesList(filtro='', fechaSel='') {
 
   document.getElementById('main-content').innerHTML = `
     ${_novedadesTabs('novedades')}
-    <div class="page-title">⚠️ Novedades</div>
+    <div class="page-title">${filtro==='actas'?'📄 Actas':'⚠️ Novedades'}</div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-sm ${filtro==='actas'||filtro==='todas'?'btn-outline':'btn-success'}" onclick="renderNovedadesList('')" title="Solo novedades reales (sin actas)">⚠️ Novedades (${_nNov})</button>
+      <button class="btn btn-sm ${filtro==='actas'?'btn-success':'btn-outline'}" onclick="renderNovedadesList('actas')" title="Actas inicial, final, de ingreso y de entrega">📄 Actas (${_nActas})</button>
+      <button class="btn btn-sm ${filtro==='todas'?'btn-success':'btn-outline'}" onclick="renderNovedadesList('todas')">Todo junto</button>
+      <span style="font-size:11px;color:var(--gris-t)">${filtro==='actas'?'Las actas no son novedades: aquí van separadas para no ensuciar el listado.':'Las actas quedaron en su propia pestaña.'}</span>
+    </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <button class="btn btn-success btn-sm" onclick="window._novedadEdit=null;loadView('novedad-form')">+ Nueva novedad</button>
       <button class="btn btn-outline btn-sm" onclick="renderNovedadesList('abiertas')">Solo abiertas</button>
-      <button class="btn btn-outline btn-sm" onclick="renderNovedadesList('')">Todas</button>
       <input type="date" value="${fechaSel}" onchange="renderNovedadesList('', this.value)" title="Ver solo las novedades de una fecha" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
       ${fechaSel?`<button class="btn btn-outline btn-sm" onclick="renderNovedadesList('')">✕ ${fmtDate(fechaSel)}</button>`:''}
       <button onclick="compartirNovedades()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir${fechaSel?' ('+fmtDate(fechaSel)+')':''}</button>
@@ -4474,7 +4499,7 @@ async function renderMantList(filtroApto='') {
       ${rowsGen.length === 0
         ? '<div class="empty"><div class="empty-icon">✅</div><p>Sin órdenes de trabajo</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr><th>Fecha</th><th>Área/Apto</th><th>Descripción del trabajo</th><th>Solicitó</th><th>Técnico (quién realiza)</th><th>Prioridad</th><th>Estado</th><th>Costo</th><th>Gerencia</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Área/Apto</th><th>Descripción del trabajo</th><th>Solicitó</th><th>Técnico (quién realiza)</th><th>Prioridad</th><th>Estado</th><th>Gerencia</th><th></th></tr></thead>
             <tbody>${rowsGen.map(o=>`<tr style="${o.estado==='Pendiente'?'background:#fff9f5':''}">
               <td style="white-space:nowrap">${fmtDate(o.fecha || (o.created_at?o.created_at.split('T')[0]:null))}</td>
               <td><strong style="color:var(--azul)">${o.area_apto}</strong></td>
@@ -4490,7 +4515,6 @@ async function renderMantList(filtroApto='') {
                   ${o.estado==='Cerrado'?'<option selected>Cerrado</option>':''}
                 </select>
               </td>
-              <td style="white-space:nowrap">${o.costo ? '<strong>$'+fmtNum(o.costo)+'</strong>' : '-'}</td>
               <td style="min-width:150px">${window._revGerCell('mantenimiento', o)}</td>
               <td style="white-space:nowrap"><button onclick="editarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button> <button onclick="borrarOT('${o.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:#9A4A40;border-color:#E0C0BA">🗑</button></td>
             </tr>`).join('')}
