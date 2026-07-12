@@ -471,10 +471,16 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-recargos-y-rack8010';
+const APP_VERSION = '2026-07-12-extras-ranking';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-extras-ranking', titulo:'Horas Extra: ranking por valor, con puesto y podio',
+    afecta:'Cuadro de Horas Extra',
+    detalle:'Sol Santiago: el cuadro ordena de mayor a menor por el VALOR a pagar (horas extra + recargos), que es lo que realmente pesa, y usa las horas acumuladas como desempate o cuando no hay salario cargado. Cada fila muestra su puesto y los tres primeros quedan resaltados, para identificar de inmediato en quién se está concentrando el sobrecosto.' },
+  { fecha:'2026-07-12', version:'2026-07-12-extras-orden-desc', titulo:'Cuadro de Horas Extra ordenado de mayor a menor',
+    afecta:'Cuadro de Horas Extra',
+    detalle:'Sol Santiago: el cuadro ahora ordena a los empleados de más a menos horas acumuladas en el mes, sumando horas extra y horas con recargo (nocturno y dominical/festivo). Así se ve de un vistazo quién va acumulando más tiempo y dónde conviene intervenir en la programación de turnos.' },
   { fecha:'2026-07-12', version:'2026-07-12-recargos-y-rack8010', titulo:'Recargos nocturnos y dominicales en Horas Extra + corrección del rack de 8010',
     afecta:'Cuadro de Horas Extra · Rack (8010) · Control de Personal (8010) · Menú',
     detalle:'(1) Sol Sebastián y administradores 8010: el Cuadro de Horas Extra solo pagaba las horas extra. Las horas ORDINARIAS del turno trabajadas de noche (7pm–6am) o en domingo/festivo generan recargo por ley y no se reflejaban en ninguna parte. Ahora el cuadro los calcula y los suma al total: recargo nocturno +35%, dominical/festivo +90% (desde jul-2026), y si el turno ordinario es nocturno en domingo o festivo se suman ambos. Se agregaron las columnas de horas con recargo, el pago de recargos y el total. (2) Sol Sebastián: en el rack de 8010 la "unidad combinada" no aplica — un apto con su habitación A (501 + 501A) ya tiene su propio concepto, "Apto completo", y el color del combo lo estaba pisando. En 8010 ya no se marca como unidad combinada; en Kubik se mantiene (602+603, Suite Deluxe 504+504A). Además el rack trae ahora una leyenda que explica los colores de las unidades combinadas. (3) Aclaración de Sebastián sobre los cargos de 8010: se reintegró Capitán de Meseros (escribió "mesero" queriendo decir "mensajero") y se retiraron Mensajero y los cargos gerenciales, ya que no se registra su ingreso. (4) El módulo de Revistas Nocturnas es de Kubik y ya no aparece en 8010.' },
@@ -7989,7 +7995,19 @@ async function renderCuadroExtras(){
   let totalPagar = 0;
   const hm = m => (m/60).toFixed(2).replace('.',',')+'h';
   let totalExtras = 0, totalRecargos = 0;
-  const filas = _accList.map(e => {
+  // Sol Santiago: de MÁS a MENOS — quién va acumulando más horas extra y recargos.
+  // Se ordena por el valor a pagar (que es lo que realmente importa) y, si empatan o no hay
+  // salario cargado, por horas acumuladas. Los tres primeros quedan resaltados.
+  const _minTot = e => { const r=e.rec||{ord_noct:0,ord_fest_diur:0,ord_fest_noct:0}; return e.min.diurna+e.min.nocturna+e.min.diurna_fest+e.min.nocturna_fest+r.ord_noct+r.ord_fest_diur+r.ord_fest_noct; };
+  const _pagoTot = e => {
+    const vh = e.salario>0 ? e.salario/240 : 0;
+    const r = e.rec||{ord_noct:0,ord_fest_diur:0,ord_fest_noct:0};
+    return (e.min.diurna/60)*vh*factorExtraNomina('diurna',ini) + (e.min.nocturna/60)*vh*factorExtraNomina('nocturna',ini)
+         + (e.min.diurna_fest/60)*vh*factorExtraNomina('diurna_fest',ini) + (e.min.nocturna_fest/60)*vh*factorExtraNomina('nocturna_fest',ini)
+         + (r.ord_noct/60)*vh*factorRecargo('ord_noct',ini) + (r.ord_fest_diur/60)*vh*factorRecargo('ord_fest_diur',ini) + (r.ord_fest_noct/60)*vh*factorRecargo('ord_fest_noct',ini);
+  };
+  _accList.sort((a,b) => (_pagoTot(b)-_pagoTot(a)) || (_minTot(b)-_minTot(a)));
+  const filas = _accList.map((e, _ix) => {
     const vh = e.salario>0 ? e.salario/240 : 0;
     const pago = t => (e.min[t]/60) * vh * factorExtraNomina(t, ini);
     const pagoExtras = pago('diurna')+pago('nocturna')+pago('diurna_fest')+pago('nocturna_fest');
@@ -8002,8 +8020,9 @@ async function renderCuadroExtras(){
     const totMin = e.min.diurna+e.min.nocturna+e.min.diurna_fest+e.min.nocturna_fest;
     const recNocMin = _r.ord_noct + _r.ord_fest_noct;
     const recFestMin = _r.ord_fest_diur + _r.ord_fest_noct;
-    return `<tr>
-      <td><strong>${e.nombre||'-'}</strong></td>
+    const _medalla = (_ix===0?'🥇 ':(_ix===1?'🥈 ':(_ix===2?'🥉 ':'')));
+    return `<tr style="${_ix<3?'background:#FFFBEB':''}">
+      <td><span style="color:var(--gris-t);font-size:11px">${_ix+1}.</span> ${_medalla}<strong>${e.nombre||'-'}</strong></td>
       <td>${e.cargo||'-'}</td>
       ${_verSal?`<td>${e.salario>0?'$'+fmtNum(e.salario):'<span style="color:var(--rojo);font-size:11px">sin salario</span>'}</td>`:''}
       <td>${hm(e.min.diurna)}</td>
