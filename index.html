@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-11-comunic-sin-leer';
+const APP_VERSION = '2026-07-12-coment-sin-responder';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-coment-sin-responder', titulo:'Comentarios: el numerito rojo lleva directo a los que esperan respuesta',
+    afecta:'Comentarios',
+    detalle:'Sol Santiago: el contador rojo de Comentarios avisaba cuántos estaban esperando respuesta, pero no había forma de aislarlos: el filtro "Dirigidos" mostraba TODOS los dirigidos (22), no los pendientes. Ahora: (1) nuevo filtro "🔴 Sin responder (N)" que muestra exactamente los que cuenta el numerito — el último comentario de cada novedad, dirigido a alguien y sin respuesta propia; (2) al hacer clic en el numerito rojo se abren directamente; (3) si hay pendientes, Comentarios abre por defecto en ese filtro. De paso se corrigió que Comentarios y Comunicaciones compartían la misma variable de filtro y se pisaban entre sí.' },
   { fecha:'2026-07-11', version:'2026-07-11-comunic-sin-leer', titulo:'Comunicaciones: el numerito rojo lleva directo a los comunicados sin leer',
     afecta:'Comunicaciones',
     detalle:'Sol Santiago: el contador rojo del menú avisaba cuántos comunicados sin leer había, pero al entrar se mostraba la lista completa y tocaba buscarlos. Ahora: (1) al hacer clic en el numerito rojo se abre directamente ese listado; (2) si hay comunicados sin leer, Comunicaciones abre por defecto en ese filtro; (3) el filtro se llama "Sin leer" y muestra el número entre paréntesis. Si no queda ninguno, lo confirma en pantalla.' },
@@ -7347,13 +7350,26 @@ window.correoComentarioNov = function(idx){
 };
 
 window._comFiltro = '';
+window._cmFiltro = '';   // filtro propio de Comentarios (antes compartía variable con Comunicaciones)
 window.renderComentariosGerencia = async function(filtro){
-  filtro=(filtro===undefined?(window._comFiltro||''):filtro); window._comFiltro=filtro;
+  // Sol Santiago: el numerito rojo de Comentarios cuenta los que están ESPERANDO RESPUESTA, pero el
+  // filtro "Dirigidos" mostraba todos los dirigidos (22). Ahora hay un filtro que es exactamente el
+  // del numerito, se abre por defecto cuando hay pendientes, y el numerito lleva directo ahí.
+  var _auto = (filtro===undefined && !window._cmFiltro);
+  filtro=(filtro===undefined?(window._cmFiltro||''):filtro);
   var res=await sb.from('novedades').select('id,fecha,area,apto,descripcion,comentarios,estado,comentario_gerencia,revisado_por,revisado_at').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(600);
+  // Los que cuenta el badge: el ÚLTIMO comentario de cada novedad, dirigido a alguien, que no escribí yo.
+  var _esMio=function(cm){ return !!((cm.autor_email && typeof currentUser!=='undefined' && currentUser && cm.autor_email===currentUser.email) || (cm.autor && typeof currentProfile!=='undefined' && currentProfile && cm.autor===currentProfile.nombre)); };
+  var _pendientes=[];
+  (res.data||[]).forEach(function(n){ var arr=Array.isArray(n.comentarios)?n.comentarios:[]; if(!arr.length) return; var last=arr[arr.length-1]; if(!last||!last.dirigido_a) return; if(!_esMio(last)) _pendientes.push({n:n, cm:last}); });
+  var _pendN=_pendientes.length;
+  if(_auto && _pendN>0) filtro='pendientes';
+  window._cmFiltro=filtro;
   var all=[];
   (res.data||[]).forEach(function(n){ var c=n.comentarios; var arr=Array.isArray(c)?c:[]; arr.forEach(function(cm){ all.push({n:n, cm:cm}); }); });
   all.sort(function(a,b){ return (b.cm.ts||0)-(a.cm.ts||0); });
   if(filtro==='dirigidos') all=all.filter(function(x){ return x.cm.dirigido_a; });
+  if(filtro==='pendientes'){ all=_pendientes.slice().sort(function(a,b){ return (b.cm.ts||0)-(a.cm.ts||0); }); }
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   var body=all.map(function(x,ri){
     var apto=(typeof areaApto==='function'?areaApto(x.n).apto:x.n.apto)||'-';
@@ -7362,7 +7378,7 @@ window.renderComentariosGerencia = async function(filtro){
     return '<tr style="vertical-align:top"><td style="white-space:nowrap">'+esc(x.cm.fecha||'')+'</td><td><strong>'+esc(apto)+'</strong></td><td>'+estSel+'</td><td style="max-width:300px;white-space:pre-wrap">'+esc(x.cm.texto||'')+((x.cm.adjunto&&x.cm.adjunto.url)?('<div style="margin-top:3px"><a href="'+x.cm.adjunto.url+'" target="_blank" style="font-size:11px;color:#1d4ed8;text-decoration:none">📎 '+esc(x.cm.adjunto.nombre||'archivo')+'</a></div>'):'')+'</td><td>'+dir+'</td><td>'+esc(x.cm.autor||'')+'</td><td style="white-space:nowrap"><button class="btn btn-success btn-sm" style="font-size:11px" onclick="toggleReplyCom('+ri+')">💬 Responder</button> <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="verNovedad(\''+x.n.id+'\')">Abrir</button></td><td style="min-width:150px">'+window._revGerCell('novedades', x.n)+'</td></tr>'+
       '<tr id="replyrow-'+ri+'" style="display:none"><td colspan="8" style="background:#f1f5f9;padding:8px 12px"><div style="font-size:11px;color:#555;margin-bottom:4px">Respuesta a: <em>'+esc((x.cm.texto||'').slice(0,60))+'</em></div><textarea id="reply-'+ri+'" placeholder="Escribe tu respuesta..." style="width:100%;min-height:52px;padding:6px;border:1px solid #cbd5e1;border-radius:6px;box-sizing:border-box"></textarea><div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn btn-success btn-sm" style="font-size:11px" onclick="enviarReplyCom(\''+x.n.id+'\','+ri+')">📨 Enviar respuesta</button><label style="font-size:11px;color:#555;cursor:pointer">📎 <input type="file" id="reply-file-'+ri+'" style="display:none" onchange="var b=this.parentNode.querySelector(\'b\'); if(b) b.textContent=this.files[0]?this.files[0].name:\'Adjuntar\';"><b style="font-weight:400">Adjuntar</b></label><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="toggleReplyCom('+ri+')">Cancelar</button></div></td></tr>';
   }).join('');
-  var fbtn=function(v,l){ var on=(window._comFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComentariosGerencia(\''+v+'\')">'+l+'</button>'; };
+  var fbtn=function(v,l){ var on=(window._cmFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComentariosGerencia(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML=
     '<div class="page-title">💬 Comentarios de gerencia</div>'+
     '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">✍️ Nueva pregunta / comentario</div></div>'+
@@ -7372,7 +7388,7 @@ window.renderComentariosGerencia = async function(filtro){
     '<div class="form-row col3"><div class="form-group"><label>Dirigido a <span style="font-weight:400;color:#888;font-size:11px">(marca una o varias personas)</span></label><div style="margin-bottom:4px"><button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(true)">Marcar todos</button> <button type="button" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 8px" onclick="_comgMarcarTodos(false)">Ninguno</button></div><div id="comg-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;max-height:200px;overflow:auto;display:flex;flex-direction:column;gap:1px">'+(function(){var _cd=_destinos(); var _e=function(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");}; return _cd.people.map(function(p){return "<label style=\"display:flex;align-items:center;justify-content:flex-start;gap:8px;font-weight:400;font-size:13px;padding:5px 8px;border-bottom:1px solid #eef2f6;cursor:pointer;text-align:left\"><input type=\"checkbox\" class=\"comg-dir-chk\" style=\"width:16px;height:16px;flex:0 0 auto;margin:0\" value=\""+_e(p.e)+"\" data-nombre=\""+_e(p.n)+"\"><span>"+_e(p.n)+"</span></label>";}).join("");})()+'</div></div>'+
     '<div class="form-group"><label>Apto (opcional)</label><input type="text" id="comg-apto" placeholder="Ej: 301"></div>'+
     '<div class="form-group" style="display:flex;align-items:flex-end"><button class="btn btn-success" style="width:100%" onclick="nuevaPreguntaGerencia()">📨 Enviar pregunta</button></div></div></div>'+
-    '<div class="card"><div class="card-header"><div class="card-title">'+all.length+' comentarios</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+fbtn('','Todos')+fbtn('dirigidos','Dirigidos')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (dirigido a, texto, apto...)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
+    '<div class="card"><div class="card-header"><div class="card-title">'+all.length+' comentario'+(all.length===1?'':'s')+(filtro==='pendientes'?' <span style="font-weight:400;color:#e24b4a;font-size:12px">· los del numerito rojo (esperan respuesta)</span>':'')+'</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+fbtn('pendientes','🔴 Sin responder'+(_pendN>0?' ('+_pendN+')':''))+fbtn('','Todos')+fbtn('dirigidos','Dirigidos')+(filtro==='pendientes'&&_pendN===0?'<span style="font-size:12px;color:#1A7D3C;font-weight:700">✓ Ninguno pendiente</span>':'')+'<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (dirigido a, texto, apto...)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px"></div></div>'+
     '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Apto</th><th>Estado</th><th>Comentario</th><th>Dirigido a</th><th>Autor</th><th></th><th>Revisión Gerencia</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 };
 
@@ -7497,7 +7513,12 @@ window._alarmaComentarios = async function(conToast){
     var pend=0;
     (res.data||[]).forEach(function(n){ var arr=Array.isArray(n.comentarios)?n.comentarios:[]; if(arr.length){ var last=arr[arr.length-1]; if(!last||!last.dirigido_a) return; var mio=((last.autor_email&&typeof currentUser!=='undefined'&&currentUser&&last.autor_email===currentUser.email)||(last.autor&&typeof currentProfile!=='undefined'&&currentProfile&&last.autor===currentProfile.nombre)); if(!mio) pend++; } });
     var old=link.querySelector('.com-badge'); if(old) old.remove();
-    if(pend>0){ var b=document.createElement('span'); b.className='com-badge'; b.textContent=pend; b.style.cssText='background:#e24b4a;color:#fff;border-radius:10px;font-size:10px;padding:1px 7px;margin-left:6px;font-weight:700'; link.appendChild(b); }
+    if(pend>0){ var b=document.createElement('span'); b.className='com-badge'; b.textContent=pend;
+      b.title='Ver los '+pend+' comentario'+(pend>1?'s':'')+' que esperan respuesta';
+      b.style.cssText='background:#e24b4a;color:#fff;border-radius:10px;font-size:10px;padding:1px 7px;margin-left:6px;font-weight:700;cursor:pointer';
+      // Sol Santiago: al hacer clic en el numerito rojo, abrir directamente esos comentarios
+      b.onclick=function(ev){ try{ ev.stopPropagation(); }catch(_){} window._cmFiltro='pendientes'; loadView('comentarios'); };
+      link.appendChild(b); }
     if(conToast&&pend>0&&!window._alarmaShown&&typeof showToast==='function'){ window._alarmaShown=true; showToast('💬 Hay '+pend+' comentario'+(pend>1?'s':'')+' de gerencia pendiente'+(pend>1?'s':'')+' — revisa el buzón','info'); }
     return pend;
   }catch(e){ return 0; }
