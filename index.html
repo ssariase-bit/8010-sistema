@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-11-revistas-nocturnas';
+const APP_VERSION = '2026-07-11-comunic-sin-leer';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-11', version:'2026-07-11-comunic-sin-leer', titulo:'Comunicaciones: el numerito rojo lleva directo a los comunicados sin leer',
+    afecta:'Comunicaciones',
+    detalle:'Sol Santiago: el contador rojo del menú avisaba cuántos comunicados sin leer había, pero al entrar se mostraba la lista completa y tocaba buscarlos. Ahora: (1) al hacer clic en el numerito rojo se abre directamente ese listado; (2) si hay comunicados sin leer, Comunicaciones abre por defecto en ese filtro; (3) el filtro se llama "Sin leer" y muestra el número entre paréntesis. Si no queda ninguno, lo confirma en pantalla.' },
   { fecha:'2026-07-11', version:'2026-07-11-revistas-nocturnas', titulo:'Nuevo módulo: Revistas Nocturnas de Seguridad',
     afecta:'Revistas Nocturnas',
     detalle:'Sol Ricardo: nuevo módulo para registrar las revistas nocturnas de seguridad, con fecha, turno, hora de la ronda, responsable, zonas/pisos revisados, resultado (Sin novedad / Con novedad), descripción del hallazgo, evidencia y observaciones. Queda en el menú junto al Check List de Turno, con listado, edición, envío por correo/WhatsApp y VB de Gerencia como los demás módulos. El responsable se elige del listado de personal.' },
@@ -7130,7 +7133,11 @@ window._comTipoStyle = function(t){
   return m[t] || {bg:'#dbeafe',col:'#1e40af',ic:'📣',bd:'#1D3461'};
 };
 window.renderComunicaciones = async function(filtro){
-  filtro = (filtro===undefined?(window._comFiltro||'activas'):filtro); window._comFiltro=filtro;
+  // Sol Santiago: el numerito rojo cuenta los comunicados sin leer dirigidos a mí, pero al entrar se
+  // veía la lista completa. Si hay pendientes y no se pidió otro filtro, se abre directo en "Mis
+  // pendientes" — que son justo los del numerito.
+  var _auto = (filtro===undefined && !window._comFiltro);
+  filtro = (filtro===undefined?(window._comFiltro||'activas'):filtro);
   var yo = window._comYo(); var puede = window._comPuedePublicar();
   var q = sb.from('comunicaciones').select('*').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(300);
   if(filtro!=='archivadas') q = q.eq('activo', true);
@@ -7140,6 +7147,10 @@ window.renderComunicaciones = async function(filtro){
   var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var fmt = function(iso){ if(!iso) return ''; var d=new Date(iso); var p=function(x){return ('0'+x).slice(-2);}; return p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes()); };
   var _arr = function(v){ return Array.isArray(v)?v:[]; };
+  // ¿Cuántos hay sin leer dirigidos a mí? (es el mismo número del badge rojo del menú)
+  var _pend = rows.filter(function(c){ try{ return window._comParaMi(c) && !window._comLeyo(c.leidos); }catch(_){ return false; } }).length;
+  if(_auto && _pend>0) filtro='pendientes';
+  window._comFiltro=filtro;
   var vis = rows.filter(function(c){ if(filtro==='pendientes'){ return window._comParaMi(c) && !window._comLeyo(c.leidos); } return true; });
   var cards = vis.map(function(c){
     var leidos = _arr(c.leidos); var resp = _arr(c.respuestas);
@@ -7174,7 +7185,9 @@ window.renderComunicaciones = async function(filtro){
     '<div class="page-title">📣 Comunicaciones</div>'
     + '<div style="font-size:12.5px;color:#666;margin:-6px 0 12px">Comentarios y llamados de atención de gerencia. Marca <strong>✓ leído</strong> cuando lo revises; puedes responder abajo.</div>'
     + pubForm
-    + '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+fbtn('activas','Activas')+fbtn('pendientes','⏳ Mis pendientes')+fbtn('archivadas','Archivadas')+'</div>'
+    + '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">'+fbtn('activas','Activas')+fbtn('pendientes','⏳ Sin leer'+(_pend>0?' ('+_pend+')':''))+fbtn('archivadas','Archivadas')
+      +(filtro==='pendientes'&&_pend>0?'<span style="font-size:12px;color:#e24b4a;font-weight:700;margin-left:4px">← estos son los del numerito rojo</span>':'')
+      +(filtro==='pendientes'&&_pend===0?'<span style="font-size:12px;color:#1A7D3C;font-weight:700;margin-left:4px">✓ No tienes comunicados sin leer</span>':'')+'</div>'
     + cards;
 };
 window.publicarComunicacion = async function(btn){
@@ -7500,7 +7513,12 @@ window._alarmaComunicaciones = async function(conToast){
     rows.forEach(function(c){ try{ var paraMi=(typeof window._comParaMi==='function')?window._comParaMi(c):true; var leido=(typeof window._comLeyo==='function')?window._comLeyo(c.leidos):false; if(paraMi && !leido) pend++; }catch(_){} });
     var link=[...document.querySelectorAll('[onclick]')].find(function(e){ return /loadView\('comunicaciones-list'\)/.test(e.getAttribute('onclick')||''); });
     if(link){ var old=link.querySelector('.comunic-badge'); if(old) old.remove();
-      if(pend>0){ var b=document.createElement('span'); b.className='comunic-badge'; b.textContent=pend; b.style.cssText='background:#e24b4a;color:#fff;border-radius:10px;font-size:10px;padding:1px 7px;margin-left:6px;font-weight:700'; link.appendChild(b); } }
+      if(pend>0){ var b=document.createElement('span'); b.className='comunic-badge'; b.textContent=pend;
+        b.title='Ver los '+pend+' comunicado'+(pend>1?'s':'')+' sin leer';
+        b.style.cssText='background:#e24b4a;color:#fff;border-radius:10px;font-size:10px;padding:1px 7px;margin-left:6px;font-weight:700;cursor:pointer';
+        // Sol Santiago: al hacer clic en el numerito rojo, abrir directamente esos comunicados
+        b.onclick=function(ev){ try{ ev.stopPropagation(); }catch(_){} window._comFiltro='pendientes'; loadView('comunicaciones-list'); };
+        link.appendChild(b); } }
     if(conToast && pend>0 && !window._alarmaComunicShown && typeof showToast==='function'){ window._alarmaComunicShown=true; showToast('📣 Tienes '+pend+' comunicado'+(pend>1?'s':'')+' sin leer — revísalos en Comunicaciones','info'); }
     return pend;
   }catch(e){ return 0; }
