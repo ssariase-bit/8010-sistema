@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-8010-sin-llaves';
+const APP_VERSION = '2026-07-12-8010-sin-loza';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-8010-sin-loza', titulo:'8010: se retira el Inventario de Loza',
+    afecta:'Menú (8010)',
+    detalle:'Sol Santiago: el Inventario de Loza es un proceso de Kubik y no aplica en 8010. Ya no aparece en el menú de 8010. En Kubik sigue igual.' },
   { fecha:'2026-07-12', version:'2026-07-12-8010-sin-llaves', titulo:'Informe de Turno: 8010 sin llaves de acceso',
     afecta:'Informe de Turno (8010)',
     detalle:'Sol Santiago: en 8010 no hay llaves de acceso, pero el Informe de Turno pedía igual el número de llaves entregadas. Se retiró la casilla en 8010 y la línea correspondiente ya no sale en el informe que se envía; la sección queda solo con sombrillas. En Kubik no cambia nada.' },
@@ -1247,8 +1250,9 @@ window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','no
 window._ITEMS_SISTEMA = ['import-rack','changelog'];
 // Módulos construidos sobre el presupuesto 2026 y las entidades 80-10 / LTM3 / PH (solo 8010): no se muestran en Kubik
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
-// Las revistas nocturnas son un proceso de seguridad de Kubik (Sol Ricardo). En 8010 no aplica.
-window._ITEMS_SOLO_KUBIK = ['revistas-list'];
+// Módulos que solo aplican en Kubik: las revistas nocturnas son un proceso de seguridad de KL
+// (Sol Ricardo) y el inventario de loza es de KL (Sol Santiago). En 8010 no aplican.
+window._ITEMS_SOLO_KUBIK = ['revistas-list','loza-list'];
 window._itemPermitido = function(it){
   var _rol = currentProfile && currentProfile.rol;
   if(it.roles && it.roles.indexOf(_rol)<0) return false;
@@ -1566,7 +1570,10 @@ async function loadView(view) {
       {id:'capsulas_lavadora',label:'Cápsulas lavadora',type:'number'},
       {id:'entregado_por',label:'Entregado por',type:'text'},
     ]); break;
-    case 'loza-list': await renderList('inventario_loza','🍽️ Inventario de Loza','loza-form',
+    case 'loza-list':
+      // Sol Santiago: el inventario de loza es solo de Kubik.
+      if (EDIFICIO_ACTIVO !== 'kubik') { document.getElementById('main-content').innerHTML = '<div class="page-title">🍽️ Inventario de Loza</div><div class="card" style="max-width:520px"><p style="font-size:14px">Este módulo aplica únicamente a <strong>Kubik Living</strong>. Cambia de edificio para usarlo.</p></div>'; break; }
+      await renderList('inventario_loza','🍽️ Inventario de Loza','loza-form',
       ['fecha','apto','elemento','cantidad','ubicacion_original','ubicacion_actual','estado'],
       ['Fecha','Apto/Área','Elemento','Cant.','Ubic. original','Ubic. actual','Estado']); break;
     case 'loza-form': renderGenForm('inventario_loza','🍽️ Registrar / Trasladar Loza',[
