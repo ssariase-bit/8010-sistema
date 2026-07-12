@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-actas-y-ot';
+const APP_VERSION = '2026-07-12-destinatarios';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-12', version:'2026-07-12-destinatarios', titulo:'Comunicados: se corrige la lista de destinatarios (personas duplicadas y usuarios que no van)',
+    afecta:'Comunicaciones · Comentarios · Solicitudes',
+    detalle:'Sol Santiago: en "Dirigido a" aparecían personas repetidas y usuarios que no deben recibir comunicados. (1) La misma persona salía dos veces cuando su nombre estaba escrito distinto en el registro de Personal y en el usuario del sistema — por ejemplo "Juan Fernando Martínez" y "Juan Martinez". Ahora cada usuario se resuelve contra el registro oficial de Personal: si su nombre corresponde a alguien ya registrado, se usa ESE nombre y no se agrega otra vez. (2) Se pueden excluir usuarios que conservan su acceso al sistema pero no deben recibir comunicados. (3) Se omite el personal marcado como Inactivo, de modo que los registros duplicados o retirados ya no aparecen.' },
   { fecha:'2026-07-12', version:'2026-07-12-actas-y-ot', titulo:'Novedades: las actas quedan en su propia pestaña · OT sin costo',
     afecta:'Novedades · Mantenimiento',
     detalle:'(1) Sol Santiago: las actas (inicial, final, de ingreso, de entrega) no son novedades y estaban inundando el listado — eran 98 de 521 registros. Ahora Novedades abre mostrando SOLO las novedades reales, y las actas tienen su propia pestaña "📄 Actas", con el conteo a la vista. Queda también la vista "Todo junto". Al registrar, el área "Actas" clasifica el registro automáticamente. (2) Sol Santiago: se retiró el campo "Costo estimado" de las órdenes de trabajo y la columna Costo del listado — el mantenimiento es casi todo in-house y el dato no aportaba. El histórico no se borra: el campo se conserva en la base y en las OT que ya lo tenían.' },
@@ -7149,6 +7152,9 @@ window._comTargetOptions = async function(){
   if(names.length) personas='<optgroup label="Personas">'+names.map(function(n){return '<option>'+esc(n)+'</option>';}).join('')+'</optgroup>';
   return deptos+personas;
 };
+// Sol Santiago: usuarios del SO que NO deben salir como destinatarios de comunicados.
+// Conservan su acceso al sistema; solo no se les dirigen comunicados.
+window._NO_DESTINATARIOS = ['Julian Boada','Paola Faccini'];
 window._comTargetChecksHTML = async function(){
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); };
   var deptos=['Todos'];
@@ -7156,13 +7162,35 @@ window._comTargetChecksHTML = async function(){
   // Personas: personal del EDIFICIO ACTIVO (no se mezclan edificios) + usuarios del SO (profiles)
   // cuyo perfil esté habilitado en este edificio. Así Gerencia/Administración que trabaja cruzado
   // (edificios: ["8010","kubik"]) aparece en ambos, sin mezclar el personal de cada edificio.
-  try{ var _pr=await sb.from('personal').select('nombre').limit(800); ((_pr&&_pr.data)||[]).forEach(function(p){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); }); }catch(e){}
-  try{ var _pf=await sb.from('profiles').select('nombre,edificios').limit(400); ((_pf&&_pf.data)||[]).forEach(function(p){ var eds=Array.isArray(p.edificios)?p.edificios:[]; if(eds.indexOf(EDIFICIO_ACTIVO)>-1){ var n=String(p.nombre||'').trim(); if(n) personas.push(n); } }); }catch(e){}
-  // Sol Juanita: salía duplicada porque venía escrita distinto en 'personal' y en 'profiles'.
-  // Se deduplica por nombre NORMALIZADO (sin tildes, sin mayúsculas, espacios colapsados),
-  // conservando la versión más completa del nombre.
+  var norm=function(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); };
+  var toks=function(s){ return norm(s).split(' ').filter(function(t){ return t.length>=2; }); };
+  // 1) Registro OFICIAL: el personal del edificio activo. Estos nombres mandan.
+  var oficiales=[];
+  try{ var _pr=await sb.from('personal').select('nombre,estado').limit(800);
+    ((_pr&&_pr.data)||[]).forEach(function(p){ if(String(p.estado||'')==='Inactivo') return; var n=String(p.nombre||'').trim(); if(n) oficiales.push(n); }); }catch(e){}
+  personas = oficiales.slice();
+  // 2) Usuarios del SO habilitados en este edificio (gerencia y administración trabajan cruzado).
+  //    Sol Santiago: "Juan Martinez" (usuario) y "Juan Fernando Martínez" (personal) son la MISMA
+  //    persona y salían dos veces. Cada usuario se resuelve contra el registro oficial: si sus
+  //    nombres están contenidos en un nombre oficial, se usa ESE y no se agrega otra vez.
+  try{
+    var _pf=await sb.from('profiles').select('nombre,edificios').limit(400);
+    ((_pf&&_pf.data)||[]).forEach(function(p){
+      var eds=Array.isArray(p.edificios)?p.edificios:[];
+      if(eds.indexOf(EDIFICIO_ACTIVO)<0) return;
+      var n=String(p.nombre||'').trim(); if(!n) return;
+      var t=toks(n); if(!t.length) return;
+      var cal=oficiales.filter(function(o){ var ot=toks(o); return t.every(function(x){ return ot.indexOf(x)>=0; }); });
+      if(cal.length===1) return;            // ya está en el registro oficial: no se duplica
+      personas.push(n);                      // no está en nómina (gerencia, comercial, etc.)
+    });
+  }catch(e){}
+  // 3) Sol Santiago: hay usuarios del sistema que NO deben aparecer como destinatarios de comunicados.
+  //    Conservan su acceso al SO; simplemente no se les dirigen comunicados.
+  var _excl=(window._NO_DESTINATARIOS||[]).map(norm);
+  personas = personas.filter(function(n){ return _excl.indexOf(norm(n))<0; });
+  // 4) Dedupe final por nombre normalizado (tildes, mayúsculas, espacios), conservando el más completo
   (function(){
-    var norm=function(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); };
     var vistos={}, uniq=[];
     personas.forEach(function(n){
       var k=norm(n); if(!k) return;
