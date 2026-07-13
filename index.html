@@ -471,10 +471,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-12-contrato-indefinido';
+const APP_VERSION = '2026-07-13-fecha-fv-y-combo';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-13', version:'2026-07-13-fecha-fv-y-combo', titulo:'Fecha de la factura editable · el estado vuelve a pintar en las unidades combinadas',
+    afecta:'Facturación · Rack',
+    detalle:'(1) Sol Sebastián (8010): la factura tomaba siempre la fecha del día, de manera que al digitar una factura de un mes anterior quedaba fechada con el día de captura. Se agregó el campo "Fecha de la factura", que trae la de hoy por defecto pero se puede cambiar. Al editar una factura, se muestra su fecha real. (2) Sol Juanita (Kubik): se trataba de un error del sistema. El color de la unidad combinada estaba tapando el color del estado, por lo que al marcar "Sale de viaje", CKI o CKO en una reserva combinada (como la del apto 602-603) la celda no cambiaba de color, mientras que en una reserva normal sí. Ahora el estado manda: el color de la unidad combinada se usa únicamente en los días de estadía normal, y cualquier cambio de estado se ve de inmediato.' },
   { fecha:'2026-07-12', version:'2026-07-12-contrato-indefinido', titulo:'Personal: todos los contratos quedan a término indefinido',
     afecta:'Personal / RRHH',
     detalle:'Sol Santiago: todo el personal está contratado a término indefinido, pero el dato estaba vacío en 22 de los 23 registros. Se completó en ambos edificios y el formulario ahora trae "Indefinido" por defecto, de modo que no vuelva a quedar en blanco. Se conservan las demás modalidades por si en algún momento se contrata bajo otra figura.' },
@@ -2626,7 +2629,11 @@ async function renderRack() {
       const _enRango = _cons && _cons.dias.includes(_fechaCelda);
       const _dispAqui = _enRango && _cons.disponibles.includes(apto);
       // Unidad combinada: los dos aptos comparten color en las celdas de esos días
-      const _cc = _comboCel[apto+'|'+d] || null;
+      // Sol Juanita: el color de la unidad combinada estaba PISANDO el color del estado, así que al
+      // marcar "Sale de viaje", CKI o CKO en un combo la celda no cambiaba de color. El estado manda:
+      // el color del combo solo se usa en los días de estadía normal (Ocupado / Apto completo).
+      const _ESTADO_MANDA = ['Check-in hoy','Check-out hoy','Check-out realizado','Sale de viaje','Sucio','Pendiente repaso','Limpieza','Mantenimiento','Bloqueado','No Show'];
+      const _cc = (_comboCel[apto+'|'+d] && !_ESTADO_MANDA.includes(est)) ? _comboCel[apto+'|'+d] : null;
       const bgCelda = _dispAqui ? '#5EEAD4' : (_cc ? _cc.bg : cm.bg);
       const colCelda = _dispAqui ? '#065F46' : (_cc ? _cc.fg : cm.color);
       const codeCelda = _dispAqui ? '✓' : (cm.code||'');
@@ -9782,7 +9789,11 @@ function renderFacturaGen(){
   +'<div class="card" style="max-width:880px">'
   +'<div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:8px 12px;font-size:12px;color:#7c5e10;margin-bottom:14px">Documento interno de control — <strong>no reemplaza la factura legal DIAN</strong> (esa la emite NewHotel/BTW).</div>'
   +(nc?'<div style="background:#FDECEA;border:1px solid #F5B7B1;border-radius:8px;padding:8px 12px;font-size:12px;color:#922B21;margin-bottom:14px">↩️ <strong>Nota crédito</strong> sobre la factura <strong>'+(nc.ref||'')+'</strong>. Los valores se guardarán en <strong>negativo</strong> (abono). Para una NC <strong>parcial</strong>, borra o reduce los conceptos que no quieres abonar.</div>':'')
-  +'<div class="form-section"><div class="form-section-title">🏢 Entidad que factura</div><div class="form-row"><div class="form-group">'+perfilSel+'<div id="fac-perfil-info" style="font-size:11px;color:var(--gris-t);margin-top:4px"></div></div><div class="form-group"><label>N° factura (manual, opcional)</label><input type="text" id="fac-num-manual" placeholder="Auto si lo dejas vacío · ej: UL 5690"><div style="font-size:11px;color:var(--gris-t);margin-top:2px">Si lo escribes, se usa ese número (y el consecutivo sigue desde ahí).</div></div></div></div>'
+  +'<div class="form-section"><div class="form-section-title">🏢 Entidad que factura</div><div class="form-row"><div class="form-group">'+perfilSel+'<div id="fac-perfil-info" style="font-size:11px;color:var(--gris-t);margin-top:4px"></div></div><div class="form-group"><label>N° factura (manual, opcional)</label><input type="text" id="fac-num-manual" placeholder="Auto si lo dejas vacío · ej: UL 5690"><div style="font-size:11px;color:var(--gris-t);margin-top:2px">Si lo escribes, se usa ese número (y el consecutivo sigue desde ahí).</div></div>'
+  // Sol Sebastián: la factura tomaba siempre la fecha del día, de modo que al digitar una factura
+  // de un mes anterior quedaba con fecha de hoy. Ahora la fecha se puede editar.
+  +'<div class="form-group"><label>Fecha de la factura *</label><input type="date" id="fac-fecha" value="'+((ed&&ed.fecha)?String(ed.fecha).slice(0,10):TODAY)+'"><div style="font-size:11px;color:var(--gris-t);margin-top:2px">Es la fecha en que se generó la factura, no la de hoy. Cámbiala si estás digitando una anterior.</div></div>'
+  +'</div></div>'
   +'<div class="form-section"><div class="form-section-title">👤 Cliente</div><div class="form-row">'
   +'<div class="form-group"><label>Titular / Razón social *</label><input type="text" id="fac-cli-nombre"></div>'
   +'<div class="form-group"><label>C.C / NIT</label><input type="text" id="fac-cli-nit"></div></div>'
@@ -9844,10 +9855,12 @@ async function facturaGuardar(conPDF){
     fac.subtotal=-Math.abs(fac.subtotal); fac.impuestos=-Math.abs(fac.impuestos); fac.total=-Math.abs(fac.total); fac.abono=0;
   }
   var man=(document.getElementById('fac-num-manual')||{}).value.trim();
+  // Sol Sebastián: la fecha de la factura la digita quien la genera (puede ser de un mes anterior).
+  // Antes se forzaba la fecha de hoy y una factura de mayo quedaba fechada con el día de captura.
+  fac.fecha = ((document.getElementById('fac-fecha')||{}).value) || TODAY;
   if(!ed){
     if(man){ fac.numero=man; var nn=parseInt((man.match(/\d+/g)||[]).pop()); if(nn){ try{ await sb.from('config').upsert({id:'ultima_factura_'+k,valor:String(nn),updated_at:new Date().toISOString()}); }catch(e){} } }
     else { fac.numero=await getNextFactura(k); }
-    fac.fecha=TODAY;
   } else if(man && man !== String(ed.numero||'').trim()){
     // Sol Juanita: al EDITAR una factura, el número escrito a mano se ignoraba y seguía saliendo el
     // consecutivo viejo. Ahora sí se aplica. El consecutivo solo avanza si el nuevo número es mayor.
