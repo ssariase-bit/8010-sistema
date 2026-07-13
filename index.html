@@ -219,6 +219,7 @@ textarea{resize:vertical;min-height:80px}
     </div>
     <button class="btn btn-primary" onclick="doLogin()">Ingresar al sistema</button>
     <p class="error-msg hidden" id="login-error"></p>
+    <p class="text-sm text-center mt-8"><a href="#" onclick="doRecuperarClave();return false;" style="color:#0EA5E9;text-decoration:underline;cursor:pointer">¿Olvidó su contraseña?</a></p>
     <p class="text-sm text-center mt-8">¿Problemas para ingresar? Contacta a Gerencia.</p>
   </div>
 </div>
@@ -471,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-13-fecha-fv-y-combo';
+const APP_VERSION = '2026-07-13-recuperar-clave';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-13', version:'2026-07-13-recuperar-clave', titulo:'Recuperación de contraseña desde el ingreso · Julián Boada y Paola Faccini vuelven a comunicados',
+    afecta:'Ingreso al sistema · Comunicados',
+    detalle:'En la pantalla de ingreso se habilitó el enlace "¿Olvidó su contraseña?". El sistema envía un correo al usuario con un enlace para definir una contraseña nueva; al regresar, el sistema exige el cambio de inmediato. Gerencia no asigna ni conoce las contraseñas: cada usuario define la propia. Adicionalmente, Julián Boada y Paola Faccini quedan habilitados como destinatarios de comunicados de 8010.' },
   { fecha:'2026-07-13', version:'2026-07-13-fecha-fv-y-combo', titulo:'Fecha de la factura editable · el estado vuelve a pintar en las unidades combinadas',
     afecta:'Facturación · Rack',
     detalle:'(1) Sol Sebastián (8010): la factura tomaba siempre la fecha del día, de manera que al digitar una factura de un mes anterior quedaba fechada con el día de captura. Se agregó el campo "Fecha de la factura", que trae la de hoy por defecto pero se puede cambiar. Al editar una factura, se muestra su fecha real. (2) Sol Juanita (Kubik): se trataba de un error del sistema. El color de la unidad combinada estaba tapando el color del estado, por lo que al marcar "Sale de viaje", CKI o CKO en una reserva combinada (como la del apto 602-603) la celda no cambiaba de color, mientras que en una reserva normal sí. Ahora el estado manda: el color de la unidad combinada se usa únicamente en los días de estadía normal, y cualquier cambio de estado se ve de inmediato.' },
@@ -808,6 +812,7 @@ async function doLogin() {
   btn.disabled = true;
 
   const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
+  // (recuperación de contraseña: ver doRecuperarClave)
   if (error) {
     showError(errEl, 'Credenciales incorrectas. Verifica tu correo y contraseña.');
     btn.innerHTML = 'Ingresar al sistema'; btn.disabled = false; return;
@@ -7207,7 +7212,35 @@ window._comTargetOptions = async function(){
 };
 // Sol Santiago: usuarios del SO que NO deben salir como destinatarios de comunicados.
 // Conservan su acceso al sistema; solo no se les dirigen comunicados.
-window._NO_DESTINATARIOS = ['Julian Boada','Paola Faccini'];
+window._NO_DESTINATARIOS = [];
+
+// ── Recuperación de contraseña ──────────────────────────────────────────────
+// Gerencia NO asigna ni conoce contraseñas. Cada usuario define la suya
+// mediante el enlace que Supabase envía a su correo corporativo.
+window.doRecuperarClave = async function(){
+  var pre = (document.getElementById('login-email')||{}).value || '';
+  var email = window.prompt('Se enviará un enlace de recuperación al correo corporativo.\n\nCorreo:', pre.trim());
+  if(!email) return;
+  email = String(email).trim().toLowerCase();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ alert('El correo no es válido.'); return; }
+  var redir = location.origin + location.pathname;
+  var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: redir });
+  if(res && res.error){ alert('No fue posible enviar el enlace: ' + res.error.message); return; }
+  alert('Se envió un enlace de recuperación a ' + email + '.\n\nRevisar la bandeja de entrada (y la carpeta de correo no deseado). El enlace permite definir una contraseña nueva.');
+};
+
+// Al regresar desde el enlace del correo, Supabase abre sesión en modo
+// recuperación: se fuerza de inmediato el cambio de contraseña.
+try{
+  sb.auth.onAuthStateChange(function(evt){
+    if(evt === 'PASSWORD_RECOVERY'){
+      setTimeout(function(){
+        try{ if(typeof abrirCambiarPwd==='function') abrirCambiarPwd(); }catch(e){}
+        try{ showToast('Defina su nueva contraseña','info'); }catch(e){}
+      }, 800);
+    }
+  });
+}catch(e){}
 window._comTargetChecksHTML = async function(){
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); };
   var deptos=['Todos'];
