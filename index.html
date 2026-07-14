@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-13-aviso-edificio';
+const APP_VERSION = '2026-07-14-compras-dos-flujos';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-compras-dos-flujos', titulo:'Compras se divide en Órdenes de Pedido y Requisiciones Internas',
+    afecta:'Compras · 8010 y Kubik',
+    detalle:'El módulo de Compras queda separado en dos flujos y se incorpora el módulo de Inventario. ÓRDENES DE PEDIDO: compra a proveedor externo para la operatividad del edificio; se registran los ítems con valores, se adjunta la cotización del proveedor y el lote completo requiere el Visto Bueno de Gerencia General antes de ejecutarse (Pendiente VB → Aprobada → Comprada → Recibida). REQUISICIONES INTERNAS: suministros que solicita el personal (papelería, insumos); se registran únicamente artículo y cantidad, sin valores, y le llegan a Compras para su gestión (Pendiente → En compra → Entregada). INVENTARIO: catálogo de productos por proveedor, con existencias y stock mínimo; se marcan los productos que hacen falta, se indica la cantidad y el sistema genera la Orden de Pedido ya diligenciada, agrupada por proveedor (una orden por proveedor). Al marcar la orden como Recibida, las existencias se actualizan automáticamente. Los tres módulos son independientes por edificio, con consecutivo propio (OP-0001 / RQ-0001). Recepción y Administración generan los dos tipos de solicitud; el Visto Bueno de las órdenes es exclusivo de Gerencia General.' },
   { fecha:'2026-07-13', version:'2026-07-13-aviso-edificio', titulo:'Novedades: aviso del edificio en el que quedará el registro',
     afecta:'Novedades · Usuarios con acceso a los dos edificios',
     detalle:'Quien tiene acceso a 8010 y a Kubik ve ahora, al reportar una novedad, un aviso con el edificio en el que quedará el registro. Se implementa porque dos observaciones sobre reservas de 8010 quedaron guardadas en Kubik: quien las escribió tenía el otro edificio activo, y el sistema estampa el edificio vigente. Los dos registros ya fueron reubicados en 8010. No hubo exposición de datos: las reservas siempre estuvieron correctamente asignadas a su edificio.' },
@@ -778,7 +781,7 @@ function EB(){ return EDIFICIOS[EDIFICIO_ACTIVO]; } // atajo al edificio activo
 const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitantes',
   'mantenimiento','control_personal','turnos','personal','contratos','transportes',
   'reembolsos','prestamos_tec','maletas','entrega_efectivos','capsulas','caja',
-  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','saldos_aptos','cotizaciones','facturacion','paquetes','consumos','semana_seguimiento','checklist_turnos','inventario_loza','masajes_scape','revistas_nocturnas']);
+  'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','compras','inventario','saldos_aptos','cotizaciones','facturacion','paquetes','consumos','semana_seguimiento','checklist_turnos','inventario_loza','masajes_scape','revistas_nocturnas']);
 (function(){
   const _from = sb.from.bind(sb);
   window._sbFromRaw = _from; // acceso al from sin filtro de edificio (para vistas multi-edificio o de un edificio fijo)
@@ -949,7 +952,9 @@ const NAV_ITEMS = {
     { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
   { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
     { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
-    { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
+    { id: 'inventario-list', icon: '📦', label: 'Inventario' },
+    { id: 'compras-ordenes', icon: '🧾', label: 'Órdenes de Pedido' },
+    { id: 'compras-requis', icon: '📝', label: 'Requisiciones Internas' },
     { id: 'personal-list', icon: '👤', label: 'Personal / RRHH' },
     { section: 'Auditoría' },
     { id: 'novedades-diarias', icon: '📋', label: 'Novedades del Día' },
@@ -1014,7 +1019,9 @@ const NAV_ITEMS = {
     { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
   { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
     { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
-    { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
+    { id: 'inventario-list', icon: '📦', label: 'Inventario' },
+    { id: 'compras-ordenes', icon: '🧾', label: 'Órdenes de Pedido' },
+    { id: 'compras-requis', icon: '📝', label: 'Requisiciones Internas' },
     { id: 'contratos-list', icon: '📄', label: 'Contratos' },
     { section: 'Comercial' },
     { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
@@ -1078,6 +1085,11 @@ const NAV_ITEMS = {
     { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
+    { section: 'Compras' },
+    { id: 'compras-requis-form', icon: '➕', label: 'Pedir Suministros' },
+    { id: 'compras-requis', icon: '📝', label: 'Requisiciones Internas' },
+    { id: 'compras-orden-form', icon: '➕', label: 'Nueva Orden de Pedido' },
+    { id: 'compras-ordenes', icon: '🧾', label: 'Órdenes de Pedido' },
     { section: 'Comercial' },
     { id: 'eventos', icon: '🎪', label: 'Eventos' },
   ],
@@ -1127,14 +1139,19 @@ const NAV_ITEMS = {
   { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
     { id: 'caja-form', icon: '➕', label: 'Movimiento Caja' },
     { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
-    { id: 'requisiciones-list', icon: '🛒', label: 'Requisiciones' },
+    { id: 'inventario-list', icon: '📦', label: 'Inventario' },
+    { id: 'compras-ordenes', icon: '🧾', label: 'Órdenes de Pedido' },
+    { id: 'compras-requis', icon: '📝', label: 'Requisiciones Internas' },
     { section: 'Consultar' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
   ],
   compras: [
     { section: 'Compras' },
-    { id: 'requisiciones-list', icon: '🛒', label: 'Requisiciones' },
-    { id: 'requisiciones-form', icon: '➕', label: 'Nueva Requisición' },
+    { id: 'inventario-list', icon: '📦', label: 'Inventario' },
+    { id: 'compras-ordenes', icon: '🧾', label: 'Órdenes de Pedido' },
+    { id: 'compras-requis', icon: '📝', label: 'Requisiciones Internas' },
+    { id: 'compras-requis-form', icon: '➕', label: 'Nueva Requisición' },
+    { id: 'compras-orden-form', icon: '➕', label: 'Nueva Orden de Pedido' },
     { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
     { id: 'transportes-form', icon: '➕', label: 'Registrar Transporte' },
     { section: 'Auditoría' },
@@ -1184,6 +1201,10 @@ rrhh: [
     { id: 'novedad-form', icon: '⚠️', label: 'Reportar Novedad' },
     { id: 'control-personal-list', icon: '⏱', label: 'Control Personal' },
     { id: 'control-personal-form', icon: '➕', label: 'Registrar Ingreso Personal' },
+    { section: 'Compras' },
+    { id: 'compras-requis-form', icon: '➕', label: 'Pedir Suministros' },
+    { id: 'compras-requis', icon: '📝', label: 'Requisiciones Internas' },
+    { id: 'compras-ordenes', icon: '🧾', label: 'Órdenes de Pedido' },
     { section: 'Consultar' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'novedades-list', icon: '📋', label: 'Novedades / Seguimientos' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
@@ -1817,6 +1838,15 @@ async function loadView(view) {
       {id:'estado',label:'Estado',type:'select',opts:['Pendiente','Aprobado','Reembolso recibido completo','Reembolso recibido parcial','Rechazado','Pagado']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
+
+    // ── COMPRAS: Órdenes de Pedido y Requisiciones Internas ──
+    case 'compras-ordenes':     await window._cmpLista('orden_pedido'); break;
+    case 'compras-requis':      await window._cmpLista('requisicion'); break;
+    case 'compras-orden-form':  window._cmpForm('orden_pedido'); break;
+    case 'compras-requis-form': window._cmpForm('requisicion'); break;
+    // ── INVENTARIO (alimenta las Órdenes de Pedido) ──
+    case 'inventario-list':     await window._invLista(); break;
+    case 'inventario-form':     window._invForm(); break;
 
     default:
       // Sol Sebastián: evitar la "pantalla en blanco/Vista no encontrada" tras guardar.
@@ -7263,6 +7293,578 @@ window._comTargetOptions = async function(){
 // Sol Santiago: usuarios del SO que NO deben salir como destinatarios de comunicados.
 // Conservan su acceso al sistema; solo no se les dirigen comunicados.
 window._NO_DESTINATARIOS = [];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPRAS — dos flujos (Sol. Santiago, 13-jul-2026). Aplica a 8010 y a Kubik.
+//
+//  1) ORDEN DE PEDIDO   · La genera Compras (Andrés) o Recepción/Administración.
+//     Lleva proveedor, ítems con valores y la cotización adjunta.
+//     Requiere Visto Bueno de GERENCIA GENERAL para autorizar el lote completo.
+//     Pendiente VB → Aprobada → Comprada → Recibida   (o Rechazada)
+//
+//  2) REQUISICIÓN INTERNA · La genera cualquier área que necesite suministros
+//     (resma de papel, insumos). Solo artículo y cantidad, SIN valores.
+//     Le llega a Compras (Andrés). Cierran Compras o Gerencia General.
+//     Pendiente → En compra → Entregada   (o Rechazada)
+// ═══════════════════════════════════════════════════════════════════════════
+window._CMP = {
+  orden_pedido: {
+    tabla:'compras', pre:'OP', tit:'🧾 Órdenes de Pedido', sing:'Orden de Pedido',
+    form:'compras-orden-form', lista:'compras-ordenes', conValores:true,
+    flujo:['Pendiente VB','Aprobada','Comprada','Recibida'],
+    ayuda:'Compra a proveedor externo para la operatividad del edificio. Se adjunta la cotización y Gerencia General autoriza el lote completo.'
+  },
+  requisicion: {
+    tabla:'compras', pre:'RQ', tit:'📝 Requisiciones Internas', sing:'Requisición Interna',
+    form:'compras-requis-form', lista:'compras-requis', conValores:false,
+    flujo:['Pendiente','En compra','Entregada'],
+    ayuda:'Suministros que el personal necesita (papelería, insumos). Se solicita a Compras. No lleva valores: los precios los maneja Compras.'
+  }
+};
+window._cmpEsGG   = function(){ return (currentProfile&&currentProfile.rol)==='gerente_general'; };
+window._cmpEsCompras = function(){ return ['gerente_general','gerencia_operativa','administrador','compras'].includes(currentProfile&&currentProfile.rol); };
+window._cmpYo = function(){ return (currentProfile&&currentProfile.nombre)||'—'; };
+window._cmpEsc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+window._cmpMoney = function(n){ return '$ '+Number(n||0).toLocaleString('es-CO'); };
+
+window._cmpBadge = function(e){
+  var m = {'Pendiente VB':'#B45309','Pendiente':'#B45309','Aprobada':'#1D4ED8','En compra':'#1D4ED8',
+           'Comprada':'#6D28D9','Recibida':'#166534','Entregada':'#166534','Rechazada':'#9A4A40'};
+  var c = m[e]||'#64748B';
+  return '<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;color:'+c+';background:'+c+'1A;border:1px solid '+c+'40;white-space:nowrap">'+window._cmpEsc(e||'—')+'</span>';
+};
+
+// ── LISTA ──────────────────────────────────────────────────────────────────
+window._cmpLista = async function(tipo){
+  var C = window._CMP[tipo];
+  var r = await sb.from('compras').select('*').eq('tipo',tipo).order('created_at',{ascending:false}).limit(300);
+  if(r.error){
+    document.getElementById('main-content').innerHTML =
+      '<div class="page-title">'+C.tit+'</div><div class="card"><p style="color:#9A4A40"><strong>El módulo aún no está habilitado en la base de datos.</strong></p>'
+      +'<p style="font-size:12px;color:var(--gris-t)">Detalle: '+window._cmpEsc(r.error.message)+'</p></div>';
+    return;
+  }
+  var rows = r.data||[];
+  var pend = rows.filter(function(x){ return x.estado===C.flujo[0]; }).length;
+  var esGG = window._cmpEsGG();
+
+  document.getElementById('main-content').innerHTML =
+    '<div class="page-title">'+C.tit+'</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px;max-width:760px">'+C.ayuda+'</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">'
+      +'<button class="btn btn-success btn-sm" onclick="window._cmpEdit=null;loadView(\''+C.form+'\')">+ Nueva '+C.sing.toLowerCase()+'</button>'
+      +'<button class="btn btn-outline btn-sm" onclick="loadView(\''+(tipo==='orden_pedido'?'compras-requis':'compras-ordenes')+'\')">'+(tipo==='orden_pedido'?'📝 Ver Requisiciones Internas':'🧾 Ver Órdenes de Pedido')+'</button>'
+      +(pend?('<span style="margin-left:auto;font-size:12px;font-weight:700;color:#B45309">⏳ '+pend+' pendiente'+(pend>1?'s':'')+(tipo==='orden_pedido'?' de Visto Bueno':' por gestionar')+'</span>'):'')
+    +'</div>'
+    +'<div class="card">'
+    +(rows.length===0
+      ? '<div class="empty"><div class="empty-icon">🛒</div><p>Sin registros</p></div>'
+      : '<div style="overflow-x:auto"><table class="tabla"><thead><tr>'
+        +'<th>N°</th><th>Fecha</th><th>Área</th><th>Solicita</th>'
+        +(C.conValores?'<th>Proveedor</th>':'')
+        +'<th>Ítems</th>'
+        +(C.conValores?'<th style="text-align:right">Total</th><th>📎</th>':'')
+        +'<th>Estado</th><th>Trazabilidad</th><th>Acciones</th></tr></thead><tbody>'
+        + rows.map(function(x){
+            var its = Array.isArray(x.items)?x.items:[];
+            var traza = [];
+            if(x.vb_at)        traza.push('✅ VB '+window._cmpEsc(x.vb_por)+' · '+String(x.vb_at).slice(0,10));
+            if(x.comprado_at)  traza.push('🛒 '+window._cmpEsc(x.comprado_por)+' · '+String(x.comprado_at).slice(0,10));
+            if(x.entregado_at) traza.push('📦 '+window._cmpEsc(x.entregado_por)+' · '+String(x.entregado_at).slice(0,10));
+            if(x.vb_comentario) traza.push('<em>'+window._cmpEsc(x.vb_comentario)+'</em>');
+            return '<tr>'
+              +'<td style="font-weight:700;white-space:nowrap">'+window._cmpEsc(x.consecutivo||'—')+'</td>'
+              +'<td style="white-space:nowrap">'+window._cmpEsc(x.fecha||'')+'</td>'
+              +'<td>'+window._cmpEsc(x.area||'—')+'</td>'
+              +'<td>'+window._cmpEsc(x.solicitante||'—')+'</td>'
+              +(C.conValores?('<td>'+window._cmpEsc(x.proveedor||'—')+'</td>'):'')
+              +'<td style="max-width:280px;font-size:11px;line-height:1.5">'
+                + its.map(function(i){ return '· '+window._cmpEsc(i.desc)+' <strong>×'+window._cmpEsc(i.cant)+'</strong>'+(i.und?(' '+window._cmpEsc(i.und)):''); }).join('<br>')
+              +'</td>'
+              +(C.conValores?('<td style="text-align:right;font-weight:700;white-space:nowrap">'+window._cmpMoney(x.total)+'</td>'
+                +'<td>'+((Array.isArray(x.adjuntos)&&x.adjuntos.length)
+                    ? '<button class="btn btn-outline btn-xs" onclick="window._cmpVerAdj(\''+x.id+'\')" title="Ver cotización">📎 '+x.adjuntos.length+'</button>'
+                    : '<span style="color:#9A4A40;font-size:11px" title="Sin cotización adjunta">⚠️ sin cot.</span>')+'</td>'):'')
+              +'<td>'+window._cmpBadge(x.estado)+'</td>'
+              +'<td style="font-size:10px;color:var(--gris-t);line-height:1.6;min-width:150px">'+(traza.join('<br>')||'—')+'</td>'
+              +'<td><div style="display:inline-grid;gap:4px;width:120px">'
+                + window._cmpAcciones(tipo, x, esGG)
+              +'</div></td></tr>';
+          }).join('')
+        +'</tbody></table></div>')
+    +'</div>';
+};
+
+window._cmpAcciones = function(tipo, x, esGG){
+  var b=[], id=x.id;
+  if(tipo==='orden_pedido'){
+    if(x.estado==='Pendiente VB'){
+      if(esGG){
+        b.push('<button class="btn btn-success btn-xs" onclick="window._cmpVB(\''+id+'\',true)">✅ Dar VB</button>');
+        b.push('<button class="btn btn-outline btn-xs" style="color:#9A4A40;border-color:#E0C0BA" onclick="window._cmpVB(\''+id+'\',false)">✖ Rechazar</button>');
+      } else {
+        b.push('<span style="font-size:10px;color:var(--gris-t);text-align:center">Espera VB de<br>Gerencia General</span>');
+      }
+    }
+    if(x.estado==='Aprobada')  b.push('<button class="btn btn-outline btn-xs" onclick="window._cmpAvanzar(\''+id+'\',\'Comprada\')">🛒 Comprada</button>');
+    if(x.estado==='Comprada')  b.push('<button class="btn btn-success btn-xs" onclick="window._cmpAvanzar(\''+id+'\',\'Recibida\')">📦 Recibida</button>');
+  } else {
+    if(x.estado==='Pendiente' && window._cmpEsCompras()){
+      b.push('<button class="btn btn-outline btn-xs" onclick="window._cmpAvanzar(\''+id+'\',\'En compra\')">🛒 En compra</button>');
+      b.push('<button class="btn btn-outline btn-xs" style="color:#9A4A40;border-color:#E0C0BA" onclick="window._cmpVB(\''+id+'\',false)">✖ Rechazar</button>');
+    }
+    if(x.estado==='En compra')  b.push('<button class="btn btn-success btn-xs" onclick="window._cmpAvanzar(\''+id+'\',\'Entregada\')">📦 Entregada</button>');
+  }
+  if(esGG) b.push('<button class="btn btn-outline btn-xs" style="color:#9A4A40;border-color:#E0C0BA" onclick="window._cmpBorrar(\''+id+'\')">🗑 Borrar</button>');
+  return b.join('') || '<span style="font-size:10px;color:var(--gris-t);text-align:center">Cerrada</span>';
+};
+
+// ── FORMULARIO ─────────────────────────────────────────────────────────────
+window._cmpForm = function(tipo){
+  var C = window._CMP[tipo];
+  var yo = window._cmpYo();
+  var areas = ['Recepción','Mantenimiento','Housekeeping','Administración','Cocina','Eventos','Zonas comunes','General'];
+  var edN = (EDIFICIO_ACTIVO==='kubik')?'KUBIK LIVING':'8010 URBAN LIVING';
+  var edC = (EDIFICIO_ACTIVO==='kubik')?'#7C3AED':'#0EA5E9';
+
+  document.getElementById('main-content').innerHTML =
+    '<div class="page-title">➕ Nueva '+C.sing+'</div>'
+    +'<div style="max-width:900px;margin-bottom:10px;padding:9px 12px;border-left:4px solid '+edC+';background:'+edC+'12;border-radius:6px;font-size:12px;line-height:1.5">'
+      +'Este registro quedará en <strong style="color:'+edC+'">'+edN+'</strong>. '+C.ayuda
+    +'</div>'
+    +'<div class="card" style="max-width:900px;margin-bottom:14px">'
+      +'<div class="form-row col3">'
+        +'<div class="form-group"><label>Fecha *</label><input type="date" id="cmp-fecha" value="'+TODAY+'"></div>'
+        +'<div class="form-group"><label>Área solicitante *</label><select id="cmp-area">'+areas.map(function(a){return '<option>'+a+'</option>';}).join('')+'</select></div>'
+        +'<div class="form-group"><label>Solicita *</label><input id="cmp-solic" value="'+window._cmpEsc(yo)+'"></div>'
+      +'</div>'
+      +(C.conValores
+        ? '<div class="form-row col2">'
+            +'<div class="form-group"><label>Proveedor *</label><input id="cmp-prov" placeholder="Nombre del proveedor"></div>'
+            +'<div class="form-group"><label>📎 Cotización del proveedor *</label><input type="file" id="cmp-cot" multiple accept="image/*,application/pdf,.pdf">'
+              +'<div style="font-size:10px;color:var(--gris-t);margin-top:3px">Sin cotización adjunta, Gerencia General no puede dar el Visto Bueno.</div></div>'
+          +'</div>'
+        : '')
+      +'<div class="form-group"><label>Justificación / para qué se necesita</label><textarea id="cmp-just" rows="2" placeholder="Ej: reposición de insumos de aseo para el mes de agosto"></textarea></div>'
+    +'</div>'
+    +'<div class="card" style="max-width:900px;margin-bottom:14px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+        +'<div style="font-weight:700;color:var(--azul)">Ítems</div>'
+        +'<button class="btn btn-outline btn-sm" onclick="window._cmpAddRow()">+ Agregar ítem</button>'
+      +'</div>'
+      +'<div style="overflow-x:auto"><table class="tabla"><thead><tr>'
+        +'<th style="min-width:220px">Descripción *</th><th style="width:90px">Cantidad *</th><th style="width:110px">Unidad</th>'
+        +(C.conValores?'<th style="width:130px">Valor unitario</th><th style="width:130px;text-align:right">Subtotal</th>':'')
+        +'<th style="width:40px"></th></tr></thead>'
+        +'<tbody id="cmp-rows"></tbody>'
+        +(C.conValores?'<tfoot><tr style="background:var(--azul-c);font-weight:800"><td colspan="4" style="text-align:right">TOTAL</td><td style="text-align:right" id="cmp-total">$ 0</td><td></td></tr></tfoot>':'')
+      +'</table></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px">'
+      +'<button class="btn btn-success" onclick="window._cmpGuardar(\''+tipo+'\',this)">💾 Enviar '+C.sing.toLowerCase()+'</button>'
+      +'<button class="btn btn-outline" onclick="loadView(\''+C.lista+'\')">Cancelar</button>'
+    +'</div>';
+  window._cmpTipo = tipo;
+  window._cmpAddRow(); window._cmpAddRow();
+};
+
+window._cmpAddRow = function(){
+  var tb = document.getElementById('cmp-rows'); if(!tb) return;
+  var conV = window._CMP[window._cmpTipo].conValores;
+  var tr = document.createElement('tr'); tr.className='cmp-row';
+  tr.innerHTML = '<td><input class="cmp-desc" style="width:100%;font-size:12px" placeholder="Ej: Resma papel carta"></td>'
+    +'<td><input type="number" class="cmp-cant" style="width:100%;font-size:12px" value="1" min="1" oninput="window._cmpTotal()"></td>'
+    +'<td><input class="cmp-und" style="width:100%;font-size:12px" placeholder="und / caja"></td>'
+    +(conV
+      ? '<td><input type="number" class="cmp-val" style="width:100%;font-size:12px;text-align:right" value="0" oninput="window._cmpTotal()"></td>'
+        +'<td class="cmp-sub" style="text-align:right;font-weight:700;white-space:nowrap">$ 0</td>'
+      : '')
+    +'<td><button class="btn btn-outline btn-xs" onclick="this.closest(\'tr\').remove();window._cmpTotal()" title="Quitar">🗑️</button></td>';
+  tb.appendChild(tr);
+};
+
+window._cmpTotal = function(){
+  if(!window._CMP[window._cmpTipo].conValores) return 0;
+  var t=0;
+  document.querySelectorAll('#cmp-rows .cmp-row').forEach(function(tr){
+    var c = Number((tr.querySelector('.cmp-cant')||{}).value)||0;
+    var v = Number((tr.querySelector('.cmp-val')||{}).value)||0;
+    var s = c*v; t+=s;
+    var cel = tr.querySelector('.cmp-sub'); if(cel) cel.textContent = '$ '+s.toLocaleString('es-CO');
+  });
+  var el=document.getElementById('cmp-total'); if(el) el.textContent = '$ '+t.toLocaleString('es-CO');
+  return t;
+};
+
+window._cmpFile2b64 = function(f){
+  return new Promise(function(res){
+    var rd = new FileReader();
+    rd.onload = function(){ res({nombre:f.name, tipo:f.type, data:String(rd.result)}); };
+    rd.onerror = function(){ res(null); };
+    rd.readAsDataURL(f);
+  });
+};
+
+window._cmpGuardar = async function(tipo, btn){
+  var C = window._CMP[tipo];
+  var conV = C.conValores;
+  var items = [];
+  document.querySelectorAll('#cmp-rows .cmp-row').forEach(function(tr){
+    var d = ((tr.querySelector('.cmp-desc')||{}).value||'').trim();
+    if(!d) return;
+    var c = Number((tr.querySelector('.cmp-cant')||{}).value)||0;
+    var o = { desc:d, cant:c, und:((tr.querySelector('.cmp-und')||{}).value||'').trim() };
+    if(conV){ o.valor = Number((tr.querySelector('.cmp-val')||{}).value)||0; o.subtotal = c*o.valor; }
+    items.push(o);
+  });
+  if(!items.length){ showToast('Se requiere al menos un ítem con descripción','error'); return; }
+
+  var prov = ((document.getElementById('cmp-prov')||{}).value||'').trim();
+  var files = conV ? Array.from((document.getElementById('cmp-cot')||{}).files||[]) : [];
+  if(conV){
+    if(!prov){ showToast('Se requiere el proveedor','error'); return; }
+    if(!files.length && !confirm('No se adjuntó la cotización del proveedor.\n\nGerencia General no podrá dar el Visto Bueno sin ella.\n\n¿Enviar de todos modos?')) return;
+  }
+
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Enviando...';
+  var adj = [];
+  for(var i=0;i<files.length;i++){ var a = await window._cmpFile2b64(files[i]); if(a) adj.push(a); }
+
+  // consecutivo por edificio y tipo
+  var cnt = await sb.from('compras').select('id',{count:'exact',head:true}).eq('tipo',tipo);
+  var n = (cnt.count||0)+1;
+  var consec = C.pre+'-'+String(n).padStart(4,'0');
+
+  var reg = {
+    tipo: tipo,
+    consecutivo: consec,
+    fecha: (document.getElementById('cmp-fecha')||{}).value || TODAY,
+    area: (document.getElementById('cmp-area')||{}).value || '',
+    solicitante: ((document.getElementById('cmp-solic')||{}).value||'').trim(),
+    justificacion: ((document.getElementById('cmp-just')||{}).value||'').trim(),
+    proveedor: conV ? prov : null,
+    items: items,
+    total: conV ? items.reduce(function(s,i){ return s+(i.subtotal||0); },0) : 0,
+    adjuntos: adj,
+    estado: C.flujo[0],
+    user_id: (window.currentUser||{}).id || null
+  };
+  var r = await sb.from('compras').insert([reg]).select('id');
+  btn.disabled = false; btn.innerHTML = '💾 Enviar '+C.sing.toLowerCase();
+  if(r.error){ showToast('No se pudo guardar: '+r.error.message,'error'); return; }
+  showToast('✅ '+consec+' enviada'+(conV?' — pendiente de Visto Bueno de Gerencia General':' — le llega a Compras'),'success');
+  loadView(C.lista);
+};
+
+// ── VB / RECHAZO / AVANCE ──────────────────────────────────────────────────
+window._cmpVB = async function(id, aprueba){
+  var r0 = await sb.from('compras').select('*').eq('id',id).single();
+  if(r0.error||!r0.data){ showToast('No se encontró el registro','error'); return; }
+  var x = r0.data, esOrden = x.tipo==='orden_pedido';
+
+  if(aprueba && esOrden && !(Array.isArray(x.adjuntos)&&x.adjuntos.length)){
+    if(!confirm('Esta orden NO tiene cotización adjunta.\n\n'+x.consecutivo+' · '+(x.proveedor||'')+' · '+window._cmpMoney(x.total)+'\n\n¿Autorizar el lote de todas formas?')) return;
+  }
+  var msg = aprueba
+    ? ('AUTORIZAR el lote completo:\n\n'+x.consecutivo+'\nProveedor: '+(x.proveedor||'—')+'\nTotal: '+window._cmpMoney(x.total)+'\nÍtems: '+(Array.isArray(x.items)?x.items.length:0)+'\n\n¿Confirmar el Visto Bueno?')
+    : ('RECHAZAR '+x.consecutivo+'.\n\n¿Confirmar?');
+  if(!confirm(msg)) return;
+
+  var coment = window.prompt(aprueba?'Comentario del Visto Bueno (opcional):':'Motivo del rechazo:', '') || '';
+  if(!aprueba && !coment.trim()){ showToast('Se requiere el motivo del rechazo','error'); return; }
+
+  var upd = {
+    estado: aprueba ? (esOrden?'Aprobada':'En compra') : 'Rechazada',
+    vb_por: window._cmpYo(), vb_at: new Date().toISOString(), vb_comentario: coment.trim()||null
+  };
+  var r = await sb.from('compras').update(upd).eq('id',id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast(aprueba?('✅ '+x.consecutivo+' autorizada'):('✖ '+x.consecutivo+' rechazada'), aprueba?'success':'info');
+  loadView(window._CMP[x.tipo].lista);
+};
+
+window._cmpAvanzar = async function(id, nuevo){
+  var r0 = await sb.from('compras').select('id,tipo,consecutivo,items').eq('id',id).single();
+  if(r0.error||!r0.data) return;
+  var upd = { estado:nuevo };
+  if(nuevo==='Comprada' || nuevo==='En compra'){ upd.comprado_por = window._cmpYo(); upd.comprado_at = new Date().toISOString(); }
+  if(nuevo==='Recibida' || nuevo==='Entregada'){ upd.entregado_por = window._cmpYo(); upd.entregado_at = new Date().toISOString(); }
+  var r = await sb.from('compras').update(upd).eq('id',id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+
+  // Al recibir la mercancía, las existencias del inventario suben solas.
+  var sumado = 0;
+  if(nuevo==='Recibida'){
+    var its = Array.isArray(r0.data.items)?r0.data.items:[];
+    for(var i=0;i<its.length;i++){
+      if(!its[i].inv_id) continue;
+      var p = await sb.from('inventario').select('id,cantidad,producto').eq('id',its[i].inv_id).single();
+      if(p.error||!p.data) continue;
+      var nueva = Number(p.data.cantidad||0) + Number(its[i].cant||0);
+      var u = await sb.from('inventario').update({ cantidad: nueva }).eq('id', its[i].inv_id);
+      if(!u.error) sumado++;
+    }
+  }
+  showToast('✅ '+r0.data.consecutivo+' → '+nuevo+(sumado?(' · inventario actualizado ('+sumado+' producto'+(sumado>1?'s':'')+')'):''),'success');
+  loadView(window._CMP[r0.data.tipo].lista);
+};
+
+window._cmpVerAdj = async function(id){
+  var r = await sb.from('compras').select('consecutivo,proveedor,adjuntos').eq('id',id).single();
+  if(r.error||!r.data) return;
+  var adj = Array.isArray(r.data.adjuntos)?r.data.adjuntos:[];
+  if(!adj.length){ showToast('Sin adjuntos','info'); return; }
+  var w = window.open('','_blank');
+  w.document.write('<title>Cotización '+r.data.consecutivo+'</title>'
+    +'<div style="font-family:system-ui;padding:16px"><h2>'+r.data.consecutivo+' · '+(r.data.proveedor||'')+'</h2>'
+    + adj.map(function(a){
+        return /pdf/i.test(a.tipo||'')
+          ? '<p><a href="'+a.data+'" download="'+a.nombre+'">📎 '+a.nombre+' (descargar PDF)</a></p><embed src="'+a.data+'" width="100%" height="800px" type="application/pdf">'
+          : '<p><strong>'+a.nombre+'</strong></p><img src="'+a.data+'" style="max-width:100%;border:1px solid #ddd;border-radius:6px">';
+      }).join('')
+    +'</div>');
+};
+
+window._cmpBorrar = async function(id){
+  if(!window._cmpEsGG()){ showToast('Solo Gerencia General','error'); return; }
+  var r0 = await sb.from('compras').select('tipo,consecutivo').eq('id',id).single();
+  if(!confirm('¿Borrar '+((r0.data||{}).consecutivo||'')+'?')) return;
+  var r = await sb.from('compras').delete().eq('id',id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('Registro borrado','info');
+  loadView(window._CMP[(r0.data||{}).tipo||'orden_pedido'].lista);
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVENTARIO — catálogo de productos por proveedor (Sol. Santiago, 14-jul-2026).
+// Va pegado a Compras: se marcan los productos que hacen falta, se indica la
+// cantidad a pedir y el sistema genera la Orden de Pedido ya diligenciada,
+// agrupada por proveedor (una orden por proveedor). Independiente por edificio.
+// ═══════════════════════════════════════════════════════════════════════════
+window._INV_CATS = ['Aseo','Papelería','Amenities','Mantenimiento','Lencería','Cocina','Dotación','Tecnología','Otros'];
+
+window._invLista = async function(){
+  var r = await sb.from('inventario').select('*').order('proveedor',{ascending:true}).order('producto',{ascending:true}).limit(1000);
+  if(r.error){
+    document.getElementById('main-content').innerHTML =
+      '<div class="page-title">📦 Inventario</div><div class="card"><p style="color:#9A4A40"><strong>El módulo aún no está habilitado en la base de datos.</strong></p>'
+      +'<p style="font-size:12px;color:var(--gris-t)">Detalle: '+window._cmpEsc(r.error.message)+'</p></div>';
+    return;
+  }
+  var rows = (r.data||[]).filter(function(x){ return x.activo !== false; });
+  var provs = [];
+  rows.forEach(function(x){ var p=x.proveedor||'(sin proveedor)'; if(provs.indexOf(p)<0) provs.push(p); });
+  var fProv = window._invFProv||'';
+  var fCat  = window._invFCat||'';
+  var vis = rows.filter(function(x){
+    if(fProv && (x.proveedor||'(sin proveedor)')!==fProv) return false;
+    if(fCat && (x.categoria||'')!==fCat) return false;
+    return true;
+  });
+  var bajos = rows.filter(function(x){ return Number(x.stock_min||0)>0 && Number(x.cantidad||0) <= Number(x.stock_min); });
+  var edN = (EDIFICIO_ACTIVO==='kubik')?'Kubik Living':'8010 Urban Living';
+
+  document.getElementById('main-content').innerHTML =
+    '<div class="page-title">📦 Inventario · '+edN+'</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px;max-width:820px">Catálogo de productos por proveedor. Marque lo que haga falta, indique la cantidad a pedir y el sistema genera la Orden de Pedido ya diligenciada (una por proveedor), lista para el Visto Bueno de Gerencia General.</div>'
+    +(bajos.length?('<div style="margin-bottom:12px;padding:10px 12px;border-left:4px solid #B45309;background:#B4530912;border-radius:6px;font-size:12px"><strong>⚠️ '+bajos.length+' producto'+(bajos.length>1?'s':'')+' en o por debajo del mínimo:</strong> '+bajos.map(function(x){return window._cmpEsc(x.producto)+' ('+Number(x.cantidad||0)+')';}).join(' · ')+'</div>'):'')
+    +'<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">'
+      +'<button class="btn btn-success btn-sm" onclick="window._invEdit=null;loadView(\'inventario-form\')">+ Nuevo producto</button>'
+      +'<select onchange="window._invFProv=this.value;window._invLista()" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">'
+        +'<option value="">Todos los proveedores</option>'
+        + provs.map(function(p){ return '<option value="'+window._cmpEsc(p)+'"'+(fProv===p?' selected':'')+'>'+window._cmpEsc(p)+'</option>'; }).join('')
+      +'</select>'
+      +'<select onchange="window._invFCat=this.value;window._invLista()" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">'
+        +'<option value="">Todas las categorías</option>'
+        + window._INV_CATS.map(function(c){ return '<option'+(fCat===c?' selected':'')+'>'+c+'</option>'; }).join('')
+      +'</select>'
+      +'<button class="btn btn-outline btn-sm" onclick="window._invMarcarBajos()">⚠️ Marcar los que están bajo mínimo</button>'
+      +'<button class="btn btn-sm" style="background:#1A5C2E;color:#fff;margin-left:auto" onclick="window._invGenerarOrden()">🧾 Generar Orden(es) de Pedido</button>'
+    +'</div>'
+    +'<div class="card">'
+    +(vis.length===0
+      ? '<div class="empty"><div class="empty-icon">📦</div><p>Sin productos registrados</p></div>'
+      : '<div style="overflow-x:auto"><table class="tabla"><thead><tr>'
+        +'<th style="width:36px"><input type="checkbox" onchange="document.querySelectorAll(\'.inv-ck\').forEach(function(c){c.checked=event.target.checked});window._invPedirVis()" title="Marcar todo"></th>'
+        +'<th>Producto</th><th>Categoría</th><th>Proveedor</th>'
+        +'<th style="text-align:right">Stock</th><th style="text-align:right">Mínimo</th><th>Und</th>'
+        +'<th style="text-align:right">Últ. valor</th><th style="width:110px">Cantidad a pedir</th><th style="width:70px"></th></tr></thead><tbody>'
+        + vis.map(function(x){
+            var bajo = Number(x.stock_min||0)>0 && Number(x.cantidad||0) <= Number(x.stock_min);
+            return '<tr'+(bajo?' style="background:#B4530910"':'')+'>'
+              +'<td><input type="checkbox" class="inv-ck" data-id="'+x.id+'" onchange="window._invPedirVis()"></td>'
+              +'<td style="font-weight:600">'+window._cmpEsc(x.producto)+(bajo?' <span title="Bajo mínimo">⚠️</span>':'')+'</td>'
+              +'<td style="font-size:11px;color:var(--gris-t)">'+window._cmpEsc(x.categoria||'—')+'</td>'
+              +'<td>'+window._cmpEsc(x.proveedor||'(sin proveedor)')+'</td>'
+              +'<td style="text-align:right;font-weight:700'+(bajo?';color:#B45309':'')+'">'+Number(x.cantidad||0)+'</td>'
+              +'<td style="text-align:right;color:var(--gris-t)">'+(Number(x.stock_min||0)||'—')+'</td>'
+              +'<td style="font-size:11px">'+window._cmpEsc(x.unidad||'und')+'</td>'
+              +'<td style="text-align:right;white-space:nowrap">'+(Number(x.valor_unit||0)?window._cmpMoney(x.valor_unit):'—')+'</td>'
+              +'<td><input type="number" class="inv-qty" data-id="'+x.id+'" min="1" value="'+(bajo?Math.max(1,Number(x.stock_min||1)):1)+'" style="width:90px;font-size:12px;text-align:right"></td>'
+              +'<td><button class="btn btn-outline btn-xs" onclick="window._invEditar(\''+x.id+'\')">✏️</button></td>'
+            +'</tr>';
+          }).join('')
+        +'</tbody></table></div>')
+    +'</div>'
+    +'<div id="inv-resumen" style="margin-top:12px"></div>';
+  window._invRows = rows;
+  window._invPedirVis();
+};
+
+window._invMarcarBajos = function(){
+  var rows = window._invRows||[];
+  document.querySelectorAll('.inv-ck').forEach(function(c){
+    var x = rows.find(function(r){ return String(r.id)===c.dataset.id; });
+    c.checked = !!(x && Number(x.stock_min||0)>0 && Number(x.cantidad||0) <= Number(x.stock_min));
+  });
+  window._invPedirVis();
+};
+
+window._invSel = function(){
+  var rows = window._invRows||[], out=[];
+  document.querySelectorAll('.inv-ck').forEach(function(c){
+    if(!c.checked) return;
+    var x = rows.find(function(r){ return String(r.id)===c.dataset.id; });
+    if(!x) return;
+    var q = document.querySelector('.inv-qty[data-id="'+c.dataset.id+'"]');
+    out.push({ prod:x, cant: Math.max(1, Number((q||{}).value)||1) });
+  });
+  return out;
+};
+
+window._invPedirVis = function(){
+  var sel = window._invSel();
+  var el = document.getElementById('inv-resumen'); if(!el) return;
+  if(!sel.length){ el.innerHTML=''; return; }
+  var porProv = {};
+  sel.forEach(function(s){
+    var p = s.prod.proveedor || '(sin proveedor)';
+    (porProv[p] = porProv[p]||[]).push(s);
+  });
+  var provs = Object.keys(porProv);
+  el.innerHTML = '<div class="card" style="border-left:4px solid #1A5C2E">'
+    +'<div style="font-weight:700;color:var(--azul);margin-bottom:8px">Se generará'+(provs.length>1?'n '+provs.length+' órdenes':' 1 orden')+' de pedido — una por proveedor</div>'
+    + provs.map(function(p){
+        var its = porProv[p];
+        var tot = its.reduce(function(s,i){ return s + i.cant*Number(i.prod.valor_unit||0); },0);
+        return '<div style="margin-bottom:8px;font-size:12px;line-height:1.7">'
+          +'<strong>'+window._cmpEsc(p)+'</strong> — '+its.length+' ítem'+(its.length>1?'s':'')
+          +(tot?(' · estimado <strong>'+window._cmpMoney(tot)+'</strong>'):' · <em style="color:#B45309">sin valores de referencia</em>')
+          +'<br><span style="color:var(--gris-t)">'+its.map(function(i){ return window._cmpEsc(i.prod.producto)+' ×'+i.cant; }).join(' · ')+'</span>'
+        +'</div>';
+      }).join('')
+    +'</div>';
+};
+
+window._invGenerarOrden = async function(){
+  var sel = window._invSel();
+  if(!sel.length){ showToast('Marque al menos un producto','error'); return; }
+  var porProv = {};
+  sel.forEach(function(s){ var p = s.prod.proveedor || '(sin proveedor)'; (porProv[p]=porProv[p]||[]).push(s); });
+  var provs = Object.keys(porProv);
+  if(!confirm('Se generará'+(provs.length>1?('n '+provs.length+' órdenes de pedido (una por proveedor)'):' 1 orden de pedido')+'.\n\n'
+    + provs.map(function(p){ return '· '+p+': '+porProv[p].length+' ítem(s)'; }).join('\n')
+    + '\n\nQuedarán en estado "Pendiente VB" a la espera del Visto Bueno de Gerencia General.\nLa cotización del proveedor se adjunta después, editando la orden.\n\n¿Continuar?')) return;
+
+  var creadas = [];
+  for(var k=0;k<provs.length;k++){
+    var p = provs[k];
+    var items = porProv[p].map(function(s){
+      return { desc:s.prod.producto, cant:s.cant, und:s.prod.unidad||'und',
+               valor:Number(s.prod.valor_unit||0), subtotal:s.cant*Number(s.prod.valor_unit||0),
+               inv_id:s.prod.id };
+    });
+    var cnt = await sb.from('compras').select('id',{count:'exact',head:true}).eq('tipo','orden_pedido');
+    var consec = 'OP-'+String((cnt.count||0)+1+k).padStart(4,'0');
+    var reg = {
+      tipo:'orden_pedido', consecutivo:consec, fecha:TODAY,
+      area:'Administración', solicitante: window._cmpYo(),
+      justificacion:'Generada desde Inventario · reposición de existencias',
+      proveedor: (p==='(sin proveedor)'?'':p),
+      items: items,
+      total: items.reduce(function(s,i){ return s+(i.subtotal||0); },0),
+      adjuntos: [], estado:'Pendiente VB',
+      user_id:(window.currentUser||{}).id||null
+    };
+    var r = await sb.from('compras').insert([reg]).select('consecutivo');
+    if(r.error){ showToast('Error creando '+consec+': '+r.error.message,'error'); return; }
+    creadas.push(consec+' · '+p);
+  }
+  showToast('✅ '+creadas.length+' orden(es) creada(s) — pendientes de Visto Bueno','success');
+  alert('Órdenes generadas:\n\n'+creadas.join('\n')+'\n\nQuedan en "Pendiente VB". Recuerde adjuntar la cotización del proveedor antes de solicitar el Visto Bueno.');
+  loadView('compras-ordenes');
+};
+
+window._invEditar = async function(id){
+  var r = await sb.from('inventario').select('*').eq('id',id).single();
+  if(r.error||!r.data){ showToast('No se encontró el producto','error'); return; }
+  window._invEdit = r.data; loadView('inventario-form');
+};
+
+window._invForm = function(){
+  var e = window._invEdit || null;
+  var v = function(k,d){ return window._cmpEsc((e&&e[k]!=null)?e[k]:(d||'')); };
+  document.getElementById('main-content').innerHTML =
+    '<div class="page-title">📦 '+(e?'Editar producto':'Nuevo producto')+'</div>'
+    +'<div class="card" style="max-width:720px">'
+      +'<div class="form-row col2">'
+        +'<div class="form-group"><label>Producto *</label><input id="inv-prod" value="'+v('producto')+'" placeholder="Ej: Resma papel carta 75g"></div>'
+        +'<div class="form-group"><label>Proveedor *</label><input id="inv-prov" value="'+v('proveedor')+'" placeholder="Ej: Panamericana"></div>'
+      +'</div>'
+      +'<div class="form-row col3">'
+        +'<div class="form-group"><label>Categoría</label><select id="inv-cat">'
+          + window._INV_CATS.map(function(c){ return '<option'+((e&&e.categoria===c)?' selected':'')+'>'+c+'</option>'; }).join('')
+        +'</select></div>'
+        +'<div class="form-group"><label>Unidad</label><input id="inv-und" value="'+v('unidad','und')+'" placeholder="und / caja / litro"></div>'
+        +'<div class="form-group"><label>Valor unitario ($)</label><input type="number" id="inv-val" value="'+(e?Number(e.valor_unit||0):0)+'"></div>'
+      +'</div>'
+      +'<div class="form-row col2">'
+        +'<div class="form-group"><label>Cantidad en existencia</label><input type="number" id="inv-cant" value="'+(e?Number(e.cantidad||0):0)+'"></div>'
+        +'<div class="form-group"><label>Stock mínimo (alerta)</label><input type="number" id="inv-min" value="'+(e?Number(e.stock_min||0):0)+'">'
+          +'<div style="font-size:10px;color:var(--gris-t);margin-top:3px">Si la existencia baja a este número o menos, el producto se marca en alerta.</div></div>'
+      +'</div>'
+      +'<div class="form-group"><label>Observaciones</label><textarea id="inv-obs" rows="2">'+v('observaciones')+'</textarea></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+      +'<button class="btn btn-success" onclick="window._invGuardar(this)">💾 Guardar</button>'
+      +'<button class="btn btn-outline" onclick="window._invEdit=null;loadView(\'inventario-list\')">Cancelar</button>'
+      +(e&&window._cmpEsGG()?('<button class="btn btn-outline" style="color:#9A4A40;border-color:#E0C0BA;margin-left:auto" onclick="window._invBorrar(\''+e.id+'\')">🗑 Dar de baja</button>'):'')
+    +'</div>';
+};
+
+window._invGuardar = async function(btn){
+  var e = window._invEdit || null;
+  var prod = ((document.getElementById('inv-prod')||{}).value||'').trim();
+  var prov = ((document.getElementById('inv-prov')||{}).value||'').trim();
+  if(!prod){ showToast('Se requiere el nombre del producto','error'); return; }
+  if(!prov){ showToast('Se requiere el proveedor','error'); return; }
+  var reg = {
+    producto: prod, proveedor: prov,
+    categoria: (document.getElementById('inv-cat')||{}).value||'Otros',
+    unidad: ((document.getElementById('inv-und')||{}).value||'und').trim(),
+    valor_unit: Number((document.getElementById('inv-val')||{}).value)||0,
+    cantidad: Number((document.getElementById('inv-cant')||{}).value)||0,
+    stock_min: Number((document.getElementById('inv-min')||{}).value)||0,
+    observaciones: ((document.getElementById('inv-obs')||{}).value||'').trim(),
+    activo: true
+  };
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Guardando...';
+  var r = e ? await sb.from('inventario').update(reg).eq('id', e.id)
+            : await sb.from('inventario').insert([reg]);
+  btn.disabled = false; btn.innerHTML = '💾 Guardar';
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('✅ Producto guardado','success');
+  window._invEdit = null; loadView('inventario-list');
+};
+
+window._invBorrar = async function(id){
+  if(!window._cmpEsGG()){ showToast('Solo Gerencia General','error'); return; }
+  if(!confirm('¿Dar de baja este producto?\n\nNo se borra el registro: deja de aparecer en el catálogo.')) return;
+  var r = await sb.from('inventario').update({activo:false}).eq('id',id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('Producto dado de baja','info');
+  window._invEdit=null; loadView('inventario-list');
+};
 
 // ── Recuperación de contraseña ──────────────────────────────────────────────
 // Gerencia NO asigna ni conoce contraseñas. Cada usuario define la suya
