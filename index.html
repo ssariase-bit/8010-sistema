@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-firma-en-todo';
+const APP_VERSION = '2026-07-14-firma-fix-guardar';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-firma-fix-guardar', titulo:'Mi Firma: se corrige el guardado',
+    afecta:'Mi Firma',
+    detalle:'La firma no se guardaba y el sistema no informaba por qué. Dos causas: la consulta usaba un método del conector que no existe en la versión instalada, lo que interrumpía el proceso sin mensaje; y la imagen se generaba a resolución excesiva, con un peso que la base de datos rechazaba. Ahora la imagen se optimiza a un tamaño adecuado para pantalla e impresión, y cualquier error se muestra en pantalla en lugar de fallar en silencio.' },
   { fecha:'2026-07-14', version:'2026-07-14-firma-en-todo', titulo:'La firma con código rige TODAS las autorizaciones de Gerencia General',
     afecta:'Reembolsos · Órdenes de Pedido · Seguridad',
     detalle:'La firma de Gerencia General queda unificada y protegida con el código de autorización en todos los puntos donde se compromete dinero: aprobación de reembolsos individuales, aprobación de lotes de reembolso, Visto Bueno del informe de reembolsos y Visto Bueno de Órdenes de Pedido. En ninguno de esos casos se aprueba nada si no se digita el código correcto. CORRECCIÓN DE SEGURIDAD: hasta ahora la firma se guardaba en el navegador del equipo (localStorage) y se estampaba sin solicitar nada, de modo que cualquier persona que usara ese equipo con la sesión abierta podía aprobar reembolsos y estampar la firma de Gerencia General. La firma ya no se almacena en el equipo: reside en la base de datos, atada al usuario, y solo se libera al digitar el código. Al cerrar sesión, la firma se descarga de la memoria.' },
@@ -7914,9 +7917,11 @@ window._frmHash = async function(pin){
 
 window._frmGet = async function(){
   var uid = (window.currentUser||{}).id; if(!uid) return null;
-  var r = await sb.from('firmas').select('*').eq('user_id',uid).maybeSingle();
+  // .limit(1) en vez de .maybeSingle(): maybeSingle no existe en todas las versiones del SDK
+  // y hacía que la función reventara sin mensaje.
+  var r = await sb.from('firmas').select('*').eq('user_id',uid).limit(1);
   if(r.error) return {__err:r.error.message};
-  return r.data||null;
+  return (r.data && r.data[0]) ? r.data[0] : null;
 };
 
 // Convierte la foto de la firma en tinta real sobre fondo transparente.
@@ -8036,10 +8041,15 @@ window._frmLimpiar = function(file){
         minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad);
         maxX=Math.min(W-1,maxX+pad); maxY=Math.min(H-1,maxY+pad);
         var cw=maxX-minX+1, ch=maxY-minY+1;
-        var cv2=document.createElement('canvas'); cv2.width=cw; cv2.height=ch;
+        // Salida a un ancho razonable: una firma de 1600px en PNG con transparencia
+        // pesa varios MB en base64 y hacía fallar el guardado. 900px es de sobra
+        // para pantalla e impresión, y el archivo queda liviano.
+        var OUT_W = Math.min(900, cw);
+        var ow = OUT_W, oh = Math.round(ch * (OUT_W/cw));
+        var cv2=document.createElement('canvas'); cv2.width=ow; cv2.height=oh;
         var cx2=cv2.getContext('2d');
         cx2.imageSmoothingEnabled = true; cx2.imageSmoothingQuality = 'high';
-        cx2.drawImage(cv, minX, minY, cw, ch, 0, 0, cw, ch);
+        cx2.drawImage(cv, minX, minY, cw, ch, 0, 0, ow, oh);
         res(cv2.toDataURL('image/png'));
       };
       img.src = String(rd.result);
@@ -8094,7 +8104,8 @@ window._frmPanel = async function(){
       +'</div>'
       +'<div style="font-size:11px;color:var(--gris-t)">Este código es personal e intransferible. No debe compartirse con nadie, ni con el personal ni con la asesoría externa.</div>'
     +'</div>'
-    +'<div style="display:flex;gap:8px">'
+    +'<div id="frm-error" style="display:none;max-width:760px;margin-bottom:12px;padding:10px 12px;border-left:4px solid #9A4A40;background:#9A4A4012;border-radius:6px;font-size:12px;color:#9A4A40;line-height:1.5"></div>'
+    +'<div style="display:flex;gap:8px;max-width:760px">'
       +'<button class="btn btn-success" onclick="window._frmGuardar(this)">💾 Guardar</button>'
       +'<button class="btn btn-outline" onclick="loadView(\'dashboard\')">Cancelar</button>'
     +'</div>';
@@ -8118,35 +8129,58 @@ window._frmPreview = async function(){
     +'</div>';
 };
 
+window._frmErr = function(msg){
+  var el = document.getElementById('frm-error');
+  if(el){ el.style.display='block'; el.innerHTML = '<strong>No se guardó.</strong> '+window._cmpEsc(msg); }
+  if(typeof showToast==='function') showToast(msg,'error');
+};
+
 window._frmGuardar = async function(btn){
-  var uid = (window.currentUser||{}).id;
-  var actual = await window._frmGet();
-  var p1 = ((document.getElementById('frm-pin1')||{}).value)||'';
-  var p2 = ((document.getElementById('frm-pin2')||{}).value)||'';
-  var upd = { user_id: uid, nombre: window._cmpYo(), cargo: 'Gerencia General', updated_at: new Date().toISOString() };
+  var el = document.getElementById('frm-error'); if(el) el.style.display='none';
+  try{
+    var uid = (window.currentUser||{}).id;
+    if(!uid){ window._frmErr('No hay sesión activa. Vuelva a ingresar.'); return; }
 
-  if(window._frmTmp) upd.imagen = window._frmTmp;
+    var actual = await window._frmGet();
+    if(actual && actual.__err){ window._frmErr('No se pudo leer la firma: '+actual.__err); return; }
 
-  if(p1 || p2){
-    if(p1.length < 4){ showToast('El código debe tener al menos 4 caracteres','error'); return; }
-    if(p1 !== p2){ showToast('Los códigos no coinciden','error'); return; }
-    if(actual && actual.pin_hash){
-      var old = ((document.getElementById('frm-pin-old')||{}).value)||'';
-      if(!old){ showToast('Se requiere el código actual para cambiarlo','error'); return; }
-      if(await window._frmHash(old) !== actual.pin_hash){ showToast('El código actual no es correcto','error'); return; }
+    var p1 = ((document.getElementById('frm-pin1')||{}).value)||'';
+    var p2 = ((document.getElementById('frm-pin2')||{}).value)||'';
+    var upd = { user_id: uid, nombre: window._cmpYo(), cargo: 'Gerencia General', updated_at: new Date().toISOString() };
+
+    if(window._frmTmp) upd.imagen = window._frmTmp;
+
+    if(p1 || p2){
+      if(p1.length < 4){ window._frmErr('El código debe tener al menos 4 caracteres.'); return; }
+      if(p1 !== p2){ window._frmErr('Los códigos no coinciden.'); return; }
+      if(actual && actual.pin_hash){
+        var old = ((document.getElementById('frm-pin-old')||{}).value)||'';
+        if(!old){ window._frmErr('Se requiere el código actual para cambiarlo.'); return; }
+        if(await window._frmHash(old) !== actual.pin_hash){ window._frmErr('El código actual no es correcto.'); return; }
+      }
+      upd.pin_hash = await window._frmHash(p1);
     }
-    upd.pin_hash = await window._frmHash(p1);
-  }
-  if(!upd.imagen && !upd.pin_hash && !(actual&&actual.imagen)){ showToast('Cargue la firma y defina el código','error'); return; }
 
-  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Guardando...';
-  var r = actual ? await sb.from('firmas').update(upd).eq('user_id',uid)
-                 : await sb.from('firmas').insert([upd]);
-  btn.disabled=false; btn.innerHTML='💾 Guardar';
-  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
-  window._frmTmp = null;
-  showToast('✅ Firma actualizada','success');
-  loadView('mi-firma');
+    var hayImg = upd.imagen || (actual && actual.imagen);
+    var hayPin = upd.pin_hash || (actual && actual.pin_hash);
+    if(!hayImg){ window._frmErr('Falta cargar la imagen de la firma.'); return; }
+    if(!hayPin){ window._frmErr('Falta definir el código de autorización.'); return; }
+
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Guardando...';
+    var r = actual ? await sb.from('firmas').update(upd).eq('user_id',uid).select('id')
+                   : await sb.from('firmas').insert([upd]).select('id');
+    btn.disabled=false; btn.innerHTML='💾 Guardar';
+
+    if(r.error){ window._frmErr(r.error.message); return; }
+    if(!r.data || !r.data.length){ window._frmErr('La base de datos rechazó el registro (permisos). Reporte este mensaje.'); return; }
+
+    window._frmTmp = null;
+    showToast('✅ Firma y código guardados','success');
+    loadView('mi-firma');
+  }catch(e){
+    try{ btn.disabled=false; btn.innerHTML='💾 Guardar'; }catch(_){}
+    window._frmErr((e && e.message) ? e.message : String(e));
+  }
 };
 
 // Pide el código y devuelve la imagen de la firma si es correcto; null si no.
