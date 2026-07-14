@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-firma-autorizacion';
+const APP_VERSION = '2026-07-14-firma-tinta';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-firma-tinta', titulo:'La firma se procesa como tinta real, no como fotografía',
+    afecta:'Mi Firma',
+    detalle:'Se mejoró el tratamiento de la imagen de la firma para que se vea como trazo de pluma y no como una fotografía recortada: corrección de iluminación despareja, umbral automático que se adapta al papel y a la luz, opacidad progresiva que conserva la variación de presión del trazo, eliminación de motas del papel y alta resolución para impresión. La vista previa muestra la firma sobre la línea de firma, tal como quedará estampada en las autorizaciones.' },
   { fecha:'2026-07-14', version:'2026-07-14-firma-autorizacion', titulo:'Firma de Gerencia General con código de autorización',
     afecta:'Compras · Órdenes de Pedido',
     detalle:'Gerencia General carga su firma en el módulo "Mi Firma" y define un código de autorización personal. Al dar el Visto Bueno a una Orden de Pedido, el sistema exige ese código; si no se digita correctamente, no se estampa la firma y la orden NO queda autorizada. La firma aprobada queda visible en la trazabilidad de la orden. El código no se almacena en el sistema: se guarda únicamente su huella criptográfica (SHA-256), de modo que no puede ser leído ni reconstruido por nadie, tampoco desde la base de datos. Si se olvida, se define uno nuevo; no existe forma de recuperar el anterior. El código es personal e intransferible.' },
@@ -7904,39 +7907,127 @@ window._frmGet = async function(){
   return r.data||null;
 };
 
-// Limpia el fondo de la foto de la firma: deja el trazo y vuelve el resto transparente.
+// Convierte la foto de la firma en tinta real sobre fondo transparente.
+//
+// El objetivo es que NO parezca una foto recortada, sino trazo de pluma:
+//  · Corrección de iluminación despareja (la sombra del celular sobre el papel).
+//  · Umbral automático (Otsu): se adapta al papel y a la luz, sin número fijo.
+//  · Opacidad progresiva: conserva la variación de presión del trazo — el borde
+//    se desvanece en vez de cortarse en escalera. Eso es lo que la hace real.
+//  · Eliminación de motas: puntos sueltos del papel o del sensor.
+//  · Alta resolución: el trazo queda nítido al imprimir o ampliar.
+window._FRM_TINTA = { r:17, g:24, b:64 };   // azul-negro de pluma
+
 window._frmLimpiar = function(file){
   return new Promise(function(res){
     var rd = new FileReader();
     rd.onload = function(){
       var img = new Image();
       img.onload = function(){
-        var W = 700, H = Math.round(img.height * (W/img.width));
+        var W = Math.min(1600, Math.max(900, img.width));
+        var H = Math.round(img.height * (W/img.width));
         var cv = document.createElement('canvas'); cv.width=W; cv.height=H;
-        var cx = cv.getContext('2d');
+        var cx = cv.getContext('2d', {willReadFrequently:true});
         cx.drawImage(img, 0, 0, W, H);
-        var d = cx.getImageData(0,0,W,H), p = d.data;
-        // Umbral: todo lo claro se vuelve transparente; el trazo oscuro se conserva en negro.
-        for(var i=0;i<p.length;i+=4){
-          var lum = 0.299*p[i] + 0.587*p[i+1] + 0.114*p[i+2];
-          if(lum > 140){ p[i+3] = 0; }
-          else { p[i]=15; p[i+1]=23; p[i+2]=42; p[i+3] = Math.min(255, Math.round((140-lum)*3)); }
+        var d = cx.getImageData(0,0,W,H), p = d.data, N = W*H;
+
+        // 1) Luminancia
+        var lum = new Float32Array(N);
+        for(var i=0;i<N;i++){
+          var o=i*4;
+          lum[i] = 0.299*p[o] + 0.587*p[o+1] + 0.114*p[o+2];
+        }
+
+        // 2) Fondo estimado (máximo local en bloques) → corrige sombras e iluminación despareja
+        var BS = Math.max(24, Math.round(W/24));
+        var bw = Math.ceil(W/BS), bh = Math.ceil(H/BS);
+        var bg = new Float32Array(bw*bh);
+        for(var by=0;by<bh;by++) for(var bx=0;bx<bw;bx++){
+          var vals=[];
+          for(var y=by*BS;y<Math.min(H,(by+1)*BS);y+=2)
+            for(var x=bx*BS;x<Math.min(W,(bx+1)*BS);x+=2) vals.push(lum[y*W+x]);
+          vals.sort(function(a,b){return a-b;});
+          bg[by*bw+bx] = vals[Math.floor(vals.length*0.90)] || 255;   // percentil 90 = papel
+        }
+        var bgAt = function(x,y){
+          var fx = Math.min(bw-1, x/BS), fy = Math.min(bh-1, y/BS);
+          var x0=Math.floor(fx), y0=Math.floor(fy);
+          var x1=Math.min(bw-1,x0+1), y1=Math.min(bh-1,y0+1);
+          var tx=fx-x0, ty=fy-y0;
+          var a=bg[y0*bw+x0], b=bg[y0*bw+x1], c=bg[y1*bw+x0], e=bg[y1*bw+x1];
+          return (a*(1-tx)+b*tx)*(1-ty) + (c*(1-tx)+e*tx)*ty;   // bilineal
+        };
+
+        // 3) Tinta = cuánto más oscuro que el papel local (0..255)
+        var ink = new Float32Array(N), hist = new Uint32Array(256);
+        for(var y=0;y<H;y++) for(var x=0;x<W;x++){
+          var idx=y*W+x;
+          var v = Math.max(0, Math.min(255, bgAt(x,y) - lum[idx]));
+          ink[idx]=v; hist[Math.round(v)]++;
+        }
+
+        // 4) Umbral automático de Otsu sobre la tinta
+        var sum=0, tot=N;
+        for(var t=0;t<256;t++) sum += t*hist[t];
+        var sumB=0, wB=0, best=0, thr=30;
+        for(var t2=0;t2<256;t2++){
+          wB += hist[t2]; if(!wB) continue;
+          var wF = tot-wB; if(!wF) break;
+          sumB += t2*hist[t2];
+          var mB = sumB/wB, mF = (sum-sumB)/wF;
+          var between = wB*wF*(mB-mF)*(mB-mF);
+          if(between > best){ best=between; thr=t2; }
+        }
+        thr = Math.max(18, Math.min(90, thr));
+        var lo = thr*0.55, hi = thr*1.55;   // banda suave: bordes que se desvanecen
+
+        // 5) Alpha progresivo (esto es lo que la hace ver como tinta, no como recorte)
+        var alpha = new Float32Array(N);
+        for(var i2=0;i2<N;i2++){
+          var v2 = ink[i2];
+          var a = (v2<=lo) ? 0 : (v2>=hi ? 1 : (v2-lo)/(hi-lo));
+          alpha[i2] = a*a*(3-2*a);          // smoothstep
+        }
+
+        // 6) Quitar motas sueltas (ruido del papel/sensor)
+        var clean = new Float32Array(N);
+        for(var y3=0;y3<H;y3++) for(var x3=0;x3<W;x3++){
+          var i3=y3*W+x3;
+          if(alpha[i3]<0.06){ clean[i3]=0; continue; }
+          var s=0,c3=0;
+          for(var dy=-1;dy<=1;dy++) for(var dx=-1;dx<=1;dx++){
+            var nx=x3+dx, ny=y3+dy;
+            if(nx<0||ny<0||nx>=W||ny>=H) continue;
+            s += alpha[ny*W+nx]; c3++;
+          }
+          clean[i3] = (s/c3 < 0.10) ? 0 : alpha[i3];   // vecindario vacío → era una mota
+        }
+
+        // 7) Pintar la tinta
+        var T = window._FRM_TINTA;
+        for(var i4=0;i4<N;i4++){
+          var o4=i4*4, a4=clean[i4];
+          p[o4]=T.r; p[o4+1]=T.g; p[o4+2]=T.b;
+          p[o4+3]=Math.round(Math.min(1,a4*1.06)*255);
         }
         cx.putImageData(d,0,0);
-        // Recorta márgenes vacíos
+
+        // 8) Recortar al trazo
         var minX=W, minY=H, maxX=0, maxY=0, hay=false;
-        var d2 = cx.getImageData(0,0,W,H).data;
-        for(var y=0;y<H;y++) for(var x=0;x<W;x++){
-          if(d2[(y*W+x)*4+3] > 20){ hay=true;
-            if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
+        for(var y5=0;y5<H;y5++) for(var x5=0;x5<W;x5++){
+          if(clean[y5*W+x5] > 0.10){ hay=true;
+            if(x5<minX)minX=x5; if(x5>maxX)maxX=x5;
+            if(y5<minY)minY=y5; if(y5>maxY)maxY=y5; }
         }
         if(!hay){ res(cv.toDataURL('image/png')); return; }
-        var pad=8;
+        var pad = Math.round(W*0.012);
         minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad);
         maxX=Math.min(W-1,maxX+pad); maxY=Math.min(H-1,maxY+pad);
         var cw=maxX-minX+1, ch=maxY-minY+1;
         var cv2=document.createElement('canvas'); cv2.width=cw; cv2.height=ch;
-        cv2.getContext('2d').drawImage(cv, minX, minY, cw, ch, 0, 0, cw, ch);
+        var cx2=cv2.getContext('2d');
+        cx2.imageSmoothingEnabled = true; cx2.imageSmoothingQuality = 'high';
+        cx2.drawImage(cv, minX, minY, cw, ch, 0, 0, cw, ch);
         res(cv2.toDataURL('image/png'));
       };
       img.src = String(rd.result);
@@ -8000,12 +8091,18 @@ window._frmPanel = async function(){
 window._frmPreview = async function(){
   var f = (document.getElementById('frm-file')||{}).files;
   if(!f || !f[0]) return;
+  var el = document.getElementById('frm-prev');
+  el.innerHTML = '<div style="font-size:12px;color:var(--gris-t)"><span class="spinner"></span> Procesando la firma...</div>';
   var png = await window._frmLimpiar(f[0]);
   window._frmTmp = png;
-  document.getElementById('frm-prev').innerHTML =
-    '<div style="padding:14px;border:2px solid #166534;border-radius:8px;background:#fff;text-align:center">'
-      +'<div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:6px">Así quedará (fondo eliminado)</div>'
-      +'<img src="'+png+'" style="max-height:110px;max-width:100%">'
+  el.innerHTML =
+    '<div style="padding:18px;border:2px solid #166534;border-radius:8px;background:#fff">'
+      +'<div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:10px">Así se estampará en las autorizaciones</div>'
+      +'<div style="border-bottom:1px solid #1f2937;display:inline-block;padding:0 30px 2px 30px;min-width:280px;text-align:center">'
+        +'<img src="'+png+'" style="max-height:90px;max-width:100%;display:block;margin:0 auto -4px auto">'
+      +'</div>'
+      +'<div style="font-size:11px;color:#1f2937;margin-top:5px;padding-left:30px">Santiago Arias E.<br><span style="color:#64748B">Gerencia General</span></div>'
+      +'<div style="font-size:10px;color:var(--gris-t);margin-top:12px;line-height:1.5">Si el trazo quedó cortado o con manchas, tome la foto de nuevo: papel blanco, buena luz, sin sombras encima, y la firma ocupando la mayor parte del encuadre.</div>'
     +'</div>';
 };
 
