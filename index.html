@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-firma-robusta';
+const APP_VERSION = '2026-07-14-compras-imprimir-correo';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-compras-imprimir-correo', titulo:'Órdenes de Pedido y Requisiciones: imprimir y enviar por correo',
+    afecta:'Compras',
+    detalle:'Cada Orden de Pedido y cada Requisición Interna se puede imprimir o guardar como PDF en un documento formal con el membrete y el NIT del edificio, el consecutivo, el detalle de los ítems, el total y el bloque de firmas (Solicitó / Autorizó). Cuando la orden está autorizada, la firma de Gerencia General aparece estampada en el documento; mientras no lo esté, el documento indica expresamente que está pendiente de Visto Bueno. Se agregó también el envío por correo, con el detalle completo en el cuerpo del mensaje, y el campo de correo del proveedor en el formulario para no tener que digitarlo cada vez.' },
   { fecha:'2026-07-14', version:'2026-07-14-firma-robusta', titulo:'Mi Firma: el guardado ya no depende de la vista previa',
     afecta:'Mi Firma',
     detalle:'El sistema informaba "Falta cargar la imagen de la firma" aun habiéndose seleccionado el archivo: el guardado dependía de que la vista previa hubiese terminado de procesar la imagen, y si ese procesamiento fallaba en silencio —por ejemplo con fotos en formato HEIC de iPhone— no quedaba nada guardado. Ahora el guardado procesa el archivo por su cuenta, informa el motivo exacto cuando una imagen no se puede abrir, y si la limpieza de fondo no es posible guarda la imagen sin procesar antes que no guardar nada.' },
@@ -7428,7 +7431,7 @@ window._cmpLista = async function(tipo){
                     : '<span style="color:#9A4A40;font-size:11px" title="Sin cotización adjunta">⚠️ sin cot.</span>')+'</td>'):'')
               +'<td>'+window._cmpBadge(x.estado)+'</td>'
               +'<td style="font-size:10px;color:var(--gris-t);line-height:1.6;min-width:150px">'+(traza.join('<br>')||'—')+'</td>'
-              +'<td><div style="display:inline-grid;gap:4px;width:120px">'
+              +'<td><div style="display:inline-grid;gap:4px;width:132px">'
                 + window._cmpAcciones(tipo, x, esGG)
               +'</div></td></tr>';
           }).join('')
@@ -7438,6 +7441,9 @@ window._cmpLista = async function(tipo){
 
 window._cmpAcciones = function(tipo, x, esGG){
   var b=[], id=x.id;
+  // Imprimir / enviar por correo: disponible siempre, en los dos flujos.
+  b.push('<button class="btn btn-outline btn-xs" onclick="window._cmpImprimir(\''+id+'\')" title="Imprimir o guardar como PDF">🖨️ Imprimir</button>');
+  b.push('<button class="btn btn-outline btn-xs" onclick="window._cmpEnviar(\''+id+'\')" title="Enviar por correo">📧 Correo</button>');
   if(tipo==='orden_pedido'){
     if(x.estado==='Pendiente VB'){
       if(esGG){
@@ -7457,7 +7463,7 @@ window._cmpAcciones = function(tipo, x, esGG){
     if(x.estado==='En compra')  b.push('<button class="btn btn-success btn-xs" onclick="window._cmpAvanzar(\''+id+'\',\'Entregada\')">📦 Entregada</button>');
   }
   if(esGG) b.push('<button class="btn btn-outline btn-xs" style="color:#9A4A40;border-color:#E0C0BA" onclick="window._cmpBorrar(\''+id+'\')">🗑 Borrar</button>');
-  return b.join('') || '<span style="font-size:10px;color:var(--gris-t);text-align:center">Cerrada</span>';
+  return b.join('');
 };
 
 // ── FORMULARIO ─────────────────────────────────────────────────────────────
@@ -7480,8 +7486,9 @@ window._cmpForm = function(tipo){
         +'<div class="form-group"><label>Solicita *</label><input id="cmp-solic" value="'+window._cmpEsc(yo)+'"></div>'
       +'</div>'
       +(C.conValores
-        ? '<div class="form-row col2">'
+        ? '<div class="form-row col3">'
             +'<div class="form-group"><label>Proveedor *</label><input id="cmp-prov" placeholder="Nombre del proveedor"></div>'
+            +'<div class="form-group"><label>Correo del proveedor</label><input id="cmp-prov-mail" type="email" placeholder="para enviarle la orden"></div>'
             +'<div class="form-group"><label>📎 Cotización del proveedor *</label><input type="file" id="cmp-cot" multiple accept="image/*,application/pdf,.pdf">'
               +'<div style="font-size:10px;color:var(--gris-t);margin-top:3px">Sin cotización adjunta, Gerencia General no puede dar el Visto Bueno.</div></div>'
           +'</div>'
@@ -7584,6 +7591,7 @@ window._cmpGuardar = async function(tipo, btn){
     solicitante: ((document.getElementById('cmp-solic')||{}).value||'').trim(),
     justificacion: ((document.getElementById('cmp-just')||{}).value||'').trim(),
     proveedor: conV ? prov : null,
+    proveedor_email: conV ? (((document.getElementById('cmp-prov-mail')||{}).value||'').trim() || null) : null,
     items: items,
     total: conV ? items.reduce(function(s,i){ return s+(i.subtotal||0); },0) : 0,
     adjuntos: adj,
@@ -7657,6 +7665,134 @@ window._cmpAvanzar = async function(id, nuevo){
   }
   showToast('✅ '+r0.data.consecutivo+' → '+nuevo+(sumado?(' · inventario actualizado ('+sumado+' producto'+(sumado>1?'s':'')+')'):''),'success');
   loadView(window._CMP[r0.data.tipo].lista);
+};
+
+// ── DOCUMENTO IMPRIMIBLE (Orden de Pedido / Requisición Interna) ───────────
+window._cmpDocHTML = function(x){
+  var C = window._CMP[x.tipo] || window._CMP.orden_pedido;
+  var conV = C.conValores;
+  var eb = (typeof EB==='function' && EB()) || {};
+  var esc = window._cmpEsc, M = window._cmpMoney;
+  var its = Array.isArray(x.items)?x.items:[];
+  var fFmt = function(f){ if(!f) return '—'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+
+  var filas = its.map(function(i,n){
+    return '<tr>'
+      +'<td style="text-align:center">'+(n+1)+'</td>'
+      +'<td style="text-align:left">'+esc(i.desc)+'</td>'
+      +'<td style="text-align:center">'+esc(i.cant)+'</td>'
+      +'<td style="text-align:center">'+esc(i.und||'und')+'</td>'
+      +(conV?('<td style="text-align:right">'+M(i.valor)+'</td><td style="text-align:right">'+M(i.subtotal)+'</td>'):'')
+      +'</tr>';
+  }).join('');
+
+  var firmaBloque = ''
+    +'<div style="display:flex;justify-content:space-between;gap:40px;margin-top:54px">'
+      +'<div style="flex:1;text-align:center">'
+        +'<div style="height:60px"></div>'
+        +'<div style="border-top:1px solid #555;padding-top:5px;font-size:11px">Solicitó<br><b>'+esc(x.solicitante||'')+'</b><br><span style="color:#666">'+esc(x.area||'')+'</span></div>'
+      +'</div>'
+      +'<div style="flex:1;text-align:center">'
+        +(x.firma_img
+            ? '<img src="'+x.firma_img+'" style="max-height:60px;display:block;margin:0 auto -2px">'
+            : '<div style="height:60px"></div>')
+        +'<div style="border-top:1px solid #555;padding-top:5px;font-size:11px">Autorizó'
+          +(x.vb_por ? ('<br><b>'+esc(x.vb_por)+'</b><br><span style="color:#666">Gerencia General · '+fFmt(x.vb_at)+'</span>')
+                     : '<br><span style="color:#B45309">Pendiente de Visto Bueno</span>')
+        +'</div>'
+      +'</div>'
+    +'</div>';
+
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8">'
+    +'<title>'+esc(x.consecutivo||'')+' — '+esc(C.sing)+'</title>'
+    +'<style>'
+      +'body{font-family:Arial,Helvetica,sans-serif;margin:26px;color:#1f2937}'
+      +'h1{color:#1D3461;margin:0 0 2px;font-size:20px}'
+      +'table{border-collapse:collapse;width:100%;font-size:12px;margin-top:6px}'
+      +'th,td{border:1px solid #cbd5e1;padding:6px 8px}'
+      +'th{background:#1F3864;color:#fff;font-size:11px}'
+      +'tfoot td{background:#eef2f7;font-weight:800}'
+      +'@media print{.np{display:none}}'
+    +'</style></head><body>'
+    +'<button class="np" onclick="window.print()" style="background:#1D3461;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;margin-bottom:14px">🖨️ Imprimir / Guardar como PDF</button>'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1D3461;padding-bottom:10px">'
+      +'<div><h1>'+esc(eb.nombre||'')+'</h1>'
+        +(eb.nit?('<div style="font-size:11px;color:#555">NIT '+esc(eb.nit)+'</div>'):'')
+      +'</div>'
+      +'<div style="text-align:right">'
+        +'<div style="font-size:15px;font-weight:800;color:#1D3461">'+esc(C.sing.toUpperCase())+'</div>'
+        +'<div style="font-size:18px;font-weight:800">'+esc(x.consecutivo||'')+'</div>'
+        +'<div style="font-size:11px;color:#555">Fecha: '+fFmt(x.fecha)+'</div>'
+        +'<div style="font-size:11px;margin-top:3px"><b>'+esc(x.estado||'')+'</b></div>'
+      +'</div>'
+    +'</div>'
+    +'<table style="margin-top:12px;font-size:12px">'
+      +'<tr><td style="background:#f6f8fa;width:130px"><b>Solicita</b></td><td>'+esc(x.solicitante||'—')+'</td>'
+          +'<td style="background:#f6f8fa;width:110px"><b>Área</b></td><td>'+esc(x.area||'—')+'</td></tr>'
+      +(conV?('<tr><td style="background:#f6f8fa"><b>Proveedor</b></td><td colspan="3">'+esc(x.proveedor||'—')+'</td></tr>'):'')
+      +'<tr><td style="background:#f6f8fa"><b>Justificación</b></td><td colspan="3">'+esc(x.justificacion||'—')+'</td></tr>'
+    +'</table>'
+    +'<table>'
+      +'<thead><tr><th style="width:34px">#</th><th style="text-align:left">Descripción</th><th style="width:70px">Cant.</th><th style="width:80px">Unidad</th>'
+        +(conV?'<th style="width:110px">Vr. unitario</th><th style="width:120px">Subtotal</th>':'')
+      +'</tr></thead>'
+      +'<tbody>'+filas+'</tbody>'
+      +(conV?('<tfoot><tr><td colspan="5" style="text-align:right">TOTAL</td><td style="text-align:right">'+M(x.total)+'</td></tr></tfoot>'):'')
+    +'</table>'
+    +(conV && !(Array.isArray(x.adjuntos)&&x.adjuntos.length)
+        ? '<div style="margin-top:10px;font-size:11px;color:#9A4A40"><b>Nota:</b> esta orden no tiene cotización del proveedor adjunta.</div>' : '')
+    +firmaBloque
+    +'</body></html>';
+};
+
+window._cmpImprimir = async function(id){
+  var r = await sb.from('compras').select('*').eq('id',id).single();
+  if(r.error||!r.data){ showToast('No se encontró el registro','error'); return; }
+  var w = window.open('','_blank');
+  if(!w){ showToast('Permita las ventanas emergentes para imprimir','error'); return; }
+  w.document.write(window._cmpDocHTML(r.data));
+  w.document.close();
+};
+
+window._cmpEnviar = async function(id){
+  var r = await sb.from('compras').select('*').eq('id',id).single();
+  if(r.error||!r.data){ showToast('No se encontró el registro','error'); return; }
+  var x = r.data, C = window._CMP[x.tipo], conV = C.conValores;
+  var its = Array.isArray(x.items)?x.items:[];
+  var eb = (typeof EB==='function' && EB()) || {};
+
+  var para = window.prompt('Correo del destinatario'+(conV?' (proveedor)':' (Compras)')+':', x.proveedor_email||'');
+  if(para === null) return;
+
+  var lineas = its.map(function(i,n){
+    return (n+1)+'. '+i.desc+'  x'+i.cant+' '+(i.und||'und')
+      + (conV? ('  -  '+window._cmpMoney(i.valor)+'  =  '+window._cmpMoney(i.subtotal)) : '');
+  }).join('\n');
+
+  var cuerpo = 'Cordial saludo.\n\n'
+    + 'Se remite '+C.sing.toLowerCase()+' '+x.consecutivo+' de '+(eb.nombre||'')+'.\n\n'
+    + 'Fecha: '+String(x.fecha||'').slice(0,10)+'\n'
+    + (conV?('Proveedor: '+(x.proveedor||'')+'\n'):'')
+    + 'Área solicitante: '+(x.area||'')+'\n'
+    + 'Solicita: '+(x.solicitante||'')+'\n'
+    + (x.justificacion?('Concepto: '+x.justificacion+'\n'):'')
+    + '\nDETALLE:\n' + lineas
+    + (conV?('\n\nTOTAL: '+window._cmpMoney(x.total)):'')
+    + (x.vb_por?('\n\nAutorizado por '+x.vb_por+' — Gerencia General.'):'')
+    + '\n\nCordialmente,\n' + (x.solicitante||'') + '\n' + (eb.nombre||'');
+
+  var asunto = C.sing+' '+x.consecutivo+' — '+(eb.nombre||'')+(conV?(' — '+window._cmpMoney(x.total)):'');
+  var url = 'mailto:'+encodeURIComponent(para.trim())
+    +'?subject='+encodeURIComponent(asunto)
+    +'&body='+encodeURIComponent(cuerpo);
+
+  if(url.length > 1900){
+    // Cuerpo muy largo para mailto: se copia al portapapeles y se abre el correo vacío.
+    try{ await navigator.clipboard.writeText(cuerpo); showToast('El detalle es largo: se copió al portapapeles. Péguelo en el correo.','info'); }catch(e){}
+    url = 'mailto:'+encodeURIComponent(para.trim())+'?subject='+encodeURIComponent(asunto);
+  }
+  window.open(url,'_blank');
+  showToast('Se abrió el correo. Para anexar el documento, use 🖨️ → Guardar como PDF y adjúntelo.','info');
 };
 
 window._cmpVerAdj = async function(id){
