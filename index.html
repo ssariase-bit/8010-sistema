@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-firma-fix-guardar';
+const APP_VERSION = '2026-07-14-firma-fix-sesion';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-firma-fix-sesion', titulo:'Mi Firma, Compras e Inventario: se corrige la lectura del usuario en sesión',
+    afecta:'Mi Firma · Órdenes de Pedido · Requisiciones · Inventario',
+    detalle:'El sistema informaba "No hay sesión activa" al guardar la firma, estando la sesión abierta. La causa: los módulos nuevos leían el identificador del usuario de una forma que siempre devolvía vacío. El mismo defecto habría dejado sin autor las órdenes de pedido y las requisiciones. Ya quedó corregido con una única fuente de verdad para el usuario en sesión.' },
   { fecha:'2026-07-14', version:'2026-07-14-firma-fix-guardar', titulo:'Mi Firma: se corrige el guardado',
     afecta:'Mi Firma',
     detalle:'La firma no se guardaba y el sistema no informaba por qué. Dos causas: la consulta usaba un método del conector que no existe en la versión instalada, lo que interrumpía el proceso sin mensaje; y la imagen se generaba a resolución excesiva, con un peso que la base de datos rechazaba. Ahora la imagen se optimiza a un tamaño adecuado para pantalla e impresión, y cualquier error se muestra en pantalla en lugar de fallar en silencio.' },
@@ -7345,6 +7348,16 @@ window._CMP = {
     ayuda:'Suministros que el personal necesita (papelería, insumos). Se solicita a Compras. No lleva valores: los precios los maneja Compras.'
   }
 };
+// El id del usuario en sesión.
+// OJO: currentUser se declara con `let`, y las variables `let` del ámbito global
+// NO quedan colgadas de `window`. Leerlas como window.currentUser devuelve undefined
+// siempre. Esto ya causó que "Mi Firma" reportara "No hay sesión activa" estando
+// la sesión perfectamente abierta.
+window._uid = function(){
+  try{ if(typeof currentUser!=='undefined' && currentUser && currentUser.id) return currentUser.id; }catch(e){}
+  try{ if(typeof currentProfile!=='undefined' && currentProfile && currentProfile.id) return currentProfile.id; }catch(e){}
+  return null;
+};
 window._cmpEsGG   = function(){ return (currentProfile&&currentProfile.rol)==='gerente_general'; };
 window._cmpEsCompras = function(){ return ['gerente_general','gerencia_operativa','administrador','compras'].includes(currentProfile&&currentProfile.rol); };
 window._cmpYo = function(){ return (currentProfile&&currentProfile.nombre)||'—'; };
@@ -7572,7 +7585,7 @@ window._cmpGuardar = async function(tipo, btn){
     total: conV ? items.reduce(function(s,i){ return s+(i.subtotal||0); },0) : 0,
     adjuntos: adj,
     estado: C.flujo[0],
-    user_id: (window.currentUser||{}).id || null
+    user_id: window._uid()
   };
   var r = await sb.from('compras').insert([reg]).select('id');
   btn.disabled = false; btn.innerHTML = '💾 Enviar '+C.sing.toLowerCase();
@@ -7818,7 +7831,7 @@ window._invGenerarOrden = async function(){
       items: items,
       total: items.reduce(function(s,i){ return s+(i.subtotal||0); },0),
       adjuntos: [], estado:'Pendiente VB',
-      user_id:(window.currentUser||{}).id||null
+      user_id: window._uid()
     };
     var r = await sb.from('compras').insert([reg]).select('consecutivo');
     if(r.error){ showToast('Error creando '+consec+': '+r.error.message,'error'); return; }
@@ -7916,7 +7929,7 @@ window._frmHash = async function(pin){
 };
 
 window._frmGet = async function(){
-  var uid = (window.currentUser||{}).id; if(!uid) return null;
+  var uid = window._uid(); if(!uid) return null;
   // .limit(1) en vez de .maybeSingle(): maybeSingle no existe en todas las versiones del SDK
   // y hacía que la función reventara sin mensaje.
   var r = await sb.from('firmas').select('*').eq('user_id',uid).limit(1);
@@ -8138,7 +8151,7 @@ window._frmErr = function(msg){
 window._frmGuardar = async function(btn){
   var el = document.getElementById('frm-error'); if(el) el.style.display='none';
   try{
-    var uid = (window.currentUser||{}).id;
+    var uid = window._uid();
     if(!uid){ window._frmErr('No hay sesión activa. Vuelva a ingresar.'); return; }
 
     var actual = await window._frmGet();
