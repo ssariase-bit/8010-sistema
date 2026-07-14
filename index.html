@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-firma-fix-sesion';
+const APP_VERSION = '2026-07-14-firma-robusta';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-firma-robusta', titulo:'Mi Firma: el guardado ya no depende de la vista previa',
+    afecta:'Mi Firma',
+    detalle:'El sistema informaba "Falta cargar la imagen de la firma" aun habiéndose seleccionado el archivo: el guardado dependía de que la vista previa hubiese terminado de procesar la imagen, y si ese procesamiento fallaba en silencio —por ejemplo con fotos en formato HEIC de iPhone— no quedaba nada guardado. Ahora el guardado procesa el archivo por su cuenta, informa el motivo exacto cuando una imagen no se puede abrir, y si la limpieza de fondo no es posible guarda la imagen sin procesar antes que no guardar nada.' },
   { fecha:'2026-07-14', version:'2026-07-14-firma-fix-sesion', titulo:'Mi Firma, Compras e Inventario: se corrige la lectura del usuario en sesión',
     afecta:'Mi Firma · Órdenes de Pedido · Requisiciones · Inventario',
     detalle:'El sistema informaba "No hay sesión activa" al guardar la firma, estando la sesión abierta. La causa: los módulos nuevos leían el identificador del usuario de una forma que siempre devolvía vacío. El mismo defecto habría dejado sin autor las órdenes de pedido y las requisiciones. Ya quedó corregido con una única fuente de verdad para el usuario en sesión.' },
@@ -7949,11 +7952,14 @@ window._frmGet = async function(){
 window._FRM_TINTA = { r:17, g:24, b:64 };   // azul-negro de pluma
 
 window._frmLimpiar = function(file){
-  return new Promise(function(res){
+  return new Promise(function(res, rej){
     var rd = new FileReader();
+    rd.onerror = function(){ rej(new Error('No se pudo leer el archivo.')); };
     rd.onload = function(){
       var img = new Image();
+      img.onerror = function(){ rej(new Error('El formato de la imagen no se puede abrir en el navegador. Si la foto es HEIC (iPhone), expórtela como JPG o PNG.')); };
       img.onload = function(){
+       try{
         var W = Math.min(1600, Math.max(900, img.width));
         var H = Math.round(img.height * (W/img.width));
         var cv = document.createElement('canvas'); cv.width=W; cv.height=H;
@@ -8064,6 +8070,7 @@ window._frmLimpiar = function(file){
         cx2.imageSmoothingEnabled = true; cx2.imageSmoothingQuality = 'high';
         cx2.drawImage(cv, minX, minY, cw, ch, 0, 0, ow, oh);
         res(cv2.toDataURL('image/png'));
+       }catch(err){ rej(err); }
       };
       img.src = String(rd.result);
     };
@@ -8124,13 +8131,58 @@ window._frmPanel = async function(){
     +'</div>';
 };
 
+// Reduce una imagen sin procesarla (plan B si la limpieza falla).
+window._frmPlano = function(file){
+  return new Promise(function(res, rej){
+    var rd = new FileReader();
+    rd.onerror = function(){ rej(new Error('No se pudo leer el archivo.')); };
+    rd.onload = function(){
+      var img = new Image();
+      img.onerror = function(){ rej(new Error('El formato de la imagen no se puede abrir en el navegador. Si la foto es HEIC (iPhone), expórtela como JPG o PNG.')); };
+      img.onload = function(){
+        var W = Math.min(900, img.width), H = Math.round(img.height*(W/img.width));
+        var cv = document.createElement('canvas'); cv.width=W; cv.height=H;
+        cv.getContext('2d').drawImage(img,0,0,W,H);
+        res(cv.toDataURL('image/png'));
+      };
+      img.src = String(rd.result);
+    };
+    rd.readAsDataURL(file);
+  });
+};
+
+// Procesa el archivo del input y deja el resultado en _frmTmp. Devuelve el PNG.
+// No depende de la vista previa: el guardado la llama por su cuenta si hace falta.
+window._frmProcesar = async function(file){
+  if(!file) return null;
+  if(file.size > 25*1024*1024) throw new Error('La imagen pesa más de 25 MB. Tome la foto con menos resolución.');
+  var png = null;
+  try{
+    png = await window._frmLimpiar(file);
+  }catch(e){
+    png = null;
+  }
+  if(!png || png.length < 200){
+    // Plan B: guardar la imagen sin limpiar el fondo, antes que no guardar nada.
+    png = await window._frmPlano(file);
+  }
+  window._frmTmp = png;
+  return png;
+};
+
 window._frmPreview = async function(){
   var f = (document.getElementById('frm-file')||{}).files;
   if(!f || !f[0]) return;
   var el = document.getElementById('frm-prev');
   el.innerHTML = '<div style="font-size:12px;color:var(--gris-t)"><span class="spinner"></span> Procesando la firma...</div>';
-  var png = await window._frmLimpiar(f[0]);
-  window._frmTmp = png;
+  var png;
+  try{
+    png = await window._frmProcesar(f[0]);
+  }catch(e){
+    el.innerHTML = '<div style="padding:10px 12px;border-left:4px solid #9A4A40;background:#9A4A4012;border-radius:6px;font-size:12px;color:#9A4A40">'+window._cmpEsc((e&&e.message)||String(e))+'</div>';
+    window._frmTmp = null;
+    return;
+  }
   el.innerHTML =
     '<div style="padding:18px;border:2px solid #166534;border-radius:8px;background:#fff">'
       +'<div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:10px">Así se estampará en las autorizaciones</div>'
@@ -8161,6 +8213,16 @@ window._frmGuardar = async function(btn){
     var p2 = ((document.getElementById('frm-pin2')||{}).value)||'';
     var upd = { user_id: uid, nombre: window._cmpYo(), cargo: 'Gerencia General', updated_at: new Date().toISOString() };
 
+    // Si hay un archivo elegido, se procesa AQUÍ. No se depende de que la vista
+    // previa haya corrido: ese era el motivo de "Falta cargar la imagen".
+    var _fi = document.getElementById('frm-file');
+    var _file = (_fi && _fi.files && _fi.files[0]) ? _fi.files[0] : null;
+    if(_file && !window._frmTmp){
+      btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Procesando imagen...';
+      try{ await window._frmProcesar(_file); }
+      catch(e){ btn.disabled=false; btn.innerHTML='💾 Guardar'; window._frmErr((e&&e.message)||String(e)); return; }
+      btn.disabled=false; btn.innerHTML='💾 Guardar';
+    }
     if(window._frmTmp) upd.imagen = window._frmTmp;
 
     if(p1 || p2){
@@ -8176,8 +8238,13 @@ window._frmGuardar = async function(btn){
 
     var hayImg = upd.imagen || (actual && actual.imagen);
     var hayPin = upd.pin_hash || (actual && actual.pin_hash);
-    if(!hayImg){ window._frmErr('Falta cargar la imagen de la firma.'); return; }
-    if(!hayPin){ window._frmErr('Falta definir el código de autorización.'); return; }
+    if(!hayImg){
+      window._frmErr(_file
+        ? 'La imagen no se pudo procesar. Pruebe con otra foto en formato JPG o PNG.'
+        : 'No se ha seleccionado ninguna imagen. Use el botón "Seleccionar archivo" en el paso 1.');
+      return;
+    }
+    if(!hayPin){ window._frmErr('Falta definir el código de autorización (paso 2).'); return; }
 
     btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Guardando...';
     var r = actual ? await sb.from('firmas').update(upd).eq('user_id',uid).select('id')
