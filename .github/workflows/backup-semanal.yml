@@ -1,0 +1,25 @@
+# Respaldo semanal de la base de datos → Google Drive
+# Corre todos los lunes 6:00 AM Colombia (11:00 UTC) y también manual (Run workflow).
+# Destino final en el repo: .github/workflows/backup-semanal.yml
+name: Respaldo semanal Supabase a Drive
+
+on:
+  schedule:
+    - cron: '0 11 * * 1'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Ejecutar respaldo
+        run: node scripts/backup.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          DRIVE_FOLDER_ID: '1NGwK5baddSgGz6oREDGLfQWGHr44Po-U'
