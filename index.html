@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-firma-tinta';
+const APP_VERSION = '2026-07-14-menu-compras-firma';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-menu-compras-firma', titulo:'Los módulos nuevos ya aparecen en el menú',
+    afecta:'Menú lateral',
+    detalle:'Inventario, Órdenes de Pedido, Requisiciones Internas y Mi Firma no aparecían en la barra lateral: quedaron registrados en la estructura de menús antigua y no en la que el sistema utiliza actualmente. Ya quedan visibles. "Mi Firma" es de acceso exclusivo de Gerencia General.' },
   { fecha:'2026-07-14', version:'2026-07-14-firma-tinta', titulo:'La firma se procesa como tinta real, no como fotografía',
     afecta:'Mi Firma',
     detalle:'Se mejoró el tratamiento de la imagen de la firma para que se vea como trazo de pluma y no como una fotografía recortada: corrección de iluminación despareja, umbral automático que se adapta al papel y a la luz, opacidad progresiva que conserva la variación de presión del trazo, eliminación de motas del papel y alta resolución para impresión. La vista previa muestra la firma sobre la línea de firma, tal como quedará estampada en las autorizaciones.' },
@@ -1278,7 +1281,11 @@ const MENU_COMPLETO = [
     ] : []),
   { id: 'indicadores', icon: '📊', label: 'Indicadores Ocup./Ventas' },
   { id: 'ventas-linea', icon: '💵', label: 'Ventas por Línea (mes a mes)' },
-  { id: 'requisiciones-list', icon: '🛒', label: 'Compras' },
+  { id: 'inventario-list', icon: '📦', label: 'Inventario' },
+  { id: 'compras-ordenes', icon: '🧾', label: 'Órdenes de Pedido' },
+  { id: 'compras-orden-form', icon: '➕', label: 'Nueva Orden de Pedido' },
+  { id: 'compras-requis', icon: '📝', label: 'Requisiciones Internas' },
+  { id: 'compras-requis-form', icon: '➕', label: 'Pedir Suministros' },
   { id: 'personal-list', icon: '👤', label: 'Personal / RRHH' },
     { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
   { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
@@ -1298,6 +1305,7 @@ const MENU_COMPLETO = [
   { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
   { id: 'semana-resumen', icon: '📅', label: 'Semana en Curso' },
   { section: 'Sistema' },
+  { id: 'mi-firma', icon: '✍️', label: 'Mi Firma' },
   { id: 'import-rack', icon: '🔄', label: 'Importar Rack 2026' },
   { id: 'changelog', icon: '🛠️', label: 'Registro de Cambios' },
 ];
@@ -1324,7 +1332,7 @@ window._puedeExtrasTodos = function(){ return window._enLista(window._WL_EXTRAS_
 window._puedeSistema = function(){ return (currentProfile&&currentProfile.rol)==='gerente_general'; };
 // Ítems restringidos por grupo
 window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','nomina','indicadores','ventas-linea','personal-list'];
-window._ITEMS_SISTEMA = ['import-rack','changelog'];
+window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma'];
 // Módulos construidos sobre el presupuesto 2026 y las entidades 80-10 / LTM3 / PH (solo 8010): no se muestran en Kubik
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
 // Sol Santiago: procesos que son ÚNICAMENTE de Kubik. En 8010 no existen y no deben aparecer:
