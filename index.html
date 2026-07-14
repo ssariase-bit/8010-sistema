@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-compras-dos-flujos';
+const APP_VERSION = '2026-07-14-firma-autorizacion';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-firma-autorizacion', titulo:'Firma de Gerencia General con código de autorización',
+    afecta:'Compras · Órdenes de Pedido',
+    detalle:'Gerencia General carga su firma en el módulo "Mi Firma" y define un código de autorización personal. Al dar el Visto Bueno a una Orden de Pedido, el sistema exige ese código; si no se digita correctamente, no se estampa la firma y la orden NO queda autorizada. La firma aprobada queda visible en la trazabilidad de la orden. El código no se almacena en el sistema: se guarda únicamente su huella criptográfica (SHA-256), de modo que no puede ser leído ni reconstruido por nadie, tampoco desde la base de datos. Si se olvida, se define uno nuevo; no existe forma de recuperar el anterior. El código es personal e intransferible.' },
   { fecha:'2026-07-14', version:'2026-07-14-compras-dos-flujos', titulo:'Compras se divide en Órdenes de Pedido y Requisiciones Internas',
     afecta:'Compras · 8010 y Kubik',
     detalle:'El módulo de Compras queda separado en dos flujos y se incorpora el módulo de Inventario. ÓRDENES DE PEDIDO: compra a proveedor externo para la operatividad del edificio; se registran los ítems con valores, se adjunta la cotización del proveedor y el lote completo requiere el Visto Bueno de Gerencia General antes de ejecutarse (Pendiente VB → Aprobada → Comprada → Recibida). REQUISICIONES INTERNAS: suministros que solicita el personal (papelería, insumos); se registran únicamente artículo y cantidad, sin valores, y le llegan a Compras para su gestión (Pendiente → En compra → Entregada). INVENTARIO: catálogo de productos por proveedor, con existencias y stock mínimo; se marcan los productos que hacen falta, se indica la cantidad y el sistema genera la Orden de Pedido ya diligenciada, agrupada por proveedor (una orden por proveedor). Al marcar la orden como Recibida, las existencias se actualizan automáticamente. Los tres módulos son independientes por edificio, con consecutivo propio (OP-0001 / RQ-0001). Recepción y Administración generan los dos tipos de solicitud; el Visto Bueno de las órdenes es exclusivo de Gerencia General.' },
@@ -977,6 +980,7 @@ const NAV_ITEMS = {
     { id: 'comercial-form', icon: '➕', label: 'Nueva Cotización' },
     { id: 'eventos', icon: '🎪', label: 'Eventos' },
     { section: 'Sistema' },
+    { id: 'mi-firma', icon: '✍️', label: 'Mi Firma' },
     { id: 'import-rack', icon: '🔄', label: 'Importar Rack 2026' },
     { id: 'changelog', icon: '🛠️', label: 'Registro de Cambios' },
   ],
@@ -1847,6 +1851,8 @@ async function loadView(view) {
     // ── INVENTARIO (alimenta las Órdenes de Pedido) ──
     case 'inventario-list':     await window._invLista(); break;
     case 'inventario-form':     window._invForm(); break;
+    // ── FIRMA DIGITAL DE GERENCIA GENERAL ──
+    case 'mi-firma':            await window._frmPanel(); break;
 
     default:
       // Sol Sebastián: evitar la "pantalla en blanco/Vista no encontrada" tras guardar.
@@ -7368,6 +7374,7 @@ window._cmpLista = async function(tipo){
         + rows.map(function(x){
             var its = Array.isArray(x.items)?x.items:[];
             var traza = [];
+            if(x.firma_img)    traza.push('<img src="'+x.firma_img+'" style="max-height:34px;display:block;margin-bottom:2px" title="Autorizado con firma de Gerencia General">');
             if(x.vb_at)        traza.push('✅ VB '+window._cmpEsc(x.vb_por)+' · '+String(x.vb_at).slice(0,10));
             if(x.comprado_at)  traza.push('🛒 '+window._cmpEsc(x.comprado_por)+' · '+String(x.comprado_at).slice(0,10));
             if(x.entregado_at) traza.push('📦 '+window._cmpEsc(x.entregado_por)+' · '+String(x.entregado_at).slice(0,10));
@@ -7577,9 +7584,18 @@ window._cmpVB = async function(id, aprueba){
     estado: aprueba ? (esOrden?'Aprobada':'En compra') : 'Rechazada',
     vb_por: window._cmpYo(), vb_at: new Date().toISOString(), vb_comentario: coment.trim()||null
   };
+
+  // La autorización de una ORDEN DE PEDIDO exige el código de Gerencia General.
+  // Sin código correcto no se estampa la firma y no se autoriza nada.
+  if(aprueba && esOrden && window._cmpEsGG()){
+    var firma = await window._frmPedir(x.consecutivo+' · '+(x.proveedor||'')+' · '+window._cmpMoney(x.total));
+    if(!firma) return;
+    upd.firma_img = firma;
+  }
+
   var r = await sb.from('compras').update(upd).eq('id',id);
   if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
-  showToast(aprueba?('✅ '+x.consecutivo+' autorizada'):('✖ '+x.consecutivo+' rechazada'), aprueba?'success':'info');
+  showToast(aprueba?('✅ '+x.consecutivo+' autorizada y firmada'):('✖ '+x.consecutivo+' rechazada'), aprueba?'success':'info');
   loadView(window._CMP[x.tipo].lista);
 };
 
@@ -7864,6 +7880,180 @@ window._invBorrar = async function(id){
   if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
   showToast('Producto dado de baja','info');
   window._invEdit=null; loadView('inventario-list');
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FIRMA DIGITAL DE GERENCIA GENERAL (Sol. Santiago, 14-jul-2026)
+//
+// La firma se estampa en las autorizaciones únicamente si se digita el código
+// de autorización. El código NO se guarda en el sistema: se guarda su huella
+// criptográfica (SHA-256). Nadie —ni el administrador de la base de datos—
+// puede leerlo ni reconstruirlo. Si se olvida, se define uno nuevo; no se
+// puede "recuperar" el anterior.
+// ═══════════════════════════════════════════════════════════════════════════
+window._frmHash = async function(pin){
+  var buf = new TextEncoder().encode('8010::firma::'+String(pin));
+  var h = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(h)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+};
+
+window._frmGet = async function(){
+  var uid = (window.currentUser||{}).id; if(!uid) return null;
+  var r = await sb.from('firmas').select('*').eq('user_id',uid).maybeSingle();
+  if(r.error) return {__err:r.error.message};
+  return r.data||null;
+};
+
+// Limpia el fondo de la foto de la firma: deja el trazo y vuelve el resto transparente.
+window._frmLimpiar = function(file){
+  return new Promise(function(res){
+    var rd = new FileReader();
+    rd.onload = function(){
+      var img = new Image();
+      img.onload = function(){
+        var W = 700, H = Math.round(img.height * (W/img.width));
+        var cv = document.createElement('canvas'); cv.width=W; cv.height=H;
+        var cx = cv.getContext('2d');
+        cx.drawImage(img, 0, 0, W, H);
+        var d = cx.getImageData(0,0,W,H), p = d.data;
+        // Umbral: todo lo claro se vuelve transparente; el trazo oscuro se conserva en negro.
+        for(var i=0;i<p.length;i+=4){
+          var lum = 0.299*p[i] + 0.587*p[i+1] + 0.114*p[i+2];
+          if(lum > 140){ p[i+3] = 0; }
+          else { p[i]=15; p[i+1]=23; p[i+2]=42; p[i+3] = Math.min(255, Math.round((140-lum)*3)); }
+        }
+        cx.putImageData(d,0,0);
+        // Recorta márgenes vacíos
+        var minX=W, minY=H, maxX=0, maxY=0, hay=false;
+        var d2 = cx.getImageData(0,0,W,H).data;
+        for(var y=0;y<H;y++) for(var x=0;x<W;x++){
+          if(d2[(y*W+x)*4+3] > 20){ hay=true;
+            if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
+        }
+        if(!hay){ res(cv.toDataURL('image/png')); return; }
+        var pad=8;
+        minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad);
+        maxX=Math.min(W-1,maxX+pad); maxY=Math.min(H-1,maxY+pad);
+        var cw=maxX-minX+1, ch=maxY-minY+1;
+        var cv2=document.createElement('canvas'); cv2.width=cw; cv2.height=ch;
+        cv2.getContext('2d').drawImage(cv, minX, minY, cw, ch, 0, 0, cw, ch);
+        res(cv2.toDataURL('image/png'));
+      };
+      img.src = String(rd.result);
+    };
+    rd.readAsDataURL(file);
+  });
+};
+
+window._frmPanel = async function(){
+  if(!window._cmpEsGG()){
+    document.getElementById('main-content').innerHTML='<div class="card"><p>Módulo exclusivo de Gerencia General.</p></div>'; return;
+  }
+  var f = await window._frmGet();
+  if(f && f.__err){
+    document.getElementById('main-content').innerHTML =
+      '<div class="page-title">✍️ Mi Firma</div><div class="card"><p style="color:#9A4A40"><strong>El módulo aún no está habilitado en la base de datos.</strong></p>'
+      +'<p style="font-size:12px;color:var(--gris-t)">Detalle: '+window._cmpEsc(f.__err)+'</p></div>';
+    return;
+  }
+  var tiene = !!(f && f.imagen);
+  var tienePin = !!(f && f.pin_hash);
+
+  document.getElementById('main-content').innerHTML =
+    '<div class="page-title">✍️ Mi Firma</div>'
+    +'<div style="max-width:760px;margin-bottom:14px;padding:10px 12px;border-left:4px solid #0EA5E9;background:#0EA5E912;border-radius:6px;font-size:12px;line-height:1.6">'
+      +'La firma se estampa en las autorizaciones únicamente al digitar el <strong>código de autorización</strong>. '
+      +'El código <strong>no se guarda</strong> en el sistema: se guarda su huella criptográfica. Nadie puede leerlo ni reconstruirlo — '
+      +'ni siquiera desde la base de datos. Si se olvida, se define uno nuevo; no existe forma de recuperar el anterior.'
+    +'</div>'
+    +'<div class="card" style="max-width:760px;margin-bottom:14px">'
+      +'<div style="font-weight:700;color:var(--azul);margin-bottom:10px">1 · Imagen de la firma</div>'
+      +(tiene
+        ? '<div style="padding:14px;border:1px dashed var(--gris-b);border-radius:8px;background:#fff;text-align:center;margin-bottom:10px">'
+            +'<img src="'+f.imagen+'" style="max-height:120px;max-width:100%">'
+            +'<div style="font-size:11px;color:var(--gris-t);margin-top:6px">Firma cargada'+(f.updated_at?(' · '+String(f.updated_at).slice(0,10)):'')+'</div>'
+          +'</div>'
+        : '<p style="font-size:12px;color:#B45309;margin-bottom:10px">⚠️ Aún no hay firma cargada.</p>')
+      +'<label style="font-size:12px;font-weight:600">'+(tiene?'Reemplazar firma':'Cargar firma')+' (foto o escaneo sobre papel blanco)</label>'
+      +'<input type="file" id="frm-file" accept="image/*" onchange="window._frmPreview()" style="margin-top:6px">'
+      +'<div style="font-size:10px;color:var(--gris-t);margin-top:4px">El sistema recorta la imagen y elimina el fondo automáticamente.</div>'
+      +'<div id="frm-prev" style="margin-top:10px"></div>'
+    +'</div>'
+    +'<div class="card" style="max-width:760px;margin-bottom:14px">'
+      +'<div style="font-weight:700;color:var(--azul);margin-bottom:10px">2 · Código de autorización</div>'
+      +(tienePin
+        ? '<p style="font-size:12px;color:#166534;margin-bottom:10px">✅ Hay un código definido. Para cambiarlo se debe digitar el actual.</p>'
+          +'<div class="form-group" style="max-width:280px"><label>Código actual</label><input type="password" id="frm-pin-old" autocomplete="off"></div>'
+        : '<p style="font-size:12px;color:#B45309;margin-bottom:10px">⚠️ Aún no hay código definido. Sin código no se puede firmar ninguna autorización.</p>')
+      +'<div class="form-row col2" style="max-width:600px">'
+        +'<div class="form-group"><label>'+(tienePin?'Código nuevo':'Código de autorización')+' *</label><input type="password" id="frm-pin1" autocomplete="new-password" placeholder="Mínimo 4 caracteres"></div>'
+        +'<div class="form-group"><label>Confirmar código *</label><input type="password" id="frm-pin2" autocomplete="new-password"></div>'
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--gris-t)">Este código es personal e intransferible. No debe compartirse con nadie, ni con el personal ni con la asesoría externa.</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px">'
+      +'<button class="btn btn-success" onclick="window._frmGuardar(this)">💾 Guardar</button>'
+      +'<button class="btn btn-outline" onclick="loadView(\'dashboard\')">Cancelar</button>'
+    +'</div>';
+};
+
+window._frmPreview = async function(){
+  var f = (document.getElementById('frm-file')||{}).files;
+  if(!f || !f[0]) return;
+  var png = await window._frmLimpiar(f[0]);
+  window._frmTmp = png;
+  document.getElementById('frm-prev').innerHTML =
+    '<div style="padding:14px;border:2px solid #166534;border-radius:8px;background:#fff;text-align:center">'
+      +'<div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:6px">Así quedará (fondo eliminado)</div>'
+      +'<img src="'+png+'" style="max-height:110px;max-width:100%">'
+    +'</div>';
+};
+
+window._frmGuardar = async function(btn){
+  var uid = (window.currentUser||{}).id;
+  var actual = await window._frmGet();
+  var p1 = ((document.getElementById('frm-pin1')||{}).value)||'';
+  var p2 = ((document.getElementById('frm-pin2')||{}).value)||'';
+  var upd = { user_id: uid, nombre: window._cmpYo(), cargo: 'Gerencia General', updated_at: new Date().toISOString() };
+
+  if(window._frmTmp) upd.imagen = window._frmTmp;
+
+  if(p1 || p2){
+    if(p1.length < 4){ showToast('El código debe tener al menos 4 caracteres','error'); return; }
+    if(p1 !== p2){ showToast('Los códigos no coinciden','error'); return; }
+    if(actual && actual.pin_hash){
+      var old = ((document.getElementById('frm-pin-old')||{}).value)||'';
+      if(!old){ showToast('Se requiere el código actual para cambiarlo','error'); return; }
+      if(await window._frmHash(old) !== actual.pin_hash){ showToast('El código actual no es correcto','error'); return; }
+    }
+    upd.pin_hash = await window._frmHash(p1);
+  }
+  if(!upd.imagen && !upd.pin_hash && !(actual&&actual.imagen)){ showToast('Cargue la firma y defina el código','error'); return; }
+
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Guardando...';
+  var r = actual ? await sb.from('firmas').update(upd).eq('user_id',uid)
+                 : await sb.from('firmas').insert([upd]);
+  btn.disabled=false; btn.innerHTML='💾 Guardar';
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  window._frmTmp = null;
+  showToast('✅ Firma actualizada','success');
+  loadView('mi-firma');
+};
+
+// Pide el código y devuelve la imagen de la firma si es correcto; null si no.
+window._frmPedir = async function(concepto){
+  var f = await window._frmGet();
+  if(!f || f.__err || !f.imagen || !f.pin_hash){
+    showToast('Primero debe cargar la firma y definir el código en "Mi Firma"','error');
+    return null;
+  }
+  var pin = window.prompt('CÓDIGO DE AUTORIZACIÓN\n\n'+(concepto||'')+'\n\nDigite su código para estampar la firma:');
+  if(pin === null) return null;
+  if(await window._frmHash(pin) !== f.pin_hash){
+    showToast('❌ Código incorrecto. No se estampó la firma ni se autorizó nada.','error');
+    return null;
+  }
+  return f.imagen;
 };
 
 // ── Recuperación de contraseña ──────────────────────────────────────────────
