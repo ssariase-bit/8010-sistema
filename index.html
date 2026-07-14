@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-13-asesoria-financiera';
+const APP_VERSION = '2026-07-13-actas-filtro-fecha';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-13', version:'2026-07-13-actas-filtro-fecha', titulo:'Actas: el filtro de fecha ya no devuelve al listado de Novedades',
+    afecta:'Novedades / Actas',
+    detalle:'Al aplicar el filtro de fecha estando en la pestaña Actas, el sistema regresaba al listado de Novedades. La pestaña seleccionada (Novedades / Actas / Todo junto), el filtro de fecha y el filtro "Solo abiertas" ahora son independientes y se conservan entre sí. "Solo abiertas" además quedó como interruptor, de modo que se puede desactivar sin salir de la pestaña. Reportado por Sebastián Martínez.' },
   { fecha:'2026-07-13', version:'2026-07-13-asesoria-financiera', titulo:'Perfil de Asesoría Financiera con acceso a los módulos financieros',
     afecta:'Perfiles y accesos',
     detalle:'Se habilitó la barra lateral del perfil "asesora" (Asesoría Financiera), con acceso a Ingresos del Mes, Resumen de Ventas, Ventas vs Presupuesto, Estado de Resultados, Nómina y Personal, además de Dashboard, Informe Ejecutivo, Ocupación y Comunicaciones. El perfil ya superaba los controles de esos módulos pero carecía de menú propio. Aprobado por Gerencia General el 13 de julio de 2026 a solicitud de la asesoría financiera externa.' },
@@ -4129,10 +4132,17 @@ window._esActaNov = function(n){
   const d = String((n&&n.descripcion)||'').toLowerCase();
   return /acta\s+(final|inicial|de\s+(ingreso|entrega|salida))/.test(d) || /^\s*actas?\b/.test(d);
 };
-async function renderNovedadesList(filtro='', fechaSel='') {
+// Sol Sebastián Martínez (13-jul-2026): al poner filtro de fecha estando en Actas,
+// se perdía la pestaña y volvía a Novedades. La causa: el selector de fecha y el botón
+// "Solo abiertas" reescribían el parámetro `filtro`. Ahora la pestaña (''|'actas'|'todas')
+// viaja aparte del filtro de estado (soloAbiertas) y de la fecha, y todos se conservan entre sí.
+async function renderNovedadesList(filtro='', fechaSel='', soloAbiertas=false) {
+  // Compatibilidad: llamadas antiguas usaban filtro='abiertas'.
+  if (filtro === 'abiertas') { soloAbiertas = true; filtro = ''; }
+  soloAbiertas = !!soloAbiertas;
   window._novFecha = fechaSel || '';
   const q = sb.from('novedades').select('*').order('created_at', { ascending: false }).limit(200);
-  if (filtro === 'abiertas') q.in('estado', ['Abierto','En proceso','Escalado']);
+  if (soloAbiertas) q.in('estado', ['Abierto','En proceso','Escalado']);
   if (fechaSel) q.eq('fecha', fechaSel);
   const { data } = await q;
   const _base = (data || []).filter(n=>!_esNovedadCK(n));
@@ -4154,23 +4164,23 @@ async function renderNovedadesList(filtro='', fechaSel='') {
     ${_novedadesTabs('novedades')}
     <div class="page-title">${filtro==='actas'?'📄 Actas':'⚠️ Novedades'}</div>
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-sm ${filtro==='actas'||filtro==='todas'?'btn-outline':'btn-success'}" onclick="renderNovedadesList('')" title="Solo novedades reales (sin actas)">⚠️ Novedades (${_nNov})</button>
-      <button class="btn btn-sm ${filtro==='actas'?'btn-success':'btn-outline'}" onclick="renderNovedadesList('actas')" title="Actas inicial, final, de ingreso y de entrega">📄 Actas (${_nActas})</button>
-      <button class="btn btn-sm ${filtro==='todas'?'btn-success':'btn-outline'}" onclick="renderNovedadesList('todas')">Todo junto</button>
+      <button class="btn btn-sm ${filtro==='actas'||filtro==='todas'?'btn-outline':'btn-success'}" onclick="renderNovedadesList('','${fechaSel}',${soloAbiertas})" title="Solo novedades reales (sin actas)">⚠️ Novedades (${_nNov})</button>
+      <button class="btn btn-sm ${filtro==='actas'?'btn-success':'btn-outline'}" onclick="renderNovedadesList('actas','${fechaSel}',${soloAbiertas})" title="Actas inicial, final, de ingreso y de entrega">📄 Actas (${_nActas})</button>
+      <button class="btn btn-sm ${filtro==='todas'?'btn-success':'btn-outline'}" onclick="renderNovedadesList('todas','${fechaSel}',${soloAbiertas})">Todo junto</button>
       <span style="font-size:11px;color:var(--gris-t)">${filtro==='actas'?'Las actas no son novedades: aquí van separadas para no ensuciar el listado.':'Las actas quedaron en su propia pestaña.'}</span>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <button class="btn btn-success btn-sm" onclick="window._novedadEdit=null;loadView('novedad-form')">+ Nueva novedad</button>
-      <button class="btn btn-outline btn-sm" onclick="renderNovedadesList('abiertas')">Solo abiertas</button>
-      <input type="date" value="${fechaSel}" onchange="renderNovedadesList('', this.value)" title="Ver solo las novedades de una fecha" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
-      ${fechaSel?`<button class="btn btn-outline btn-sm" onclick="renderNovedadesList('')">✕ ${fmtDate(fechaSel)}</button>`:''}
+      <button class="btn btn-sm ${soloAbiertas?'btn-success':'btn-outline'}" onclick="renderNovedadesList('${filtro}','${fechaSel}',${!soloAbiertas})" title="Alterna entre ver todos los estados y ver solo Abierto / En proceso / Escalado">${soloAbiertas?'✓ Solo abiertas':'Solo abiertas'}</button>
+      <input type="date" value="${fechaSel}" onchange="renderNovedadesList('${filtro}', this.value, ${soloAbiertas})" title="Ver solo los registros de una fecha" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
+      ${fechaSel?`<button class="btn btn-outline btn-sm" onclick="renderNovedadesList('${filtro}','',${soloAbiertas})">✕ ${fmtDate(fechaSel)}</button>`:''}
       <button onclick="compartirNovedades()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir${fechaSel?' ('+fmtDate(fechaSel)+')':''}</button>
       <button onclick="tablaNovedades('${fechaSel}')" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">🖨️ Ver tabla / Imprimir</button>
       <input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar (fecha, área, apto, texto...)" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px;flex:1;min-width:180px">
     </div>
     <div class="card">
       ${rows.length === 0
-        ? '<div class="empty"><div class="empty-icon">✅</div><p>Sin novedades</p></div>'
+        ? `<div class="empty"><div class="empty-icon">✅</div><p>${filtro==='actas'?'Sin actas':'Sin novedades'}${fechaSel?' para el '+fmtDate(fechaSel):''}${soloAbiertas?' en estado abierto':''}</p></div>`
         : `<div style="overflow-x:auto"><table class="tabla">
             <thead><tr><th onclick="ordenarTabla(this)" style="cursor:pointer">Fecha ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Hora ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Área ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Apto/Ubic. ⇅</th><th>Descripción</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Prioridad ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Estado ⇅</th><th onclick="ordenarTabla(this)" style="cursor:pointer">Solicitó ⇅</th><th>Revisión Gerencia</th><th>Acciones</th></tr></thead>
             <tbody>${rows.map(n => `<tr>
