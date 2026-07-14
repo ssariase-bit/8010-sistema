@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-13-actas-filtro-fecha';
+const APP_VERSION = '2026-07-13-aviso-edificio';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-13', version:'2026-07-13-aviso-edificio', titulo:'Novedades: aviso del edificio en el que quedará el registro',
+    afecta:'Novedades · Usuarios con acceso a los dos edificios',
+    detalle:'Quien tiene acceso a 8010 y a Kubik ve ahora, al reportar una novedad, un aviso con el edificio en el que quedará el registro. Se implementa porque dos observaciones sobre reservas de 8010 quedaron guardadas en Kubik: quien las escribió tenía el otro edificio activo, y el sistema estampa el edificio vigente. Los dos registros ya fueron reubicados en 8010. No hubo exposición de datos: las reservas siempre estuvieron correctamente asignadas a su edificio.' },
   { fecha:'2026-07-13', version:'2026-07-13-actas-filtro-fecha', titulo:'Actas: el filtro de fecha ya no devuelve al listado de Novedades',
     afecta:'Novedades / Actas',
     detalle:'Al aplicar el filtro de fecha estando en la pestaña Actas, el sistema regresaba al listado de Novedades. La pestaña seleccionada (Novedades / Actas / Todo junto), el filtro de fecha y el filtro "Solo abiertas" ahora son independientes y se conservan entre sí. "Solo abiertas" además quedó como interruptor, de modo que se puede desactivar sin salir de la pestaña. Reportado por Sebastián Martínez.' },
@@ -3733,6 +3736,20 @@ async function renderNovedadForm() {
   const areaGestorOpts = ['Recepción','Apartamento','Mantenimiento','Housekeeping','Seguridad','Zonas comunes','Financiero','Huésped','General'].map(a=>`<option>${a}</option>`).join('');
   document.getElementById('main-content').innerHTML = `
     <div class="page-title">⚠️ ${ed?'Editar Novedad':'Reportar Novedad'}</div>
+    ${(function(){
+      // Sol. Santiago (13-jul-2026): dos comentarios sobre reservas de 8010 quedaron
+      // registrados en Kubik porque quien los escribió tenía el otro edificio activo.
+      // A quien tiene acceso a ambos edificios se le advierte dónde va a quedar el registro.
+      try{
+        if((edificiosPermitidos()||[]).length < 2) return '';
+        var nom = (EDIFICIO_ACTIVO==='kubik') ? 'KUBIK LIVING' : '8010 URBAN LIVING';
+        var col = (EDIFICIO_ACTIVO==='kubik') ? '#7C3AED' : '#0EA5E9';
+        return '<div style="max-width:640px;margin-bottom:10px;padding:9px 12px;border-left:4px solid '+col+';background:'+col+'12;border-radius:6px;font-size:12px;line-height:1.5">'
+          + 'Este registro quedará en <strong style="color:'+col+'">'+nom+'</strong>. '
+          + 'Si corresponde al otro edificio, cámbielo en el selector superior antes de guardar.'
+          + '</div>';
+      }catch(e){ return ''; }
+    })()}
     <div class="card" style="max-width:640px">
       <div class="form-row">
         <div class="form-group"><label>Fecha</label><input type="date" id="n-fecha" value="${TODAY}"></div>
