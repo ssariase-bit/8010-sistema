@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-menu-compras-firma';
+const APP_VERSION = '2026-07-14-firma-en-todo';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-firma-en-todo', titulo:'La firma con código rige TODAS las autorizaciones de Gerencia General',
+    afecta:'Reembolsos · Órdenes de Pedido · Seguridad',
+    detalle:'La firma de Gerencia General queda unificada y protegida con el código de autorización en todos los puntos donde se compromete dinero: aprobación de reembolsos individuales, aprobación de lotes de reembolso, Visto Bueno del informe de reembolsos y Visto Bueno de Órdenes de Pedido. En ninguno de esos casos se aprueba nada si no se digita el código correcto. CORRECCIÓN DE SEGURIDAD: hasta ahora la firma se guardaba en el navegador del equipo (localStorage) y se estampaba sin solicitar nada, de modo que cualquier persona que usara ese equipo con la sesión abierta podía aprobar reembolsos y estampar la firma de Gerencia General. La firma ya no se almacena en el equipo: reside en la base de datos, atada al usuario, y solo se libera al digitar el código. Al cerrar sesión, la firma se descarga de la memoria.' },
   { fecha:'2026-07-14', version:'2026-07-14-menu-compras-firma', titulo:'Los módulos nuevos ya aparecen en el menú',
     afecta:'Menú lateral',
     detalle:'Inventario, Órdenes de Pedido, Requisiciones Internas y Mi Firma no aparecían en la barra lateral: quedaron registrados en la estructura de menús antigua y no en la que el sistema utiliza actualmente. Ya quedan visibles. "Mi Firma" es de acceso exclusivo de Gerencia General.' },
@@ -850,6 +853,7 @@ async function loadProfile() {
 
 async function doLogout() {
   await sb.auth.signOut();
+  try{ if(window._firmaOlvidar) window._firmaOlvidar(); }catch(e){}   // la firma no queda cargada en el equipo
   currentUser = null; currentProfile = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
@@ -9433,14 +9437,18 @@ async function generarInformeReembolso(keepVB){
 }
 function imprimirInformeReembolso(){ if(!window._riPrintHTML){ if(typeof showToast==='function') showToast('Genera el informe primero','error'); return; } var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para imprimir','error'); return; } w.document.write(window._riPrintHTML); w.document.close(); }
 window._riVB = null;
-function darVBReembolso(){
+async function darVBReembolso(){
   if(typeof window._puedeAprobarReemb==='function' && !window._puedeAprobarReemb()){ if(typeof showToast==='function') showToast('Solo Gerencia General (Santiago) puede dar el Visto Bueno','error'); return; }
-  var _f=(typeof window._getFirma==='function'?window._getFirma():'');
-  var _doVB=function(){ window._riVB = { nombre: (typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'Gerencia', fecha: (typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO')), firma: (typeof window._getFirma==='function'?window._getFirma():'') }; generarInformeReembolso(true); if(typeof showToast==='function') showToast('✅ Visto Bueno registrado en el informe','success'); };
-  if(!_f && typeof window.subirMiFirma==='function'){
-    if(confirm('Aún no tienes una firma guardada en este equipo. ¿Quieres subir tu firma ahora para que quede estampada en el informe?\n\n(Aceptar = subir firma · Cancelar = firmar solo con tu nombre)')){ window.subirMiFirma(function(){ _doVB(); }); return; }
-  }
-  _doVB();
+  // Exige el código de autorización: sin él no se estampa la firma ni se da el VB.
+  var firma = await window._firmaAutorizar('Visto Bueno del informe de reembolsos');
+  if(!firma) return;
+  window._riVB = {
+    nombre: (typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'Gerencia',
+    fecha: (typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO')),
+    firma: firma
+  };
+  generarInformeReembolso(true);
+  if(typeof showToast==='function') showToast('✅ Visto Bueno registrado y firmado','success');
 }
 // ── Solo Santiago Arias puede dar el Visto Bueno / aprobar reembolsos ──
 window._WL_APRUEBA_REEMB = ['santiago.arias@8010urbanliving.com'];
@@ -9463,7 +9471,10 @@ window.aprobarReembolso = async function(id){
   var cuando=(typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO'));
   var ref=(r.consecutivo?('R-'+r.consecutivo):('#'+id));
   if(!confirm('¿Aprobar el reembolso '+ref+' por '+_reembFmt(r.valor)+'?\n\nQuedará marcado como APROBADO por '+quien+' ('+cuando+'). Esta acción queda registrada en el sistema.')) return;
-  var traza='✅ Aprobado por '+quien+' el '+cuando;
+  // Exige el código de autorización de Gerencia General.
+  var _fi = await window._firmaAutorizar('Reembolso '+ref+' · '+_reembFmt(r.valor));
+  if(!_fi) return;
+  var traza='✅ Aprobado y firmado por '+quien+' el '+cuando;
   var obs=(r.observaciones? (r.observaciones+' | '):'')+traza;
   var upd=await sb.from('reembolsos').update({ estado:'Aprobado', aprobado_por:quien, observaciones:obs }).eq('id',id);
   if(upd.error){ if(typeof showToast==='function') showToast('Error al aprobar: '+upd.error.message,'error'); return; }
@@ -9471,29 +9482,27 @@ window.aprobarReembolso = async function(id){
   if(typeof loadView==='function') loadView('reembolsos-list');
 };
 
-// ── Firma del aprobador (imagen guardada en este equipo) ──
-window._firmaKey = function(){ var e=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.email)||(typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||'user'; return 'so_firma_'+e; };
-window._getFirma = function(){ try{ return localStorage.getItem(window._firmaKey())||''; }catch(_){ return ''; } };
-window.subirMiFirma = function(cb){
-  var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
-  inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f) return;
-    var rd=new FileReader();
-    rd.onload=function(){
-      var img=new Image();
-      img.onload=function(){
-        // Redimensiona a máx 320px de ancho para no saturar localStorage
-        var maxW=320, sc=Math.min(1, maxW/img.width), w=Math.round(img.width*sc), h=Math.round(img.height*sc);
-        var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-        cv.getContext('2d').drawImage(img,0,0,w,h);
-        var durl=cv.toDataURL('image/png');
-        try{ localStorage.setItem(window._firmaKey(), durl); if(typeof showToast==='function') showToast('✍️ Firma guardada en este equipo','success'); if(cb) cb(durl); }
-        catch(e){ if(typeof showToast==='function') showToast('No se pudo guardar la firma (imagen muy grande)','error'); }
-      };
-      img.src=rd.result;
-    };
-    rd.readAsDataURL(f);
-  };
-  inp.click();
+// ── Firma del aprobador ────────────────────────────────────────────────────
+// ANTES: la firma vivía en el navegador del equipo (localStorage) y se estampaba
+// sin pedir nada. Cualquiera que se sentara en el equipo con la sesión abierta
+// podía aprobar y firmar. AHORA la firma vive en la base, atada al usuario, y
+// solo se estampa si se digita el código de autorización (ver "Mi Firma").
+window._FIRMA_CACHE = null;
+window._getFirma = function(){ return (window._FIRMA_CACHE || ''); };   // solo lectura de la ya autorizada
+window._firmaOlvidar = function(){ window._FIRMA_CACHE = null; };
+
+// Pide el código y, si es correcto, deja la firma disponible para este documento.
+window._firmaAutorizar = async function(concepto){
+  var img = await window._frmPedir(concepto);
+  if(!img) return null;
+  window._FIRMA_CACHE = img;
+  return img;
+};
+
+// Compatibilidad: si algo llama a subirMiFirma, se redirige al módulo Mi Firma.
+window.subirMiFirma = function(){
+  if(typeof showToast==='function') showToast('La firma se carga en Sistema → Mi Firma','info');
+  if(typeof loadView==='function') loadView('mi-firma');
 };
 // ── Aprobación de LOTE completo (todos los recibos de un consecutivo) con firma ──
 window._loteRows = null;
@@ -9537,10 +9546,14 @@ window._confirmarAprobarLote = async function(consec){
   if(!window._puedeAprobarReemb()){ if(typeof showToast==='function') showToast('Solo Gerencia General (Santiago) puede dar el Visto Bueno del lote','error'); return; }
   var rows=window._loteRows||[];
   if(!rows.length){ return; }
+  // Exige el código de autorización antes de tocar nada.
+  var _totalPrev = rows.reduce(function(s,r){ return s+(Number(r.valor)||0); },0);
+  var _fi = await window._firmaAutorizar('Lote R-'+consec+' · '+rows.length+' recibos · '+_reembFmt(_totalPrev));
+  if(!_fi) return;
   var btn=document.getElementById('lote-ap-btn'); if(btn){ btn.disabled=true; btn.textContent='Aprobando…'; }
   var quien=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||(typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||'Gerencia';
   var cuando=(typeof fmtFH12==='function'?fmtFH12():new Date().toLocaleString('es-CO'));
-  var traza='✅ Aprobado (lote R-'+consec+') por '+quien+' el '+cuando;
+  var traza='✅ Aprobado y firmado (lote R-'+consec+') por '+quien+' el '+cuando;
   var ids=rows.map(function(r){ return r.id; });
   // Actualiza uno por uno para conservar observaciones previas de cada recibo
   var okAll=true, errMsg='';
