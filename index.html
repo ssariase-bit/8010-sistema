@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-compras-imprimir-correo';
+const APP_VERSION = '2026-07-14-wifi-y-control-personal';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-wifi-y-control-personal', titulo:'WiFi Kubik corregido · el Control de Ingreso solo muestra personal operativo',
+    afecta:'Mensaje de bienvenida (Kubik) · Control de Ingreso Personal (8010)',
+    detalle:'La contraseña del WiFi en el mensaje de bienvenida de Kubik quedó con la inicial en mayúscula (Kubik8i8), según reporte de recepción. En el Control de Ingreso Personal de 8010, el selector de empleados ya no muestra al personal de dirección/gerencia ni de honorarios (a quienes no se les registra ingreso-salida) ni a los colaboradores inactivos; solo aparece el personal operativo activo. Adicionalmente se unificaron los nombres duplicados de los registros de ingreso con el registro oficial de personal, para que los recargos crucen correctamente.' },
   { fecha:'2026-07-14', version:'2026-07-14-compras-imprimir-correo', titulo:'Órdenes de Pedido y Requisiciones: imprimir y enviar por correo',
     afecta:'Compras',
     detalle:'Cada Orden de Pedido y cada Requisición Interna se puede imprimir o guardar como PDF en un documento formal con el membrete y el NIT del edificio, el consecutivo, el detalle de los ítems, el total y el bloque de firmas (Solicitó / Autorizó). Cuando la orden está autorizada, la firma de Gerencia General aparece estampada en el documento; mientras no lo esté, el documento indica expresamente que está pendiente de Visto Bueno. Se agregó también el envío por correo, con el detalle completo en el cuerpo del mensaje, y el campo de correo del proveedor en el formulario para no tener que digitarlo cada vez.' },
@@ -790,7 +793,7 @@ const EDIFICIOS = {
     facturarA: ['8i8 Operadora SAS','Particular','Otra'],
     // Restaurante del edificio (impuesto YA incluido en el precio -> se extrae). Bagatelle factura IVA 19% + servicio 10%.
     restaurante: { nombre:'Bagatelle', impuesto:'IVA', tasa:0.19, servicio:0.10, domicilio:0.15 },
-    wifi: { red:'HUESPEDES_KL', clave:'kubik8i8' },
+    wifi: { red:'HUESPEDES_KL', clave:'Kubik8i8' },
     camareras: ['Yolimar Manzanillo','Luz Dary Rodríguez','Ángela Díaz'],
     jornadas: { 'Administrador':540, 'Camarera':500, 'Mantenimiento':540, 'Otro':540 },
     indicadoresMes: {}
@@ -5980,9 +5983,16 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
   if (tabla === 'control_personal') {
     (async () => {
       try {
-        const [cp, pe] = await Promise.all([ sb.from('control_personal').select('nombre'), sb.from('personal').select('nombre') ]);
-        // Incluye también las camareras y duplas de apoyo del edificio (para registrar ingresos/horarios)
-        const nombres = [...new Set([...(EB().camareras||[]), ...(cp.data||[]).map(x=>x.nombre), ...(pe.data||[]).map(x=>x.nombre)].filter(Boolean))].sort((a,b)=>String(a).localeCompare(b));
+        const [cp, pe] = await Promise.all([ sb.from('control_personal').select('nombre'), sb.from('personal').select('nombre,cargo,estado') ]);
+        // Sol Sebastián (14-jul-2026): al personal de dirección/gerencia y de honorarios no se le
+        // registra ingreso-salida, y no debe aparecer en el selector. Tampoco los inactivos.
+        const norm = function(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); };
+        const _excl = new Set((window._NO_CONTROL_INGRESO||[]).map(norm));
+        (pe.data||[]).forEach(function(x){ if(String(x.estado||'')==='Inactivo') _excl.add(norm(x.nombre)); });
+        // Roster: solo personal operativo activo (excluye Gerentes y Administradores de la lista de exclusión)
+        const rosterOp = (pe.data||[]).filter(function(x){ return String(x.estado||'')!=='Inactivo' && !_excl.has(norm(x.nombre)); }).map(function(x){ return x.nombre; });
+        const cpNombres = (cp.data||[]).map(function(x){ return x.nombre; }).filter(function(n){ return !_excl.has(norm(n)); });
+        const nombres = [...new Set([...(EB().camareras||[]), ...cpNombres, ...rosterOp].filter(Boolean))].sort((a,b)=>String(a).localeCompare(b));
         // Sol Sebastián: al pasar el nombre a 3 casillas (nombre · apellido · 2º apellido), el listado
         // de empleados quedaba pegado al campo oculto y desapareció. Se agrega un selector visible que
         // rellena las 3 casillas al elegir el empleado.
@@ -7326,6 +7336,10 @@ window._comTargetOptions = async function(){
 // Sol Santiago: usuarios del SO que NO deben salir como destinatarios de comunicados.
 // Conservan su acceso al sistema; solo no se les dirigen comunicados.
 window._NO_DESTINATARIOS = [];
+
+// Sol Sebastián (14-jul-2026): personal de dirección/gerencia y de honorarios al que NO se le
+// registra ingreso-salida. No aparece en el selector del Control de Ingreso Personal.
+window._NO_CONTROL_INGRESO = ['Adriana Bernal','Andrés Leguizamón','Andres Leguizamon','Fabio Malaver','Fernando Herrera','Jonathan Zambrano','Maria Jose Tosta','María José Tosta','Natalia Muñoz','Zareth Varela'];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPRAS — dos flujos (Sol. Santiago, 13-jul-2026). Aplica a 8010 y a Kubik.
