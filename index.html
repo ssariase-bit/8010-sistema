@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-candado-usd';
+const APP_VERSION = '2026-07-14-dashboard-1000-filas';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-dashboard-1000-filas', titulo:'El Dashboard mostraba menos venta de la real',
+    afecta:'Dashboard · Informe Ejecutivo · Formato Huéspedes',
+    detalle:'El Dashboard consultaba el rack del mes sin paginar. La base de datos entrega un máximo de 1.000 filas por consulta y un mes de 8010 supera ese tope (31 días x 33 unidades = 1.023 filas), por lo que las filas sobrantes se descartaban en silencio y la venta del mes quedaba subestimada. En julio de 2026 el Dashboard mostraba $393.246.136 cuando la venta real de alojamiento era $403.534.442: se perdían 14 filas por $10.288.306. El mismo defecto estaba en el Informe Ejecutivo y en el Formato de Huéspedes. Toda lectura del rack por rango de fechas quedó paginada. Los módulos de Ingresos del Mes, Resumen de Ventas e Indicadores no estaban afectados: ya paginaban correctamente.' },
   { fecha:'2026-07-14', version:'2026-07-14-candado-usd', titulo:'Reservas en USD: la TRM se trae sola y sin ella no se guarda la reserva',
     afecta:'Nueva Reserva · Ventas',
     detalle:'Se corrige de raíz la pérdida de ventas en reservas en dólares. Hasta ahora, si la reserva se marcaba en USD y se dejaba la TRM en blanco, el sistema guardaba el valor EN DÓLARES dentro del campo de pesos, sin advertencia: el rack leía "USD 350" como "$350" y la venta prácticamente desaparecía. El defecto se detectó tres veces (31 reservas en mayo y 70 noches en julio, estas últimas por $56.126.206 de venta que no se estaba contando, con efecto hasta noviembre). Ahora: (1) al marcar USD, el sistema trae automáticamente la TRM oficial del día del check-in y muestra cuál aplicó; (2) si por alguna razón no hay TRM, la reserva NO se guarda y se advierte el motivo; (3) si la TRM digitada está fuera del rango normal, se pide confirmación. Se corrigió además la consulta de TRM para fechas futuras, que antes devolvía cero.' },
@@ -812,6 +815,28 @@ const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitant
   'mantenimiento','control_personal','turnos','personal','contratos','transportes',
   'reembolsos','prestamos_tec','maletas','entrega_efectivos','capsulas','caja',
   'recibos_magnifique','check_carpetas','desayunos','listado_cargos','requisiciones','compras','inventario','saldos_aptos','cotizaciones','facturacion','paquetes','consumos','semana_seguimiento','checklist_turnos','inventario_loza','masajes_scape','revistas_nocturnas']);
+// ── Rack por rango de fechas, SIEMPRE paginado ────────────────────────────
+// Supabase devuelve máximo 1.000 filas por consulta. Un mes del rack de 8010
+// son ~1.023 filas (31 días × 33 unidades), de modo que cualquier consulta sin
+// paginar pierde filas EN SILENCIO y subestima la venta. Toda lectura del rack
+// por rango debe pasar por aquí.
+// OJO: ya existe una función _rackRango(cols, desde, hasta, edi) más abajo, usada por
+// los módulos financieros. Esta es distinta y se llama _rackMes para no pisarla.
+window._rackMes = async function(desde, hasta, cols){
+  const sel = cols || '*';
+  let todo = [], from = 0;
+  while(true){
+    const r = await sb.from('rack').select(sel).gte('fecha', desde).lte('fecha', hasta).range(from, from+999);
+    if(r.error) return { data: todo, error: r.error };
+    const d = r.data || [];
+    todo = todo.concat(d);
+    if(d.length < 1000) break;
+    from += 1000;
+    if(from > 200000) break;   // tope de seguridad
+  }
+  return { data: todo, error: null };
+};
+
 (function(){
   const _from = sb.from.bind(sb);
   window._sbFromRaw = _from; // acceso al from sin filtro de edificio (para vistas multi-edificio o de un edificio fijo)
@@ -2148,9 +2173,13 @@ async function renderDashboard() {
   const indMes = INDICADORES_2026[mesKey] || null;
 
   // Cargar todo en paralelo
+  // OJO: el rack del mes se trae PAGINADO. Supabase entrega máximo 1.000 filas por
+  // consulta y un mes de 8010 supera ese tope (31 días × 33 unidades = 1.023 filas),
+  // por lo que la consulta sin paginar descartaba en silencio las últimas filas y
+  // subestimaba la venta del mes (julio 2026: $10.288.306 menos de lo real).
   const [rHoy, rMes, novRes, mantRes, turnosHoy, turnosUlt] = await Promise.all([
     sb.from('rack').select('*').eq('fecha', TODAY).eq('edificio', EDIFICIO_ACTIVO).order('estado', { ascending: true }),
-    sb.from('rack').select('apto,estado,tarifa,huesped,fecha').eq('edificio', EDIFICIO_ACTIVO).gte('fecha', monthStart).lte('fecha', monthEnd),
+    window._rackMes(monthStart, monthEnd, 'apto,estado,tarifa,huesped,fecha'),
     sb.from('novedades').select('*').in('estado',['Abierto','En proceso','Escalado']).order('created_at',{ascending:false}),
     sb.from('mantenimiento').select('*').in('estado',['Pendiente','En proceso']).gte('fecha', new Date(Date.now()-90*24*60*60*1000).toISOString().split('T')[0]).order('created_at',{ascending:false}),
     sb.from('turnos').select('*').eq('fecha', TODAY).order('created_at',{ascending:false}),
@@ -2517,7 +2546,7 @@ async function renderRack() {
     if (faltanHoy.length > 0) {
       const newRows = faltanHoy.map(a => ({ fecha: todayStr, apto: a, estado: 'Libre', edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id }));
       await sb.from('rack').upsert(newRows, { onConflict: 'fecha,apto,edificio', ignoreDuplicates: true });
-      const { data: refreshed } = await sb.from('rack').select('*').gte('fecha', monthStart).lte('fecha', monthEnd).or(`edificio.eq.${EDIFICIO_ACTIVO},edificio.is.null`);
+      const { data: refreshed } = await window._rackMes(monthStart, monthEnd, '*');   // paginado: un mes supera las 1.000 filas
       if (refreshed) allRack = refreshed;
     }
   }
@@ -10619,7 +10648,7 @@ async function renderInformeEjecutivo(){
   document.getElementById('main-content').innerHTML = '<div class="page-title">📈 Informe Ejecutivo</div><div class="card"><p style="color:#888">Cargando datos…</p></div>';
   const [rHoy, rMes, novR, mantR, salR, solR, conR] = await Promise.all([
     sb.from('rack').select('*').eq('fecha',TODAY).eq('edificio',ed),
-    sb.from('rack').select('apto,estado,tarifa').eq('edificio',ed).gte('fecha',mStart).lte('fecha',mEnd),
+    window._rackMes(mStart, mEnd, 'apto,estado,tarifa'),   // paginado: un mes supera las 1.000 filas de Supabase
     sb.from('novedades').select('descripcion,apto,estado,area,created_at').in('estado',['Abierto','En proceso','Escalado']),
     sb.from('mantenimiento').select('descripcion,apto,estado,fecha').in('estado',['Pendiente','En proceso']),
     sb.from('saldos_aptos').select('apto,arrendatario,saldo_total,fecha').eq('edificio',ed),
@@ -12600,7 +12629,7 @@ async function renderFormatoHuespedes(yArg, mArg) {
 
   const hoyDia = (month===now.getMonth() && year===now.getFullYear()) ? now.getDate() : -1;
 
-  const { data } = await sb.from('rack').select('*').gte('fecha',monthStart).lte('fecha',monthEnd).order('fecha');
+  const { data } = await window._rackMes(monthStart, monthEnd, '*');   // paginado: un mes supera las 1.000 filas
   const rows = data||[];
 
   // Agrupar por apto y día
