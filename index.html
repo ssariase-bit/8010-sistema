@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-15-agenda-eventos-seguridad';
+const APP_VERSION = '2026-07-15-actas-deteccion';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-15', version:'2026-07-15-actas-deteccion', titulo:'Las actas ya no quedan mezcladas con las novedades',
+    afecta:'Novedades / Actas',
+    detalle:'Al registrar un acta, el sistema la guardaba como novedad. El reconocimiento de actas solo contemplaba las expresiones "acta final", "acta inicial", "acta de ingreso" y "acta de entrega", de modo que las formas que se usan a diario —por ejemplo "Se realiza acta 1 y 2 del Apto 701-702"— no se identificaban, y el acta quedaba en el listado de novedades. Adicionalmente, la clasificación dependía de que la persona recordara seleccionar el área "Actas". Ahora el sistema reconoce el acta por el texto de la descripción, cambia el área automáticamente a "Actas" y lo advierte en pantalla, permitiendo corregirlo manualmente si no corresponde. Los registros que ya habían quedado mal clasificados fueron reubicados. Reportado por Nancy Medina Pabón.' },
   { fecha:'2026-07-15', version:'2026-07-15-agenda-eventos-seguridad', titulo:'Agenda de Eventos: impresión de la semana para Seguridad',
     afecta:'Eventos · Agenda de Eventos',
     detalle:'Se mejoró la impresión de la agenda semanal de eventos, que se entrega en copia a Seguridad. El documento sale de lunes a domingo, con una tabla por día y las columnas Horario, PAX, Ubicación y Observaciones, en el mismo formato que se maneja semana a semana. Se agregó el conteo de eventos de la semana, el encabezado con el rango de fechas en texto, la constancia de impresión (fecha, hora y responsable) y el bloque de firmas de entrega y recibido por parte de Seguridad. Los eventos en estado Cancelado ya no se imprimen, para no informar a Seguridad de eventos anulados. Los eventos de cada día quedan ordenados por hora. El botón de impresión estaba disponible pero pasaba desapercibido: ahora aparece resaltado en la barra superior de la Agenda.' },
@@ -3893,7 +3896,8 @@ async function renderNovedadForm() {
         </div>
       </div>
       <div class="form-group"><label>¿Cuál fue la novedad? *</label>
-        <textarea id="n-desc" placeholder="Describe qué ocurrió, dónde exactamente y a qué hora..." style="min-height:120px"></textarea>
+        <textarea id="n-desc" placeholder="Describe qué ocurrió, dónde exactamente y a qué hora..." style="min-height:120px" oninput="window._novDetectaActa()"></textarea>
+        <div id="n-acta-aviso" style="display:none;margin-top:6px;padding:8px 10px;border-left:4px solid #7C3AED;background:#7C3AED12;border-radius:6px;font-size:12px;line-height:1.5"></div>
       </div>
       <div class="form-group"><label>¿Qué acción se tomó?</label>
         <textarea id="n-accion-tomada" placeholder="Qué se hizo para resolver o el plan a seguir..." style="min-height:80px"></textarea>
@@ -4244,11 +4248,43 @@ function _esNovedadCK(n){
 
 // Sol Santiago: las actas (inicial, final, de ingreso, de entrega) NO son novedades y estaban
 // inundando el listado. Se identifican para poder separarlas en su propia pestaña.
+// Al escribir la novedad, si el texto corresponde a un acta, el área se cambia sola
+// a "Actas" y se avisa. Antes dependía de que la persona se acordara de elegirla, y
+// el acta terminaba mezclada en el listado de novedades.
+window._novDetectaActa = function(){
+  var d = (document.getElementById('n-desc')||{}).value || '';
+  var sel = document.getElementById('n-area');
+  var av  = document.getElementById('n-acta-aviso');
+  if(!sel || !av) return;
+  var esActa = window._esActaNov({ area:'', descripcion:d });
+  if(esActa && sel.value !== 'Actas'){
+    if(!window._novAreaPrev) window._novAreaPrev = sel.value;   // recuerda lo que había
+    sel.value = 'Actas';
+    av.style.display='block';
+    av.innerHTML = 'Se detectó que el registro es un <strong>acta</strong>, por lo que el área se cambió a <strong>Actas</strong> y quedará en la pestaña Actas, no en Novedades. Si no corresponde, se puede cambiar el área manualmente.';
+  } else if(!esActa && window._novAreaPrev && sel.value==='Actas'){
+    sel.value = window._novAreaPrev; window._novAreaPrev = null;
+    av.style.display='none';
+  } else if(!esActa){
+    av.style.display='none';
+  }
+};
+
+// Detecta si un registro es un acta y no una novedad.
+// Sol. Nancy Medina (15-jul-2026): "Se realiza acta 1 y 2 del Apto 701-702" quedaba
+// clasificado como novedad, porque solo se reconocían las actas final/inicial/de
+// ingreso/de entrega. Se amplía a las formas que efectivamente se usan a diario:
+// "acta 1 y 2", "actas 1 y 2", "se realiza/hace/deja acta", "acta del apto ...".
 window._esActaNov = function(n){
   const area = String((n&&n.area)||'').toLowerCase();
   if (area.indexOf('acta') >= 0) return true;
   const d = String((n&&n.descripcion)||'').toLowerCase();
-  return /acta\s+(final|inicial|de\s+(ingreso|entrega|salida))/.test(d) || /^\s*actas?\b/.test(d);
+  if (!/\bactas?\b/.test(d)) return false;                       // sin la palabra "acta" no es acta
+  return /\bactas?\s+(final|inicial|de\s+(ingreso|entrega|salida|recibo))/.test(d)   // acta final / inicial / de ingreso...
+      || /\bactas?\s*n?[°º.]?\s*\d/.test(d)                                          // acta 1 · acta N° 2 · actas 1 y 2
+      || /\b(se\s+)?(realiza|realizo|realizó|hace|hizo|deja|dejo|dejó|queda|elabora|elaboro|elaboró|firma|firmo|firmó|entrega|entrego|entregó)\s+(el\s+|la\s+|las\s+|los\s+)?actas?\b/.test(d)
+      || /^\s*actas?\b/.test(d)                                                      // empieza por "acta"
+      || /\bactas?\s+(del?|para)\s+(el\s+)?(apto|apartamento|hab)/.test(d);          // acta del apto 701
 };
 // Sol Sebastián Martínez (13-jul-2026): al poner filtro de fecha estando en Actas,
 // se perdía la pestaña y volvía a Novedades. La causa: el selector de fecha y el botón
