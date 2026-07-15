@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-15-fix-rack';
+const APP_VERSION = '2026-07-15-saldos-y-turno6';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-15', version:'2026-07-15-saldos-y-turno6', titulo:'Cuadro de Saldos: se corrige el total · Turno 6 · Actas · se retira la calculadora',
+    afecta:'Cuadro de Saldos · Seguimientos por Turno · Control de Ingreso · Novedades/Actas',
+    detalle:'(1) CUADRO DE SALDOS — CORRECCIÓN IMPORTANTE: al digitar el Master con separador de miles (por ejemplo 16.080.000), el Saldo total lo tomaba como 16,08. El sistema interpretaba el punto como separador decimal. Ahora los valores se leen en formato colombiano —el punto separa miles y la coma los decimales— y el total suma correctamente. Se recomienda revisar los saldos registrados con anterioridad, ya que pudieron quedar con el total errado. (2) El Cuadro de Saldos muestra ahora la columna Descripción de extras y totaliza Master, Extras y Saldo al final del listado. (3) Se agregó el Turno 6 (7:30 a.m. – 4:30 p.m.) para administradores, tanto en Seguimientos por Turno como en los horarios del Control de Ingreso. (4) Se retiró la calculadora de recargos del Control de Ingreso: los recargos ya se calculan automáticamente en el Cuadro de Horas Extra. (5) Actas: se afinó el reconocimiento para no marcar como acta los registros que solo la mencionan de paso ni los que la niegan (No se realiza acta). Reportado por Sebastián Martínez, Ricardo Vallejo y Nancy Medina.' },
   { fecha:'2026-07-15', version:'2026-07-15-fix-rack', titulo:'Corrección urgente: el Rack de Aptos no cargaba',
     afecta:'Rack de Aptos',
     detalle:'El Rack de Aptos presentaba el error "Error cargando rack: invalid input syntax for type date" y no abría. La causa fue un cambio introducido el mismo día: la función nueva que lee el rack paginado quedó con el mismo nombre que la variable que guarda el mes seleccionado del Rack, y la sobrescribió, por lo que el Rack intentaba construir la fecha del mes con una función en lugar de un número. La función quedó renombrada y el Rack opera con normalidad. Reportado por Fabio Malaver.' },
@@ -1649,7 +1652,7 @@ async function loadView(view) {
     case 'seguimientos-list': await renderSeguimientosTurno(); break;
     case 'puntos-fijos-list': await renderPuntosFijos(); break;
     case 'puntos-fijos-form': renderPuntosFijosFormMulti(); break;
-    case 'seguimientos-form': renderGenForm('seguimientos_turno','📌 Nuevo Seguimiento / Novedad',[{id:'fecha',label:'Fecha',type:'date',default:TODAY},{id:'turno',label:'Turno',type:'select',opts:['Turno 1','Turno 2','Turno 3','Turno 4','Turno 5','Mañana','Noche']},{id:'categoria',label:'Categoría',type:'select',opts:['Novedad','Préstamo','Mantenimiento','CKI / TRM','Cortesía','Otro']},{id:'apto',label:'Apto',type:'text'},{id:'detalle',label:'Detalle',type:'textarea',req:true},{id:'responsable',label:'Responsable',type:'text'},{id:'estado',label:'Estado',type:'select',opts:['Pendiente','En seguimiento','Resuelto']},{id:'observacion',label:'Actualización / Observación',type:'textarea'},{id:'edificio',type:'text',hidden:true,default:EDIFICIO_ACTIVO}]); break;
+    case 'seguimientos-form': renderGenForm('seguimientos_turno','📌 Nuevo Seguimiento / Novedad',[{id:'fecha',label:'Fecha',type:'date',default:TODAY},{id:'turno',label:'Turno',type:'select',opts:['Turno 1','Turno 2','Turno 3','Turno 4','Turno 5','Turno 6 (7:30am–4:30pm)','Mañana','Noche']},{id:'categoria',label:'Categoría',type:'select',opts:['Novedad','Préstamo','Mantenimiento','CKI / TRM','Cortesía','Otro']},{id:'apto',label:'Apto',type:'text'},{id:'detalle',label:'Detalle',type:'textarea',req:true},{id:'responsable',label:'Responsable',type:'text'},{id:'estado',label:'Estado',type:'select',opts:['Pendiente','En seguimiento','Resuelto']},{id:'observacion',label:'Actualización / Observación',type:'textarea'},{id:'edificio',type:'text',hidden:true,default:EDIFICIO_ACTIVO}]); break;
     case 'tareas-fds-form': renderGenForm('tareas_fds','🧹 Nueva Tarea de Fin de Semana',[{id:'fecha',label:'Fecha',type:'date',default:TODAY},{id:'dia',label:'Día',type:'select',opts:['Sábado','Domingo','Lunes','Martes','Miércoles','Jueves','Viernes']},{id:'area',label:'Área',type:'select',opts:['Áreas Públicas','Mantenimiento','Camareras','Administradores','Varios']},{id:'tarea',label:'Tarea',type:'text',req:true},{id:'responsable',label:'Responsable',type:'text'},{id:'observacion',label:'Observación',type:'textarea'},{id:'estado',label:'Estado',type:'select',opts:['Pendiente','Realizado']},{id:'edificio',type:'text',hidden:true,default:EDIFICIO_ACTIVO}]); break;
     case 'mantenimiento-list': await renderMantList(); break;
     case 'turnos-list':        await renderTurnosList(); break;
@@ -1842,9 +1845,11 @@ async function loadView(view) {
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
 
+    // Sol. Sebastián: se hace visible la descripción de los extras y se totaliza al final.
     case 'saldos-list': await renderList('saldos_aptos','💳 Cuadro de Saldos','saldos-form',
-      ['fecha','apto','arrendatario','empresa','master','extras','saldo_total','observaciones'],
-      ['Fecha','Apto','Arrendatario','Empresa','Master','Extras','Saldo','Obs.']); break;
+      ['fecha','apto','arrendatario','empresa','master','extras','descripcion_extras','saldo_total','observaciones'],
+      ['Fecha','Apto','Arrendatario','Empresa','Master','Extras','Descripción extras','Saldo','Obs.']);
+      window._saldosTotales(); break;
     case 'saldos-form': renderGenForm('saldos_aptos','💳 Registrar Saldo de Apto',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull,req:true},
@@ -1862,7 +1867,7 @@ async function loadView(view) {
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del empleado',type:'nombre3',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:_CARGOS()},
-      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:25 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 2:20 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:50 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','8:00 AM - 5:00 PM','8:00 AM - 5:45 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
+      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:25 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 2:20 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:50 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','7:30 AM - 4:30 PM (Administrador · Turno 6)','8:00 AM - 5:00 PM','8:00 AM - 5:45 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
@@ -4252,6 +4257,67 @@ function _esNovedadCK(n){
 
 // Sol Santiago: las actas (inicial, final, de ingreso, de entrega) NO son novedades y estaban
 // inundando el listado. Se identifican para poder separarlas en su propia pestaña.
+// Sol. Sebastián (14-jul-2026): totalizar Master, Extras y Saldo al final del Cuadro
+// de Saldos. Se agrega una fila de totales al pie de la tabla ya renderizada.
+window._saldosTotales = function(){
+  setTimeout(function(){
+    try{
+      var tb = document.querySelector('#main-content table.tabla');
+      if(!tb || tb.tFoot) return;
+      var ths = [].slice.call(tb.querySelectorAll('thead th')).map(function(t){ return (t.textContent||'').trim().toLowerCase(); });
+      var iM = ths.indexOf('master'), iE = ths.indexOf('extras'), iS = ths.indexOf('saldo');
+      if(iM < 0 && iE < 0 && iS < 0) return;
+      var filas = [].slice.call(tb.querySelectorAll('tbody tr'));
+      var sum = function(i){ if(i<0) return 0; var t=0; filas.forEach(function(tr){ var c=tr.children[i]; if(c) t += window._numCO(c.textContent); }); return t; };
+      var tM=sum(iM), tE=sum(iE), tS=sum(iS);
+      var tf = document.createElement('tfoot');
+      var tr = document.createElement('tr');
+      tr.style.cssText = 'background:#1F3864;color:#fff;font-weight:800';
+      ths.forEach(function(_,i){
+        var td = document.createElement('td');
+        td.style.cssText = 'padding:8px;white-space:nowrap';
+        if(i===0) td.textContent = 'TOTALES ('+filas.length+')';
+        else if(i===iM) { td.textContent = '$ '+Math.round(tM).toLocaleString('es-CO'); td.style.textAlign='right'; }
+        else if(i===iE) { td.textContent = '$ '+Math.round(tE).toLocaleString('es-CO'); td.style.textAlign='right'; }
+        else if(i===iS) { td.textContent = '$ '+Math.round(tS).toLocaleString('es-CO'); td.style.textAlign='right'; }
+        tr.appendChild(td);
+      });
+      tf.appendChild(tr); tb.appendChild(tf);
+    }catch(e){}
+  }, 350);
+};
+
+// Lee un número escrito en formato colombiano: el punto es separador de MILES y la
+// coma es el decimal. "16.080.000" → 16080000 · "1.234,56" → 1234.56 · "$ 9.000" → 9000
+// Sol. Sebastián (14-jul-2026): el Cuadro de Saldos tomaba "16.080.000" como 16,08
+// porque limpiaba el texto y se lo pasaba a parseFloat, que corta en el segundo punto.
+window._numCO = function(v){
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return 0;
+  var neg = /^\(.*\)$/.test(s) || /-/.test(s);
+  s = s.replace(/[^\d.,]/g, '');
+  if (!s) return 0;
+  var iC = s.lastIndexOf(','), iP = s.lastIndexOf('.');
+  if (iC > -1 && iP > -1) {
+    // Manda el último: el otro es separador de miles.
+    if (iC > iP) s = s.replace(/\./g, '').replace(',', '.');   // 1.234,56
+    else         s = s.replace(/,/g, '');                      // 1,234.56
+  } else if (iC > -1) {
+    // Solo comas: decimal si deja 1 o 2 cifras al final; si no, es separador de miles.
+    s = (s.length - iC - 1 <= 2 && s.split(',').length === 2) ? s.replace(',', '.') : s.replace(/,/g, '');
+  } else if (iP > -1) {
+    var partes = s.split('.');
+    var ultima = partes[partes.length - 1];
+    // "16.080.000" (varios puntos) o "9.000" (grupo de 3) → separador de miles.
+    if (partes.length > 2 || ultima.length === 3) s = s.replace(/\./g, '');
+    // "16.08" → decimal de verdad, se deja como está.
+  }
+  var n = parseFloat(s);
+  if (!isFinite(n)) return 0;
+  return neg ? -Math.abs(n) : n;
+};
+
 // Al escribir la novedad, si el texto corresponde a un acta, el área se cambia sola
 // a "Actas" y se avisa. Antes dependía de que la persona se acordara de elegirla, y
 // el acta terminaba mezclada en el listado de novedades.
@@ -4282,13 +4348,19 @@ window._novDetectaActa = function(){
 window._esActaNov = function(n){
   const area = String((n&&n.area)||'').toLowerCase();
   if (area.indexOf('acta') >= 0) return true;
-  const d = String((n&&n.descripcion)||'').toLowerCase();
-  if (!/\bactas?\b/.test(d)) return false;                       // sin la palabra "acta" no es acta
+  let d = String((n&&n.descripcion)||'').toLowerCase();
+  // Solo se evalúa el reporte, no el cierre: en "Acción tomada" se suele mencionar
+  // el acta de pasada ("queda registrado en el Acta del Apto") sin que el registro
+  // sea un acta.
+  d = d.split(/acci[oó]n\s+tomada/)[0];
+  if (!/\bactas?\b/.test(d)) return false;
+  // La negación no es un acta: "No se realiza acta ni confirmación".
+  d = d.replace(/\bno\s+se\s+\w+\s+(el\s+|la\s+|las\s+|los\s+)?actas?\b/g, ' ');
+  if (!/\bactas?\b/.test(d)) return false;
   return /\bactas?\s+(final|inicial|de\s+(ingreso|entrega|salida|recibo))/.test(d)   // acta final / inicial / de ingreso...
       || /\bactas?\s*n?[°º.]?\s*\d/.test(d)                                          // acta 1 · acta N° 2 · actas 1 y 2
-      || /\b(se\s+)?(realiza|realizo|realizó|hace|hizo|deja|dejo|dejó|queda|elabora|elaboro|elaboró|firma|firmo|firmó|entrega|entrego|entregó)\s+(el\s+|la\s+|las\s+|los\s+)?actas?\b/.test(d)
-      || /^\s*actas?\b/.test(d)                                                      // empieza por "acta"
-      || /\bactas?\s+(del?|para)\s+(el\s+)?(apto|apartamento|hab)/.test(d);          // acta del apto 701
+      || /\b(se\s+)?(realiza|realizo|realizó|hace|hizo|deja|dejo|dejó|queda|elabora|elaboro|elaboró|firma|firmo|firmó|recibe|recibio|recibió)\s+(el\s+|la\s+|las\s+|los\s+)?actas?\b/.test(d)
+      || /^\s*actas?\b/.test(d);                                                     // empieza por "acta"
 };
 // Sol Sebastián Martínez (13-jul-2026): al poner filtro de fecha estando en Actas,
 // se perdía la pestaña y volvía a Novedades. La causa: el selector de fecha y el botón
@@ -6149,7 +6221,14 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
   }
   // Cuadro de Saldos: Total = Master + Extras (automatico)
   if (tabla === 'saldos_aptos') {
-    var _scalc=function(){ var pm=function(id){var e=document.getElementById(id); if(!e) return 0; var v=String(e.value||'').replace(/[^\d.-]/g,''); return parseFloat(v)||0;}; var st=document.getElementById('gf-saldo_total'); if(st){ st.value=pm('gf-master')+pm('gf-extras'); st.readOnly=true; st.style.background='#E2EFDA'; st.style.fontWeight='700'; st.title='Automatico: Master + Extras'; } };
+    // Sol. Sebastián (14-jul-2026): al escribir el Master con separador de miles
+    // ("16.080.000"), el total lo tomaba como 16,08 — leía el punto como decimal.
+    // Ahora se interpreta en formato colombiano con window._numCO.
+    var _scalc=function(){
+      var pm=function(id){ var e=document.getElementById(id); return e? window._numCO(e.value) : 0; };
+      var st=document.getElementById('gf-saldo_total');
+      if(st){ st.value=pm('gf-master')+pm('gf-extras'); st.readOnly=true; st.style.background='#E2EFDA'; st.style.fontWeight='700'; st.title='Automático: Master + Extras'; }
+    };
     ['gf-master','gf-extras'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', _scalc); });
     _scalc();
   }
@@ -10571,7 +10650,6 @@ async function tablaSimplePersonal(){ var fIn=document.getElementById('cp-fecha-
         <input type="date" id="cp-fecha-informe" value="${TODAY}" title="Fecha del informe a compartir" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
         <button class="btn btn-outline btn-sm" onclick="tablaControlPersonal()" style="padding:10px 16px;color:var(--azul);border-color:var(--azul)">🖨️ Ver tabla / Imprimir</button>
         <button class="btn btn-outline btn-sm" onclick="tablaSimplePersonal()" style="padding:10px 16px">🖨 Tabla</button><button class="btn btn-outline btn-sm" onclick="compartirControlPersonal()" style="padding:10px 16px">📤 Compartir</button>
-        <button class="btn btn-outline btn-sm" onclick="calcRecargos()" style="padding:10px 16px;color:#7c3aed;border-color:#7c3aed">🧮 Calculadora de recargos</button>
         <button class="btn btn-success btn-sm" onclick="loadView('control-personal-form')" style="padding:10px 20px">+ Registrar</button>
       </div>
     </div>
