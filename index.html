@@ -476,10 +476,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-15-requisiciones-y-calendario';
+const APP_VERSION = '2026-07-15-canon-por-ciclo';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-15', version:'2026-07-15-canon-por-ciclo', titulo:'Canon mensual: cada mes causa exactamente un canon',
+    afecta:'Nueva Reserva (canon TxM) · Ventas · Rack',
+    detalle:'CORRECCIÓN DE FONDO. El canon de los contratos largos se causa por ciclo —por ejemplo del 15 de junio al 14 de julio—, es decir un canon por mes calendario, sin importar que el mes tenga 28, 30 o 31 días. El sistema, en cambio, dividía el canon entre 30 fijo y lo multiplicaba por los días del mes: en los meses de 31 días cobraba un día de más y en febrero dos de menos. En 2026 esto representaba $21.827.667 de venta inflada en el año, y febrero quedaba subfacturado en $4.608.938. Ahora el valor de la noche se calcula como canon dividido entre los días de su propio mes, con lo cual cada mes causa exactamente un canon. Se corrigieron 1.445 registros del rack de 2026 en 16 contratos de canon. Efecto sobre el período enero-mayo ya reportado a los socios: $4.948.887 menos (0,23% de los ingresos informados), por debajo del umbral de materialidad, ya que el faltante de febrero compensa el exceso de los meses de 31 días. Reportado por Fabio Malaver.' },
   { fecha:'2026-07-15', version:'2026-07-15-requisiciones-y-calendario', titulo:'Requisiciones vuelve al menú y envía solo lo pendiente · Calendario de Huéspedes aclarado',
     afecta:'Requisiciones · Calendario de Huéspedes',
     detalle:'(1) CORRECCIÓN: al incorporar el nuevo módulo de Compras, el módulo anterior de Requisiciones quedó fuera del menú y su histórico —29 registros, 10 de ellos pendientes— dejó de ser consultable. Ya está de vuelta, identificado como "Requisiciones (histórico)", mientras se migra al flujo nuevo. (2) Se agregó el botón "Enviar solo lo PENDIENTE", que remite por correo únicamente las requisiciones pendientes de compra: antes había que enviar el listado completo para solicitar unos pocos artículos. (3) CALENDARIO DE HUÉSPEDES: se explica en pantalla qué representa el módulo —la ocupación del mes completo, apartamento por apartamento— y se aclara que no debe confundirse con Ocupación / Estado de Huéspedes, que es la foto del día. El botón "Ver tabla" se renombró "Estado de hoy", porque abría ese informe y no la impresión del calendario, lo que generaba confusión. Reportado por Sebastián Martínez.' },
@@ -4288,6 +4291,24 @@ function _esNovedadCK(n){
 
 // Sol Santiago: las actas (inicial, final, de ingreso, de entrega) NO son novedades y estaban
 // inundando el listado. Se identifican para poder separarlas en su propia pestaña.
+// ── CANON MENSUAL: valor de la noche ───────────────────────────────────────
+// Sol. Fabio Malaver / Santiago (15-jul-2026). El canon de un contrato largo se causa por
+// CICLO (por ejemplo del 15 de junio al 14 de julio), es decir un canon por mes calendario,
+// sin importar que el mes tenga 28, 30 o 31 días.
+// Antes el sistema dividía el canon entre 30 fijo y multiplicaba por los días del mes, de
+// modo que en los meses de 31 cobraba un día de más y en febrero dos de menos. En 2026 eso
+// significaba $21.827.667 de venta inflada en el año (y febrero subfacturado en $4.608.938).
+// Ahora la noche vale canon ÷ días de SU mes, con lo cual cada mes causa exactamente un canon.
+window._canonNoche = function(canonMensual, fecha){
+  var c = Number(canonMensual)||0;
+  if(!(c>0)) return null;
+  var p = String(fecha||'').slice(0,10).split('-');
+  var y = Number(p[0]), m = Number(p[1]);
+  if(!y || !m) return null;
+  var dias = new Date(y, m, 0).getDate();          // días reales del mes (maneja bisiestos)
+  return Math.round((c/dias)*100)/100;
+};
+
 // Sol. Sebastián (14-jul-2026): enviar por correo únicamente las requisiciones pendientes.
 // Antes había que enviar el listado completo (29 registros) para pedir 10 artículos.
 window._reqBotonPendientes = function(){
@@ -5664,7 +5685,11 @@ async function guardarReserva() {
   const _rAp2 = (document.getElementById('res-ap2')?.value||'').trim()||null;
   const _tarifaRaw = Number(document.getElementById('res-tarifa').value) || 0;
   const _tipoTG = document.getElementById('res-tipotarifa')?.value || 'TxN';
-  const tarifa  = (_tipoTG==='TxM') ? (Math.round(_tarifaRaw/30*100)/100) : _tarifaRaw; // TxM: canon mensual → valor noche (÷30, con 2 decimales para no perder precisión)
+  // TxM (canon mensual) → valor de la noche. Se conserva el ÷30 como referencia; el valor
+  // real de cada noche se calcula más abajo con los días del mes que corresponda, para que
+  // cada mes cause exactamente UN canon (ver _canonNoche).
+  const tarifa  = (_tipoTG==='TxM') ? (Math.round(_tarifaRaw/30*100)/100) : _tarifaRaw;
+  const _canonMensual = (_tipoTG==='TxM') ? _tarifaRaw : 0;
   // Moneda / TRM: si es USD, el rack debe guardar el equivalente en PESOS para que cuente en ventas
   const _monedaR = document.getElementById('res-moneda')?.value || 'COP';
   const _trmR = Number(document.getElementById('res-trm')?.value) || 0;
@@ -5736,7 +5761,10 @@ async function guardarReserva() {
     d.setDate(d.getDate() + i);
     const fecha = d.toISOString().split('T')[0];
     const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
-    const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
+    // Canon mensual: el valor de la noche se calcula con los días del mes al que pertenece,
+    // de modo que cada mes calendario cause exactamente UN canon (30, 31 o 28 días).
+    const _tCanon = _canonMensual ? window._canonNoche(_canonMensual, fecha) : null;
+    const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : (_tCanon !== null ? _tCanon : tarifa);
     const tNocheCOP = _esUSDr ? Math.round(tNoche*_trmR) : tNoche; // USD→COP (la TRM ya está validada arriba)
     for (const _a of _aptosW2){ const _sib=(_adjSel.length>0 && _a!==apto); const _tA=_sib?null:(tNocheCOP||null); const _tU=(_esUSDr && !_sib)?(tNoche||null):null; rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) }); }
   }
