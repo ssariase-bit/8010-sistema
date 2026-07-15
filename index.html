@@ -476,10 +476,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-15-asesora-eventos';
+const APP_VERSION = '2026-07-15-orden-iva';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-15', version:'2026-07-15-orden-iva', titulo:'Órdenes de Pedido: Subtotal, IVA y Total a pagar',
+    afecta:'Compras · Órdenes de Pedido',
+    detalle:'CORRECCIÓN IMPORTANTE. La Orden de Pedido sumaba únicamente el subtotal de los ítems y lo rotulaba "TOTAL", de modo que el Visto Bueno de Gerencia General se daba sobre un valor inferior al que efectivamente se paga. En la orden OP-0001 se autorizaron $2.301.391 cuando la cotización del proveedor era de $2.702.194: quedaban $400.803 de IVA por fuera del documento firmado. Ahora la orden registra y muestra Subtotal, IVA y Total a pagar, tanto en el formulario como en el listado, en el documento impreso y en el correo al proveedor. La ventana de Visto Bueno muestra el desglose completo y advierte cuando la orden no tiene IVA registrado. El IVA se digita tomándolo de la cotización del proveedor y no se calcula automáticamente, porque los proveedores mezclan productos gravados y exentos: en la cotización de referencia el IVA correspondía al 17,4% y no al 19%. Se deja un atajo para aplicar el 19% cuando toda la orden esté gravada. Solicitado por Gerencia General.' },
   { fecha:'2026-07-15', version:'2026-07-15-asesora-eventos', titulo:'El perfil de Asesoría también consulta Eventos',
     afecta:'Perfiles y accesos',
     detalle:'El perfil "asesora" (Asesoría) no veía los módulos de Eventos, Agenda de Eventos ni Rack de Salones, que son parte relevante del ingreso del edificio. Ya quedan habilitados en consulta. El perfil conserva su alcance: no autoriza Órdenes de Pedido, no aprueba reembolsos, no accede al módulo de Firma ni a la importación del Rack; esas facultades siguen siendo exclusivas de Gerencia General.' },
@@ -7824,7 +7827,7 @@ window._cmpLista = async function(tipo){
         +'<th>N°</th><th>Fecha</th><th>Área</th><th>Solicita</th>'
         +(C.conValores?'<th>Proveedor</th>':'')
         +'<th>Ítems</th>'
-        +(C.conValores?'<th style="text-align:right">Total</th><th>📎</th>':'')
+        +(C.conValores?'<th style="text-align:right">Total a pagar</th><th>📎</th>':'')
         +'<th>Estado</th><th>Trazabilidad</th><th>Acciones</th></tr></thead><tbody>'
         + rows.map(function(x){
             var its = Array.isArray(x.items)?x.items:[];
@@ -7843,7 +7846,10 @@ window._cmpLista = async function(tipo){
               +'<td style="max-width:280px;font-size:11px;line-height:1.5">'
                 + its.map(function(i){ return '· '+window._cmpEsc(i.desc)+' <strong>×'+window._cmpEsc(i.cant)+'</strong>'+(i.und?(' '+window._cmpEsc(i.und)):''); }).join('<br>')
               +'</td>'
-              +(C.conValores?('<td style="text-align:right;font-weight:700;white-space:nowrap">'+window._cmpMoney(x.total)+'</td>'
+              +(C.conValores?('<td style="text-align:right;font-weight:700;white-space:nowrap">'+window._cmpMoney((Number(x.subtotal||x.total)||0)+(Number(x.iva)||0))
+                  +(Number(x.iva)>0 ? ('<div style="font-size:10px;font-weight:400;color:var(--gris-t)">sub '+window._cmpMoney(x.subtotal||x.total)+' + IVA '+window._cmpMoney(x.iva)+'</div>')
+                                    : '<div style="font-size:10px;font-weight:400;color:#B45309">sin IVA registrado</div>')
+                +'</td>'
                 +'<td>'+((Array.isArray(x.adjuntos)&&x.adjuntos.length)
                     ? '<button class="btn btn-outline btn-xs" onclick="window._cmpVerAdj(\''+x.id+'\')" title="Ver cotización">📎 '+x.adjuntos.length+'</button>'
                     : '<span style="color:#9A4A40;font-size:11px" title="Sin cotización adjunta">⚠️ sin cot.</span>')+'</td>'):'')
@@ -7923,8 +7929,19 @@ window._cmpForm = function(tipo){
         +(C.conValores?'<th style="width:130px">Valor unitario</th><th style="width:130px;text-align:right">Subtotal</th>':'')
         +'<th style="width:40px"></th></tr></thead>'
         +'<tbody id="cmp-rows"></tbody>'
-        +(C.conValores?'<tfoot><tr style="background:var(--azul-c);font-weight:800"><td colspan="4" style="text-align:right">TOTAL</td><td style="text-align:right" id="cmp-total">$ 0</td><td></td></tr></tfoot>':'')
+        // Sol. Santiago (15-jul-2026): la orden debe mostrar Subtotal, IVA y Total. Antes solo
+        // sumaba el subtotal y lo rotulaba "TOTAL", de modo que el Visto Bueno se daba sobre
+        // un valor menor al que efectivamente se paga (OP-0001: se autorizó $2.301.391
+        // cuando la orden con IVA era $2.702.194).
+        +(C.conValores?('<tfoot>'
+          +'<tr style="background:#f6f8fa;font-weight:700"><td colspan="4" style="text-align:right">SUBTOTAL</td><td style="text-align:right" id="cmp-subtotal">$ 0</td><td></td></tr>'
+          +'<tr style="background:#f6f8fa"><td colspan="4" style="text-align:right;font-weight:700">IVA'
+            +' <button type="button" onclick="window._cmpIva19()" style="font-weight:400;font-size:10px;padding:2px 7px;margin-left:6px;border:1px solid var(--azul);border-radius:5px;background:#fff;color:var(--azul);cursor:pointer" title="Aplicar 19% sobre el subtotal">aplicar 19%</button>'
+          +'</td><td style="text-align:right"><input type="number" id="cmp-iva" value="0" oninput="window._cmpTotal()" style="width:110px;font-size:12px;text-align:right;font-weight:700"></td><td></td></tr>'
+          +'<tr style="background:var(--azul-c);font-weight:800;font-size:14px"><td colspan="4" style="text-align:right">TOTAL A PAGAR</td><td style="text-align:right" id="cmp-total">$ 0</td><td></td></tr>'
+        +'</tfoot>'):'')
       +'</table></div>'
+      +(C.conValores?'<div style="font-size:11px;color:var(--gris-t);margin-top:6px">El IVA se toma <strong>de la cotización del proveedor</strong>, no se calcula solo: los proveedores mezclan productos gravados y exentos. En la cotización de referencia el IVA fue del 17,4%, no del 19%.</div>':'')
     +'</div>'
     +'<div style="display:flex;gap:8px">'
       +'<button class="btn btn-success" onclick="window._cmpGuardar(\''+tipo+'\',this)">💾 Enviar '+C.sing.toLowerCase()+'</button>'
@@ -7949,17 +7966,30 @@ window._cmpAddRow = function(){
   tb.appendChild(tr);
 };
 
+// Devuelve el subtotal (suma de los ítems) y refresca Subtotal · IVA · Total.
 window._cmpTotal = function(){
   if(!window._CMP[window._cmpTipo].conValores) return 0;
   var t=0;
   document.querySelectorAll('#cmp-rows .cmp-row').forEach(function(tr){
     var c = Number((tr.querySelector('.cmp-cant')||{}).value)||0;
-    var v = Number((tr.querySelector('.cmp-val')||{}).value)||0;
+    var v = window._numCO((tr.querySelector('.cmp-val')||{}).value);
     var s = c*v; t+=s;
-    var cel = tr.querySelector('.cmp-sub'); if(cel) cel.textContent = '$ '+s.toLocaleString('es-CO');
+    var cel = tr.querySelector('.cmp-sub'); if(cel) cel.textContent = '$ '+Math.round(s).toLocaleString('es-CO');
   });
-  var el=document.getElementById('cmp-total'); if(el) el.textContent = '$ '+t.toLocaleString('es-CO');
+  var iva = window._numCO((document.getElementById('cmp-iva')||{}).value);
+  var sub = document.getElementById('cmp-subtotal'); if(sub) sub.textContent = '$ '+Math.round(t).toLocaleString('es-CO');
+  var el  = document.getElementById('cmp-total');    if(el)  el.textContent  = '$ '+Math.round(t+iva).toLocaleString('es-CO');
   return t;
+};
+
+// Atajo: aplica el 19% sobre el subtotal. Sirve cuando toda la orden está gravada.
+window._cmpIva19 = function(){
+  var t=0;
+  document.querySelectorAll('#cmp-rows .cmp-row').forEach(function(tr){
+    t += (Number((tr.querySelector('.cmp-cant')||{}).value)||0) * window._numCO((tr.querySelector('.cmp-val')||{}).value);
+  });
+  var e=document.getElementById('cmp-iva');
+  if(e){ e.value = Math.round(t*0.19); window._cmpTotal(); }
 };
 
 window._cmpFile2b64 = function(f){
@@ -7980,7 +8010,7 @@ window._cmpGuardar = async function(tipo, btn){
     if(!d) return;
     var c = Number((tr.querySelector('.cmp-cant')||{}).value)||0;
     var o = { desc:d, cant:c, und:((tr.querySelector('.cmp-und')||{}).value||'').trim() };
-    if(conV){ o.valor = Number((tr.querySelector('.cmp-val')||{}).value)||0; o.subtotal = c*o.valor; }
+    if(conV){ o.valor = window._numCO((tr.querySelector('.cmp-val')||{}).value); o.subtotal = c*o.valor; }
     items.push(o);
   });
   if(!items.length){ showToast('Se requiere al menos un ítem con descripción','error'); return; }
@@ -8011,7 +8041,10 @@ window._cmpGuardar = async function(tipo, btn){
     proveedor: conV ? prov : null,
     proveedor_email: conV ? (((document.getElementById('cmp-prov-mail')||{}).value||'').trim() || null) : null,
     items: items,
-    total: conV ? items.reduce(function(s,i){ return s+(i.subtotal||0); },0) : 0,
+    // subtotal = suma de ítems · iva = el de la cotización · total = lo que efectivamente se paga
+    subtotal: conV ? items.reduce(function(s,i){ return s+(i.subtotal||0); },0) : 0,
+    iva:      conV ? window._numCO((document.getElementById('cmp-iva')||{}).value) : 0,
+    total:    conV ? (items.reduce(function(s,i){ return s+(i.subtotal||0); },0) + window._numCO((document.getElementById('cmp-iva')||{}).value)) : 0,
     adjuntos: adj,
     estado: C.flujo[0],
     user_id: window._uid()
@@ -8030,10 +8063,21 @@ window._cmpVB = async function(id, aprueba){
   var x = r0.data, esOrden = x.tipo==='orden_pedido';
 
   if(aprueba && esOrden && !(Array.isArray(x.adjuntos)&&x.adjuntos.length)){
-    if(!confirm('Esta orden NO tiene cotización adjunta.\n\n'+x.consecutivo+' · '+(x.proveedor||'')+' · '+window._cmpMoney(x.total)+'\n\n¿Autorizar el lote de todas formas?')) return;
+    if(!confirm('Esta orden NO tiene cotización adjunta.\n\n'+x.consecutivo+' · '+(x.proveedor||'')+' · '+window._cmpMoney(x.total)+'\n\nSin la cotización no hay contra qué verificar el valor ni el IVA.\n\n¿Autorizar el lote de todas formas?')) return;
   }
+  // El Visto Bueno se da sobre el TOTAL CON IVA, que es lo que efectivamente se paga.
+  var _sub = Number(x.subtotal || x.total) || 0;
+  var _iva = Number(x.iva) || 0;
+  var _tot = _sub + _iva;
   var msg = aprueba
-    ? ('AUTORIZAR el lote completo:\n\n'+x.consecutivo+'\nProveedor: '+(x.proveedor||'—')+'\nTotal: '+window._cmpMoney(x.total)+'\nÍtems: '+(Array.isArray(x.items)?x.items.length:0)+'\n\n¿Confirmar el Visto Bueno?')
+    ? ('AUTORIZAR el lote completo:\n\n'+x.consecutivo
+       +'\nProveedor: '+(x.proveedor||'—')
+       +'\nÍtems: '+(Array.isArray(x.items)?x.items.length:0)
+       +'\n\nSubtotal: '+window._cmpMoney(_sub)
+       +'\nIVA:      '+window._cmpMoney(_iva)
+       +'\nTOTAL A PAGAR: '+window._cmpMoney(_tot)
+       +(_iva===0 ? '\n\n⚠️ Esta orden no tiene IVA registrado. Si la cotización lo incluye, el valor real a pagar es mayor.' : '')
+       +'\n\n¿Confirmar el Visto Bueno?')
     : ('RECHAZAR '+x.consecutivo+'.\n\n¿Confirmar?');
   if(!confirm(msg)) return;
 
@@ -8155,7 +8199,11 @@ window._cmpDocHTML = function(x){
         +(conV?'<th style="width:110px">Vr. unitario</th><th style="width:120px">Subtotal</th>':'')
       +'</tr></thead>'
       +'<tbody>'+filas+'</tbody>'
-      +(conV?('<tfoot><tr><td colspan="5" style="text-align:right">TOTAL</td><td style="text-align:right">'+M(x.total)+'</td></tr></tfoot>'):'')
+      +(conV?('<tfoot>'
+        +'<tr><td colspan="5" style="text-align:right">SUBTOTAL</td><td style="text-align:right">'+M(x.subtotal || x.total)+'</td></tr>'
+        +'<tr><td colspan="5" style="text-align:right">IVA</td><td style="text-align:right">'+M(x.iva||0)+'</td></tr>'
+        +'<tr style="background:#1F3864;color:#fff"><td colspan="5" style="text-align:right;font-size:13px">TOTAL A PAGAR</td><td style="text-align:right;font-size:13px">'+M((x.subtotal||x.total)+(Number(x.iva)||0))+'</td></tr>'
+      +'</tfoot>'):'')
     +'</table>'
     +(conV && !(Array.isArray(x.adjuntos)&&x.adjuntos.length)
         ? '<div style="margin-top:10px;font-size:11px;color:#9A4A40"><b>Nota:</b> esta orden no tiene cotización del proveedor adjunta.</div>' : '')
@@ -8195,11 +8243,13 @@ window._cmpEnviar = async function(id){
     + 'Solicita: '+(x.solicitante||'')+'\n'
     + (x.justificacion?('Concepto: '+x.justificacion+'\n'):'')
     + '\nDETALLE:\n' + lineas
-    + (conV?('\n\nTOTAL: '+window._cmpMoney(x.total)):'')
+    + (conV?('\n\nSubtotal: '+window._cmpMoney(x.subtotal||x.total)
+            +'\nIVA: '+window._cmpMoney(x.iva||0)
+            +'\nTOTAL A PAGAR: '+window._cmpMoney((Number(x.subtotal||x.total)||0)+(Number(x.iva)||0))):'')
     + (x.vb_por?('\n\nAutorizado por '+x.vb_por+' — Gerencia General.'):'')
     + '\n\nCordialmente,\n' + (x.solicitante||'') + '\n' + (eb.nombre||'');
 
-  var asunto = C.sing+' '+x.consecutivo+' — '+(eb.nombre||'')+(conV?(' — '+window._cmpMoney(x.total)):'');
+  var asunto = C.sing+' '+x.consecutivo+' — '+(eb.nombre||'')+(conV?(' — '+window._cmpMoney((Number(x.subtotal||x.total)||0)+(Number(x.iva)||0))):'');
   var url = 'mailto:'+encodeURIComponent(para.trim())
     +'?subject='+encodeURIComponent(asunto)
     +'&body='+encodeURIComponent(cuerpo);
@@ -8386,6 +8436,9 @@ window._invGenerarOrden = async function(){
       justificacion:'Generada desde Inventario · reposición de existencias',
       proveedor: (p==='(sin proveedor)'?'':p),
       items: items,
+      // El IVA se digita al editar la orden, tomándolo de la cotización del proveedor.
+      subtotal: items.reduce(function(s,i){ return s+(i.subtotal||0); },0),
+      iva: 0,
       total: items.reduce(function(s,i){ return s+(i.subtotal||0); },0),
       adjuntos: [], estado:'Pendiente VB',
       user_id: window._uid()
