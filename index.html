@@ -476,10 +476,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-15-lote-sebastian';
+const APP_VERSION = '2026-07-15-requisiciones-y-calendario';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-15', version:'2026-07-15-requisiciones-y-calendario', titulo:'Requisiciones vuelve al menú y envía solo lo pendiente · Calendario de Huéspedes aclarado',
+    afecta:'Requisiciones · Calendario de Huéspedes',
+    detalle:'(1) CORRECCIÓN: al incorporar el nuevo módulo de Compras, el módulo anterior de Requisiciones quedó fuera del menú y su histórico —29 registros, 10 de ellos pendientes— dejó de ser consultable. Ya está de vuelta, identificado como "Requisiciones (histórico)", mientras se migra al flujo nuevo. (2) Se agregó el botón "Enviar solo lo PENDIENTE", que remite por correo únicamente las requisiciones pendientes de compra: antes había que enviar el listado completo para solicitar unos pocos artículos. (3) CALENDARIO DE HUÉSPEDES: se explica en pantalla qué representa el módulo —la ocupación del mes completo, apartamento por apartamento— y se aclara que no debe confundirse con Ocupación / Estado de Huéspedes, que es la foto del día. El botón "Ver tabla" se renombró "Estado de hoy", porque abría ese informe y no la impresión del calendario, lo que generaba confusión. Reportado por Sebastián Martínez.' },
   { fecha:'2026-07-15', version:'2026-07-15-lote-sebastian', titulo:'Entrega de Efectivos vuelve al menú · Check List Carpetas · Paquetes · Acompañantes',
     afecta:'Entrega de Efectivos · Check List Carpetas · Paquetes · Rack',
     detalle:'(1) ENTREGA DE EFECTIVOS: el módulo existía pero no figuraba en el menú, de modo que no había forma de llegar a él. Ya aparece en la sección Financiero / Admin, junto con la opción de registrar una entrega. (2) CHECK LIST CARPETAS: los documentos de la carpeta admiten ahora "No aplica" —antes obligaba a marcar "No", lo que hacía ver el apartamento como si le faltaran documentos—; al marcar "Apto vacío = Sí" pasan solos a No aplica; al elegir el apartamento se arrastran el arrendatario y la empresa desde el Rack, y si el apto no tiene huésped se marca solo como vacío; y se retiró el botón de Rótulo, que se imprime desde su propio módulo. (3) PAQUETES: se agregó el caso del paquete que el arrendatario DEJA para que lo recoja una persona externa, con el nombre y el documento de quien lo recoge; el formulario se adapta según el tipo de movimiento. Además, el paquete deja de duplicarse en Seguimientos por Turno en 8010 (se conserva en Kubik, donde se solicitó). (4) RACK: se retiró el campo "Otros acompañantes", que pedía los mismos nombres que "Otros huéspedes en el apto" y obligaba a escribirlos dos veces; los nombres van ahora en un solo campo y la sección de acompañantes queda para los de servicio (empleada, enfermera, niñera). Reportado por Sebastián Martínez.' },
@@ -1360,6 +1363,9 @@ const MENU_COMPLETO = [
   { id: 'compras-orden-form', icon: '➕', label: 'Nueva Orden de Pedido' },
   { id: 'compras-requis', icon: '📝', label: 'Requisiciones Internas' },
   { id: 'compras-requis-form', icon: '➕', label: 'Pedir Suministros' },
+  // Módulo anterior de requisiciones. Conserva el histórico (29 registros, 10 pendientes)
+  // y se mantiene accesible mientras se migra al flujo nuevo de Compras.
+  { id: 'requisiciones-list', icon: '🗂️', label: 'Requisiciones (histórico)' },
   { id: 'personal-list', icon: '👤', label: 'Personal / RRHH' },
     { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
   { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
@@ -1807,7 +1813,8 @@ async function loadView(view) {
       {id:'foto',label:'Foto / evidencia (enlace)',type:'text'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
-    case 'requisiciones-list': await renderList('requisiciones','🛒 Requisiciones de Compra','requisiciones-form',['fecha','area','solicitado_por','articulo','cantidad_solicitada','cantidad_recibida','estado'],['Fecha','Área','Solicitó','Artículo','Solicitado','Recibido','Estado']); break;
+    case 'requisiciones-list': await renderList('requisiciones','🛒 Requisiciones de Compra','requisiciones-form',['fecha','area','solicitado_por','articulo','cantidad_solicitada','cantidad_recibida','estado'],['Fecha','Área','Solicitó','Artículo','Solicitado','Recibido','Estado']);
+      window._reqBotonPendientes(); break;
     case 'requisiciones-form': renderGenForm('requisiciones','🛒 Nueva Requisición de Compra',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'area',label:'Área solicitante',type:'select',opts:['Recepción','Mantenimiento','Housekeeping','Cocina','Administración'],req:true},
@@ -4281,6 +4288,54 @@ function _esNovedadCK(n){
 
 // Sol Santiago: las actas (inicial, final, de ingreso, de entrega) NO son novedades y estaban
 // inundando el listado. Se identifican para poder separarlas en su propia pestaña.
+// Sol. Sebastián (14-jul-2026): enviar por correo únicamente las requisiciones pendientes.
+// Antes había que enviar el listado completo (29 registros) para pedir 10 artículos.
+window._reqBotonPendientes = function(){
+  setTimeout(async function(){
+    try{
+      if(document.getElementById('req-btn-pend')) return;
+      var barra = document.querySelector('#main-content .card') || document.getElementById('main-content');
+      var ancla = document.querySelector('#main-content input[onkeyup*="buscarEnListado"]');
+      var cont = ancla ? (ancla.parentNode) : barra;
+      if(!cont) return;
+      var b = document.createElement('button');
+      b.id = 'req-btn-pend';
+      b.className = 'btn btn-sm';
+      b.style.cssText = 'background:#B45309;color:#fff;border:none;font-weight:700;margin-left:6px';
+      b.textContent = '📧 Enviar solo lo PENDIENTE';
+      b.title = 'Envía por correo únicamente las requisiciones que están pendientes';
+      b.onclick = window._reqEnviarPendientes;
+      cont.appendChild(b);
+    }catch(e){}
+  }, 350);
+};
+
+window._reqEnviarPendientes = async function(){
+  var r = await sb.from('requisiciones').select('*').eq('estado','Pendiente').order('fecha',{ascending:true});
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  var d = r.data||[];
+  if(!d.length){ showToast('No hay requisiciones pendientes','info'); return; }
+  var eb = (typeof EB==='function' && EB()) || {};
+  var fFmt = function(f){ if(!f) return '—'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  var lineas = d.map(function(x,i){
+    return (i+1)+'. '+(x.articulo||'')+'  ×'+(x.cantidad_solicitada||'')
+      + '   ('+(x.area||'')+' · solicitó '+(x.solicitado_por||'')+' · '+fFmt(x.fecha)+')';
+  }).join('\n');
+  var asunto = 'Requisiciones pendientes — '+(eb.nombre||'')+' · '+d.length+' artículo'+(d.length===1?'':'s');
+  var cuerpo = 'Cordial saludo.\n\nSe relacionan las requisiciones que se encuentran pendientes de compra:\n\n'
+    + lineas
+    + '\n\nTotal: '+d.length+' artículo'+(d.length===1?'':'s')+' pendiente'+(d.length===1?'':'s')+'.'
+    + '\n\nCordialmente,\n'+((currentProfile&&currentProfile.nombre)||'')+'\n'+(eb.nombre||'');
+  var para = window.prompt('Correo del destinatario (Compras):', 'compras@8010urbanliving.com');
+  if(para === null) return;
+  var url = 'mailto:'+encodeURIComponent(String(para).trim())+'?subject='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(cuerpo);
+  if(url.length > 1900){
+    try{ await navigator.clipboard.writeText(cuerpo); showToast('El listado es largo: se copió al portapapeles. Péguelo en el correo.','info'); }catch(e){}
+    url = 'mailto:'+encodeURIComponent(String(para).trim())+'?subject='+encodeURIComponent(asunto);
+  }
+  window.open(url,'_blank');
+};
+
 // Sol. Sebastián (14-jul-2026): "Compañía que factura" (LTM3 / 80-10) y "A cargo de
 // (razón social)" preguntaban lo mismo dos veces, y podían quedar contradictorias: la
 // confirmación decía una sociedad y el ingreso se registraba en la otra. La razón
@@ -13036,9 +13091,15 @@ async function renderFormatoHuespedes(yArg, mArg) {
         <button onclick="navFormatoHuespedes(1)" class="btn btn-outline btn-sm" title="Mes siguiente" style="padding:5px 10px">▶</button>
       </div>
       <div style="display:flex;gap:6px">
-        <button onclick="tablaEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)">🖨️ Ver tabla / Imprimir</button>
-        <button onclick="compartirEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)">📤 Compartir</button>
+        <button onclick="tablaEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--azul);border-color:var(--azul)" title="Abre el Estado de Huéspedes de HOY en formato de tabla. No es la impresión de este calendario.">🖨️ Estado de hoy / Imprimir</button>
+        <button onclick="compartirEstadoHuespedes()" class="btn btn-outline btn-sm" style="color:var(--verde);border-color:var(--verde)" title="Comparte el Estado de Huéspedes de hoy">📤 Compartir estado de hoy</button>
       </div>
+    </div>
+    <!-- Sol. Sebastián (14-jul-2026): no era claro qué representa este módulo, y el botón
+         "Ver tabla" abría el Estado de Huéspedes (la foto de hoy), lo que confundía más. -->
+    <div style="margin-bottom:12px;padding:9px 12px;border-left:4px solid #0EA5E9;background:#0EA5E912;border-radius:6px;font-size:12px;line-height:1.6">
+      <strong>Qué es este módulo:</strong> la ocupación del <strong>mes completo</strong>, apartamento por apartamento y día por día. Cada barra es una estadía: muestra el día de entrada, el huésped y el día de salida, de modo que se ve de un vistazo qué está ocupado, qué se libera y qué queda disponible en el mes.
+      <br><strong>No confundir con Ocupación / Estado de Huéspedes</strong>, que es la foto del día de hoy. El botón «Estado de hoy» abre precisamente ese informe, no la impresión de este calendario.
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;align-items:center">
       <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;border-radius:4px;background:#9FE1CB"></span>En casa</span>
