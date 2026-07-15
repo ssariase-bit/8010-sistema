@@ -476,10 +476,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-15-orden-iva';
+const APP_VERSION = '2026-07-15-reembolso-abierto';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-15', version:'2026-07-15-reembolso-abierto', titulo:'Reembolsos: un reembolso con varios recibos, que se puede seguir alimentando',
+    afecta:'Reembolsos · Todo el equipo',
+    detalle:'Antes el listado mostraba una línea por CADA recibo, de modo que un reembolso de 11 recibos se veía como 11 reembolsos distintos y no había forma de volver a abrirlo para agregarle gastos. Ahora: (1) El listado agrupa por número de reembolso. Cada línea es UN reembolso (R-0076) con su empresa, su total, cuántos recibos tiene y su estado; se despliega con un clic para ver los recibos por dentro. Los 98 recibos que había pasan a verse como los 75 reembolsos que realmente son. (2) Nuevo botón "➕ Agregar recibos": abre un reembolso ya existente y permite seguirle añadiendo recibos a medida que se va comprando, conservando el mismo número. El formulario muestra lo ya registrado, lo que se agrega ahora y el total del reembolso. (3) El estado se calcula sobre el reembolso completo: Pendiente, Parcial (3/11) o Aprobado, para que se vea de una si quedó algún recibo sin Visto Bueno. (4) Si se agregan recibos a un reembolso ya aprobado, el sistema avisa que quedará parcial y hay que volver a dar el VB — no se aprueba plata nueva con una firma vieja. (5) Los recibos sin escanear se marcan con ⚠️. (6) Se elimina "Nuevo Reembolso" de un solo recibo: todo reembolso nace agrupado. Se quitó también el "Informe de Reembolsos" que aparecía duplicado en el menú.' },
   { fecha:'2026-07-15', version:'2026-07-15-orden-iva', titulo:'Órdenes de Pedido: Subtotal, IVA y Total a pagar',
     afecta:'Compras · Órdenes de Pedido',
     detalle:'CORRECCIÓN IMPORTANTE. La Orden de Pedido sumaba únicamente el subtotal de los ítems y lo rotulaba "TOTAL", de modo que el Visto Bueno de Gerencia General se daba sobre un valor inferior al que efectivamente se paga. En la orden OP-0001 se autorizaron $2.301.391 cuando la cotización del proveedor era de $2.702.194: quedaban $400.803 de IVA por fuera del documento firmado. Ahora la orden registra y muestra Subtotal, IVA y Total a pagar, tanto en el formulario como en el listado, en el documento impreso y en el correo al proveedor. La ventana de Visto Bueno muestra el desglose completo y advierte cuando la orden no tiene IVA registrado. El IVA se digita tomándolo de la cotización del proveedor y no se calcula automáticamente, porque los proveedores mezclan productos gravados y exentos: en la cotización de referencia el IVA correspondía al 17,4% y no al 19%. Se deja un atajo para aplicar el 19% cuando toda la orden esté gravada. Solicitado por Gerencia General.' },
@@ -1057,9 +1060,7 @@ const NAV_ITEMS = {
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
     { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
     { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
-  { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
-    { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
-    { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
+    { id: 'reembolsos-lote', icon: '➕', label: 'Nuevo Reembolso' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
     { id: 'cargos-form', icon: '➕', label: 'Registrar Cargo' },
@@ -1172,9 +1173,7 @@ const NAV_ITEMS = {
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
     { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
     { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
-  { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
-    { id: 'reembolsos-form', icon: '➕', label: 'Nuevo Reembolso' },
-    { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
+    { id: 'reembolsos-lote', icon: '➕', label: 'Nuevo Reembolso' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
     { section: 'Compras' },
@@ -1376,8 +1375,8 @@ const MENU_COMPLETO = [
   // y se mantiene accesible mientras se migra al flujo nuevo de Compras.
   { id: 'requisiciones-list', icon: '🗂️', label: 'Requisiciones (histórico)' },
   { id: 'personal-list', icon: '👤', label: 'Personal / RRHH' },
-    { id: 'reembolsos-lote', icon: '🧾', label: 'Reembolso por Lotes' },
   { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
+  { id: 'reembolsos-lote', icon: '➕', label: 'Nuevo Reembolso' },
   { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
   { id: 'magnifique-list', icon: '🍽️', label: EDIFICIO_ACTIVO==='kubik'?'Recibos Bagatelle':'Recibos Magnifique' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
@@ -1934,10 +1933,8 @@ async function loadView(view) {
     case 'formato-huespedes':  await renderFormatoHuespedes(); break;
 
     case 'reembolsos-informe': await renderReembolsoInforme(); break;
-    case 'reembolsos-list': await renderList('reembolsos','💸 Reembolsos','reembolsos-form',
-      ['consecutivo','fecha','recibo_no','empresa','descripcion','area','valor','estado'],
-      ['#','Fecha','Recibo','Empresa','Descripción','Área','Valor','Estado']); break;
-    case 'reembolsos-lote': renderReembolsoLote(); break;
+    case 'reembolsos-list': await renderReembolsosList(); break;
+    case 'reembolsos-lote': await renderReembolsoLote(); break;
     case 'reembolsos-form': renderGenForm('reembolsos','💸 Registrar Reembolso',[
       {id:'fecha',label:'Fecha de creado (automática)',type:'date',default:TODAY,locked:true},
       {id:'fecha_factura',label:'Fecha del recibo',type:'date'},
@@ -10496,33 +10493,155 @@ window.guardarMovCaja=async function(btn){
 };
 
 // ════════ REEMBOLSO POR LOTES — varios recibos en un solo reembolso (solicitud Sebastián) ════════
-function renderReembolsoLote(){
+// ════════ LISTA DE REEMBOLSOS AGRUPADA POR CONSECUTIVO ════════
+// Un reembolso = un consecutivo, con todos sus recibos adentro.
+// Antes cada recibo se veía como un reembolso independiente.
+window._REEMB_EXP = window._REEMB_EXP || {};
+async function renderReembolsosList(){
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var fmt=function(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); };
+  var fF=function(f){ if(!f) return '—'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  document.getElementById('main-content').innerHTML='<div class="page-title">💸 Reembolsos</div><div class="card">Cargando…</div>';
+  // paginado: Supabase corta en 1.000
+  var d=[],f=0;
+  while(true){ var r=await sb.from('reembolsos').select('*').order('consecutivo',{ascending:false}).range(f,f+999);
+    if(r.error){ document.getElementById('main-content').innerHTML='<div class="card">Error: '+esc(r.error.message)+'</div>'; return; }
+    d=d.concat(r.data||[]); if(!r.data||r.data.length<1000) break; f+=1000; }
+  var _APROB=['Aprobado','Pagado','Reembolso recibido completo','Reembolso recibido parcial'];
+  // agrupar
+  var g={}, orden=[];
+  d.forEach(function(x){
+    var k=(x.consecutivo==null||x.consecutivo==='')?('_s'+x.id):('c'+x.consecutivo);
+    if(!g[k]){ g[k]={ key:k, consec:(x.consecutivo==null||x.consecutivo===''?null:x.consecutivo), rows:[] }; orden.push(k); }
+    g[k].rows.push(x);
+  });
+  var puedeAprob=(typeof window._puedeAprobarReemb==='function') && window._puedeAprobarReemb();
+  var totGral=0, nRec=0, nPend=0;
+  var html=orden.map(function(k){
+    var G=g[k], rows=G.rows, h=rows[0];
+    var total=rows.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
+    var pend=rows.filter(function(x){ return _APROB.indexOf(x.estado)<0; }).length;
+    totGral+=total; nRec+=rows.length; if(pend) nPend++;
+    var estado = pend===0 ? 'Aprobado' : (pend===rows.length ? 'Pendiente' : 'Parcial ('+(rows.length-pend)+'/'+rows.length+')');
+    var col = pend===0 ? {b:'#D1FAE5',t:'#065F46'} : (pend===rows.length ? {b:'#FEF3C7',t:'#92400E'} : {b:'#DBEAFE',t:'#1E40AF'});
+    var ref = G.consec!=null ? ('R-'+String(G.consec).padStart(4,'0')) : '— suelto —';
+    var abierto = !!window._REEMB_EXP[k];
+    var det = rows.map(function(x,i){
+      var ya=_APROB.indexOf(x.estado)>=0;
+      return '<tr style="background:#fafbfc;font-size:12px">'
+        +'<td style="padding:4px 8px;color:#999">'+(i+1)+'</td>'
+        +'<td style="padding:4px 8px">'+esc(fF(x.fecha_factura||x.fecha))+'</td>'
+        +'<td style="padding:4px 8px">'+esc(x.recibo_no||'—')+'</td>'
+        +'<td style="padding:4px 8px">'+esc(x.descripcion||'')+'</td>'
+        +'<td style="padding:4px 8px;text-align:right;white-space:nowrap">'+fmt(x.valor)+'</td>'
+        +'<td style="padding:4px 8px;text-align:center">'+(x.adjunto?'<a href="'+esc(x.adjunto)+'" target="_blank" style="color:#1d4ed8;text-decoration:none">📎</a>':'<span style="color:#c00" title="Sin recibo escaneado">⚠️</span>')+'</td>'
+        +'<td style="padding:4px 8px;text-align:center;color:'+(ya?'#065F46':'#92400E')+'">'+esc(x.estado||'')+'</td>'
+        +'<td style="padding:4px 8px;text-align:right;white-space:nowrap">'+(typeof _btnsEdit==='function'?_btnsEdit('reembolsos',x.id):'')+'</td></tr>';
+    }).join('');
+    var acc='';
+    if(G.consec!=null){
+      acc+='<button onclick="event.stopPropagation();_loteAbrir('+G.consec+')" class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#1F3864;color:#fff;border:none" title="Añadir más recibos a este mismo reembolso">➕ Agregar recibos</button> ';
+      if(puedeAprob && pend) acc+='<button onclick="event.stopPropagation();aprobarLoteReembolso(\''+G.consec+'\')" class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#15803d;color:#fff;border:none">✅✍️ Aprobar</button> ';
+      acc+='<button onclick="event.stopPropagation();comprobanteLote('+G.consec+')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px">👁 Ver</button> ';
+      acc+='<button onclick="event.stopPropagation();correoLote('+G.consec+')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">✉️</button>';
+    } else {
+      acc+='<button onclick="event.stopPropagation();previewReembolso(\''+h.id+'\')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px">👁 Ver</button> '+(typeof _btnsEdit==='function'?_btnsEdit('reembolsos',h.id):'');
+    }
+    return '<tbody class="reemb-grupo">'
+      +'<tr onclick="_reembToggle(\''+k+'\')" style="cursor:pointer;border-top:2px solid #e6e8ec">'
+      +'<td style="width:26px;color:#1F3864;font-weight:800">'+(abierto?'▾':'▸')+'</td>'
+      +'<td style="font-weight:800;color:#1F3864;white-space:nowrap">'+ref+'</td>'
+      +'<td style="white-space:nowrap">'+esc(fF(h.fecha))+'</td>'
+      +'<td>'+esc(h.empresa||'—')+'</td>'
+      +'<td>'+esc(h.area||'—')+'</td>'
+      +'<td style="text-align:center;white-space:nowrap"><span style="background:#EEF2FF;color:#3730A3;font-weight:700;font-size:11px;padding:2px 8px;border-radius:10px">'+rows.length+' recibo'+(rows.length>1?'s':'')+'</span></td>'
+      +'<td style="text-align:right;font-weight:800;white-space:nowrap">'+fmt(total)+'</td>'
+      +'<td style="text-align:center"><span style="background:'+col.b+';color:'+col.t+';font-weight:700;font-size:11px;padding:2px 10px;border-radius:10px;white-space:nowrap">'+estado+'</span></td>'
+      +'<td style="white-space:nowrap;text-align:right">'+acc+'</td></tr>'
+      +(abierto?('<tr><td colspan="9" style="padding:0 0 10px 26px;background:#fafbfc"><table style="width:100%;border-collapse:collapse"><thead><tr style="font-size:11px;color:#666;text-align:left"><th style="padding:4px 8px">#</th><th style="padding:4px 8px">Fecha recibo</th><th style="padding:4px 8px">No.</th><th style="padding:4px 8px">Descripción</th><th style="padding:4px 8px;text-align:right">Valor</th><th style="padding:4px 8px;text-align:center">Adj.</th><th style="padding:4px 8px;text-align:center">Estado</th><th></th></tr></thead><tbody>'+det+'</tbody></table></td></tr>'):'')
+      +'</tbody>';
+  }).join('');
+  document.getElementById('main-content').innerHTML=
+    '<div class="page-title">💸 Reembolsos</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Cada línea es UN reembolso con todos sus recibos adentro. Haz clic para abrirlo, o pulsa <b>➕ Agregar recibos</b> para seguir sumando gastos al mismo reembolso.</div>'
+    +'<div class="card"><div class="card-header" style="flex-wrap:wrap;gap:8px">'
+    +'<div class="card-title">'+orden.length+' reembolsos <span style="font-weight:400;color:#888;font-size:12px">· '+nRec+' recibos · '+nPend+' con pendientes</span> <span style="margin-left:14px;color:var(--verde);font-weight:700">'+fmt(totGral)+'</span></div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<input type="text" onkeyup="_reembBuscar(this)" placeholder="🔎 Buscar empresa, recibo, descripción…" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">'
+    +'<button class="btn btn-sm" style="background:#1A5C2E;color:#fff" onclick="_loteAbrir(null)">➕ Nuevo reembolso</button>'
+    +'</div></div>'
+    +'<div style="overflow-x:auto"><table class="tabla" id="reemb-tabla"><thead><tr><th></th><th>Reembolso</th><th>Fecha</th><th>Empresa</th><th>Área</th><th style="text-align:center">Recibos</th><th style="text-align:right">Total</th><th style="text-align:center">Estado</th><th></th></tr></thead>'
+    +(html||'<tbody><tr><td colspan="9" style="text-align:center;color:#999;padding:20px">Sin reembolsos</td></tr></tbody>')
+    +'</table></div></div>';
+}
+window._reembToggle=function(k){ window._REEMB_EXP[k]=!window._REEMB_EXP[k]; renderReembolsosList(); };
+window._reembBuscar=function(inp){
+  var q=String(inp.value||'').toLowerCase().trim();
+  document.querySelectorAll('#reemb-tabla tbody.reemb-grupo').forEach(function(tb){
+    tb.style.display = (!q || tb.textContent.toLowerCase().indexOf(q)>-1) ? '' : 'none';
+  });
+};
+// Abre un reembolso existente para seguir añadiéndole recibos (o uno nuevo si consec=null)
+window._loteAbrir=function(consec){ renderReembolsoLote(consec); };
+
+async function renderReembolsoLote(_consec){
   var q=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'';
   window._loteCajaIds=[];
+  window._loteConsec = (_consec==null||_consec==='') ? null : Number(_consec);
+  var _prev=[], _h={};
+  if(window._loteConsec!=null){
+    var _pr=await sb.from('reembolsos').select('*').eq('consecutivo',window._loteConsec).order('created_at');
+    _prev=_pr.data||[]; _h=_prev[0]||{};
+  }
   var _cm=(EB().cajasMenores)||[];
   var _cajaOpts=_cm.map(function(c){return '<option value="'+String(c.id).replace(/"/g,'')+'">'+String(c.nombre||c.id).replace(/</g,'&lt;')+'</option>';}).join('');
+  var _esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var _fmt=function(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); };
+  var _fF=function(f){ if(!f) return '—'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  var _abierto = window._loteConsec!=null;
+  var _ref = _abierto ? ('R-'+String(window._loteConsec).padStart(4,'0')) : '';
+  var _yaTotal = _prev.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
+  var _APROB=['Aprobado','Pagado','Reembolso recibido completo','Reembolso recibido parcial'];
+  var _cerrado = _prev.length>0 && _prev.every(function(x){ return _APROB.indexOf(x.estado)>=0; });
+  var _prevHTML = !_abierto ? '' :
+    '<div class="card" style="margin-bottom:14px;border-left:4px solid #1F3864"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Recibos ya registrados en '+_ref+' ('+_prev.length+')</div>'
+    +'<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>#</th><th>Fecha</th><th>No.</th><th>Descripción</th><th style="text-align:right">Valor</th><th style="text-align:center">Adj.</th><th style="text-align:center">Estado</th></tr></thead><tbody>'
+    +_prev.map(function(x,i){ return '<tr style="font-size:12px;color:#555"><td>'+(i+1)+'</td><td>'+_fF(x.fecha_factura||x.fecha)+'</td><td>'+_esc(x.recibo_no||'—')+'</td><td>'+_esc(x.descripcion||'')+'</td><td style="text-align:right;white-space:nowrap">'+_fmt(x.valor)+'</td><td style="text-align:center">'+(x.adjunto?'<a href="'+_esc(x.adjunto)+'" target="_blank">📎</a>':'<span style="color:#c00">⚠️</span>')+'</td><td style="text-align:center;font-size:11px">'+_esc(x.estado||'')+'</td></tr>'; }).join('')
+    +'</tbody><tfoot><tr style="background:#eef3fb;font-weight:800"><td colspan="4" style="text-align:right">Ya registrado</td><td style="text-align:right">'+_fmt(_yaTotal)+'</td><td colspan="2"></td></tr></tfoot></table></div>'
+    +(_cerrado?'<div style="margin-top:8px;font-size:12px;color:#92400E;background:#FEF3C7;padding:8px 10px;border-radius:6px">⚠️ Este reembolso ya fue aprobado en su totalidad. Si agregas recibos, entrarán como <b>Pendiente</b> y el reembolso quedará parcial: habrá que volver a dar el Visto Bueno.</div>':'')
+    +'</div>';
   document.getElementById('main-content').innerHTML=
-    '<div class="page-title">💸 Reembolso por Lotes</div>'
-    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Agrupa varios recibos en UN solo reembolso (un número y un correo con todos los comprobantes). Llena la cabecera, añade los recibos y guarda.</div>'
+    '<div class="page-title">💸 '+(_abierto?('Reembolso '+_ref+' — agregar recibos'):'Nuevo Reembolso')+'</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">'+(_abierto
+      ? 'Se están añadiendo recibos al reembolso <b>'+_ref+'</b>, que ya tiene '+_prev.length+' recibo(s) por '+_fmt(_yaTotal)+'. El número no cambia. <a href="#" onclick="loadView(\'reembolsos-list\');return false" style="color:#1F3864">← Volver al listado</a>'
+      : 'Un reembolso agrupa TODOS los recibos de una misma compra o periodo bajo un solo número. Se puede guardar con los recibos que haya hoy y seguir añadiendo después desde el listado.')+'</div>'
+    +_prevHTML
     +'<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Datos del reembolso</div>'
     +'<div class="form-row col3">'
-      +'<div class="form-group"><label>Empresa / Proveedor *</label><input id="lt-empresa"></div>'
+      +'<div class="form-group"><label>Empresa / Proveedor *</label><input id="lt-empresa" value="'+_esc(_h.empresa||'')+'"'+(_abierto?' readonly style="background:#f3f4f6"':'')+'></div>'
       +'<div class="form-group"><label>Tipo ID</label><select id="lt-tipo"><option>NIT</option><option>CC</option><option>CE</option><option>Pasaporte</option><option>Otro</option></select></div>'
-      +'<div class="form-group"><label>Número ID</label><input id="lt-numero"></div>'
+      +'<div class="form-group"><label>Número ID</label><input id="lt-numero" value="'+_esc(_h.numero||'')+'"></div>'
     +'</div><div class="form-row col3">'
       +'<div class="form-group"><label>Área</label><select id="lt-area"><option>Compras</option><option>Eventos</option><option>Cargo Apto.</option><option>Administrativo</option><option>Mantenimiento</option><option>Housekeeping</option><option>Recepción</option><option>Cocina</option><option>General</option></select></div>'
       +'<div class="form-group"><label>Caja (origen)</label><select id="lt-caja">'+_cajaOpts+'</select></div>'
-      +'<div class="form-group"><label>Fecha</label><input type="date" id="lt-fecha" value="'+TODAY+'"></div>'
+      +'<div class="form-group"><label>Fecha</label><input type="date" id="lt-fecha" value="'+_esc(String(_h.fecha||TODAY).slice(0,10))+'"></div>'
     +'</div><div class="form-row col3">'
-      +'<div class="form-group"><label>Realiza / Entrega</label><input id="lt-entregado" value="'+q.replace(/"/g,'&quot;')+'"></div>'
-      +'<div class="form-group"><label>Aprobado por</label><input id="lt-aprobado"></div>'
-      +'<div class="form-group"><label>Observaciones</label><input id="lt-obs"></div>'
+      +'<div class="form-group"><label>Realiza / Entrega</label><input id="lt-entregado" value="'+_esc(_h.entregado_por||q)+'"></div>'
+      +'<div class="form-group"><label>Aprobado por</label><input id="lt-aprobado" value="'+_esc(_h.aprobado_por||'')+'"></div>'
+      +'<div class="form-group"><label>Observaciones</label><input id="lt-obs" value="'+_esc(_h.observaciones||'')+'"></div>'
     +'</div></div>'
-    +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px"><div style="font-weight:700;color:var(--azul)">Recibos</div><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" style="border-color:#1A5C2E;color:#1A5C2E" onclick="_loteCargarPendientes()">⬇️ Cargar gastos pendientes de la caja</button><button class="btn btn-outline btn-sm" onclick="_loteAddRow()">+ Añadir recibo</button></div></div>'
+    +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px"><div style="font-weight:700;color:var(--azul)">'+(_abierto?'Recibos nuevos a agregar':'Recibos')+'</div><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" style="border-color:#1A5C2E;color:#1A5C2E" onclick="_loteCargarPendientes()">⬇️ Cargar gastos pendientes de la caja</button><button class="btn btn-outline btn-sm" onclick="_loteAddRow()">+ Añadir recibo</button></div></div>'
     +'<div style="overflow-x:auto"><table class="tabla" id="lt-tabla"><thead><tr><th>Fecha recibo</th><th>No. Recibo</th><th>Descripción</th><th style="text-align:right">Valor ($)</th><th>📎 Recibo escaneado</th><th></th></tr></thead><tbody id="lt-rows"></tbody>'
-    +'<tfoot><tr style="background:var(--azul-c);font-weight:800"><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right" id="lt-total">$ 0</td><td></td><td></td></tr></tfoot></table></div></div>'
-    +'<div style="display:flex;gap:8px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="_loteGuardar(this)">💾 Guardar reembolso (lote)</button></div>';
-  window._loteRows=0; _loteAddRow(); _loteAddRow();
+    +'<tfoot>'+(_abierto?'<tr style="color:#666"><td colspan="3" style="text-align:right">Ya registrado en '+_ref+'</td><td style="text-align:right">'+_fmt(_yaTotal)+'</td><td></td><td></td></tr><tr style="color:#666"><td colspan="3" style="text-align:right">Se agrega ahora</td><td style="text-align:right" id="lt-total">$ 0</td><td></td><td></td></tr><tr style="background:var(--azul-c);font-weight:800"><td colspan="3" style="text-align:right">TOTAL DEL REEMBOLSO</td><td style="text-align:right" id="lt-granTotal">'+_fmt(_yaTotal)+'</td><td></td><td></td></tr>':'<tr style="background:var(--azul-c);font-weight:800"><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right" id="lt-total">$ 0</td><td></td><td></td></tr>')+'</tfoot></table></div></div>'
+    +'<div style="display:flex;gap:8px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="_loteGuardar(this)">💾 '+(_abierto?('Agregar al reembolso '+_ref):'Guardar reembolso')+'</button>'
+    +(_abierto?'<button class="btn btn-outline" onclick="loadView(\'reembolsos-list\')">Cancelar</button>':'')+'</div>';
+  window._loteYaTotal=_yaTotal;
+  if(_abierto){
+    var _st=document.getElementById('lt-tipo'); if(_st&&_h.tipo) _st.value=_h.tipo;
+    var _sa=document.getElementById('lt-area'); if(_sa&&_h.area) _sa.value=_h.area;
+    var _sc=document.getElementById('lt-caja'); if(_sc&&_h.caja) _sc.value=_h.caja;
+  }
+  window._loteRows=0; _loteAddRow(); if(!_abierto) _loteAddRow();
 }
 function _loteAddRow(){
   var tb=document.getElementById('lt-rows'); if(!tb) return;
@@ -10537,7 +10656,9 @@ function _loteAddRow(){
 }
 function _loteTotal(){
   var t=0; document.querySelectorAll('#lt-rows .lt-val').forEach(function(i){ t+=Number(i.value)||0; });
-  var el=document.getElementById('lt-total'); if(el) el.textContent='$ '+t.toLocaleString('es-CO');
+  var el=document.getElementById('lt-total'); if(el) el.textContent='$ '+Math.round(t).toLocaleString('es-CO');
+  var gt=document.getElementById('lt-granTotal');
+  if(gt) gt.textContent='$ '+Math.round(t+(Number(window._loteYaTotal)||0)).toLocaleString('es-CO');
   return t;
 }
 // Fase 3: traer los gastos pendientes de legalizar de la caja seleccionada al lote
@@ -10579,11 +10700,16 @@ async function _loteGuardar(btn){
     }
     recibos.push({ fecha_factura:(tr.querySelector('.lt-fec').value||null), recibo_no:(tr.querySelector('.lt-rec').value.trim()||null), descripcion:(desc||'(sin descripción)'), valor:val, adjunto:_adjU });
   }
-  if(!recibos.length){ showToast('Añade al menos un recibo con valor','error'); if(btn){ btn.disabled=false; btn.textContent='💾 Guardar reembolso (lote)'; } return; }
+  var _reabre = (window._loteConsec!=null);
+  if(!recibos.length){ showToast('Añade al menos un recibo con valor','error'); if(btn){ btn.disabled=false; btn.textContent=_reabre?('💾 Agregar al reembolso R-'+String(window._loteConsec).padStart(4,'0')):'💾 Guardar reembolso'; } return; }
   if(btn) btn.textContent='Guardando…';
-  // siguiente consecutivo
-  var mx=await sb.from('reembolsos').select('consecutivo').eq('edificio',EDIFICIO_ACTIVO).order('consecutivo',{ascending:false}).limit(1);
-  var consec=((mx.data&&mx.data[0]&&Number(mx.data[0].consecutivo))||0)+1;
+  // consecutivo: si se está reabriendo un reembolso existente, se conserva el suyo
+  var consec;
+  if(_reabre){ consec=window._loteConsec; }
+  else {
+    var mx=await sb.from('reembolsos').select('consecutivo').eq('edificio',EDIFICIO_ACTIVO).order('consecutivo',{ascending:false}).limit(1);
+    consec=((mx.data&&mx.data[0]&&Number(mx.data[0].consecutivo))||0)+1;
+  }
   var base={ empresa:empresa, tipo:document.getElementById('lt-tipo').value, numero:document.getElementById('lt-numero').value.trim()||null, area:document.getElementById('lt-area').value, caja:document.getElementById('lt-caja').value, fecha:document.getElementById('lt-fecha').value||TODAY, entregado_por:document.getElementById('lt-entregado').value.trim()||null, aprobado_por:document.getElementById('lt-aprobado').value.trim()||null, observaciones:document.getElementById('lt-obs').value.trim()||null, estado:'Pendiente', consecutivo:consec, edificio:EDIFICIO_ACTIVO, user_id:currentUser.id };
   var rows=recibos.map(function(r){ return Object.assign({}, base, { fecha_factura:r.fecha_factura, recibo_no:r.recibo_no, descripcion:r.descripcion, valor:r.valor, adjunto:r.adjunto }); });
   var resp=await sb.from('reembolsos').insert(rows);
@@ -10592,15 +10718,20 @@ async function _loteGuardar(btn){
     resp=await sb.from('reembolsos').insert(rows2);
     if(!resp.error) showToast('Guardado, pero falta crear la columna "adjunto" en reembolsos para conservar los escaneos.','info');
   }
-  if(btn){ btn.disabled=false; btn.textContent='💾 Guardar reembolso (lote)'; }
+  if(btn){ btn.disabled=false; btn.textContent=_reabre?('💾 Agregar al reembolso R-'+String(consec).padStart(4,'0')):'💾 Guardar reembolso'; }
   if(resp.error){ showToast('Error al guardar: '+resp.error.message,'error'); return; }
   // Fase 3: marcar los gastos de caja incluidos en este lote
   if(window._loteCajaIds && window._loteCajaIds.length){
     try{ await sb.from('caja').update({ estado_legal:'En lote', lote_consec:consec }).in('id', window._loteCajaIds); }catch(e){}
     window._loteCajaIds=[];
   }
-  showToast('✅ Reembolso #'+consec+' guardado con '+rows.length+' recibo(s)','success');
-  comprobanteLote(consec);
+  var _ref='R-'+String(consec).padStart(4,'0');
+  showToast(_reabre
+    ? ('✅ '+rows.length+' recibo(s) agregados a '+_ref)
+    : ('✅ Reembolso '+_ref+' creado con '+rows.length+' recibo(s)'),'success');
+  window._loteConsec=null; window._loteYaTotal=0;
+  if(_reabre){ window._REEMB_EXP['c'+consec]=true; if(typeof loadView==='function') loadView('reembolsos-list'); }
+  else comprobanteLote(consec);
 }
 function _loteComprobanteHTML(consec, rows){
   var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||'';
