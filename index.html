@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-wifi-y-control-personal';
+const APP_VERSION = '2026-07-14-candado-usd';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-14', version:'2026-07-14-candado-usd', titulo:'Reservas en USD: la TRM se trae sola y sin ella no se guarda la reserva',
+    afecta:'Nueva Reserva · Ventas',
+    detalle:'Se corrige de raíz la pérdida de ventas en reservas en dólares. Hasta ahora, si la reserva se marcaba en USD y se dejaba la TRM en blanco, el sistema guardaba el valor EN DÓLARES dentro del campo de pesos, sin advertencia: el rack leía "USD 350" como "$350" y la venta prácticamente desaparecía. El defecto se detectó tres veces (31 reservas en mayo y 70 noches en julio, estas últimas por $56.126.206 de venta que no se estaba contando, con efecto hasta noviembre). Ahora: (1) al marcar USD, el sistema trae automáticamente la TRM oficial del día del check-in y muestra cuál aplicó; (2) si por alguna razón no hay TRM, la reserva NO se guarda y se advierte el motivo; (3) si la TRM digitada está fuera del rango normal, se pide confirmación. Se corrigió además la consulta de TRM para fechas futuras, que antes devolvía cero.' },
   { fecha:'2026-07-14', version:'2026-07-14-wifi-y-control-personal', titulo:'WiFi Kubik corregido · el Control de Ingreso solo muestra personal operativo',
     afecta:'Mensaje de bienvenida (Kubik) · Control de Ingreso Personal (8010)',
     detalle:'La contraseña del WiFi en el mensaje de bienvenida de Kubik quedó con la inicial en mayúscula (Kubik8i8), según reporte de recepción. En el Control de Ingreso Personal de 8010, el selector de empleados ya no muestra al personal de dirección/gerencia ni de honorarios (a quienes no se les registra ingreso-salida) ni a los colaboradores inactivos; solo aparece el personal operativo activo. Adicionalmente se unificaron los nombres duplicados de los registros de ingreso con el registro oficial de personal, para que los recargos crucen correctamente.' },
@@ -5126,8 +5129,9 @@ function renderNuevaReserva() {
           </div>
           <div class="form-group" id="res-trm-group" style="display:none">
             <label>TRM (USD→COP) *</label>
-            <input type="number" id="res-trm" oninput="calcReserva()" placeholder="Ej: 4200" style="font-weight:600">
-            <div style="font-size:11px;color:#6B7280;margin-top:3px">Se guarda el equivalente en pesos (tarifa USD × TRM) para que cuente en ventas.</div>
+            <input type="number" id="res-trm" oninput="calcReserva()" placeholder="Se trae sola" style="font-weight:600">
+            <div id="res-trm-info" style="font-size:11px;color:#166534;font-weight:600;margin-top:3px"></div>
+            <div style="font-size:11px;color:#6B7280;margin-top:3px">Se trae la TRM oficial del día del check-in. Se guarda el equivalente en pesos (tarifa USD × TRM) para que cuente en ventas. <strong>Sin TRM la reserva no se guarda.</strong></div>
           </div>
           <div class="form-group">
             <label>IVA</label>
@@ -5345,6 +5349,9 @@ function calcReserva() {
   const sym = moneda === 'USD' ? 'USD' : '$';
   if (document.getElementById('res-moneda-sym')) document.getElementById('res-moneda-sym').textContent = sym;
   var _trmG = document.getElementById('res-trm-group'); if (_trmG) _trmG.style.display = (moneda === 'USD') ? '' : 'none';
+  // Al pasar a USD se trae sola la TRM oficial del día del check-in, para que
+  // nadie tenga que digitarla (y no se guarde la reserva en dólares crudos).
+  if (moneda === 'USD') { try{ window._trmAuto(ci); }catch(e){} }
   if (ci && co) {
     const noches = Math.max(0, Math.round((new Date(co) - new Date(ci)) / 86400000));
     document.getElementById('res-noches').value = noches;
@@ -5462,6 +5469,26 @@ async function guardarReserva() {
       if(!confirm('⚠️ APTO OCUPADO\n\nEl apto '+_u.apto+' ya está ocupado por "'+_u.huesped+'" en esas fechas ('+_fechas[0]+(_fechas.length>1?(' a '+_fechas[_fechas.length-1]):'')+').\n\n¿Registrar de todos modos? (sobrescribirá el rack de ese apto)')){ _resetBtn(); return; }
     }
   } catch(_e){}
+
+  // ─── CANDADO USD (Sol. Santiago 14-jul-2026) ────────────────────────────
+  // Hasta ahora, si la reserva era en USD y se dejaba la TRM vacía, el sistema
+  // guardaba el valor EN DÓLARES dentro del campo de pesos, sin avisar. El rack
+  // leía "USD 350" como "$350 pesos" y la venta desaparecía. Se detectó tres
+  // veces: en mayo (31 reservas) y en julio (70 noches, $56.126.206 de venta
+  // perdida hasta noviembre). La reserva ya NO se guarda sin TRM.
+  if (_esUSDr && !(_trmR > 0)) {
+    showToast('La reserva está en USD y falta la TRM. Sin TRM no se puede convertir a pesos y la venta no contaría.','error');
+    const _t = document.getElementById('res-trm');
+    if(_t){ _t.style.border='2px solid #9A4A40'; _t.focus(); }
+    return;
+  }
+  if (_esUSDr && _trmR > 0 && (_trmR < 1000 || _trmR > 10000)) {
+    if(!confirm('La TRM digitada es '+_trmR.toLocaleString()+', un valor fuera de lo normal (suele estar entre 3.000 y 5.000).\n\n¿Es correcta?')) {
+      const _t = document.getElementById('res-trm'); if(_t){ _t.focus(); }
+      return;
+    }
+  }
+
   const rows = [];
   for (let i = 0; i < noches; i++) {
     const d = new Date(ci);
@@ -5469,7 +5496,7 @@ async function guardarReserva() {
     const fecha = d.toISOString().split('T')[0];
     const estado = i === 0 ? 'Check-in hoy' : 'Ocupado';
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : tarifa;
-    const tNocheCOP = (_esUSDr && _trmR>0) ? Math.round(tNoche*_trmR) : tNoche; // USD→COP para que cuente en ventas
+    const tNocheCOP = _esUSDr ? Math.round(tNoche*_trmR) : tNoche; // USD→COP (la TRM ya está validada arriba)
     for (const _a of _aptosW2){ const _sib=(_adjSel.length>0 && _a!==apto); const _tA=_sib?null:(tNocheCOP||null); const _tU=(_esUSDr && !_sib)?(tNoche||null):null; rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) }); }
   }
   // Día de check-out
@@ -7336,6 +7363,37 @@ window._comTargetOptions = async function(){
 // Sol Santiago: usuarios del SO que NO deben salir como destinatarios de comunicados.
 // Conservan su acceso al sistema; solo no se les dirigen comunicados.
 window._NO_DESTINATARIOS = [];
+
+// ── TRM oficial (datos.gov.co) ─────────────────────────────────────────────
+// Si la fecha es futura y aún no hay TRM publicada, se usa la última vigente.
+// (Antes se devolvía 0 y las tarifas en USD se multiplicaban por cero.)
+window._trmOficial = async function(fecha){
+  var f = String(fecha||'').slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(f)) f = TODAY;
+  try{
+    var u = 'https://www.datos.gov.co/resource/32sa-8pi3.json?$where=vigenciadesde<=%27'+f+'T00:00:00.000%27%20and%20vigenciahasta%3E=%27'+f+'T00:00:00.000%27';
+    var j = await (await fetch(u)).json();
+    if(j && j[0] && Number(j[0].valor) > 0) return { valor:Number(j[0].valor), fecha:f, exacta:true };
+  }catch(e){}
+  try{
+    var j2 = await (await fetch('https://www.datos.gov.co/resource/32sa-8pi3.json?$order=vigenciadesde%20DESC&$limit=1')).json();
+    if(j2 && j2[0] && Number(j2[0].valor) > 0) return { valor:Number(j2[0].valor), fecha:String(j2[0].vigenciadesde).slice(0,10), exacta:false };
+  }catch(e){}
+  return null;
+};
+
+// Rellena el campo TRM de la reserva con la oficial del día del check-in.
+window._trmAuto = async function(ci){
+  var el = document.getElementById('res-trm');
+  if(!el || (Number(el.value)||0) > 0) return;      // respeta lo que el usuario ya digitó
+  var t = await window._trmOficial(ci || TODAY);
+  if(!t) return;
+  el.value = t.valor;
+  el.style.border = '';
+  var lbl = document.getElementById('res-trm-info');
+  if(lbl) lbl.textContent = t.exacta ? ('TRM oficial del '+t.fecha) : ('TRM del '+t.fecha+' (última publicada)');
+  try{ calcReserva(); }catch(e){}
+};
 
 // Sol Sebastián (14-jul-2026): personal de dirección/gerencia y de honorarios al que NO se le
 // registra ingreso-salida. No aparece en el selector del Control de Ingreso Personal.
