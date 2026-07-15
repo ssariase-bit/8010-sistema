@@ -476,10 +476,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-15-canon-por-ciclo';
+const APP_VERSION = '2026-07-15-asesora-eventos';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-15', version:'2026-07-15-asesora-eventos', titulo:'El perfil de Asesoría también consulta Eventos',
+    afecta:'Perfiles y accesos',
+    detalle:'El perfil "asesora" (Asesoría) no veía los módulos de Eventos, Agenda de Eventos ni Rack de Salones, que son parte relevante del ingreso del edificio. Ya quedan habilitados en consulta. El perfil conserva su alcance: no autoriza Órdenes de Pedido, no aprueba reembolsos, no accede al módulo de Firma ni a la importación del Rack; esas facultades siguen siendo exclusivas de Gerencia General.' },
   { fecha:'2026-07-15', version:'2026-07-15-canon-por-ciclo', titulo:'Canon mensual: cada mes causa exactamente un canon',
     afecta:'Nueva Reserva (canon TxM) · Ventas · Rack',
     detalle:'CORRECCIÓN DE FONDO. El canon de los contratos largos se causa por ciclo —por ejemplo del 15 de junio al 14 de julio—, es decir un canon por mes calendario, sin importar que el mes tenga 28, 30 o 31 días. El sistema, en cambio, dividía el canon entre 30 fijo y lo multiplicaba por los días del mes: en los meses de 31 días cobraba un día de más y en febrero dos de menos. En 2026 esto representaba $21.827.667 de venta inflada en el año, y febrero quedaba subfacturado en $4.608.938. Ahora el valor de la noche se calcula como canon dividido entre los días de su propio mes, con lo cual cada mes causa exactamente un canon. Se corrigieron 1.445 registros del rack de 2026 en 16 contratos de canon. Efecto sobre el período enero-mayo ya reportado a los socios: $4.948.887 menos (0,23% de los ingresos informados), por debajo del umbral de materialidad, ya que el faltante de febrero compensa el exceso de los meses de 31 días. Reportado por Fabio Malaver.' },
@@ -1380,9 +1383,9 @@ const MENU_COMPLETO = [
   { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
   { section: 'Comercial' },
   { id: 'comercial-list', icon: '📞', label: 'Cotizaciones / Leads' },
-  { id: 'eventos', icon: '🎪', label: 'Eventos', roles: ['gerente_general','administrador','gerencia_operativa','comercial','eventos','recepcion'] },
-  { id: 'eventos-agenda', icon: '📅', label: 'Agenda de Eventos', roles: ['gerente_general','administrador','gerencia_operativa','comercial','eventos','recepcion'] },
-  { id: 'eventos-rack', icon: '🗓️', label: 'Rack de Salones', roles: ['gerente_general','administrador','gerencia_operativa','comercial','eventos','recepcion'] },
+  { id: 'eventos', icon: '🎪', label: 'Eventos', roles: ['gerente_general','administrador','gerencia_operativa','comercial','eventos','recepcion','asesora'] },
+  { id: 'eventos-agenda', icon: '📅', label: 'Agenda de Eventos', roles: ['gerente_general','administrador','gerencia_operativa','comercial','eventos','recepcion','asesora'] },
+  { id: 'eventos-rack', icon: '🗓️', label: 'Rack de Salones', roles: ['gerente_general','administrador','gerencia_operativa','comercial','eventos','recepcion','asesora'] },
   { section: 'Auditoría' },
   { id: 'novedades-diarias', icon: '📋', label: 'Novedades del Día' },
   { id: 'tareas-fds-list', icon: '🧹', label: 'Tareas Fin de Semana' },
