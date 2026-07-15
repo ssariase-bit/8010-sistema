@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-15-actas-deteccion';
+const APP_VERSION = '2026-07-15-fix-rack';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-15', version:'2026-07-15-fix-rack', titulo:'Corrección urgente: el Rack de Aptos no cargaba',
+    afecta:'Rack de Aptos',
+    detalle:'El Rack de Aptos presentaba el error "Error cargando rack: invalid input syntax for type date" y no abría. La causa fue un cambio introducido el mismo día: la función nueva que lee el rack paginado quedó con el mismo nombre que la variable que guarda el mes seleccionado del Rack, y la sobrescribió, por lo que el Rack intentaba construir la fecha del mes con una función en lugar de un número. La función quedó renombrada y el Rack opera con normalidad. Reportado por Fabio Malaver.' },
   { fecha:'2026-07-15', version:'2026-07-15-actas-deteccion', titulo:'Las actas ya no quedan mezcladas con las novedades',
     afecta:'Novedades / Actas',
     detalle:'Al registrar un acta, el sistema la guardaba como novedad. El reconocimiento de actas solo contemplaba las expresiones "acta final", "acta inicial", "acta de ingreso" y "acta de entrega", de modo que las formas que se usan a diario —por ejemplo "Se realiza acta 1 y 2 del Apto 701-702"— no se identificaban, y el acta quedaba en el listado de novedades. Adicionalmente, la clasificación dependía de que la persona recordara seleccionar el área "Actas". Ahora el sistema reconoce el acta por el texto de la descripción, cambia el área automáticamente a "Actas" y lo advierte en pantalla, permitiendo corregirlo manualmente si no corresponde. Los registros que ya habían quedado mal clasificados fueron reubicados. Reportado por Nancy Medina Pabón.' },
@@ -826,9 +829,10 @@ const TABLAS_POR_EDIFICIO = new Set(['rack','novedades','housekeeping','visitant
 // son ~1.023 filas (31 días × 33 unidades), de modo que cualquier consulta sin
 // paginar pierde filas EN SILENCIO y subestima la venta. Toda lectura del rack
 // por rango debe pasar por aquí.
-// OJO: ya existe una función _rackRango(cols, desde, hasta, edi) más abajo, usada por
-// los módulos financieros. Esta es distinta y se llama _rackMes para no pisarla.
-window._rackMes = async function(desde, hasta, cols){
+// OJO CON EL NOMBRE: ya existe _rackRango(cols, desde, hasta, edi) —usada por los módulos
+// financieros— y window._rackMes —que guarda el MES seleccionado del Rack—. Esta función es
+// distinta de ambas y por eso se llama _rackFetchRango. (Llamarla _rackMes rompió el Rack.)
+window._rackFetchRango = async function(desde, hasta, cols){
   const sel = cols || '*';
   let todo = [], from = 0;
   while(true){
@@ -2185,7 +2189,7 @@ async function renderDashboard() {
   // subestimaba la venta del mes (julio 2026: $10.288.306 menos de lo real).
   const [rHoy, rMes, novRes, mantRes, turnosHoy, turnosUlt] = await Promise.all([
     sb.from('rack').select('*').eq('fecha', TODAY).eq('edificio', EDIFICIO_ACTIVO).order('estado', { ascending: true }),
-    window._rackMes(monthStart, monthEnd, 'apto,estado,tarifa,huesped,fecha'),
+    window._rackFetchRango(monthStart, monthEnd, 'apto,estado,tarifa,huesped,fecha'),
     sb.from('novedades').select('*').in('estado',['Abierto','En proceso','Escalado']).order('created_at',{ascending:false}),
     sb.from('mantenimiento').select('*').in('estado',['Pendiente','En proceso']).gte('fecha', new Date(Date.now()-90*24*60*60*1000).toISOString().split('T')[0]).order('created_at',{ascending:false}),
     sb.from('turnos').select('*').eq('fecha', TODAY).order('created_at',{ascending:false}),
@@ -2552,7 +2556,7 @@ async function renderRack() {
     if (faltanHoy.length > 0) {
       const newRows = faltanHoy.map(a => ({ fecha: todayStr, apto: a, estado: 'Libre', edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id }));
       await sb.from('rack').upsert(newRows, { onConflict: 'fecha,apto,edificio', ignoreDuplicates: true });
-      const { data: refreshed } = await window._rackMes(monthStart, monthEnd, '*');   // paginado: un mes supera las 1.000 filas
+      const { data: refreshed } = await window._rackFetchRango(monthStart, monthEnd, '*');   // paginado: un mes supera las 1.000 filas
       if (refreshed) allRack = refreshed;
     }
   }
@@ -10687,7 +10691,7 @@ async function renderInformeEjecutivo(){
   document.getElementById('main-content').innerHTML = '<div class="page-title">📈 Informe Ejecutivo</div><div class="card"><p style="color:#888">Cargando datos…</p></div>';
   const [rHoy, rMes, novR, mantR, salR, solR, conR] = await Promise.all([
     sb.from('rack').select('*').eq('fecha',TODAY).eq('edificio',ed),
-    window._rackMes(mStart, mEnd, 'apto,estado,tarifa'),   // paginado: un mes supera las 1.000 filas de Supabase
+    window._rackFetchRango(mStart, mEnd, 'apto,estado,tarifa'),   // paginado: un mes supera las 1.000 filas de Supabase
     sb.from('novedades').select('descripcion,apto,estado,area,created_at').in('estado',['Abierto','En proceso','Escalado']),
     sb.from('mantenimiento').select('descripcion,apto,estado,fecha').in('estado',['Pendiente','En proceso']),
     sb.from('saldos_aptos').select('apto,arrendatario,saldo_total,fecha').eq('edificio',ed),
@@ -12705,7 +12709,7 @@ async function renderFormatoHuespedes(yArg, mArg) {
 
   const hoyDia = (month===now.getMonth() && year===now.getFullYear()) ? now.getDate() : -1;
 
-  const { data } = await window._rackMes(monthStart, monthEnd, '*');   // paginado: un mes supera las 1.000 filas
+  const { data } = await window._rackFetchRango(monthStart, monthEnd, '*');   // paginado: un mes supera las 1.000 filas
   const rows = data||[];
 
   // Agrupar por apto y día
