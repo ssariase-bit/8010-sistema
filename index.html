@@ -306,7 +306,7 @@ textarea{resize:vertical;min-height:80px}
         <select id="m-canal">
           <option value="">— Seleccionar —</option>
           <option>Directo</option><option>Airbnb</option><option>Booking</option>
-          <option>Expedia</option><option>Mirai</option><option>Hotelbeds</option><option>HyperGuest</option><option>Referido</option><option>Corporativo</option>
+          <option>Expedia</option><option>Expedia VIP</option><option>Mirai</option><option>Hotelbeds</option><option>HyperGuest</option><option>Referido</option><option>Corporativo</option>
         </select>
       </div>
     </div>
@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-15-saldos-y-turno6';
+const APP_VERSION = '2026-07-15-expedia-vip-y-razon';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-15', version:'2026-07-15-expedia-vip-y-razon', titulo:'Canal Expedia VIP · la razón social ya no se pregunta dos veces',
+    afecta:'Nueva Reserva · Check-in',
+    detalle:'(1) Se agregó el canal "Expedia VIP" en Nueva Reserva y en el Check-in. Hasta ahora no existía, por lo que estas reservas se venían registrando como "Expedia" y el dato VIP quedaba escrito a mano en observaciones o, por error, en el campo Empresa. (2) "Compañía que factura" (80-10 / LTM3) y "A cargo de (razón social)" preguntaban lo mismo dos veces y podían quedar contradictorias: la confirmación al huésped podía decir una sociedad mientras el ingreso se registraba en la otra. La razón social ahora se deriva automáticamente de la compañía que factura, con lo cual el dato es uno solo y no puede contradecirse. Se revisaron las reservas existentes y ninguna presentaba contradicción. Reportado por Sebastián Martínez.' },
   { fecha:'2026-07-15', version:'2026-07-15-saldos-y-turno6', titulo:'Cuadro de Saldos: se corrige el total · Turno 6 · Actas · se retira la calculadora',
     afecta:'Cuadro de Saldos · Seguimientos por Turno · Control de Ingreso · Novedades/Actas',
     detalle:'(1) CUADRO DE SALDOS — CORRECCIÓN IMPORTANTE: al digitar el Master con separador de miles (por ejemplo 16.080.000), el Saldo total lo tomaba como 16,08. El sistema interpretaba el punto como separador decimal. Ahora los valores se leen en formato colombiano —el punto separa miles y la coma los decimales— y el total suma correctamente. Se recomienda revisar los saldos registrados con anterioridad, ya que pudieron quedar con el total errado. (2) El Cuadro de Saldos muestra ahora la columna Descripción de extras y totaliza Master, Extras y Saldo al final del listado. (3) Se agregó el Turno 6 (7:30 a.m. – 4:30 p.m.) para administradores, tanto en Seguimientos por Turno como en los horarios del Control de Ingreso. (4) Se retiró la calculadora de recargos del Control de Ingreso: los recargos ya se calculan automáticamente en el Cuadro de Horas Extra. (5) Actas: se afinó el reconocimiento para no marcar como acta los registros que solo la mencionan de paso ni los que la niegan (No se realiza acta). Reportado por Sebastián Martínez, Ricardo Vallejo y Nancy Medina.' },
@@ -4257,6 +4260,21 @@ function _esNovedadCK(n){
 
 // Sol Santiago: las actas (inicial, final, de ingreso, de entrega) NO son novedades y estaban
 // inundando el listado. Se identifican para poder separarlas en su propia pestaña.
+// Sol. Sebastián (14-jul-2026): "Compañía que factura" (LTM3 / 80-10) y "A cargo de
+// (razón social)" preguntaban lo mismo dos veces, y podían quedar contradictorias: la
+// confirmación decía una sociedad y el ingreso se registraba en la otra. La razón
+// social pasa a derivarse de la compañía que factura.
+window._RAZON_DE_ENTIDAD = { '80-10':'80|10 S.A.S', 'LTM3':'LTM3 S.A.S' };
+window._syncRazonSocial = function(){
+  var e = document.getElementById('res-entidad');
+  var r = document.getElementById('res-cxc-razon');
+  if(!e || !r) return;
+  var destino = window._RAZON_DE_ENTIDAD[e.value];
+  if(!destino) return;
+  var ok = [].slice.call(r.options).some(function(o){ return o.value===destino || o.text===destino; });
+  if(ok) r.value = destino;
+};
+
 // Sol. Sebastián (14-jul-2026): totalizar Master, Extras y Saldo al final del Cuadro
 // de Saldos. Se agrega una fila de totales al pie de la tabla ya renderizada.
 window._saldosTotales = function(){
@@ -5289,11 +5307,11 @@ function renderNuevaReserva() {
                corporativos igual de largos). Por eso se pregunta explícitamente en la reserva. -->
           <div class="form-group">
             <label>Compañía que factura *</label>
-            <select id="res-entidad" style="font-weight:600">
+            <select id="res-entidad" style="font-weight:600" onchange="window._syncRazonSocial()">
               <option value="80-10">80-10 Urban Living SAS — Alojamiento</option>
               <option value="LTM3">LTM3 S.A.S — Canon de arrendamiento</option>
             </select>
-            <div style="font-size:11px;color:#6B7280;margin-top:3px">Define en qué sociedad entra el ingreso. Lo determina el contrato, no cuánto dure la estadía.</div>
+            <div style="font-size:11px;color:#6B7280;margin-top:3px">Define en qué sociedad entra el ingreso y por cuál se factura. Lo determina el contrato, no cuánto dure la estadía.</div>
           </div>` : ''}
           <div class="form-group">
             <label id="res-tarifa-lbl">Tarifa por noche *</label>
@@ -5385,6 +5403,7 @@ function renderNuevaReserva() {
               <option>Airbnb</option>
               <option>Booking</option>
               <option>Expedia</option>
+              <option>Expedia VIP</option>
               <option>Mirai</option>
               <option>Hotelbeds</option>
               <option>HyperGuest</option>
@@ -5437,6 +5456,7 @@ function renderNuevaReserva() {
           <div class="form-group">
             <label>A cargo de (razón social)</label>
             <select id="res-cxc-razon">${(((EB&&EB().nombre)||'').indexOf('8010')===-1)?'<option>8i8 Operadora SAS</option>':'<option>80|10 S.A.S</option><option>LTM3 S.A.S</option>'}</select>
+            ${(((EB&&EB().nombre)||'').indexOf('8010')>-1)?'<div id="res-razon-nota" style="font-size:11px;color:#6B7280;margin-top:3px">La toma de <strong>Compañía que factura</strong>: se factura por la misma sociedad que registra el ingreso.</div>':''}
           </div>
         </div>
         <div class="form-group">
@@ -5482,6 +5502,7 @@ function renderNuevaReserva() {
   document.getElementById('res-checkout').value = manana;
   // Firmante por defecto = usuario logueado
   document.getElementById('res-firmante').value = currentProfile?.nombre || '';
+  try{ window._syncRazonSocial(); }catch(e){}   // la razón social sigue a la compañía que factura
   calcReserva();
 }
 
@@ -12969,6 +12990,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
             <option ${canal==='Particular'?'selected':''}>Particular</option>
             <option ${canal==='Booking'?'selected':''}>Booking</option>
             <option ${canal==='Expedia'?'selected':''}>Expedia</option>
+            <option ${canal==='Expedia VIP'?'selected':''}>Expedia VIP</option>
             <option ${canal==='Airbnb'?'selected':''}>Airbnb</option>
             <option ${canal==='Mirai'?'selected':''}>Mirai</option>
             <option ${canal==='Hotelbeds'?'selected':''}>Hotelbeds</option>
