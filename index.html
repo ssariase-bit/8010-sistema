@@ -357,14 +357,18 @@ textarea{resize:vertical;min-height:80px}
       <label>PAX en casa (total)</label>
       <input type="number" id="m-pax" placeholder="0" min="0" readonly style="background:#eef1f5;font-weight:700">
     </div>
+    <!-- Sol. Sebastián (14-jul-2026): "Otros acompañantes" (texto libre) pedía lo mismo que
+         "Otros huéspedes en el apto" —los nombres— y solo este último se reflejaba
+         individualmente, por lo que tocaba escribirlos dos veces. Se retira el texto libre;
+         los nombres van en un solo campo y aquí quedan únicamente los acompañantes por rol. -->
     <div class="form-group">
-      <label>Acompañantes</label>
+      <label>Acompañantes de servicio</label>
       <div style="display:flex;gap:16px;flex-wrap:wrap;padding-top:4px">
         <label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="m-acomp" value="Empleada"> Empleada</label>
         <label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="m-acomp" value="Enfermera"> Enfermera</label>
         <label style="font-weight:400;display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="m-acomp" value="Niñera"> Niñera</label>
       </div>
-      <input type="text" id="m-acomp-libre" placeholder="Otros acompañantes (ej: esposa e hijo, pareja…)" style="margin-top:6px;width:100%">
+      <div style="font-size:11px;color:var(--gris-t);margin-top:5px">Los nombres de quienes se hospedan (esposa, hijos, pareja…) se registran arriba, en <strong>Otros huéspedes en el apto</strong>: allí quedan uno por uno en la Ocupación y en el Rack.</div>
     </div>
 
     <!-- Toggle Apto Completo — solo para aptos con variante A -->
@@ -472,10 +476,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-15-expedia-vip-y-razon';
+const APP_VERSION = '2026-07-15-lote-sebastian';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-15', version:'2026-07-15-lote-sebastian', titulo:'Entrega de Efectivos vuelve al menú · Check List Carpetas · Paquetes · Acompañantes',
+    afecta:'Entrega de Efectivos · Check List Carpetas · Paquetes · Rack',
+    detalle:'(1) ENTREGA DE EFECTIVOS: el módulo existía pero no figuraba en el menú, de modo que no había forma de llegar a él. Ya aparece en la sección Financiero / Admin, junto con la opción de registrar una entrega. (2) CHECK LIST CARPETAS: los documentos de la carpeta admiten ahora "No aplica" —antes obligaba a marcar "No", lo que hacía ver el apartamento como si le faltaran documentos—; al marcar "Apto vacío = Sí" pasan solos a No aplica; al elegir el apartamento se arrastran el arrendatario y la empresa desde el Rack, y si el apto no tiene huésped se marca solo como vacío; y se retiró el botón de Rótulo, que se imprime desde su propio módulo. (3) PAQUETES: se agregó el caso del paquete que el arrendatario DEJA para que lo recoja una persona externa, con el nombre y el documento de quien lo recoge; el formulario se adapta según el tipo de movimiento. Además, el paquete deja de duplicarse en Seguimientos por Turno en 8010 (se conserva en Kubik, donde se solicitó). (4) RACK: se retiró el campo "Otros acompañantes", que pedía los mismos nombres que "Otros huéspedes en el apto" y obligaba a escribirlos dos veces; los nombres van ahora en un solo campo y la sección de acompañantes queda para los de servicio (empleada, enfermera, niñera). Reportado por Sebastián Martínez.' },
   { fecha:'2026-07-15', version:'2026-07-15-expedia-vip-y-razon', titulo:'Canal Expedia VIP · la razón social ya no se pregunta dos veces',
     afecta:'Nueva Reserva · Check-in',
     detalle:'(1) Se agregó el canal "Expedia VIP" en Nueva Reserva y en el Check-in. Hasta ahora no existía, por lo que estas reservas se venían registrando como "Expedia" y el dato VIP quedaba escrito a mano en observaciones o, por error, en el campo Empresa. (2) "Compañía que factura" (80-10 / LTM3) y "A cargo de (razón social)" preguntaban lo mismo dos veces y podían quedar contradictorias: la confirmación al huésped podía decir una sociedad mientras el ingreso se registraba en la otra. La razón social ahora se deriva automáticamente de la compañía que factura, con lo cual el dato es uno solo y no puede contradecirse. Se revisaron las reservas existentes y ninguna presentaba contradicción. Reportado por Sebastián Martínez.' },
@@ -1316,6 +1323,10 @@ const MENU_COMPLETO = [
   { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
   { id: 'caja-list', icon: '💰', label: 'Caja' },
   { id: 'caja-informe', icon: '🧾', label: 'Informe de Caja' },
+  // Sol. Sebastián (14-jul-2026): el módulo de Entrega de Efectivos existía pero no
+  // figuraba en el menú, de modo que no había cómo llegar a él.
+  { id: 'entrega-efectivos', icon: '💵', label: 'Entrega de Efectivos' },
+  { id: 'entrega-efectivos-form', icon: '➕', label: 'Registrar Entrega de Efectivo' },
   { id: 'facturas-list', icon: '🧾', label: 'Facturación' },
   { section: 'Huéspedes' },
   { id: 'ocupacion', icon: '🏨', label: 'Ocupación' },
@@ -1572,13 +1583,20 @@ async function loadView(view) {
     case 'paquetes-list': await renderList('paquetes','📦 Paquetes / Encargos','paquetes-form',
       ['fecha','apto','destinatario','descripcion','transportadora','recibido_por','estado','recogido_por','documento_recoge'],
       ['Fecha','Apto','Destinatario','Descripción','Transportadora','Recibió','Estado','Recogido por','Documento']); break;
+    // Sol. Sebastián (14-jul-2026): faltaba el caso en que el arrendatario DEJA un paquete
+    // para que lo recoja una persona externa. El campo "Tipo de movimiento" distingue las
+    // dos situaciones y cambia lo que se pide en pantalla.
     case 'paquetes-form': renderGenForm('paquetes','📦 Registrar Paquete',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
+      {id:'estado',label:'Tipo de movimiento *',type:'select',default:'Recibido para el arrendatario',
+        opts:['Recibido para el arrendatario','Dejado por el arrendatario para un externo']},
       {id:'apto',label:'Apartamento',type:'text',req:true},
-      {id:'destinatario',label:'Destinatario',type:'nombre3'},
+      {id:'destinatario',label:'Destinatario / Arrendatario',type:'nombre3'},
       {id:'descripcion',label:'Descripción del paquete',type:'text',req:true},
       {id:'transportadora',label:'Transportadora / Quién lo trajo',type:'text'},
-      {id:'recibido_por',label:'Recibido por',type:'text',default:(currentProfile?.nombre||'')},
+      {id:'recogido_por',label:'Quién lo recoge (persona externa)',type:'text'},
+      {id:'documento_recoge',label:'Documento de quien lo recoge',type:'text'},
+      {id:'recibido_por',label:'Registrado por',type:'text',default:(currentProfile?.nombre||'')},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     // Recibos Magnifique
@@ -1838,11 +1856,14 @@ async function loadView(view) {
       {id:'tipo_negociacion',label:'Tipo de negociación',type:'select',opts:[''].concat((EB().facturarA||[]).filter(function(x){return x!=='Particular'&&x!=='Otra';}))},
       {id:'apto_vacio',label:'Apto vacío',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
       {id:'facturar_a',label:'Facturar a',type:'select',opts:(EB().facturarA||['Particular','Otra'])},
-      {id:'contrato_firmado',label:'Contrato firmado',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
-      {id:'registro_ingreso',label:'Registro de ingreso',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
-      {id:'copia_documentos',label:'Copia de documentos',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
-      {id:'info_reserva',label:'Info de reserva',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
-      {id:'carpeta_completa',label:'Carpeta completa',type:'select',opts:[{v:'true',l:'Sí'},{v:'false',l:'No'}]},
+      // Sol. Sebastián (14-jul-2026): si el apto está vacío, marcar "No" en todo daba a
+      // entender que el documento falta, cuando en realidad no aplica. Se agrega "No aplica",
+      // que se guarda en blanco (las columnas son booleanas y no admiten otro texto).
+      {id:'contrato_firmado',label:'Contrato firmado',type:'select',opts:[{v:'',l:'— No aplica —'},{v:'true',l:'Sí'},{v:'false',l:'No'}]},
+      {id:'registro_ingreso',label:'Registro de ingreso',type:'select',opts:[{v:'',l:'— No aplica —'},{v:'true',l:'Sí'},{v:'false',l:'No'}]},
+      {id:'copia_documentos',label:'Copia de documentos',type:'select',opts:[{v:'',l:'— No aplica —'},{v:'true',l:'Sí'},{v:'false',l:'No'}]},
+      {id:'info_reserva',label:'Info de reserva',type:'select',opts:[{v:'',l:'— No aplica —'},{v:'true',l:'Sí'},{v:'false',l:'No'}]},
+      {id:'carpeta_completa',label:'Carpeta completa',type:'select',opts:[{v:'',l:'— No aplica —'},{v:'true',l:'Sí'},{v:'false',l:'No'}]},
       {id:'otro_si_1',label:'Otro Sí 1 (descripción)',type:'text'},
       {id:'otro_si_2',label:'Otro Sí 2 (descripción)',type:'text'},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
@@ -3436,7 +3457,7 @@ async function saveApto() {
     pax_adultos: (document.getElementById('m-pax-ad') && document.getElementById('m-pax-ad').value!=='') ? Number(document.getElementById('m-pax-ad').value) : null,
     pax_menores: (document.getElementById('m-pax-me') && document.getElementById('m-pax-me').value!=='') ? Number(document.getElementById('m-pax-me').value) : null,
     pax_infantes: (document.getElementById('m-pax-in') && document.getElementById('m-pax-in').value!=='') ? Number(document.getElementById('m-pax-in').value) : null,
-    acompanantes: (function(){ var a=[]; document.querySelectorAll('.m-acomp:checked').forEach(function(c){a.push(c.value);}); var lib=(document.getElementById('m-acomp-libre')&&document.getElementById('m-acomp-libre').value.trim())||''; if(lib) lib.split(',').map(function(s){return s.trim();}).filter(Boolean).forEach(function(s){a.push(s);}); return a.length?a.join(', '):null; })(),
+    acompanantes: (function(){ var a=[]; document.querySelectorAll('.m-acomp:checked').forEach(function(c){a.push(c.value);}); return a.length?a.join(', '):null; })(),
     observaciones: document.getElementById('m-obs').value,
     iva: document.getElementById('m-iva')?.value || 'incluido',
     empresa: document.getElementById('m-empresa')?.value.trim() || null,
@@ -6240,6 +6261,56 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
       } catch(e){}
     })();
   }
+  // Sol. Sebastián (14-jul-2026): el formulario de paquetes se adapta al tipo de movimiento.
+  // Si el paquete LLEGA para el arrendatario, se pide la transportadora. Si el arrendatario
+  // lo DEJA para un externo, se pide quién lo recoge y su documento.
+  if (tabla === 'paquetes') {
+    var _pkTipo = document.getElementById('gf-estado');
+    var _pkMostrar = function(){
+      if(!_pkTipo) return;
+      var esSalida = /dejado por el arrendatario/i.test(_pkTipo.value||'');
+      var g = function(id){ var e=document.getElementById(id); return e ? (e.closest('.form-group')||e.parentNode) : null; };
+      var ver = function(id,on){ var x=g(id); if(x) x.style.display = on ? '' : 'none'; };
+      ver('gf-transportadora', !esSalida);
+      ver('gf-recogido_por', esSalida);
+      ver('gf-documento_recoge', esSalida);
+      var lbl = document.querySelector('label[for="gf-destinatario"]');
+      var av = document.getElementById('pk-aviso');
+      var cont = _pkTipo.closest('.form-group')||_pkTipo.parentNode;
+      if(esSalida){
+        if(!av && cont){ av=document.createElement('div'); av.id='pk-aviso';
+          av.style.cssText='margin-top:6px;padding:8px 10px;border-left:4px solid #B45309;background:#B4530912;border-radius:6px;font-size:12px;line-height:1.5';
+          av.innerHTML='El arrendatario deja el paquete para que lo recoja un tercero. Se debe registrar el <strong>nombre y el documento</strong> de quien lo recoge al momento de la entrega.';
+          cont.appendChild(av); }
+      } else if(av){ av.remove(); }
+    };
+    if(_pkTipo){ _pkTipo.addEventListener('change', _pkMostrar); _pkMostrar(); }
+  }
+  // Sol. Sebastián (14-jul-2026): al marcar "Apto vacío = Sí", los documentos de la
+  // carpeta pasan solos a "No aplica" (antes tocaba marcar "No" en todo, lo que hacía
+  // ver el apartamento como si le faltaran documentos).
+  if (tabla === 'check_carpetas') {
+    var _CAMPOS_NA = ['gf-contrato_firmado','gf-registro_ingreso','gf-copia_documentos','gf-info_reserva','gf-carpeta_completa'];
+    var _vacio = document.getElementById('gf-apto_vacio');
+    var _avisoNA = function(on){
+      var g = _vacio && (_vacio.closest('.form-group')||_vacio.parentNode);
+      if(!g) return;
+      var a = document.getElementById('cc-aviso-na');
+      if(on){
+        if(!a){ a=document.createElement('div'); a.id='cc-aviso-na';
+          a.style.cssText='margin-top:6px;padding:8px 10px;border-left:4px solid #7C3AED;background:#7C3AED12;border-radius:6px;font-size:12px;line-height:1.5';
+          a.innerHTML='El apartamento está vacío: los documentos de la carpeta quedaron en <strong>No aplica</strong>. Si alguno sí aplica, se puede cambiar.';
+          g.appendChild(a); }
+      } else if(a){ a.remove(); }
+    };
+    var _naSync = function(){
+      if(!_vacio) return;
+      var esVacio = String(_vacio.value)==='true';
+      if(esVacio){ _CAMPOS_NA.forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; }); }
+      _avisoNA(esVacio);
+    };
+    if(_vacio) _vacio.addEventListener('change', _naSync);
+  }
   // Cuadro de Saldos: Total = Master + Extras (automatico)
   if (tabla === 'saldos_aptos') {
     // Sol. Sebastián (14-jul-2026): al escribir el Master con separador de miles
@@ -6290,7 +6361,8 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
   })();
   // Sol Sebastián: al elegir el apartamento, arrastrar el arrendatario (nombre y apellidos) y la
   // empresa desde el Rack, igual que hace el informe de CKI/CKO. Evita redigitar y evita errores.
-  if (tabla === 'listado_cargos' || tabla === 'saldos_aptos') {
+  // 14-jul-2026: se extiende a Check List Carpetas, que era donde faltaba.
+  if (tabla === 'listado_cargos' || tabla === 'saldos_aptos' || tabla === 'check_carpetas') {
     var _apE = document.getElementById('gf-apto');
     if (_apE) _apE.addEventListener('change', async function(){
       var ap = String(_apE.value||'').trim(); if(!ap) return;
@@ -6301,7 +6373,21 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
           .eq('edificio',EDIFICIO_ACTIVO).eq('apto',ap).eq('fecha',TODAY)
           .in('estado',['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje']).limit(1);
         var r = (q.data||[])[0];
-        if(!r){ showToast('El apto '+ap+' no tiene huésped hoy en el Rack','info'); return; }
+        if(!r){
+          // En Check List Carpetas, un apto sin huésped hoy significa que está vacío:
+          // se marca solo y los documentos pasan a "No aplica".
+          if(tabla==='check_carpetas'){
+            var _v=document.getElementById('gf-apto_vacio');
+            if(_v){ _v.value='true'; try{ _v.dispatchEvent(new Event('change')); }catch(e){} }
+            showToast('El apto '+ap+' no tiene huésped hoy: se marcó como vacío','info');
+            return;
+          }
+          showToast('El apto '+ap+' no tiene huésped hoy en el Rack','info'); return;
+        }
+        if(tabla==='check_carpetas'){
+          var _v2=document.getElementById('gf-apto_vacio');
+          if(_v2 && String(_v2.value)==='true'){ _v2.value='false'; try{ _v2.dispatchEvent(new Event('change')); }catch(e){} }
+        }
         var p = (typeof window._nombrePartes==='function') ? window._nombrePartes(r)
               : {nombre:r.nombre||'', apellido1:r.apellido1||'', apellido2:r.apellido2||''};
         var setv=function(id,v){ var e=document.getElementById(id); if(e) e.value=(v==null?'':v); };
@@ -6405,8 +6491,10 @@ async function submitGenForm(tabla, ids, reqs) {
       _comEnviarCorreo(_mkt, 'Nueva cotización / lead — '+_f('nombre')+' · '+_edi, _html).then(r=>{ if(r&&r.error) showToast('Lead guardado, pero el aviso a Mercadeo falló','error'); else showToast('📧 Aviso enviado a Mercadeo','success'); });
     } catch(_e){ console.error('aviso mercadeo:', _e); }
   }
-  // Sol Juanita (Kubik): al REGISTRAR un paquete/encargo, dejarlo también en Seguimientos por turno
-  if (tabla==='paquetes' && !_wasEdit) {
+  // Sol Juanita (Kubik): al REGISTRAR un paquete/encargo, dejarlo también en Seguimientos por turno.
+  // Sol Sebastián (8010, 14-jul-2026): en 8010 esto duplica la información, porque el paquete ya
+  // queda en su propio módulo. Se conserva únicamente en Kubik, que es donde se solicitó.
+  if (tabla==='paquetes' && !_wasEdit && EDIFICIO_ACTIVO==='kubik') {
     try {
       var _pkgDet = '📦 Paquete/encargo: '+(obj.descripcion||'')+(obj.destinatario?(' — para '+obj.destinatario):'')+(obj.transportadora?(' ('+obj.transportadora+')'):'');
       await sb.from('seguimientos_turno').insert({ fecha: obj.fecha||TODAY, categoria:'Otro', apto: obj.apto||null, detalle: _pkgDet, responsable: obj.recibido_por||null, estado:'Pendiente', edificio: EDIFICIO_ACTIVO });
@@ -9206,6 +9294,11 @@ async function renderList(tabla, titulo, formView, cols, headers) {
   const tableRows = rows.map(r => {
     const celdas = cols.map(c => {
       let v = r[c];
+      // Sol. Sebastián (14-jul-2026): en Check List Carpetas, el campo en blanco significa
+      // "No aplica" —por ejemplo cuando el apartamento está vacío— y no un dato faltante.
+      if (tabla === 'check_carpetas' && (v === null || v === undefined || v === '') &&
+          ['contrato_firmado','registro_ingreso','copia_documentos','info_reserva','carpeta_completa'].includes(String(c).toLowerCase()))
+        return `<td><span style="color:#7C3AED;font-size:11px;font-weight:600">No aplica</span></td>`;
       if (v === null || v === undefined) return '<td>-</td>';
       if (typeof v === 'boolean') return `<td><span style="color:${v?'#1E7E34':'#B00020'};font-weight:600">${v ? 'Sí' : 'No'}</span></td>`;
       const _cl = String(c).toLowerCase();
@@ -9229,7 +9322,9 @@ async function renderList(tabla, titulo, formView, cols, headers) {
       var _btnLote = (_puedeAprob && r.consecutivo) ? `<button onclick="aprobarLoteReembolso('${String(r.consecutivo).replace(/'/g,"\\'")}')" class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#15803d;color:#fff;border:none">✅✍️ Aprobar lote</button> ` : '';
       acciones = `<td style="white-space:nowrap">${_btnLote}${_btnAprob}<button onclick="previewReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px">👁 Ver</button> <button onclick="correoReembolso('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">✉️ Correo</button> ${_btnsEdit(tabla, r.id)}</td>`;
     } else if (tabla === 'check_carpetas') {
-      acciones = `<td style="white-space:nowrap"><button onclick="imprimirRotuloCarpeta('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">🖨 Rótulo</button> ${_btnsEdit(tabla, r.id)}</td>`;
+      // Sol. Sebastián (14-jul-2026): se retira el botón de Rótulo de este listado.
+      // Los rótulos se imprimen desde su propio módulo (Rótulos de Carpetas).
+      acciones = `<td style="white-space:nowrap">${_btnsEdit(tabla, r.id)}</td>`;
     } else {
       acciones = `<td style="white-space:nowrap">${_btnsEdit(tabla, r.id)}</td>`;
     }
