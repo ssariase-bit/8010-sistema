@@ -472,10 +472,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-14-dashboard-1000-filas';
+const APP_VERSION = '2026-07-15-agenda-eventos-seguridad';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-15', version:'2026-07-15-agenda-eventos-seguridad', titulo:'Agenda de Eventos: impresión de la semana para Seguridad',
+    afecta:'Eventos · Agenda de Eventos',
+    detalle:'Se mejoró la impresión de la agenda semanal de eventos, que se entrega en copia a Seguridad. El documento sale de lunes a domingo, con una tabla por día y las columnas Horario, PAX, Ubicación y Observaciones, en el mismo formato que se maneja semana a semana. Se agregó el conteo de eventos de la semana, el encabezado con el rango de fechas en texto, la constancia de impresión (fecha, hora y responsable) y el bloque de firmas de entrega y recibido por parte de Seguridad. Los eventos en estado Cancelado ya no se imprimen, para no informar a Seguridad de eventos anulados. Los eventos de cada día quedan ordenados por hora. El botón de impresión estaba disponible pero pasaba desapercibido: ahora aparece resaltado en la barra superior de la Agenda.' },
   { fecha:'2026-07-14', version:'2026-07-14-dashboard-1000-filas', titulo:'El Dashboard mostraba menos venta de la real',
     afecta:'Dashboard · Informe Ejecutivo · Formato Huéspedes',
     detalle:'El Dashboard consultaba el rack del mes sin paginar. La base de datos entrega un máximo de 1.000 filas por consulta y un mes de 8010 supera ese tope (31 días x 33 unidades = 1.023 filas), por lo que las filas sobrantes se descartaban en silencio y la venta del mes quedaba subestimada. En julio de 2026 el Dashboard mostraba $393.246.136 cuando la venta real de alojamiento era $403.534.442: se perdían 14 filas por $10.288.306. El mismo defecto estaba en el Informe Ejecutivo y en el Formato de Huéspedes. Toda lectura del rack por rango de fechas quedó paginada. Los módulos de Ingresos del Mes, Resumen de Ventas e Indicadores no estaban afectados: ya paginaban correctamente.' },
@@ -10993,28 +10996,65 @@ async function renderEventosAgenda(){
         <button class="btn btn-outline btn-sm" onclick="window._evAgendaLunes='${_evShiftWeek(lunes,7)}';renderEventosAgenda()">▶</button>
         <button onclick="loadView('eventos-rack')" class="btn btn-outline btn-sm">🗓️ Rack</button>
         <button onclick="loadView('eventos')" class="btn btn-outline btn-sm">📋 Lista</button>
-        <button onclick="imprimirAgendaEventos()" class="btn btn-outline btn-sm" style="color:#1D3461;border-color:#1D3461">🖨️ Imprimir (copia seguridad)</button>
+        <button onclick="imprimirAgendaEventos()" class="btn btn-sm" style="background:#1D3461;color:#fff;border:none;font-weight:700" title="Imprime la agenda de lunes a domingo con horario, PAX, ubicación y observaciones. Incluye espacio para la firma de recibido de Seguridad.">🖨️ Imprimir agenda (copia Seguridad)</button>
         <a href="${_agWa}" target="_blank" class="btn btn-outline btn-sm" style="color:#0E8A4F;border-color:#0E8A4F;text-decoration:none">💬 Enviar WhatsApp</a>
         <button onclick="enviarAgendaEventos(this)" class="btn btn-outline btn-sm" style="color:#1D3461;border-color:#1D3461">📧 Enviar correo</button>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">${cards}</div>`;
 }
+// Agenda semanal de eventos para entregar a Seguridad (Sol. Recepción, 15-jul-2026).
+// Formato de lunes a domingo, una tabla por día: Horario · PAX · Ubicación · Observaciones.
+// Los eventos cancelados NO se imprimen: Seguridad no debe quedar informada de un evento anulado.
 window.imprimirAgendaEventos = function(){
   var all=window._evAgAll||[]; var mondayISO=window._evAgLunes; if(!mondayISO){ renderEventosAgenda(); return; }
   var d=new Date(mondayISO+'T00:00:00');
   var dias=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+  var MES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var fmt=function(iso){ var p=String(iso).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  var largo=function(iso){ var p=String(iso).slice(0,10).split('-'); return parseInt(p[2],10)+' de '+MES[parseInt(p[1],10)-1]; };
+  var vivos = all.filter(function(e){ return String(e.estado||'').toLowerCase() !== 'cancelado'; });
+  var nEv = 0;
   var body='';
   for(var i=0;i<7;i++){ var dd=new Date(d); dd.setDate(dd.getDate()+i); var fstr=dd.toISOString().slice(0,10);
-    var evs=all.filter(function(e){ var fi=e.fecha_inicio, ff=e.fecha_fin||e.fecha_inicio; return fstr>=fi && fstr<=ff; });
-    var rows = evs.length ? evs.map(function(e){ return '<tr><td>'+esc(e.empresa||'')+'</td><td>'+esc(e.hora||'')+'</td><td style="text-align:center">'+esc(e.pax||'')+'</td><td>'+esc(e.sala||'')+'</td><td>'+esc(e.observaciones||'')+'</td></tr>'; }).join('') : '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>';
-    body += '<table class="ag"><thead><tr><th class="dia">'+dias[i]+' '+fmt(fstr)+'</th><th style="width:120px">Horario</th><th style="width:50px">PAX</th><th style="width:110px">Ubicación</th><th>Observaciones</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    var evs=vivos.filter(function(e){ var fi=e.fecha_inicio, ff=e.fecha_fin||e.fecha_inicio; return fstr>=fi && fstr<=ff; });
+    evs.sort(function(a,b){ return String(a.hora||'').localeCompare(String(b.hora||'')); });
+    nEv += evs.length;
+    var rows = evs.length ? evs.map(function(e){
+        return '<tr><td><b>'+esc(e.empresa||'(evento)')+'</b></td><td>'+esc(e.hora||'')+'</td><td style="text-align:center">'+esc(e.pax||'')+'</td><td>'+esc(e.sala||'')+'</td><td>'+esc(e.observaciones||'')+'</td></tr>';
+      }).join('')
+      : '<tr><td colspan="5" style="color:#888;font-style:italic">Sin eventos programados</td></tr>';
+    body += '<table class="ag"><thead><tr><th class="dia">'+dias[i]+' '+fmt(fstr)+'</th><th style="width:130px">Horario</th><th style="width:45px">PAX</th><th style="width:115px">Ubicación</th><th>Observaciones</th></tr></thead><tbody>'+rows+'</tbody></table>';
   }
   var nb=(typeof EB==='function'&&EB().nombre)||'8010 Urban Living';
-  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Agenda de Eventos</title><style>body{font-family:Arial,sans-serif;color:#111;padding:20px}h1{font-size:18px;margin:0 0 2px}h2{font-size:13px;color:#555;font-weight:400;margin:0 0 16px}table.ag{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:12px}table.ag th,table.ag td{border:1px solid #333;padding:5px 8px;text-align:left;vertical-align:top}table.ag th{background:#f0f0f0}table.ag th.dia{background:#1D3461;color:#fff;width:220px}.noprint{margin-top:12px}@media print{.noprint{display:none}}</style></head><body><h1>Agenda de Eventos — '+esc(nb)+'</h1><h2>Semana '+fmt(window._evAgLunes)+' al '+fmt(window._evAgDom)+'</h2>'+body+'<div class="noprint"><button onclick="window.print()" style="padding:8px 16px;font-size:14px;cursor:pointer">🖨️ Imprimir</button></div></body></html>';
-  var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes para imprimir','error'); return; }
+  var hoy=new Date();
+  var impreso=hoy.getDate()+'/'+(hoy.getMonth()+1)+'/'+hoy.getFullYear()+' '+String(hoy.getHours()).padStart(2,'0')+':'+String(hoy.getMinutes()).padStart(2,'0');
+  var quien=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'';
+  var recibo='<table class="rec"><tr>'
+    +'<td style="width:50%">Entregado por: '+esc(quien)+'<br><br>Firma: ______________________</td>'
+    +'<td>Recibido por (Seguridad): ______________________<br><br>Fecha y hora: __________  Firma: __________</td>'
+    +'</tr></table>';
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Agenda de Eventos</title><style>'
+    +'body{font-family:Arial,sans-serif;color:#111;padding:20px}'
+    +'h1{font-size:18px;margin:0 0 2px;color:#1D3461}'
+    +'h2{font-size:13px;color:#555;font-weight:400;margin:0 0 4px}'
+    +'.meta{font-size:10px;color:#888;margin-bottom:14px}'
+    +'table.ag{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:12px;page-break-inside:avoid}'
+    +'table.ag th,table.ag td{border:1px solid #333;padding:5px 8px;text-align:left;vertical-align:top}'
+    +'table.ag th{background:#f0f0f0}'
+    +'table.ag th.dia{background:#1D3461;color:#fff;width:215px}'
+    +'table.rec{width:100%;border-collapse:collapse;margin-top:18px;font-size:11px;page-break-inside:avoid}'
+    +'table.rec td{border:1px solid #999;padding:10px 8px;vertical-align:top}'
+    +'.noprint{margin-top:12px}@media print{.noprint{display:none}}'
+    +'</style></head><body>'
+    +'<h1>Agenda de Eventos — '+esc(nb)+'</h1>'
+    +'<h2>Semana del lunes '+largo(window._evAgLunes)+' al domingo '+largo(window._evAgDom)+' de '+String(window._evAgDom).slice(0,4)+' · '+nEv+' evento'+(nEv===1?'':'s')+'</h2>'
+    +'<div class="meta">Copia para Seguridad · Impreso el '+impreso+(quien?(' por '+esc(quien)):'')+'</div>'
+    +body+recibo
+    +'<div class="noprint"><button onclick="window.print()" style="padding:8px 16px;font-size:14px;cursor:pointer">🖨️ Imprimir</button></div>'
+    +'</body></html>';
+  var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permita las ventanas emergentes para imprimir','error'); return; }
   w.document.open(); w.document.write(html); w.document.close(); setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 500);
 };
 // ─── Rack de Salones (grilla sala x dia del mes, alimentado de eventos) ───
