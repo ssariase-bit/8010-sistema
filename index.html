@@ -476,10 +476,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-16-registro-huesped';
+const APP_VERSION = '2026-07-17-solicitudes-julio';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-17', version:'2026-07-17-solicitudes-julio', titulo:'Acompañantes que ya no desaparecen · Entidad en Informe de Reembolsos · Columna Magnifique en Cargos · Ajustes en Entrega de Efectivo',
+    afecta:'Rack · Estado de Huéspedes / Ocupación · Informe de Reembolsos · Listado de Cargos · Entrega de Efectivos · 8010',
+    detalle:'Solicitado por Sebastián Martínez. (1) ACOMPAÑANTES: al guardar los acompañantes (tanto la lista con estado como el texto libre) desde el Rack, el dato ahora se propaga a TODAS las filas del rack de esa misma estadía (mismo apto, entre checkin y checkout), no solo al día que se estaba viendo. Antes se guardaba en un solo día y al mirar otro día parecía que los acompañantes desaparecían (reportado varias veces). Si la fila no tiene checkin/checkout se conserva el comportamiento anterior (solo ese día). Con esto los acompañantes vuelven a verse en Estado de Huéspedes / Ocupación. (2) INFORME DE REEMBOLSOS: se agregó un selector de Entidad para el encabezado; en 8010 se puede elegir entre 80|10 Ochenta Diez Urban Living SAS y LTM3 S.A.S, y la razón social + NIT del informe salen según lo elegido (los datos se toman de la tabla fiscal del sistema, no se digitan a mano). En Kubik queda 8i8. (3) LISTADO DE CARGOS: se agregó la columna "Magnifique ($)" en el formulario y en el listado, análoga a las demás columnas de cargo; no se incluye en el total automático para no alterar lo que se cobra. (4) ENTREGA DE EFECTIVO: en "Administrador que entrega" el campo ahora inicia en blanco ("— Seleccionar —") en lugar de quedar preseleccionado en una persona; se conservan Adriana Bernal y Jonathan Zambrano como opciones. El campo de destino/cajilla no es obligatorio para registrar la entrega.' },
   { fecha:'2026-07-16', version:'2026-07-16-registro-huesped', titulo:'Registro de huésped (corta y larga estadía) desde la reserva',
     afecta:'Reservas · Recepción · 8010',
     detalle:'Solicitado por Sebastián Martínez. En la lista de Reservas, cada reserva tiene un botón 🪪 que genera el formato de registro de hospedaje precargado con los datos de la reserva —y del preregistro y del registro anterior del mismo huésped, si existen—, listo para completar en recepción, imprimir/firmar y guardar en el sistema. El formato se elige por la duración: hasta 29 noches usa el REGISTRO DE CORTA ESTADÍA (contrato 80|10 con sus cláusulas legales completas, réplica exacta del formato actual); 30 noches o más usa el REGISTRO DE LARGA ESTADÍA (tarjeta LTM3 FO-SE-25 con garantía y responsabilidad, bilingüe), y se puede cambiar de formato con un clic. Los campos que la reserva no trae (documento, nacionalidad, dirección, fecha de nacimiento) quedan en blanco para diligenciar; los acompañantes no se autollenan. El registro guardado queda como Cárdex para reutilizarlo cuando el huésped regrese. NOTA: para GUARDAR los registros hace falta crear la tabla "registros_hospedaje" en la base; mientras tanto el formato se imprime y avisa. Los textos legales son idénticos a los formatos vigentes.' },
@@ -1641,8 +1644,8 @@ async function loadView(view) {
 
     // Listado General de Cargos
     case 'cargos-list': await renderList('listado_cargos','📋 Listado General de Cargos','cargos-form',
-      ['fecha','semana','apto','arrendatario','num_comanda','transporte','lavanderia','minibar','varios','salas','iva','total','observaciones'],
-      ['Fecha','Semana','Apto','Arrendatario','Comanda','Transporte','Lavandería','Minibar','Varios','Salas','IVA','Total','Comentarios']); break;
+      ['fecha','semana','apto','arrendatario','num_comanda','transporte','lavanderia','minibar','varios','salas','magnifique','iva','total','observaciones'],
+      ['Fecha','Semana','Apto','Arrendatario','Comanda','Transporte','Lavandería','Minibar','Varios','Salas','Magnifique','IVA','Total','Comentarios']); break;
     case 'cargos-form': renderGenForm('listado_cargos','📋 Registrar Cargo',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'semana',label:'Semana (ej: 25 MAY - 31 MAY)',type:'text'},
@@ -1657,6 +1660,7 @@ async function loadView(view) {
       {id:'utilidad_minibar',label:'Utilidad minibar ($)',type:'number',default:'0'},
       {id:'varios',label:'Varios ($)',type:'number',default:'0'},
       {id:'salas',label:'Salas ($)',type:'number',default:'0'},
+      {id:'magnifique',label:'Magnifique ($)',type:'number',default:'0'},
       {id:'iva',label:'IVA',type:'select',opts:['19%','8%','5%']},
       {id:'total',label:'Total ($) — automático (base + IVA)',type:'number',default:'0'},
       {id:'observaciones',label:'Observaciones',type:'text'},
@@ -1672,7 +1676,7 @@ async function loadView(view) {
            {id:'arrendatario',label:'Arrendatario (a)',type:'nombre3',default:''},
            {id:'fv',label:'FV',type:'text',default:''},
            {id:'valor',label:'Valor ($)',type:'money',default:''},
-           {id:'administrador_entrega',label:'Administrador que entrega',type:'select',opts:['Adriana Bernal','Jonathan Zambrano']},
+           {id:'administrador_entrega',label:'Administrador que entrega',type:'select',opts:[{v:'',l:'— Seleccionar —'},'Adriana Bernal','Jonathan Zambrano']},
            {id:'fecha_entrega',label:'Fecha de entrega',type:'date',default:''}]
         : []),
       ...(EDIFICIO_ACTIVO==='kubik'
@@ -10397,6 +10401,12 @@ async function renderReembolsoInforme(){
   var hoy = TODAY; var ini = (new Date()).toISOString().slice(0,8)+'01';
   var ests = ['Pendiente','Aprobado','Reembolso recibido completo','Reembolso recibido parcial','Rechazado','Pagado'];
   var opE = '<option value="__todos">Todos los estados</option>' + ests.map(function(e){ return '<option value="'+e+'">'+e+'</option>'; }).join('');
+  // Sol. Sebastián: elegir la entidad que encabeza el informe (razón social + NIT). En 8010 hay dos
+  // entidades (80|10 y LTM3); en Kubik solo 8i8. Los datos salen de la tabla FISCAL (no se digitan NITs a mano).
+  var _riEsKbk = (typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO==='kubik');
+  var _riEntOpts = _riEsKbk
+    ? '<option value="8i8">8i8 Operadora SAS</option>'
+    : '<option value="80-10">80|10 Ochenta Diez Urban Living SAS</option><option value="LTM3">LTM3 S.A.S</option>';
   document.getElementById('main-content').innerHTML =
     '<div class="page-title">🧾 Informe de Reembolsos</div>'+
     '<div class="card" style="max-width:920px">'+
@@ -10413,7 +10423,7 @@ async function renderReembolsoInforme(){
       '<div class="form-row col3">'+
         '<div class="form-group"><label>Dinero en efectivo ($)</label><input type="number" id="ri-efectivo" value="0"></div>'+
         '<div class="form-group"><label>Reembolso pendiente ($)</label><input type="number" id="ri-pend" value="0"></div>'+
-        '<div class="form-group"></div>'+
+        '<div class="form-group"><label>Entidad (encabezado)</label><select id="ri-entidad">'+_riEntOpts+'</select></div>'+
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-success" onclick="generarInformeReembolso()">📄 Generar informe</button><button class="btn btn-outline" id="ri-print-btn" onclick="imprimirInformeReembolso()" style="display:none">🖨️ Imprimir / PDF</button></div>'+
     '</div>'+
@@ -10444,8 +10454,10 @@ async function generarInformeReembolso(keepVB){
   var total = rows.reduce(function(s,r){ return s+(Number(r.valor)||0); },0);
   var recibosProv = total;
   var diferencia = fondoFijo - recibosProv;
-  var nomEd=(typeof EB==='function' && EB().nombre)||'';
-  var _nit=(typeof EB==='function' && EB().nit)||'';
+  var _riEnt = (document.getElementById('ri-entidad')||{}).value||'';
+  var _riFisc = (typeof FISCAL!=='undefined' && FISCAL[_riEnt]) ? FISCAL[_riEnt] : null;
+  var nomEd=_riFisc ? _riFisc.razon : ((typeof EB==='function' && EB().nombre)||'');
+  var _nit=_riFisc ? _riFisc.nit : ((typeof EB==='function' && EB().nit)||'');
   var estLbl=(estado==='__todos')?'Todos los estados':estado;
   var tr = rows.map(function(r,i){ return '<tr><td>'+(i+1)+'</td><td>'+fmtF(r.fecha)+'</td><td>'+esc(r.tipo||'')+'</td><td>'+esc(r.numero||'')+'</td><td style="text-align:left">'+esc(r.descripcion||'')+'</td><td style="text-align:right;white-space:nowrap">'+fmt(r.valor)+'</td><td>'+esc(r.centro_costos||r.area||'')+'</td></tr>'; }).join('') || '<tr><td colspan="7" style="text-align:center;color:#999;padding:18px">Sin reembolsos en ese rango</td></tr>';
   var encabezado = '<div style="text-align:center;margin-bottom:4px"><h2 style="color:#1D3461;margin:0">'+esc(nomEd)+' — Reembolso Caja Menor</h2><div style="color:#6b7280;font-size:12px">NIT '+esc(_nit)+'</div></div>'+
@@ -11706,13 +11718,13 @@ async function renderEstadoHuespedes() {
   window._ehRows = rows;
 }
 function guardarAcompanantesRes(id,val){ sb.from('reservas').update({acompanantes:String(val||'').trim()}).eq('id',id).then(r=>{ if(r.error) showToast('Error: '+r.error.message,'error'); else showToast('✓ Acompañantes guardado','success'); }); }
-function guardarAcompanantesRack(id,val){ sb.from('rack').update({acompanantes:String(val||'').trim()}).eq('id',id).then(r=>{ if(r.error) showToast('Error: '+r.error.message,'error'); else showToast('✓ Acompañantes guardado','success'); }); }
+function guardarAcompanantesRack(id,val){ var _v=String(val||'').trim(); sb.from('rack').select('apto,checkin,checkout').eq('id',id).single().then(function(res){ var row=res&&res.data; var q; if(row&&row.apto&&row.checkin&&row.checkout){ q=sb.from('rack').update({acompanantes:_v}).eq('apto',row.apto).gte('fecha',row.checkin).lte('fecha',row.checkout); } else { q=sb.from('rack').update({acompanantes:_v}).eq('id',id); } q.then(function(r){ if(r.error) showToast('Error: '+r.error.message,'error'); else showToast('✓ Acompañantes guardado','success'); }); }); }
 
 window._paxMap=window._paxMap||{};
 function _paxEstadoOpts(sel){ return ['IN','Sale de viaje','CKO'].map(function(o){return '<option'+(o===sel?' selected':'')+'>'+o+'</option>';}).join(''); }
 function _paxHTML(id){ var arr=window._paxMap[id]||[]; var esc=function(s){return String(s==null?'':s).replace(/"/g,'&quot;');}; var rows=arr.map(function(p,i){ return '<div style="display:flex;gap:3px;margin-top:2px;align-items:center"><input value="'+esc(p.n)+'" placeholder="Nombre" onchange="paxSet(\''+id+'\','+i+',\'n\',this.value)" style="width:90px;padding:2px;font-size:10px"><select onchange="paxSet(\''+id+'\','+i+',\'e\',this.value)" style="font-size:10px;padding:2px">'+_paxEstadoOpts(p.e||'IN')+'</select><span onclick="paxDel(\''+id+'\','+i+')" title="Quitar" style="cursor:pointer;color:#b91c1c;font-weight:700;padding:0 3px">x</span></div>'; }).join(''); return rows+'<div style="margin-top:2px"><span onclick="paxAdd(\''+id+'\')" style="cursor:pointer;color:#1d4ed8;font-size:10px;font-weight:700">+ acompanante</span></div>'; }
 function _paxRefresh(id){ var el=document.getElementById('pax-'+id); if(el) el.innerHTML=_paxHTML(id); }
-function _paxSave(id){ sb.from('rack').update({acomp_pax: window._paxMap[id]||[]}).eq('id',id).then(function(r){ if(r.error && typeof showToast==='function') showToast('Error acompanantes: '+r.error.message,'error'); }); }
+function _paxSave(id){ var _v=window._paxMap[id]||[]; sb.from('rack').select('apto,checkin,checkout').eq('id',id).single().then(function(res){ var row=res&&res.data; var q; if(row&&row.apto&&row.checkin&&row.checkout){ q=sb.from('rack').update({acomp_pax:_v}).eq('apto',row.apto).gte('fecha',row.checkin).lte('fecha',row.checkout); } else { q=sb.from('rack').update({acomp_pax:_v}).eq('id',id); } q.then(function(r){ if(r.error && typeof showToast==='function') showToast('Error acompanantes: '+r.error.message,'error'); }); }); }
 function paxAdd(id){ window._paxMap[id]=window._paxMap[id]||[]; window._paxMap[id].push({n:'',e:'IN'}); _paxRefresh(id); }
 function paxDel(id,i){ if(!window._paxMap[id]) return; window._paxMap[id].splice(i,1); _paxRefresh(id); _paxSave(id); }
 function paxSet(id,i,k,v){ if(!window._paxMap[id]||!window._paxMap[id][i]) return; window._paxMap[id][i][k]=v; _paxSave(id); }
