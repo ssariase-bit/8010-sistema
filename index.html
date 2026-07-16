@@ -476,10 +476,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-15-reembolso-abierto';
+const APP_VERSION = '2026-07-16-lotes-requisiciones';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-16', version:'2026-07-16-lotes-requisiciones', titulo:'Reembolsos por lote sellado · Requisiciones que se montan día a día',
+    afecta:'Reembolsos · Requisiciones Internas · Todo el equipo',
+    detalle:'REEMBOLSOS: (1) Los recibos del día a día ya no crean reembolsos: entran a una BANDEJA, agrupados por caja, donde se acumulan. (2) Al pedir el reembolso se pulsa "📦 Sacar lote": los recibos de esa caja reciben el consecutivo siguiente y el lote queda SELLADO — no se le pueden agregar ni quitar recibos; lo que llegue después entra al siguiente lote. Desaparece el botón "Agregar recibos" sobre lotes ya generados: nada de plata nueva bajo una firma vieja (mismo principio de la OP-0001). (3) Nuevo botón "✏️ Editar datos" para corregir la empresa u observaciones del encabezado de un lote (p. ej. un nombre mal digitado) sin tocar recibos ni valores. (4) Los botones de imprimir/enviar del comprobante ya no salen en el PDF (reporte de Sebastián). REQUISICIONES INTERNAS: (5) Ahora se puede ABRIR una requisición y montarle las compras día a día —cada ítem queda con su fecha—, porque las compras no se hacen en un solo día. (6) Al terminar se pulsa "🔒 Cerrar": se genera el consolidado y queda sellada; si lleva valores, muestra Subtotal · IVA · Total y pasa a Visto Bueno de Gerencia General con firma, igual que las órdenes de pedido. Compras posteriores requieren requisición nueva. (7) Las requisiciones abiertas hace más de 30 días quedan marcadas con ⚠️. Solicitado por Gerencia General y Andrés (Compras).' },
   { fecha:'2026-07-15', version:'2026-07-15-reembolso-abierto', titulo:'Reembolsos: un reembolso con varios recibos, que se puede seguir alimentando',
     afecta:'Reembolsos · Todo el equipo',
     detalle:'Antes el listado mostraba una línea por CADA recibo, de modo que un reembolso de 11 recibos se veía como 11 reembolsos distintos y no había forma de volver a abrirlo para agregarle gastos. Ahora: (1) El listado agrupa por número de reembolso. Cada línea es UN reembolso (R-0076) con su empresa, su total, cuántos recibos tiene y su estado; se despliega con un clic para ver los recibos por dentro. Los 98 recibos que había pasan a verse como los 75 reembolsos que realmente son. (2) Nuevo botón "➕ Agregar recibos": abre un reembolso ya existente y permite seguirle añadiendo recibos a medida que se va comprando, conservando el mismo número. El formulario muestra lo ya registrado, lo que se agrega ahora y el total del reembolso. (3) El estado se calcula sobre el reembolso completo: Pendiente, Parcial (3/11) o Aprobado, para que se vea de una si quedó algún recibo sin Visto Bueno. (4) Si se agregan recibos a un reembolso ya aprobado, el sistema avisa que quedará parcial y hay que volver a dar el VB — no se aprueba plata nueva con una firma vieja. (5) Los recibos sin escanear se marcan con ⚠️. (6) Se elimina "Nuevo Reembolso" de un solo recibo: todo reembolso nace agrupado. Se quitó también el "Informe de Reembolsos" que aparecía duplicado en el menú.' },
@@ -1060,7 +1063,7 @@ const NAV_ITEMS = {
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
     { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
     { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
-    { id: 'reembolsos-lote', icon: '➕', label: 'Nuevo Reembolso' },
+    { id: 'reembolsos-lote', icon: '➕', label: 'Registrar Recibos' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
     { id: 'cargos-form', icon: '➕', label: 'Registrar Cargo' },
@@ -1173,7 +1176,7 @@ const NAV_ITEMS = {
     { id: 'saldos-list', icon: '💳', label: 'Cuadro de Saldos' },
     { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
     { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
-    { id: 'reembolsos-lote', icon: '➕', label: 'Nuevo Reembolso' },
+    { id: 'reembolsos-lote', icon: '➕', label: 'Registrar Recibos' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
     { section: 'Compras' },
@@ -1376,7 +1379,7 @@ const MENU_COMPLETO = [
   { id: 'requisiciones-list', icon: '🗂️', label: 'Requisiciones (histórico)' },
   { id: 'personal-list', icon: '👤', label: 'Personal / RRHH' },
   { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
-  { id: 'reembolsos-lote', icon: '➕', label: 'Nuevo Reembolso' },
+  { id: 'reembolsos-lote', icon: '➕', label: 'Registrar Recibos' },
   { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
   { id: 'magnifique-list', icon: '🍽️', label: EDIFICIO_ACTIVO==='kubik'?'Recibos Bagatelle':'Recibos Magnifique' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
@@ -7769,8 +7772,11 @@ window._CMP = {
     tabla:'compras', pre:'RQ', tit:'📝 Requisiciones Internas', sing:'Requisición Interna',
     form:'compras-requis-form', lista:'compras-requis', conValores:false,
     flujo:['Pendiente','En compra','Entregada'],
-    ayuda:'Suministros que el personal necesita (papelería, insumos). Se solicita a Compras. No lleva valores: los precios los maneja Compras.'
-  }
+    ayuda:'Suministros que el personal necesita (papelería, insumos). Se puede ABRIR y montarle las compras día a día: al cerrarla se genera el consolidado (Subtotal · IVA · Total si lleva valores) y queda sellada. También se puede enviar de una vez con la lista completa.'
+  },
+  // Solo para pintar filas de ítems CON valores en la vista "agregar compras día a día"
+  // de una requisición abierta. No es un tipo de documento.
+  req_items: { conValores:true }
 };
 // El id del usuario en sesión.
 // OJO: currentUser se declara con `let`, y las variables `let` del ámbito global
@@ -7789,7 +7795,7 @@ window._cmpEsc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').
 window._cmpMoney = function(n){ return '$ '+Number(n||0).toLocaleString('es-CO'); };
 
 window._cmpBadge = function(e){
-  var m = {'Pendiente VB':'#B45309','Pendiente':'#B45309','Aprobada':'#1D4ED8','En compra':'#1D4ED8',
+  var m = {'Abierta':'#15803D','Pendiente VB':'#B45309','Pendiente':'#B45309','Aprobada':'#1D4ED8','En compra':'#1D4ED8',
            'Comprada':'#6D28D9','Recibida':'#166534','Entregada':'#166534','Rechazada':'#9A4A40'};
   var c = m[e]||'#64748B';
   return '<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;color:'+c+';background:'+c+'1A;border:1px solid '+c+'40;white-space:nowrap">'+window._cmpEsc(e||'—')+'</span>';
@@ -7841,7 +7847,8 @@ window._cmpLista = async function(tipo){
               +'<td>'+window._cmpEsc(x.solicitante||'—')+'</td>'
               +(C.conValores?('<td>'+window._cmpEsc(x.proveedor||'—')+'</td>'):'')
               +'<td style="max-width:280px;font-size:11px;line-height:1.5">'
-                + its.map(function(i){ return '· '+window._cmpEsc(i.desc)+' <strong>×'+window._cmpEsc(i.cant)+'</strong>'+(i.und?(' '+window._cmpEsc(i.und)):''); }).join('<br>')
+                + its.map(function(i){ return '· '+(i.fec?('<span style="color:#999">'+String(i.fec).slice(5)+'</span> '):'')+window._cmpEsc(i.desc)+' <strong>×'+window._cmpEsc(i.cant)+'</strong>'+(i.und?(' '+window._cmpEsc(i.und)):'')+(Number(i.subtotal)>0?(' — '+window._cmpMoney(i.subtotal)):''); }).join('<br>')
+                +((!C.conValores && Number(x.total)>0)?('<div style="margin-top:4px;font-weight:800">Total: '+window._cmpMoney(x.total)+(Number(x.iva)>0?(' <span style="font-weight:400;color:var(--gris-t)">(sub '+window._cmpMoney(x.subtotal)+' + IVA '+window._cmpMoney(x.iva)+')</span>'):'')+'</div>'):'')
               +'</td>'
               +(C.conValores?('<td style="text-align:right;font-weight:700;white-space:nowrap">'+window._cmpMoney((Number(x.subtotal||x.total)||0)+(Number(x.iva)||0))
                   +(Number(x.iva)>0 ? ('<div style="font-size:10px;font-weight:400;color:var(--gris-t)">sub '+window._cmpMoney(x.subtotal||x.total)+' + IVA '+window._cmpMoney(x.iva)+'</div>')
@@ -7850,7 +7857,9 @@ window._cmpLista = async function(tipo){
                 +'<td>'+((Array.isArray(x.adjuntos)&&x.adjuntos.length)
                     ? '<button class="btn btn-outline btn-xs" onclick="window._cmpVerAdj(\''+x.id+'\')" title="Ver cotización">📎 '+x.adjuntos.length+'</button>'
                     : '<span style="color:#9A4A40;font-size:11px" title="Sin cotización adjunta">⚠️ sin cot.</span>')+'</td>'):'')
-              +'<td>'+window._cmpBadge(x.estado)+'</td>'
+              +'<td>'+window._cmpBadge(x.estado)
+                +((x.estado==='Abierta' && x.fecha && ((new Date(TODAY+'T12:00:00') - new Date(String(x.fecha).slice(0,10)+'T12:00:00'))/86400000)>30)?'<div style="font-size:10px;color:#B45309;margin-top:3px">⚠️ abierta hace más de 30 días</div>':'')
+              +'</td>'
               +'<td style="font-size:10px;color:var(--gris-t);line-height:1.6;min-width:150px">'+(traza.join('<br>')||'—')+'</td>'
               +'<td><div style="display:inline-grid;gap:4px;width:132px">'
                 + window._cmpAcciones(tipo, x, esGG)
@@ -7877,6 +7886,20 @@ window._cmpAcciones = function(tipo, x, esGG){
     if(x.estado==='Aprobada')  b.push('<button class="btn btn-outline btn-xs" onclick="window._cmpAvanzar(\''+id+'\',\'Comprada\')">🛒 Comprada</button>');
     if(x.estado==='Comprada')  b.push('<button class="btn btn-success btn-xs" onclick="window._cmpAvanzar(\''+id+'\',\'Recibida\')">📦 Recibida</button>');
   } else {
+    // Requisición ABIERTA (Sol. Santiago/Andrés 16-jul-2026): se le montan compras
+    // día a día y se cierra cuando terminan. Cerrada = sellada.
+    if(x.estado==='Abierta'){
+      b.push('<button class="btn btn-success btn-xs" onclick="window._cmpAgregarItems(\''+id+'\')">➕ Agregar ítems</button>');
+      b.push('<button class="btn btn-outline btn-xs" onclick="window._cmpCerrarReq(\''+id+'\')" title="Genera el consolidado y sella la requisición">🔒 Cerrar</button>');
+    }
+    if(x.estado==='Pendiente VB'){
+      if(esGG){
+        b.push('<button class="btn btn-success btn-xs" onclick="window._cmpVB(\''+id+'\',true)">✅ Dar VB</button>');
+        b.push('<button class="btn btn-outline btn-xs" style="color:#9A4A40;border-color:#E0C0BA" onclick="window._cmpVB(\''+id+'\',false)">✖ Rechazar</button>');
+      } else {
+        b.push('<span style="font-size:10px;color:var(--gris-t);text-align:center">Espera VB de<br>Gerencia General</span>');
+      }
+    }
     if(x.estado==='Pendiente' && window._cmpEsCompras()){
       b.push('<button class="btn btn-outline btn-xs" onclick="window._cmpAvanzar(\''+id+'\',\'En compra\')">🛒 En compra</button>');
       b.push('<button class="btn btn-outline btn-xs" style="color:#9A4A40;border-color:#E0C0BA" onclick="window._cmpVB(\''+id+'\',false)">✖ Rechazar</button>');
@@ -7940,8 +7963,9 @@ window._cmpForm = function(tipo){
       +'</table></div>'
       +(C.conValores?'<div style="font-size:11px;color:var(--gris-t);margin-top:6px">El IVA se toma <strong>de la cotización del proveedor</strong>, no se calcula solo: los proveedores mezclan productos gravados y exentos. En la cotización de referencia el IVA fue del 17,4%, no del 19%.</div>':'')
     +'</div>'
-    +'<div style="display:flex;gap:8px">'
-      +'<button class="btn btn-success" onclick="window._cmpGuardar(\''+tipo+'\',this)">💾 Enviar '+C.sing.toLowerCase()+'</button>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +(tipo==='requisicion' ? '<button class="btn" style="background:#15803D;color:#fff" onclick="window._cmpGuardar(\''+tipo+'\',this,\'Abierta\')" title="Queda abierta y las compras se le van montando día a día. Se cierra cuando terminen.">🟢 Abrir requisición (se monta día a día)</button>' : '')
+      +'<button class="btn btn-success" onclick="window._cmpGuardar(\''+tipo+'\',this)">💾 Enviar '+C.sing.toLowerCase()+(tipo==='requisicion'?' (lista completa)':'')+'</button>'
       +'<button class="btn btn-outline" onclick="loadView(\''+C.lista+'\')">Cancelar</button>'
     +'</div>';
   window._cmpTipo = tipo;
@@ -7998,19 +8022,20 @@ window._cmpFile2b64 = function(f){
   });
 };
 
-window._cmpGuardar = async function(tipo, btn){
+window._cmpGuardar = async function(tipo, btn, estadoIni){
   var C = window._CMP[tipo];
   var conV = C.conValores;
+  var abre = (estadoIni==='Abierta');   // requisición abierta: se monta día a día
   var items = [];
   document.querySelectorAll('#cmp-rows .cmp-row').forEach(function(tr){
     var d = ((tr.querySelector('.cmp-desc')||{}).value||'').trim();
     if(!d) return;
     var c = Number((tr.querySelector('.cmp-cant')||{}).value)||0;
-    var o = { desc:d, cant:c, und:((tr.querySelector('.cmp-und')||{}).value||'').trim() };
+    var o = { desc:d, cant:c, und:((tr.querySelector('.cmp-und')||{}).value||'').trim(), fec:TODAY };
     if(conV){ o.valor = window._numCO((tr.querySelector('.cmp-val')||{}).value); o.subtotal = c*o.valor; }
     items.push(o);
   });
-  if(!items.length){ showToast('Se requiere al menos un ítem con descripción','error'); return; }
+  if(!items.length && !abre){ showToast('Se requiere al menos un ítem con descripción','error'); return; }
 
   var prov = ((document.getElementById('cmp-prov')||{}).value||'').trim();
   var files = conV ? Array.from((document.getElementById('cmp-cot')||{}).files||[]) : [];
@@ -8043,14 +8068,97 @@ window._cmpGuardar = async function(tipo, btn){
     iva:      conV ? window._numCO((document.getElementById('cmp-iva')||{}).value) : 0,
     total:    conV ? (items.reduce(function(s,i){ return s+(i.subtotal||0); },0) + window._numCO((document.getElementById('cmp-iva')||{}).value)) : 0,
     adjuntos: adj,
-    estado: C.flujo[0],
+    estado: estadoIni || C.flujo[0],
     user_id: window._uid()
   };
   var r = await sb.from('compras').insert([reg]).select('id');
   btn.disabled = false; btn.innerHTML = '💾 Enviar '+C.sing.toLowerCase();
   if(r.error){ showToast('No se pudo guardar: '+r.error.message,'error'); return; }
-  showToast('✅ '+consec+' enviada'+(conV?' — pendiente de Visto Bueno de Gerencia General':' — le llega a Compras'),'success');
+  showToast(abre
+    ? ('🟢 '+consec+' abierta — desde el listado se le van montando las compras día a día con ➕ Agregar ítems')
+    : ('✅ '+consec+' enviada'+(conV?' — pendiente de Visto Bueno de Gerencia General':' — le llega a Compras')),'success');
   loadView(C.lista);
+};
+
+// ── REQUISICIÓN ABIERTA: agregar compras día a día (Sol. Santiago/Andrés 16-jul-2026) ──
+window._cmpAgregarItems = async function(id){
+  var r = await sb.from('compras').select('*').eq('id',id).single();
+  if(r.error||!r.data){ showToast('No se encontró la requisición','error'); return; }
+  var x = r.data, esc = window._cmpEsc;
+  if(x.estado!=='Abierta'){ showToast('Esta requisición ya está cerrada (sellada): las compras nuevas van en una requisición nueva','error'); return; }
+  if(!(window._cmpEsCompras() || (x.user_id && x.user_id===window._uid()))){ showToast('Solo quien la abrió, Compras o Gerencia pueden agregarle ítems','error'); return; }
+  var its = Array.isArray(x.items)?x.items:[];
+  var acum = its.reduce(function(s,i){ return s+(Number(i.subtotal)||0); },0);
+  document.getElementById('main-content').innerHTML =
+    '<div class="page-title">➕ '+esc(x.consecutivo)+' — compras del día</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px;max-width:900px">Requisición <b>abierta</b> desde el '+esc(x.fecha||'—')+' · '+esc(x.area||'')+' · '+esc(x.solicitante||'')+'. Las compras se montan día a día; al cerrarla se genera el consolidado con Subtotal · IVA · Total y queda sellada. <a href="#" onclick="loadView(\'compras-requis\');return false" style="color:#1F3864">← Volver al listado</a></div>'
+    +'<div class="card" style="max-width:900px;margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Ya registrado ('+its.length+' ítem'+(its.length===1?'':'s')+')</div>'
+    +(its.length
+      ? '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Descripción</th><th style="width:80px">Cant.</th><th style="width:90px">Unidad</th><th style="width:120px;text-align:right">Valor unit.</th><th style="width:120px;text-align:right">Subtotal</th></tr></thead><tbody>'
+        +its.map(function(i){ return '<tr style="font-size:12px"><td>'+esc(i.fec||'—')+'</td><td>'+esc(i.desc)+'</td><td>'+esc(i.cant)+'</td><td>'+esc(i.und||'')+'</td><td style="text-align:right">'+(i.valor?window._cmpMoney(i.valor):'—')+'</td><td style="text-align:right">'+(i.subtotal?window._cmpMoney(i.subtotal):'—')+'</td></tr>'; }).join('')
+        +'</tbody><tfoot><tr style="background:#f6f8fa;font-weight:800"><td colspan="5" style="text-align:right">Acumulado</td><td style="text-align:right">'+window._cmpMoney(acum)+'</td></tr></tfoot></table></div>'
+      : '<div style="color:#999;font-size:12px">Aún no tiene ítems.</div>')
+    +'</div>'
+    +'<div class="card" style="max-width:900px;margin-bottom:14px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:700;color:var(--azul)">Compras nuevas — quedan con fecha de hoy</div><button class="btn btn-outline btn-sm" onclick="window._cmpAddRow()">+ Agregar ítem</button></div>'
+      +'<div style="overflow-x:auto"><table class="tabla"><thead><tr><th style="min-width:220px">Descripción *</th><th style="width:90px">Cantidad *</th><th style="width:110px">Unidad</th><th style="width:130px">Valor unitario</th><th style="width:130px;text-align:right">Subtotal</th><th style="width:40px"></th></tr></thead><tbody id="cmp-rows"></tbody></table></div>'
+      +'<div style="font-size:11px;color:var(--gris-t);margin-top:6px">El valor unitario es opcional si aún no se conoce, pero el consolidado del cierre solo suma lo que tenga valor.</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px"><button class="btn btn-success" onclick="window._cmpGuardarItems(\''+id+'\',this)">💾 Agregar a '+esc(x.consecutivo)+'</button>'
+    +'<button class="btn btn-outline" onclick="loadView(\'compras-requis\')">Cancelar</button></div>';
+  window._cmpTipo = 'req_items';
+  window._cmpAddRow(); window._cmpAddRow();
+};
+
+window._cmpGuardarItems = async function(id, btn){
+  var r0 = await sb.from('compras').select('id,estado,items,iva,consecutivo,user_id').eq('id',id).single();
+  if(r0.error||!r0.data){ showToast('No se encontró la requisición','error'); return; }
+  var x = r0.data;
+  if(x.estado!=='Abierta'){ showToast('La requisición ya fue cerrada: lo nuevo va en una requisición nueva','error'); return; }
+  var nuevos=[];
+  document.querySelectorAll('#cmp-rows .cmp-row').forEach(function(tr){
+    var d=((tr.querySelector('.cmp-desc')||{}).value||'').trim(); if(!d) return;
+    var c=Number((tr.querySelector('.cmp-cant')||{}).value)||0;
+    var v=window._numCO((tr.querySelector('.cmp-val')||{}).value);
+    nuevos.push({ desc:d, cant:c, und:((tr.querySelector('.cmp-und')||{}).value||'').trim(), valor:v, subtotal:c*v, fec:TODAY });
+  });
+  if(!nuevos.length){ showToast('Agrega al menos un ítem con descripción','error'); return; }
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Guardando…'; }
+  var its=(Array.isArray(x.items)?x.items:[]).concat(nuevos);
+  var sub=its.reduce(function(s,i){ return s+(Number(i.subtotal)||0); },0);
+  var r=await sb.from('compras').update({ items:its, subtotal:sub, total:sub+(Number(x.iva)||0) }).eq('id',id);
+  if(btn){ btn.disabled=false; btn.innerHTML='💾 Agregar'; }
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('✅ '+nuevos.length+' ítem(s) agregados a '+x.consecutivo+' · acumulado '+window._cmpMoney(sub),'success');
+  window._cmpAgregarItems(id);
+};
+
+// ── CERRAR REQUISICIÓN: consolidado y sello (Sol. Santiago/Andrés 16-jul-2026) ──
+// Con valores → Subtotal · IVA · Total y pasa a Visto Bueno de Gerencia General.
+// Sin valores → pasa a Compras (flujo clásico). En ambos casos queda sellada.
+window._cmpCerrarReq = async function(id){
+  var r0 = await sb.from('compras').select('*').eq('id',id).single();
+  if(r0.error||!r0.data){ showToast('No se encontró la requisición','error'); return; }
+  var x = r0.data;
+  if(x.estado!=='Abierta'){ showToast('Ya está cerrada','info'); return; }
+  if(!(window._cmpEsCompras() || (x.user_id && x.user_id===window._uid()))){ showToast('Solo quien la abrió, Compras o Gerencia pueden cerrarla','error'); return; }
+  var its = Array.isArray(x.items)?x.items:[];
+  if(!its.length){ showToast('No se puede cerrar vacía: primero se le montan los ítems','error'); return; }
+  var sub = its.reduce(function(s,i){ return s+(Number(i.subtotal)||0); },0);
+  var conPlata = sub>0, iva = 0;
+  if(conPlata){
+    var iS = window.prompt('IVA del consolidado (tomado de las facturas, no calculado). 0 si no aplica:', String(x.iva||0));
+    if(iS===null) return;
+    iva = window._numCO(iS);
+  }
+  var tot = sub+iva;
+  if(!confirm('CERRAR '+x.consecutivo+' — queda SELLADA.\n\nÍtems: '+its.length
+    +(conPlata?('\n\nSubtotal: '+window._cmpMoney(sub)+'\nIVA:      '+window._cmpMoney(iva)+'\nTOTAL:    '+window._cmpMoney(tot)+'\n\nPasa a Visto Bueno de Gerencia General.'):'\n\nSin valores registrados: le llega a Compras para su gestión.')
+    +'\n\nLas compras posteriores requieren una requisición NUEVA.\n\n¿Confirmar el cierre?')) return;
+  var r = await sb.from('compras').update({ estado:(conPlata?'Pendiente VB':'Pendiente'), subtotal:sub, iva:iva, total:tot }).eq('id',id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('🔒 '+x.consecutivo+' cerrada y sellada'+(conPlata?' — pendiente de Visto Bueno de Gerencia General':' — le llega a Compras'),'success');
+  loadView('compras-requis');
 };
 
 // ── VB / RECHAZO / AVANCE ──────────────────────────────────────────────────
@@ -8086,9 +8194,9 @@ window._cmpVB = async function(id, aprueba){
     vb_por: window._cmpYo(), vb_at: new Date().toISOString(), vb_comentario: coment.trim()||null
   };
 
-  // La autorización de una ORDEN DE PEDIDO exige el código de Gerencia General.
-  // Sin código correcto no se estampa la firma y no se autoriza nada.
-  if(aprueba && esOrden && window._cmpEsGG()){
+  // La autorización de PLATA exige el código de Gerencia General: órdenes de pedido
+  // y requisiciones cerradas con valores. Sin código correcto no se estampa la firma.
+  if(aprueba && window._cmpEsGG() && (esOrden || ((Number(x.subtotal)||0)+(Number(x.iva)||0))>0)){
     var firma = await window._frmPedir(x.consecutivo+' · '+(x.proveedor||'')+' · '+window._cmpMoney(x.total));
     if(!firma) return;
     upd.firma_img = firma;
@@ -10516,8 +10624,34 @@ async function renderReembolsosList(){
     g[k].rows.push(x);
   });
   var puedeAprob=(typeof window._puedeAprobarReemb==='function') && window._puedeAprobarReemb();
+  // ── BANDEJA (Sol. Santiago/Andrés 16-jul-2026): los recibos sueltos (sin consecutivo)
+  // se acumulan aquí, agrupados por caja. "Sacar lote" les asigna el consecutivo y SELLA
+  // el lote: de ahí en adelante no se agregan ni quitan recibos; lo nuevo va al lote siguiente.
+  var ordenLotes=[], sueltos=[];
+  orden.forEach(function(k){ if(g[k].consec==null){ sueltos=sueltos.concat(g[k].rows); } else { ordenLotes.push(k); } });
+  var puedeLote=(typeof window._cmpEsCompras==='function') && window._cmpEsCompras();
+  var porCaja={};
+  sueltos.forEach(function(x){ var c=x.caja||'(sin caja)'; (porCaja[c]=porCaja[c]||[]).push(x); });
+  var bandejaHTML='';
+  if(sueltos.length){
+    bandejaHTML='<div class="card" style="margin-bottom:14px;border-left:4px solid #B45309">'
+      +'<div style="font-weight:800;color:#B45309;margin-bottom:4px">🧺 Bandeja — recibos sin lote ('+sueltos.length+')</div>'
+      +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Aquí se acumulan los recibos del día a día. Al pulsar <b>📦 Sacar lote</b> se les asigna el consecutivo y el lote queda <b>sellado</b>: los recibos que lleguen después entran al siguiente lote.</div>'
+      +Object.keys(porCaja).map(function(c){
+        var rs=porCaja[c]; var tot=rs.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
+        return '<div style="border:1px solid #f0e2cc;border-radius:8px;padding:10px;margin-bottom:8px;background:#FFFBEB">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">'
+          +'<div><b>Caja '+esc(c)+'</b> · '+rs.length+' recibo'+(rs.length>1?'s':'')+' · <b>'+fmt(tot)+'</b></div>'
+          +(puedeLote?('<button onclick="_sacarLote(\''+String(c).replace(/'/g,'').replace(/"/g,'')+'\')" class="btn btn-sm" style="background:#B45309;color:#fff;border:none;padding:4px 12px;font-size:12px">📦 Sacar lote</button>'):'')
+          +'</div>'
+          +'<table style="width:100%;border-collapse:collapse;font-size:12px"><tbody>'
+          +rs.map(function(x,i){ return '<tr><td style="padding:3px 8px;color:#999">'+(i+1)+'</td><td style="padding:3px 8px">'+esc(fF(x.fecha_factura||x.fecha))+'</td><td style="padding:3px 8px">'+esc(x.recibo_no||'—')+'</td><td style="padding:3px 8px">'+esc(x.descripcion||'')+'</td><td style="padding:3px 8px;text-align:right;white-space:nowrap">'+fmt(x.valor)+'</td><td style="padding:3px 8px;text-align:center">'+(x.adjunto?'<a href="'+esc(x.adjunto)+'" target="_blank" style="color:#1d4ed8;text-decoration:none">📎</a>':'<span style="color:#c00" title="Sin recibo escaneado">⚠️</span>')+'</td><td style="padding:3px 8px;text-align:right;white-space:nowrap">'+(typeof _btnsEdit==='function'?_btnsEdit('reembolsos',x.id):'')+'</td></tr>'; }).join('')
+          +'</tbody></table></div>';
+      }).join('')
+    +'</div>';
+  }
   var totGral=0, nRec=0, nPend=0;
-  var html=orden.map(function(k){
+  var html=ordenLotes.map(function(k){
     var G=g[k], rows=G.rows, h=rows[0];
     var total=rows.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
     var pend=rows.filter(function(x){ return _APROB.indexOf(x.estado)<0; }).length;
@@ -10540,7 +10674,9 @@ async function renderReembolsosList(){
     }).join('');
     var acc='';
     if(G.consec!=null){
-      acc+='<button onclick="event.stopPropagation();_loteAbrir('+G.consec+')" class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#1F3864;color:#fff;border:none" title="Añadir más recibos a este mismo reembolso">➕ Agregar recibos</button> ';
+      // Lote sellado: no se agregan recibos (Sol. Santiago 16-jul-2026). Solo se pueden
+      // corregir los DATOS del encabezado (empresa mal digitada, etc.), nunca los valores.
+      if(puedeLote) acc+='<button onclick="event.stopPropagation();_loteEditarDatos('+G.consec+')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px" title="Corregir empresa u observaciones del encabezado. Los recibos y valores no se tocan.">✏️ Editar datos</button> ';
       if(puedeAprob && pend) acc+='<button onclick="event.stopPropagation();aprobarLoteReembolso(\''+G.consec+'\')" class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#15803d;color:#fff;border:none">✅✍️ Aprobar</button> ';
       acc+='<button onclick="event.stopPropagation();comprobanteLote('+G.consec+')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px">👁 Ver</button> ';
       acc+='<button onclick="event.stopPropagation();correoLote('+G.consec+')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">✉️</button>';
@@ -10563,12 +10699,13 @@ async function renderReembolsosList(){
   }).join('');
   document.getElementById('main-content').innerHTML=
     '<div class="page-title">💸 Reembolsos</div>'
-    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Cada línea es UN reembolso con todos sus recibos adentro. Haz clic para abrirlo, o pulsa <b>➕ Agregar recibos</b> para seguir sumando gastos al mismo reembolso.</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Los recibos se registran en la <b>bandeja</b> y se acumulan hasta que se saca el lote. Cada lote queda <b>sellado</b> con su consecutivo: lo que llegue después entra al siguiente. Cada línea de la lista es un lote con todos sus recibos adentro.</div>'
+    +bandejaHTML
     +'<div class="card"><div class="card-header" style="flex-wrap:wrap;gap:8px">'
-    +'<div class="card-title">'+orden.length+' reembolsos <span style="font-weight:400;color:#888;font-size:12px">· '+nRec+' recibos · '+nPend+' con pendientes</span> <span style="margin-left:14px;color:var(--verde);font-weight:700">'+fmt(totGral)+'</span></div>'
+    +'<div class="card-title">'+ordenLotes.length+' lotes <span style="font-weight:400;color:#888;font-size:12px">· '+nRec+' recibos · '+nPend+' con pendientes</span> <span style="margin-left:14px;color:var(--verde);font-weight:700">'+fmt(totGral)+'</span></div>'
     +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
     +'<input type="text" onkeyup="_reembBuscar(this)" placeholder="🔎 Buscar empresa, recibo, descripción…" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">'
-    +'<button class="btn btn-sm" style="background:#1A5C2E;color:#fff" onclick="_loteAbrir(null)">➕ Nuevo reembolso</button>'
+    +'<button class="btn btn-sm" style="background:#1A5C2E;color:#fff" onclick="_loteAbrir(null)">➕ Registrar recibos</button>'
     +'</div></div>'
     +'<div style="overflow-x:auto"><table class="tabla" id="reemb-tabla"><thead><tr><th></th><th>Reembolso</th><th>Fecha</th><th>Empresa</th><th>Área</th><th style="text-align:center">Recibos</th><th style="text-align:right">Total</th><th style="text-align:center">Estado</th><th></th></tr></thead>'
     +(html||'<tbody><tr><td colspan="9" style="text-align:center;color:#999;padding:20px">Sin reembolsos</td></tr></tbody>')
@@ -10581,8 +10718,62 @@ window._reembBuscar=function(inp){
     tb.style.display = (!q || tb.textContent.toLowerCase().indexOf(q)>-1) ? '' : 'none';
   });
 };
-// Abre un reembolso existente para seguir añadiéndole recibos (o uno nuevo si consec=null)
+// Abre el registro de recibos en bandeja (consec siempre null desde el 16-jul-2026)
 window._loteAbrir=function(consec){ renderReembolsoLote(consec); };
+
+// ── SACAR LOTE (Sol. Santiago/Andrés 16-jul-2026) ─────────────────────────
+// Toma TODOS los recibos sueltos de una caja, les asigna el consecutivo siguiente
+// y sella el lote. Después de esto no se agregan ni quitan recibos: lo nuevo va
+// al próximo lote. Mismo principio de la OP-0001: nada de plata nueva bajo una firma vieja.
+window._sacarLote=async function(caja){
+  if(!(typeof window._cmpEsCompras==='function' && window._cmpEsCompras())){ showToast('Sacar el lote requiere rol de compras, administración o gerencia','error'); return; }
+  var esSinCaja=(!caja || caja==='(sin caja)');
+  var q=sb.from('reembolsos').select('*').is('consecutivo',null);
+  q=esSinCaja ? q.is('caja',null) : q.eq('caja',caja);
+  var r=await q;
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  var rows=r.data||[];
+  if(!rows.length){ showToast('No hay recibos sueltos en esa caja','info'); return; }
+  var tot=rows.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
+  var sinAdj=rows.filter(function(x){ return !x.adjunto; }).length;
+  if(!confirm('SACAR LOTE — Caja '+(esSinCaja?'(sin caja)':caja)
+    +'\n\nRecibos: '+rows.length
+    +'\nTotal: $ '+Math.round(tot).toLocaleString('es-CO')
+    +(sinAdj?('\n\n⚠️ '+sinAdj+' recibo(s) SIN escaneo adjunto.'):'')
+    +'\n\nEl lote queda SELLADO: no se le podrán agregar ni quitar recibos.\nLos recibos nuevos entrarán al siguiente lote.\n\n¿Confirmar?')) return;
+  // consecutivo siguiente: solo entre lotes ya numerados (los null de la bandeja no cuentan)
+  var mx=await sb.from('reembolsos').select('consecutivo').eq('edificio',EDIFICIO_ACTIVO).not('consecutivo','is',null).order('consecutivo',{ascending:false}).limit(1);
+  if(mx.error){ showToast('Error: '+mx.error.message,'error'); return; }
+  var consec=((mx.data&&mx.data[0]&&Number(mx.data[0].consecutivo))||0)+1;
+  var u=sb.from('reembolsos').update({ consecutivo:consec }).is('consecutivo',null);
+  u=esSinCaja ? u.is('caja',null) : u.eq('caja',caja);
+  var upd=await u;
+  if(upd.error){ showToast('Error al sellar el lote: '+upd.error.message,'error'); return; }
+  // los gastos de caja que estaban "En lote" sin consecutivo quedan amarrados a este lote
+  if(!esSinCaja){ try{ await sb.from('caja').update({ lote_consec:consec }).eq('caja',caja).eq('estado_legal','En lote').is('lote_consec',null); }catch(e){} }
+  showToast('📦 Lote R-'+String(consec).padStart(4,'0')+' generado y sellado · '+rows.length+' recibo(s) · $ '+Math.round(tot).toLocaleString('es-CO'),'success');
+  window._REEMB_EXP['c'+consec]=true;
+  comprobanteLote(consec);
+};
+
+// ── EDITAR DATOS DEL ENCABEZADO (Sol. Santiago 16-jul-2026) ────────────────
+// El sello del lote aplica a los recibos y valores, no a un nombre mal digitado.
+// Corrige empresa/observaciones en TODAS las filas del consecutivo. Nunca toca valores.
+window._loteEditarDatos=async function(consec){
+  if(!(typeof window._cmpEsCompras==='function' && window._cmpEsCompras())){ showToast('Editar datos requiere rol de compras, administración o gerencia','error'); return; }
+  var r=await sb.from('reembolsos').select('*').eq('consecutivo',consec).order('created_at').limit(1);
+  if(r.error||!(r.data&&r.data.length)){ showToast('No se encontró el lote','error'); return; }
+  var h=r.data[0], ref='R-'+String(consec).padStart(4,'0');
+  var emp=window.prompt('Empresa / Proveedor del lote '+ref+':', h.empresa||'');
+  if(emp===null) return; emp=emp.trim();
+  if(!emp){ showToast('La empresa no puede quedar vacía','error'); return; }
+  var obs=window.prompt('Observaciones (opcional):', h.observaciones||'');
+  if(obs===null) return;
+  var upd=await sb.from('reembolsos').update({ empresa:emp, observaciones:(obs.trim()||null) }).eq('consecutivo',consec);
+  if(upd.error){ showToast('Error: '+upd.error.message,'error'); return; }
+  showToast('✏️ Datos de '+ref+' actualizados ("'+emp+'"). Los recibos y valores no se tocaron.','success');
+  renderReembolsosList();
+};
 
 async function renderReembolsoLote(_consec){
   var q=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'';
@@ -10611,10 +10802,10 @@ async function renderReembolsoLote(_consec){
     +(_cerrado?'<div style="margin-top:8px;font-size:12px;color:#92400E;background:#FEF3C7;padding:8px 10px;border-radius:6px">⚠️ Este reembolso ya fue aprobado en su totalidad. Si agregas recibos, entrarán como <b>Pendiente</b> y el reembolso quedará parcial: habrá que volver a dar el Visto Bueno.</div>':'')
     +'</div>';
   document.getElementById('main-content').innerHTML=
-    '<div class="page-title">💸 '+(_abierto?('Reembolso '+_ref+' — agregar recibos'):'Nuevo Reembolso')+'</div>'
+    '<div class="page-title">💸 '+(_abierto?('Reembolso '+_ref+' — agregar recibos'):'Registrar recibos — bandeja')+'</div>'
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">'+(_abierto
       ? 'Se están añadiendo recibos al reembolso <b>'+_ref+'</b>, que ya tiene '+_prev.length+' recibo(s) por '+_fmt(_yaTotal)+'. El número no cambia. <a href="#" onclick="loadView(\'reembolsos-list\');return false" style="color:#1F3864">← Volver al listado</a>'
-      : 'Un reembolso agrupa TODOS los recibos de una misma compra o periodo bajo un solo número. Se puede guardar con los recibos que haya hoy y seguir añadiendo después desde el listado.')+'</div>'
+      : 'Los recibos se registran aquí y quedan en la <b>bandeja</b>, acumulándose día a día por caja. Cuando se pide el reembolso, se pulsa <b>📦 Sacar lote</b> en el listado: ahí se asigna el consecutivo y el lote queda sellado.')+'</div>'
     +_prevHTML
     +'<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Datos del reembolso</div>'
     +'<div class="form-row col3">'
@@ -10633,7 +10824,7 @@ async function renderReembolsoLote(_consec){
     +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px"><div style="font-weight:700;color:var(--azul)">'+(_abierto?'Recibos nuevos a agregar':'Recibos')+'</div><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" style="border-color:#1A5C2E;color:#1A5C2E" onclick="_loteCargarPendientes()">⬇️ Cargar gastos pendientes de la caja</button><button class="btn btn-outline btn-sm" onclick="_loteAddRow()">+ Añadir recibo</button></div></div>'
     +'<div style="overflow-x:auto"><table class="tabla" id="lt-tabla"><thead><tr><th>Fecha recibo</th><th>No. Recibo</th><th>Descripción</th><th style="text-align:right">Valor ($)</th><th>📎 Recibo escaneado</th><th></th></tr></thead><tbody id="lt-rows"></tbody>'
     +'<tfoot>'+(_abierto?'<tr style="color:#666"><td colspan="3" style="text-align:right">Ya registrado en '+_ref+'</td><td style="text-align:right">'+_fmt(_yaTotal)+'</td><td></td><td></td></tr><tr style="color:#666"><td colspan="3" style="text-align:right">Se agrega ahora</td><td style="text-align:right" id="lt-total">$ 0</td><td></td><td></td></tr><tr style="background:var(--azul-c);font-weight:800"><td colspan="3" style="text-align:right">TOTAL DEL REEMBOLSO</td><td style="text-align:right" id="lt-granTotal">'+_fmt(_yaTotal)+'</td><td></td><td></td></tr>':'<tr style="background:var(--azul-c);font-weight:800"><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right" id="lt-total">$ 0</td><td></td><td></td></tr>')+'</tfoot></table></div></div>'
-    +'<div style="display:flex;gap:8px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="_loteGuardar(this)">💾 '+(_abierto?('Agregar al reembolso '+_ref):'Guardar reembolso')+'</button>'
+    +'<div style="display:flex;gap:8px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="_loteGuardar(this)">💾 '+(_abierto?('Agregar al reembolso '+_ref):'Guardar en bandeja')+'</button>'
     +(_abierto?'<button class="btn btn-outline" onclick="loadView(\'reembolsos-list\')">Cancelar</button>':'')+'</div>';
   window._loteYaTotal=_yaTotal;
   if(_abierto){
@@ -10703,13 +10894,9 @@ async function _loteGuardar(btn){
   var _reabre = (window._loteConsec!=null);
   if(!recibos.length){ showToast('Añade al menos un recibo con valor','error'); if(btn){ btn.disabled=false; btn.textContent=_reabre?('💾 Agregar al reembolso R-'+String(window._loteConsec).padStart(4,'0')):'💾 Guardar reembolso'; } return; }
   if(btn) btn.textContent='Guardando…';
-  // consecutivo: si se está reabriendo un reembolso existente, se conserva el suyo
-  var consec;
-  if(_reabre){ consec=window._loteConsec; }
-  else {
-    var mx=await sb.from('reembolsos').select('consecutivo').eq('edificio',EDIFICIO_ACTIVO).order('consecutivo',{ascending:false}).limit(1);
-    consec=((mx.data&&mx.data[0]&&Number(mx.data[0].consecutivo))||0)+1;
-  }
+  // Bandeja (16-jul-2026): los recibos nuevos entran SIN consecutivo. El número se
+  // asigna únicamente al SACAR EL LOTE (_sacarLote), y en ese momento el lote se sella.
+  var consec = _reabre ? window._loteConsec : null;
   var base={ empresa:empresa, tipo:document.getElementById('lt-tipo').value, numero:document.getElementById('lt-numero').value.trim()||null, area:document.getElementById('lt-area').value, caja:document.getElementById('lt-caja').value, fecha:document.getElementById('lt-fecha').value||TODAY, entregado_por:document.getElementById('lt-entregado').value.trim()||null, aprobado_por:document.getElementById('lt-aprobado').value.trim()||null, observaciones:document.getElementById('lt-obs').value.trim()||null, estado:'Pendiente', consecutivo:consec, edificio:EDIFICIO_ACTIVO, user_id:currentUser.id };
   var rows=recibos.map(function(r){ return Object.assign({}, base, { fecha_factura:r.fecha_factura, recibo_no:r.recibo_no, descripcion:r.descripcion, valor:r.valor, adjunto:r.adjunto }); });
   var resp=await sb.from('reembolsos').insert(rows);
@@ -10725,13 +10912,14 @@ async function _loteGuardar(btn){
     try{ await sb.from('caja').update({ estado_legal:'En lote', lote_consec:consec }).in('id', window._loteCajaIds); }catch(e){}
     window._loteCajaIds=[];
   }
-  var _ref='R-'+String(consec).padStart(4,'0');
-  showToast(_reabre
-    ? ('✅ '+rows.length+' recibo(s) agregados a '+_ref)
-    : ('✅ Reembolso '+_ref+' creado con '+rows.length+' recibo(s)'),'success');
   window._loteConsec=null; window._loteYaTotal=0;
-  if(_reabre){ window._REEMB_EXP['c'+consec]=true; if(typeof loadView==='function') loadView('reembolsos-list'); }
-  else comprobanteLote(consec);
+  if(_reabre){
+    showToast('✅ '+rows.length+' recibo(s) agregados a R-'+String(consec).padStart(4,'0'),'success');
+    window._REEMB_EXP['c'+consec]=true; if(typeof loadView==='function') loadView('reembolsos-list');
+  } else {
+    showToast('🧺 '+rows.length+' recibo(s) registrados en la bandeja. El lote se saca desde el listado cuando se pida el reembolso.','success');
+    if(typeof loadView==='function') loadView('reembolsos-list');
+  }
 }
 function _loteComprobanteHTML(consec, rows){
   var eb=(typeof EB==='function'&&EB())||{}; var nb=eb.nombre||'';
@@ -10754,8 +10942,9 @@ async function comprobanteLote(consec){
   var rows=res.data||[]; if(!rows.length){ showToast('No se encontró el reembolso','error'); return; }
   var dest=(typeof _REEMB_DEST!=='undefined'&&(_REEMB_DEST[EDIFICIO_ACTIVO]||_REEMB_DEST['8010']))||{to:[],cc:[]};
   var comp=_loteComprobanteHTML(consec, rows);
-  var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reembolso '+consec+'</title></head><body style="background:#f4f5f7;margin:0;padding:20px">'
-    +'<div style="max-width:680px;margin:0 auto 12px;display:flex;gap:8px;justify-content:flex-end">'
+  // Sol. Sebastián (15-jul-2026): los botones no deben salir en el PDF impreso.
+  var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reembolso '+consec+'</title><style>@media print{.no-print{display:none !important}}</style></head><body style="background:#f4f5f7;margin:0;padding:20px">'
+    +'<div class="no-print" style="max-width:680px;margin:0 auto 12px;display:flex;gap:8px;justify-content:flex-end">'
     +'<button onclick="window.print()" style="background:#1F3864;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:700">🖨️ Imprimir / PDF</button>'
     +'<button onclick="window.opener&&window.opener.correoLote&&window.opener.correoLote('+consec+');" style="background:#1A5C2E;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:700">📧 Enviar correo</button></div>'
     +comp+'</body></html>';
