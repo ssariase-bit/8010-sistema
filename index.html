@@ -476,10 +476,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-16-lotes-requisiciones';
+const APP_VERSION = '2026-07-16-registro-huesped';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-16', version:'2026-07-16-registro-huesped', titulo:'Registro de huésped (corta y larga estadía) desde la reserva',
+    afecta:'Reservas · Recepción · 8010',
+    detalle:'Solicitado por Sebastián Martínez. En la lista de Reservas, cada reserva tiene un botón 🪪 que genera el formato de registro de hospedaje precargado con los datos de la reserva —y del preregistro y del registro anterior del mismo huésped, si existen—, listo para completar en recepción, imprimir/firmar y guardar en el sistema. El formato se elige por la duración: hasta 29 noches usa el REGISTRO DE CORTA ESTADÍA (contrato 80|10 con sus cláusulas legales completas, réplica exacta del formato actual); 30 noches o más usa el REGISTRO DE LARGA ESTADÍA (tarjeta LTM3 FO-SE-25 con garantía y responsabilidad, bilingüe), y se puede cambiar de formato con un clic. Los campos que la reserva no trae (documento, nacionalidad, dirección, fecha de nacimiento) quedan en blanco para diligenciar; los acompañantes no se autollenan. El registro guardado queda como Cárdex para reutilizarlo cuando el huésped regrese. NOTA: para GUARDAR los registros hace falta crear la tabla "registros_hospedaje" en la base; mientras tanto el formato se imprime y avisa. Los textos legales son idénticos a los formatos vigentes.' },
   { fecha:'2026-07-16', version:'2026-07-16-lotes-requisiciones', titulo:'Reembolsos por lote sellado · Requisiciones que se montan día a día',
     afecta:'Reembolsos · Requisiciones Internas · Todo el equipo',
     detalle:'REEMBOLSOS: (1) Los recibos del día a día ya no crean reembolsos: entran a una BANDEJA, agrupados por caja, donde se acumulan. (2) Al pedir el reembolso se pulsa "📦 Sacar lote": los recibos de esa caja reciben el consecutivo siguiente y el lote queda SELLADO — no se le pueden agregar ni quitar recibos; lo que llegue después entra al siguiente lote. Desaparece el botón "Agregar recibos" sobre lotes ya generados: nada de plata nueva bajo una firma vieja (mismo principio de la OP-0001). (3) Nuevo botón "✏️ Editar datos" para corregir la empresa u observaciones del encabezado de un lote (p. ej. un nombre mal digitado) sin tocar recibos ni valores. (4) Los botones de imprimir/enviar del comprobante ya no salen en el PDF (reporte de Sebastián). REQUISICIONES INTERNAS: (5) Ahora se puede ABRIR una requisición y montarle las compras día a día —cada ítem queda con su fecha—, porque las compras no se hacen en un solo día. (6) Al terminar se pulsa "🔒 Cerrar": se genera el consolidado y queda sellada; si lleva valores, muestra Subtotal · IVA · Total y pasa a Visto Bueno de Gerencia General con firma, igual que las órdenes de pedido. Compras posteriores requieren requisición nueva. (7) Las requisiciones abiertas hace más de 30 días quedan marcadas con ⚠️. Solicitado por Gerencia General y Andrés (Compras).' },
@@ -7562,7 +7565,7 @@ window.renderReservas = async function(filtro){
     else { var _ocup=_rk && _OCU[_rk.estado]; var _hn=_rk?window._nombreCompleto(_rk):''; var _match=_ocup && window._rvNameMatch(_hn, r.nombre);
       if(_match){ _enRack='<span style="color:#1A5C2E;font-weight:700" title="Coincide con el rack">✓</span>'; }
       else { _enRack='<span style="color:#C0392B;font-weight:700" title="No coincide con el rack de hoy'+(_hn?(' (rack: '+_hn+')'):' (apto libre)')+'">✗</span>'; _rowStyle=' style="background:#FDF3F2"'; } }
-    return '<tr'+_rowStyle+'><td style="white-space:nowrap"><strong style="cursor:pointer;color:#1D3461;text-decoration:underline" title="Ver detalle de la reserva" onclick="verDetalleReserva(\''+r.id+'\')">'+window._rvEsc(r.numero||r.num_reserva||'-')+'</strong></td><td style="white-space:nowrap;font-size:12px">'+(r.num_reserva?window._rvEsc(r.num_reserva):'<span style="color:#bbb">—</span>')+'</td><td style="white-space:nowrap;font-size:11px;color:#6B7280">'+window._rvFmtD(r.created_at)+'</td><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td>'+(r.empresa?window._rvEsc(r.empresa):'<span style="color:#bbb">—</span>')+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">'+_tnStr+'</td><td style="white-space:nowrap">'+_tmStr+'</td><td style="white-space:nowrap;font-weight:600">'+_ttStr+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="text-align:center">'+_enRack+'</td><td style="min-width:150px">'+window._revGerCell('reservas', r)+'</td><td style="white-space:nowrap"><span title="Ver detalle" style="cursor:pointer;font-size:14px" onclick="verDetalleReserva(\''+r.id+'\')">👁️</span> <span title="Hacer Check-In (CKI)" style="cursor:pointer;font-size:13px" onclick="ckiDesdeReserva(\''+r.id+'\')">🟢</span> <span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
+    return '<tr'+_rowStyle+'><td style="white-space:nowrap"><strong style="cursor:pointer;color:#1D3461;text-decoration:underline" title="Ver detalle de la reserva" onclick="verDetalleReserva(\''+r.id+'\')">'+window._rvEsc(r.numero||r.num_reserva||'-')+'</strong></td><td style="white-space:nowrap;font-size:12px">'+(r.num_reserva?window._rvEsc(r.num_reserva):'<span style="color:#bbb">—</span>')+'</td><td style="white-space:nowrap;font-size:11px;color:#6B7280">'+window._rvFmtD(r.created_at)+'</td><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td>'+(r.empresa?window._rvEsc(r.empresa):'<span style="color:#bbb">—</span>')+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">'+_tnStr+'</td><td style="white-space:nowrap">'+_tmStr+'</td><td style="white-space:nowrap;font-weight:600">'+_ttStr+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="text-align:center">'+_enRack+'</td><td style="min-width:150px">'+window._revGerCell('reservas', r)+'</td><td style="white-space:nowrap"><span title="Ver detalle" style="cursor:pointer;font-size:14px" onclick="verDetalleReserva(\''+r.id+'\')">👁️</span> <span title="Hacer Check-In (CKI)" style="cursor:pointer;font-size:13px" onclick="ckiDesdeReserva(\''+r.id+'\')">🟢</span> <span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Registro de huésped (corta/larga estadía)" style="cursor:pointer" onclick="_regHuesped(\''+r.id+'\')">🪪</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
   };
   var body=rows.map(window._rvRowHTML).join('');
   document.getElementById('main-content').innerHTML=
@@ -7577,6 +7580,208 @@ window.rvFiltrarCreadas=function(fecha){
   var filt = fecha ? rows.filter(function(r){ return String(r.created_at||'').slice(0,10)===fecha; }) : rows;
   var tb=document.getElementById('rv-tbody'); if(tb) tb.innerHTML=filt.map(window._rvRowHTML).join('')||'<tr><td colspan="16" style="text-align:center;color:#999;padding:14px">Sin reservas creadas en esa fecha.</td></tr>';
   var c=document.getElementById('rv-count'); if(c) c.textContent=filt.length+' reservas'+(fecha?(' · creadas el '+fecha):'');
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REGISTRO DE HUÉSPED (Sol. Sebastián 13/16-jul-2026) ─ corta estadía (80|10)
+// y larga estadía (LTM3). Se genera desde la reserva, precargando lo que hay;
+// recepción completa lo faltante, imprime/firma y queda guardado en el SO.
+// Formatos replicados 1:1 de "REGISTRO CORTAS ESTADÍAS SAS.docx" y "REGISTRO LTM3.pptx".
+// ═══════════════════════════════════════════════════════════════════════════
+window._REG_LOGO = "";
+window._REG_CLAUSULAS = "PRIMERA. - Objeto: Por medio del presente Contrato, EL OPERADOR INMOBILIARIO entrega al HUESPED la tenencia y uso, a t\u00edtulo de hospedaje, de la Unidad Privada/Apartamento n\u00famero 902 que hace parte del Inmueble, y que se encuentra sometido al R\u00e9gimen de Propiedad Horizontal en los t\u00e9rminos de la Ley 675 de 001. SEGUNDA. - Canon dE Hospedaje Y FORMA DE PAGO: El precio o canon de hospedaje diario durante la vigencia del presente Contrato ser\u00e1 de: 180 USD + IVA (CIENTO OCHENTA DOLARES MAS IVA), Por lo tanto, EL HUESPED reconocer\u00e1 y pagar\u00e1 a EL OPERADOR INMOBILIARIO el valor total resultante de multiplicar el n\u00famero de d\u00edas que se hospede en el Apartamento por la tarifa diaria establecida anteriormente2.1. El pago del canon por el hospedaje del Apartamento se realizar\u00e1 en los t\u00e9rminos indicados en el presente Contrato y depender\u00e1 del n\u00famero de d\u00edas de hospedaje que sean contratados por EL HUESPED. De conformidad con lo anterior, si el t\u00e9rmino de duraci\u00f3n del hospedaje no supera los siete (7) d\u00edas calendario, EL HUESPED deber\u00e1 pagar la totalidad del canon de hospedaje a la celebraci\u00f3n del presente contrato. Por el contrario, si el t\u00e9rmino de duraci\u00f3n del hospedaje supera los siete (7) d\u00edas calendario, el canon por el alojamiento se cancelar\u00e1 cada semana, de manera anticipada, iniciando con el pago de la primera de las semanas de estad\u00eda, contada a partir de la celebraci\u00f3n del presente Contrato. 2.2. En cualquiera de los dos (2) eventos mencionados anteriormente, EL HUESPED deber\u00e1 realizar el pago por el hospedaje contratado en efectivo, cheque, tarjeta d\u00e9bito o cr\u00e9dito, consignaci\u00f3n o transferencia a la siguiente cuenta bancaria PAR\u00c1GRAFO: En aquellos eventos donde EL HUESPED sea un residente en el exterior el servicio de hospedaje estar\u00e1 exento del impuesto sobre las ventas, por tanto, s\u00f3lo se le cobrar\u00e1 el valor correspondiente al canon de hospedaje en los t\u00e9rminos indicados anteriormente. Para efectos de lo anterior, EL HUESPED residente en el exterior deber\u00e1 acreditar su calidad permitiendo a EL OPERADOR INMOBILIARIO tomar copia de su pasaporte y declarando su calidad de no residente mediante la suscripci\u00f3n del documento respectivo. TERCERA. - DURACI\u00d3N: El termino de duraci\u00f3n del presente Contrato ser\u00e1 de CUATRO (04) NOCHES calendario, contados a partir de la fecha de suscripci\u00f3n del mismo y hasta el d\u00eda DIECISEIS (16) del mes de JULIO del a\u00f1o dos mil veintis\u00e9is (2026). No obstante, lo anterior, en ning\u00fan caso la duraci\u00f3n del presente Contrato podr\u00e1 ser superior a treinta(30) d\u00edas calendario, continuos o discontinuos, respecto de un mismo HUESPED. CUARTA. - POL\u00cdTICA DE RESERVAS, MODIFICACI\u00d3N Y/O CANCELACI\u00d3N DEL HOSPEDAJE: Toda reserva, modificaci\u00f3n y/o cancelaci\u00f3n del hospedaje deber\u00e1 realizarse v\u00eda correo electr\u00f3nico o directamente en el Inmueble ante los representantes del OPERADOR INMOBILIARIO. Por lo tanto, no se aceptar\u00e1n reservas, modificaciones y/o cancelaciones de hospedajes por tel\u00e9fono o a trav\u00e9s de la p\u00e1gina web. 4.1. Para aquellas reservas con un hospedaje superior a cinco (5) d\u00edas calendario, EL HUESPED, con el fin de garantizar su reserva, deber\u00e1 realizar un anticipo al OPERADOR INMOBILIARIO, correspondiente al veinte por ciento (20%) del valor total de su reserva.4.2. Para aquellas reservas con un hospedaje inferior a cinco (5) d\u00edas calendario, EL HUESPED, con el fin de garantizar su reserva, deber\u00e1 realizar un anticipo al OPERADOR INMOBILIARIO, correspondiente a un (1) canon de hospedaje diario vigente a la fecha de realizaci\u00f3n de la reserva.4.3. El pago de los anticipos mencionados en los numerales 4.1. y 4.2. anteriores, seg\u00fan el caso, deber\u00e1 realizarse al menos dentro de las cuarenta y ocho (48) horas previas al arribo del HUESPED al Inmueble, en los t\u00e9rminos y condiciones se\u00f1alados en el numeral 2.2. del presente documento. De llevarse a cabo el alojamiento efectivo por parte del HUESPED, las sumas pagadas por \u00e9ste a t\u00edtulo de anticipo, ser\u00e1n abonadas al precio total pactado por el hospedaje. 4.4. Cualquier cancelaci\u00f3n y/o modificaci\u00f3n de la reserva deber\u00e1 realizarse por lo menos con veinticuatro (24) horas de anticipaci\u00f3n a la fecha de llegada indicada por EL HUESPED.4.5. La reserva de la Unidad Privada se perder\u00e1 si EL HUESPED no se presenta dentro de las veinticuatro (24) horas siguientes al d\u00eda de llegada indicado, caso en el cual se dar\u00e1 aplicaci\u00f3n a las sanciones que se indican a continuaci\u00f3n.4.6. Para aquellos eventos en los cuales EL HUESPED no se presente o incumpla con alguna de las pol\u00edticas aqu\u00ed enunciadas, EL OPERADOR INMOBILIARIO tendr\u00e1 la facultad de retener, a t\u00edtulo de sanci\u00f3n, los anticipos realizados de que tratan los numerales 4.1. y 4.2. anteriores; esto es: (i) El veinte por ciento (20%) sobre el precio pactado para aquellas reservas que superen los cinco (5) d\u00edas calendario de hospedaje; o, (ii) El valor correspondiente a un (1) canon de hospedaje diario vigente a la fecha de realizaci\u00f3n de la reserva para aquellas inferiores a cinco (5) d\u00edas calendario de hospedaje. De conformidad con lo anterior, con la suscripci\u00f3n del presente Contrato EL HUESPED declara conocer y aceptar que EL OPERADOR INMOBILIARIO podr\u00e1 hacer uso de los anticipos realizados para pagarse la sanci\u00f3n mencionada anteriormente. QUINTA.- TARJETA DE REGISTRO: Ser\u00e1 obligaci\u00f3n del OPERADOR INMOBILIARIO, de acuerdo a la informaci\u00f3n suministrada por EL HUESPED, diligenciar una tarjeta de registro que contendr\u00e1, al menos, la siguiente informaci\u00f3n: identificaci\u00f3n del hu\u00e9sped y de sus acompa\u00f1antes si es del caso, nacionalidad, direcci\u00f3n y tel\u00e9fono del lugar de residencia, lugar de procedencia, lugar de destino, fecha de entrada, fecha de salida, forma de pago y firma del HUESPED. Adicionalmente, esta tarjeta de registro contendr\u00e1 la informaci\u00f3n del Inmueble, direcci\u00f3n, n\u00famero de la Unidad Privada, valor de la tarifa diaria del servicio de hospedaje, etc.\nPAR\u00c1GRAFO: La tarjeta de registro debidamente diligenciada deber\u00e1 permanecer en la administraci\u00f3n del Inmueble y deber\u00e1 ser conservada en archivo por un tiempo m\u00ednimo de cinco (5) a\u00f1os, contados a partir de la fecha de salida del HUESPED. La tarjeta de registro definida anteriormente hace parte integral del presente Contrato como Anexo No. 1.SEXTA.- Destinaci\u00f3n: EL HUESPED se obliga a utilizar el Apartamento autorizado como vivienda tur\u00edstica, exclusivamente para uso de habitaci\u00f3n temporal no permanente y conforme a lo dispuesto en el Reglamento de Propiedad Horizontal al que se encuentra sometido el mismo, el cual declara conocer. Por lo anterior, est\u00e1 prohibida cualquier utilizaci\u00f3n del Apartamento con una finalidad diferente a la indicada anteriormente. El incumplimiento de la obligaci\u00f3n establecida en la presente cl\u00e1usula dar\u00e1 derecho al OPERADOR INMOBILIARIO para dar por terminado el presente Contrato, y para exigir el desalojo y la restituci\u00f3n inmediata del Apartamento. SEptima.- Causales de Terminaci\u00f3n: Ser\u00e1n causales para dar por terminado en cualquier momento el presente Contrato por parte del OPERADOR INMOBILIARIO las siguientes: (i) La utilizaci\u00f3n por parte del HUESPED del Apartamento e Inmueble para usos distintos del indicado en el presente Contrato; (ii) La falta de cuidado en el trato y cuidado por parte del HU\u00c9SPED, sus dependientes y/o acompa\u00f1antes al Apartamento y al  Inmueble, incluyendo las zonas y \u00e1reas comunes que hacen parte de la Copropiedad; (iii) El incumplimiento de todas las obligaciones establecidas en el Reglamento de Propiedad Horizontal y en el presente Contrato, las cuales EL HUESPED declara conocer y aceptar con la suscripci\u00f3n del presente documento; (iv) La destinaci\u00f3n del Apartamento e Inmueble para fines il\u00edcitos o contrarios a las buenas costumbres o que presenten peligro para el Inmueble o para la salubridad e integridad f\u00edsica de sus copropietarios y dem\u00e1s hu\u00e9spedes; (v) La utilizaci\u00f3n del Apartamento para depositar armas o explosivos o dinero de grupos terroristas o para que se elabore o almacene, venda o usen drogas o estupefacientes o sustancias alucin\u00f3genas, tales como marihuana, coca\u00edna, morfina, hero\u00edna y afines. Por lo anterior, EL HUESPED se obliga a no guardar ni permitir que se guarden en el Apartamento sustancias inflamables o explosivas que pongan en peligro la seguridad del mismo y de la copropiedad; (vi) La utilizaci\u00f3n del Apartamento para la explotaci\u00f3n, pornograf\u00eda, turismo sexual y formas de abuso sexual con menores de edad; y, (vii) Cualquier otra vulneraci\u00f3n de las obligaciones establecidas en el presente Contrato y en la Ley. PAR\u00c1GRAFO: Acaecida una cualquiera de las causales de terminaci\u00f3n, EL OPERADOR INMOBILIARIO dar\u00e1 por terminado el presente Contrato mediante previo aviso escrito dirigido al HUESPED, con una antelaci\u00f3n no menor de cuarenta y ocho (48) horas corridas.OCTAVA.- rECIBO Y ESTADO: EL HUESPED declara que recibe el Apartamento objeto del presente Contrato en buen estado y amoblado conforme al inventario contenido en el Acta de Entrega del mismo que hace parte integral del presente contrato como Anexo No. 2. NOVENA.- Restituci\u00f3n: A la terminaci\u00f3n del Contrato por cualquier causa, EL HUESPED restituir\u00e1 el Apartamento a EL OPERADOR INMOBILIARIO en las mismas condiciones en que lo recibi\u00f3, salvo el deterioro natural causado por el uso leg\u00edtimo, y con todos los muebles y enseres que lo integran y que se encuentran contenidos en el Acta de Entrega del mismo -Anexo No. 2-, en perfecto estado de servir, dentro de las veinticuatro (24) siguientes contadas a partir de la notificaci\u00f3n de terminaci\u00f3n. La terminaci\u00f3n del Contrato por cumplimiento de su t\u00e9rmino de duraci\u00f3n no requiere de notificaci\u00f3n alguna por parte del OPERADOR INMOBILIARIO.DECIMA.- Inspecci\u00f3n: EL OPERADOR INMOBILIARIO podr\u00e1 en cualquier momento efectuar visita de inspecci\u00f3n al Apartamento arrendado con el fin de verificar su estado de conservaci\u00f3n y el cumplimiento por parte del HUESPED, de las disposiciones contenidas en el presente Contrato y en el Reglamento de Propiedad Horizontal del Inmueble. DECIMO PRIMERA.- Servicios P\u00daBLICOS: Los servicios p\u00fablicos domiciliarios b\u00e1sicos, tales como: electricidad, acueducto, alcantarillado, gas, recolecci\u00f3n de basuras, alumbrado p\u00fablico, as\u00ed como los servicios denominados de valor agregado como telefon\u00eda local, internet, Wi-Fi, asistencia m\u00e9dica, seguro de hospedaje, televisi\u00f3n por cable o satelital y servicio de limpieza del Apartamento, se encuentran incluidos dentro del canon de hospedaje pactado en los t\u00e9rminos de la Cl\u00e1usula Segunda del presente Contrato. D\u00e9cima SEGUNDA.- SERVICIOS ADICIONALES: Los servicios adicionales que presta EL OPERADOR INMOBILIARIO a sus hu\u00e9spedes y copropietarios, tales como: lavander\u00eda, llamadas telef\u00f3nicas internacionales, consumos de minibar, restaurante o cualquier otro servicio adicional a los expresamente enunciados en la cl\u00e1usula anterior, NO se encuentran incluidos dentro del canon de hospedaje establecido en el presente Contrato. Por lo tanto, en caso que EL HUESPED solicite alguno de los servicios adicionales, enunciados o no anteriormente, estos deber\u00e1n ser cancelados por EL HUESPED a la terminaci\u00f3n del presente Contrato, de acuerdo con las tarifas para servicios adicionales establecidas por EL OPERADOR INMOBILIARIO y que hacen parte integral del presente contrato como Anexo No. 3.D\u00e9cimA TERCERA.- Incumplimiento: El incumplimiento del HUESPED a cualquiera de sus obligaciones legales o contractuales faculta a EL OPERADOR INMOBILIARIO  para ejercer las siguientes acciones: (i) Declarar terminado este Contrato, y reclamar la devoluci\u00f3n del Apartamento judicial y/o extrajudicialmente. En todo caso, EL OPERADOR INMOBILIARIO podr\u00e1 exigir al HUESPED garant\u00edas para el pago del canon de hospedaje, de los servicios adicionales y para el resarcimiento por los da\u00f1os que se causen al apartamento, sus muebles y enseres objeto de hospedaje, as\u00ed como al Inmueble del que estos hacen parte; y, (ii) Exigir y perseguir al HUESPED a trav\u00e9s de cualquier medio, judicial o extrajudicialmente, por el monto de los perjuicios resultantes del incumplimiento del presente Contrato, as\u00ed como dar aplicaci\u00f3n de la sanci\u00f3n pactada. PAR\u00c1GRAFO: Ocurrido el incumplimiento, EL OPERADOR INMOBILIARIO dar\u00e1 por terminado el presente Contrato mediante previo aviso escrito dirigido al HUESPED, con una antelaci\u00f3n no menor de cuarenta y ocho (48) horas corridas.DECIMA CUARTA.- CONSTITUCI\u00d3N DE GARANT\u00cdA: Con el prop\u00f3sito de garantizar las obligaciones contenidas en este Contrato, como lo son el pago del canon de hospedaje, de los servicios adicionales y para el resarcimiento por los da\u00f1os que se causen al Apartamento, sus muebles y enseres objeto de hospedaje, as\u00ed como al Inmueble del que \u00e9stos hacen parte y/o a terceros, EL OPERADOR INMOBILIARIO podr\u00e1 exigir a EL HUESPED la constituci\u00f3n de una cualquiera de las siguientes garant\u00edas: (i) Autorizaci\u00f3n expresa para que EL OPERADOR INMOBILIARIO pueda cobrar los saldos pendientes generados por las obligaciones contenidas en el presente Contrato \u2013canon, servicios adicionales, da\u00f1os, etc.-, con cargo a su tarjeta de cr\u00e9dito; o, (ii) Solicitar la suscripci\u00f3n de un pagar\u00e9 en blanco con carta de instrucciones. PAR\u00c1GRAFO: Ante la imposibilidad de hacer efectiva cualquiera de las anteriores garant\u00edas, EL OPERADOR INMOBILIARIO podr\u00e1 exigir a EL HUESPED la restituci\u00f3n y desalojo inmediato del Apartamento.  decima quinta.- seguro de hospedaje: EL HUESPED acepta suscribir la p\u00f3liza de hospedaje y haber le\u00eddo su clausulado \u00edntegramente, del cual se le hace entrega de la copia correspondiente. La prima de dicha p\u00f3liza hace parte del canon de alojamiento. D\u00c9CIMA SEXTA.- Responsabilidad: EL OPERADOR INMOBILIARIO no asume responsabilidad alguna por los da\u00f1os o perjuicios que EL HUESPED pueda sufrir por causas atribuibles a terceros, a otros hu\u00e9spedes o a sus empleados o dependientes, ni por robos, hurtos o siniestros causados por inundaci\u00f3n, incendio o terrorismo, ni por p\u00e9rdida alguna ocurrida dentro del Apartamento o Inmueble, de joyas, dinero, t\u00edtulos valores, etc. que no le hayan sido entregados en dep\u00f3sito para su custodia. D\u00e9cima S\u00c9PTIMA.- Perfeccionamiento: El presente Contrato se entiende perfeccionado con la suscripci\u00f3n del mismo por parte del HUESPED y del OPERADOR INMOBILIARIO.D\u00e9cima octava.- Cl\u00e1usula Penal: En el evento de incumplimiento cualquiera de Las Partes de las obligaciones a su cargo contenidas en la ley o en este Contrato, la parte incumplida deber\u00e1 pagar a la otra una suma equivalente al veinte por ciento (20%) del valor total del hospedaje pactado para la fecha del incumplimiento, a t\u00edtulo de pena, sin perjuicio de las dem\u00e1s sanciones y mecanismos de pago previstos en este Contrato. En el evento que los perjuicios ocasionados por la parte incumplida, excedan el valor de la suma aqu\u00ed prevista como pena, la parte incumplida deber\u00e1 ajustar la diferencia entre el valor total de los perjuicios y el valor de la pena prevista en esta Cl\u00e1usula. D\u00e9cima novena.- Costos: Cualquier costo que se cause con ocasi\u00f3n de la celebraci\u00f3n o prorroga de este Contrato, incluyendo el impuesto de timbre, ser\u00e1 asumido en su integridad por EL HUESPED.VIG\u00c9SIMA.- CESI\u00d3N Y SUBARRIENDO: EL HUESPED no podr\u00e1 ceder el presente Contrato, subarrendar el Apartamento o transferir su tenencia, sin autorizaci\u00f3n previa y por escrito del OPERADOR INMOBILIARIO.VIG\u00c9SIMA PRIMERA.- M\u00c9rito Ejecutivo: EL HUESPED declara de manera expresa que reconoce y acepta que este Contrato presta m\u00e9rito ejecutivo para exigir por parte del OPERADOR INMOBILIARIO, el pago de los c\u00e1nones de hospedaje causados y no pagados por aqu\u00e9l, as\u00ed como las multas y sanciones que se causen por el incumplimiento de cualquiera de las obligaciones a su cargo en virtud de la ley o de este Contrato, las sumas causadas y no pagadas por concepto de servicios adicionales prestados por la administraci\u00f3n del Inmueble, y en conclusi\u00f3n, cualquier suma generada como consecuencia del desarrollo y ejecuci\u00f3n del presente Contrato.   A su vez, el presente Contrato presta m\u00e9rito ejecutivo para que EL HUESPED pueda exigir del OPERADOR INMOBILIARIO, el pago de la Cl\u00e1usula Penal por el incumplimiento de una cualquiera de las obligaciones a su cargo. Par\u00e1grafo: Las Partes acuerdan que cualquier copia autenticada ante Notario de este Contrato tendr\u00e1 el mismo valor que el original para efectos judiciales y extrajudiciales.   VIG\u00c9SIMA SEGUNDA. - PROTECCI\u00d3N DE DATOS PERSONALES: EL HUESPED manifiesta conocer y entender la Pol\u00edtica de Tratamiento de Bases de Datos Personales del OPERADOR INMOBILIARIO, la cual hace parte integral de este Contrato, y entiende que sus datos y los de los Ejecutivos van a ser incorporados en una base de datos, cuyo responsable ser\u00e1 el OPERADOR INMOBILIARIO; lo cual es necesario para el cumplimiento de las obligaciones aqu\u00ed descritas.  EL HUESPED autoriza expresamente al  OPERADOR INMOBILIARIO y a sus vinculadas para retener y procesar, tanto electr\u00f3nica como manualmente, la informaci\u00f3n que recolecten en virtud de la ejecuci\u00f3n del presente Contrato y autoriza para que \u00e9sta sea utilizada por el  OPERADOR INMOBILIARIO con prop\u00f3sitos internos, as\u00ed como para transferirla a terceros, incluyendo a sus compa\u00f1\u00edas vinculadas o relacionadas, y autoridades administrativas, migratorias y judiciales, respetando para todos los efectos la normatividad en la materia, y garantizando el correcto tratamiento de los datos personales. EL HUESPED expresamente autoriza al OPERADOR INMOBILIARIO para que transfiera, almacene y procese dicha informaci\u00f3n en cualquier pa\u00eds en donde \u00e9ste o sus compa\u00f1\u00edas vinculadas o relacionadas tengan presencia. En ejercicio del tratamiento de datos aqu\u00ed autorizado, el OPERADOR INMOBILIARIO dar\u00e1 cumplimiento a las disposiciones establecidas en la ley 1581 de 2012 y en el Decreto 1377 de 2013. Por lo tanto, el OPERADOR INMOBILIARIO tomar\u00e1 las medidas de \u00edndole t\u00e9cnica y administrativas necesarias para garantizar el correcto ejercicio del derecho de habeas data, as\u00ed como la seguridad de los datos que se encuentren en su poder, evitando su alteraci\u00f3n, p\u00e9rdida, tratamiento, acceso, o reproducci\u00f3n no autorizada. En todo caso, las partes se obligan a dejar indemne a la otra parte, en todo momento, frente a cualquier reclamaci\u00f3n, sanci\u00f3n, violaci\u00f3n, y dem\u00e1s eventos que pudieren surgir como consecuencia del incumplimiento de las obligaciones a su cargo frente al correcto tratamiento de los datos personales, derivado de la ejecuci\u00f3n de este Contrato. VIG\u00c9SIMA TERCERA. - VALIDEZ: El presente Contrato anula todo convenio anterior relativo al hospedaje del Apartamento y solamente podr\u00e1 ser modificado por escrito debidamente suscrito por Las Partes.\n    \n\n\n\n\n________________________";
+window._regEsc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+window._regFD = function(f){ if(!f) return ''; var p=String(f).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):String(f); };
+window._REG_MESES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+
+// Entrada: desde la lista de reservas
+window._regHuesped = async function(id){
+  var r = await sb.from('reservas').select('*').eq('id',id).single();
+  if(r.error||!r.data){ showToast('No se encontró la reserva','error'); return; }
+  var rv = r.data;
+  // Precarga adicional desde preregistro (link que llena el huésped), si coincide por nombre
+  var pre = {};
+  try{
+    var _nm = (rv.nombre||'').trim();
+    if(_nm){ var pr = await sb.from('prereg').select('*').eq('edificio',EDIFICIO_ACTIVO).ilike('nombre','%'+_nm.split(' ')[0]+'%').order('created_at',{ascending:false}).limit(1);
+      if(pr.data && pr.data[0]) pre = pr.data[0]; }
+  }catch(e){}
+  // Registro previo del mismo huésped (Cárdex): para reincidentes
+  var previo = null;
+  try{
+    var _rp = await sb.from('registros_hospedaje').select('*').eq('edificio',EDIFICIO_ACTIVO).ilike('nombre','%'+(rv.nombre||'').trim()+'%').order('created_at',{ascending:false}).limit(1);
+    if(_rp.data && _rp.data[0]) previo = _rp.data[0];
+  }catch(e){}
+  var noches = Number(rv.noches)||0;
+  var sugerido = (noches>=30) ? 'larga' : 'corta';
+  window._regCtx = { rv:rv, pre:pre, previo:previo, tipo:sugerido };
+  window._regRender();
+};
+
+window._regSetTipo = function(t){ window._regCtx.tipo=t; window._regRender(); };
+
+window._regRender = function(){
+  var C = window._regCtx, rv=C.rv, pre=C.pre||{}, previo=C.previo||{};
+  var esc=window._regEsc, FD=window._regFD;
+  // valores precargados (reserva → prereg → registro previo)
+  var nombre = rv.nombre || previo.nombre || '';
+  var ape = [rv.apellido1||'', rv.apellido2||''].join(' ').trim() || previo.apellido || '';
+  var doc = pre.documento || previo.documento || '';
+  var tel = rv.telefono || rv.tel || pre.telefono || previo.telefono || '';
+  var email = rv.email || pre.email || previo.email || '';
+  var nac = pre.nacionalidad || previo.nacionalidad || '';
+  var dir = pre.direccion || pre.ciudad || previo.direccion || '';
+  var fnac = pre.fecha_nacimiento || previo.fecha_nacimiento || '';
+  var pais = pre.pais || pre.nacionalidad || previo.pais || '';
+  var apto = rv.apto || '';
+  var ci = FD(rv.checkin), co = FD(rv.checkout);
+  var mesco = rv.checkout ? window._REG_MESES[(Number(String(rv.checkout).slice(5,7))||1)-1] : '';
+  var usd = (rv.moneda==='USD');
+  var tnum = usd ? (Number(rv.tarifa_usd)||Number(rv.tarifa)||0) : (Number(rv.tarifa)||0);
+  var tarifa = (usd?'USD ':'$ ') + Math.round(tnum).toLocaleString('es-CO') + (usd?' + IVA':'');
+  var pago = rv.pago || 'Directo';
+  var reincidente = !!(C.previo);
+  var _in=function(id,val,ph){ return '<input id="'+id+'" value="'+esc(val)+'" placeholder="'+esc(ph||'')+'" style="width:100%;border:none;border-bottom:1px solid #bbb;padding:2px 3px;font:inherit;background:transparent">'; };
+
+  var head = '<div class="page-title">🪪 Registro de huésped — '+esc(nombre||'(sin nombre)')+'</div>'
+    + '<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px;max-width:820px">Reserva '+esc(rv.num_reserva||rv.numero||'')+' · Apto '+esc(apto)+' · '+esc(ci)+' → '+esc(co)+' · '+(Number(rv.noches)||0)+' noches.'
+      + (reincidente?' <b style="color:#B45309">Huésped con registro previo</b> — datos precargados del Cárdex.':'')
+      + '</div>'
+    + '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">'
+      + '<span style="font-size:12px;color:#666">Formato:</span>'
+      + '<button class="btn btn-sm '+(C.tipo==='corta'?'btn-success':'btn-outline')+'" onclick="_regSetTipo(\'corta\')">Corta estadía (80|10) · ≤29 noches</button>'
+      + '<button class="btn btn-sm '+(C.tipo==='larga'?'btn-success':'btn-outline')+'" onclick="_regSetTipo(\'larga\')">Larga estadía (LTM3) · contrato</button>'
+      + '<span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" style="background:#1F3864;color:#fff" onclick="_regImprimir()">🖨️ Imprimir / PDF</button>'
+      + '<button class="btn btn-sm" style="background:#1A5C2E;color:#fff" onclick="_regGuardar(this)">💾 Guardar registro</button>'
+      + '<button class="btn btn-outline btn-sm" onclick="loadView(\'reservas\')">Volver</button></span>'
+    + '</div>';
+
+  var cuerpo;
+  if(C.tipo==='corta'){
+    cuerpo = '<div id="reg-print"><table class="reg-t"><tbody>'
+      + '<tr><td colspan="4" class="reg-tit">80|10 OCHENTA DIEZ URBAN LIVING S.A.S.</td></tr>'
+      + '<tr><td colspan="4" class="reg-sub">FORMATO DE INSCRIPCIÓN Y REGISTRO DE HOSPEDAJE EN VIVIENDA TURÍSTICA</td></tr>'
+      + '<tr><td colspan="4" class="reg-sec">INFORMACIÓN GENERAL DEL HUESPED</td></tr>'
+      + '<tr><td class="reg-lb">Nombre(s):</td><td class="reg-v">'+_in('rg-nombre',nombre)+'</td><td class="reg-lb">Teléfono:</td><td class="reg-v">'+_in('rg-tel',tel)+'</td></tr>'
+      + '<tr><td class="reg-lb">Apellido(s):</td><td class="reg-v">'+_in('rg-ape',ape)+'</td><td class="reg-lb">Domicilio:</td><td class="reg-v">'+_in('rg-dom',dir)+'</td></tr>'
+      + '<tr><td class="reg-lb">No. Documento:</td><td class="reg-v">'+_in('rg-doc',doc)+'</td><td class="reg-lb">E-mail:</td><td class="reg-v">'+_in('rg-email',email)+'</td></tr>'
+      + '<tr><td class="reg-lb">País:</td><td class="reg-v">'+_in('rg-pais',pais)+'</td><td class="reg-lb">Sexo:</td><td class="reg-v">'+_in('rg-sexo','')+'</td></tr>'
+      + '<tr><td colspan="4" class="reg-sec">ACOMPAÑANTE(S)</td></tr>'
+      + '<tr><td class="reg-lb">Nombre(s) y Apellido(s):</td><td class="reg-v" colspan="3">'+_in('rg-ac-nom','')+'</td></tr>'
+      + '<tr><td class="reg-lb">Dirección:</td><td class="reg-v">'+_in('rg-ac-dir','')+'</td><td class="reg-lb">Sexo:</td><td class="reg-v">'+_in('rg-ac-sexo','')+'</td></tr>'
+      + '<tr><td colspan="2" class="reg-sec2">TARIFA SERVICIO DE HOSPEDAJE</td><td colspan="2" class="reg-v">'+_in('rg-tarifa',tarifa+' · Apto '+apto+' · '+ci+' → '+co)+'</td></tr>'
+      + '<tr><td colspan="2" class="reg-sec2">FORMA DE PAGO:</td><td class="reg-v">'+_in('rg-pago',pago)+'</td><td class="reg-v">Mes CKO: '+_in('rg-mesco',mesco)+'</td></tr>'
+      + '</tbody></table>'
+      + '<div class="reg-clau">'+window._REG_CLAUSULAS+'</div>'
+      + '<div class="reg-firma">_____________________________________<br>FIRMA DEL HUÉSPED</div>'
+      + '</div>';
+  } else {
+    var lc=function(es,en,inp){ return '<div class="reg-lc"><div class="reg-ll"><b>'+esc(es)+'</b><br><i>'+esc(en)+'</i></div><div class="reg-lv">'+inp+'</div></div>'; };
+    cuerpo = '<div id="reg-print" class="ltm3p"><div class="ltm3-head"><img src="'+window._REG_LOGO+'" class="ltm3-logo"><div class="ltm3-t">REGISTRO LTM3</div>'
+      + '<div class="ltm3-room"><b>HABITACIÓN</b> / ROOM<br>'+_in('rg-hab',apto)+'</div></div>'
+      + '<div class="ltm3-fecha">Fecha Llegada: '+_in('rg-ci',ci)+' &nbsp; Fecha Salida: '+_in('rg-co',co)+'</div>'
+      + '<div class="reg-g2">'
+        + lc('Nombre:','First Name:',_in('rg-l-nom',nombre))
+        + lc('Apellidos:','Last Name:',_in('rg-l-ape',ape))
+        + lc('Fecha de Nacimiento:','Birth Date:',_in('rg-l-fnac',FD(fnac)))
+        + lc('Cédula / Pasaporte','ID / Passport',_in('rg-l-doc',doc))
+        + lc('Nacionalidad:','Nationality:',_in('rg-l-nac',nac))
+        + lc('Dirección:','Address:',_in('rg-l-dir',dir))
+        + lc('Teléfono:','Phone Number:',_in('rg-l-tel',tel))
+        + lc('Correo Electrónico:','E-Mail:',_in('rg-l-email',email))
+        + lc('Procedencia','Coming From',_in('rg-l-proc',''))
+        + lc('Destino','Going To',_in('rg-l-dest',''))
+      + '</div>'
+      + '<div class="ltm3-gar"><b>Carta de Garantía — Tarjeta de Crédito:</b> Visa ☐ Amex ☐ Master Card ☐ Diners ☐ &nbsp; Número ____________________ N.S ____ F.V __/__</div>'
+      + '<div class="ltm3-resp"><b>RESPONSABILIDAD POR PÉRDIDA</b> – Si no entrega a 80|10 urban living los objetos que el arrendatario desea que se custodien, se exonera a 80|10 urban living de toda responsabilidad en caso de pérdida, por tanto, los objetos como Joyas, Cámaras, Dinero, Equipos o Utensilios que permanezcan en el apartamento o áreas de servicio diferentes a las que 80|10 urban living dispone para depósitos, estarán bajo el único riesgo del arrendatario ya que en este caso 80|10 urban living no asume responsabilidad alguna, en caso de pérdida o deterioro. El ARRENDATARIO autoriza para llenar los espacios en blanco en la tarjeta del registro.</div>'
+      + '<div class="ltm3-resp en"><b>RESPONSIBILITY BY LOST</b> – If the objects that the leaseholder wishes to be guarded are not given to 80|10 urban living, the company is exonerated of everything responsibility in loss case, therefore, value objects as jewels, cameras, money, equipment or utensils that remain in the apartment or service areas different of the areas where 80|10 urban living arranges to deposit, will be under the unique risk of the leaseholder, in this case 80|10 urban living does not assume any responsibility, in loss case or deterioration. The leaseholder authorizes 80|10 urban living to fill the blank spaces in the registry card.</div>'
+      + '<div class="ltm3-ac"><b>ACOMPAÑANTES</b> (Nombre / Apellido / F. Nacimiento / Documento / Nacionalidad / E-mail)'
+        + '<div class="ltm3-acl">1. '+_in('rg-l-ac1','')+'</div>'
+        + '<div class="ltm3-acl">2. '+_in('rg-l-ac2','')+'</div></div>'
+      + '<div class="ltm3-fi">Firma / Signature ______________________________</div>'
+      + '<div class="ltm3-cod">Código: FO-SE-25 &nbsp; Versión: 00 &nbsp;·&nbsp; Generado desde el Sistema Operativo 8010</div>'
+      + '</div>';
+  }
+  document.getElementById('main-content').innerHTML =
+    '<style>'
+    + '.reg-t{width:100%;border-collapse:collapse;margin-bottom:12px;font-family:"Times New Roman",serif}'
+    + '.reg-t td{border:1px solid #333;padding:4px 7px;font-size:12.5px;vertical-align:middle}'
+    + '.reg-tit{text-align:center;font-weight:bold;font-size:15px;background:#f2f2f2}'
+    + '.reg-sub{text-align:center;font-weight:bold;font-size:12.5px}'
+    + '.reg-sec{text-align:center;font-weight:bold;background:#e8eef6}'
+    + '.reg-sec2{font-weight:bold;background:#f2f2f2}'
+    + '.reg-lb{width:16%;font-weight:bold;background:#fafafa;white-space:nowrap}.reg-v{width:34%}'
+    + '.reg-clau{font-family:"Times New Roman",serif;font-size:9.2px;text-align:justify;line-height:1.35;margin-top:6px;white-space:pre-wrap}'
+    + '.reg-firma{margin-top:24px;text-align:center;font-size:12px;font-weight:bold}'
+    + '.ltm3p{font-family:Arial,Helvetica,sans-serif}'
+    + '.ltm3-head{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:8px}'
+    + '.ltm3-logo{height:50px}.ltm3-t{font-size:20px;font-weight:bold;letter-spacing:1px}.ltm3-room{font-size:12px;text-align:right;width:150px}'
+    + '.ltm3-fecha{margin:10px 0;font-size:13px;font-weight:bold;background:#f2f2f2;padding:6px 10px;border:1px solid #333}'
+    + '.reg-g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}'
+    + '.reg-lc{display:flex;border:1px solid #333;min-height:34px}.reg-ll{width:50%;font-size:10.5px;padding:4px 6px;background:#fafafa;border-right:1px solid #333}.reg-lv{width:50%;padding:2px 6px;display:flex;align-items:center}'
+    + '.ltm3-gar{margin:12px 0;border:1px solid #333;padding:8px 10px;font-size:11px}'
+    + '.ltm3-resp{font-size:9px;text-align:justify;margin-top:8px;line-height:1.35}.ltm3-resp.en{color:#555;font-style:italic}'
+    + '.ltm3-ac{margin-top:10px;font-size:10.5px}.ltm3-acl{margin-top:8px}'
+    + '.ltm3-fi{margin-top:18px;font-size:12px;text-align:center}.ltm3-cod{margin-top:12px;font-size:9px;color:#666;border-top:1px solid #ccc;padding-top:5px}'
+    + '#reg-print input{color:#0a3d91;font-weight:600}'
+    + '</style>'
+    + head
+    + '<div class="card" style="max-width:850px">'+cuerpo+'</div>';
+};
+
+window._regVal = function(id){ var e=document.getElementById(id); return e?(e.value||''):''; };
+
+// Congela los <input> a texto para impresión y para guardar (los valores escritos deben verse)
+window._regSnapshotHTML = function(){
+  var src=document.getElementById('reg-print'); if(!src) return '';
+  var clone=src.cloneNode(true);
+  var ins=src.querySelectorAll('input'), cins=clone.querySelectorAll('input');
+  for(var i=0;i<ins.length;i++){ var sp=document.createElement('span'); sp.textContent=ins[i].value||''; sp.style.cssText='color:#0a3d91;font-weight:600'; cins[i].parentNode.replaceChild(sp, cins[i]); }
+  return clone.outerHTML;
+};
+
+window._regImprimir = function(){
+  var snap=window._regSnapshotHTML(); if(!snap){ showToast('Nada para imprimir','error'); return; }
+  var css='body{font-family:Arial,sans-serif;margin:0;padding:22px;color:#111}'
+    + '.reg-t{width:100%;border-collapse:collapse;margin-bottom:12px;font-family:"Times New Roman",serif}.reg-t td{border:1px solid #333;padding:4px 7px;font-size:12.5px}'
+    + '.reg-tit{text-align:center;font-weight:bold;font-size:15px;background:#f2f2f2}.reg-sub{text-align:center;font-weight:bold;font-size:12.5px}'
+    + '.reg-sec{text-align:center;font-weight:bold;background:#e8eef6}.reg-sec2{font-weight:bold;background:#f2f2f2}.reg-lb{font-weight:bold;background:#fafafa}'
+    + '.reg-clau{font-family:"Times New Roman",serif;font-size:9.2px;text-align:justify;line-height:1.35;white-space:pre-wrap}.reg-firma{margin-top:24px;text-align:center;font-weight:bold}'
+    + '.ltm3-head{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:8px}.ltm3-logo{height:50px}.ltm3-t{font-size:20px;font-weight:bold}.ltm3-room{font-size:12px;text-align:right}'
+    + '.ltm3-fecha{margin:10px 0;font-size:13px;font-weight:bold;background:#f2f2f2;padding:6px 10px;border:1px solid #333}.reg-g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}'
+    + '.reg-lc{display:flex;border:1px solid #333}.reg-ll{width:50%;font-size:10.5px;padding:4px 6px;background:#fafafa;border-right:1px solid #333}.reg-lv{width:50%;padding:4px 6px}'
+    + '.ltm3-gar{margin:12px 0;border:1px solid #333;padding:8px 10px;font-size:11px}.ltm3-resp{font-size:9px;text-align:justify;margin-top:8px}.ltm3-resp.en{color:#555;font-style:italic}.ltm3-ac{margin-top:10px;font-size:10.5px}.ltm3-acl{margin-top:8px}.ltm3-fi{margin-top:18px;text-align:center}.ltm3-cod{margin-top:12px;font-size:9px;color:#666;border-top:1px solid #ccc;padding-top:5px}';
+  var w=window.open('','_blank');
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Registro de huésped</title><style>'+css+'</style></head><body>'+snap+'<div style="text-align:center;margin-top:16px" class="noprint"><button onclick="window.print()" style="background:#1F3864;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer">🖨️ Imprimir</button></div><style>@media print{.noprint{display:none}}</style></body></html>');
+  w.document.close();
+};
+
+window._regGuardar = async function(btn){
+  var C=window._regCtx, rv=C.rv;
+  if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+  var row={ edificio:EDIFICIO_ACTIVO, reserva_id:rv.id, tipo:(C.tipo==='larga'?'LTM3':'80-10'),
+    apto:(C.tipo==='larga'?_regVal('rg-hab'):rv.apto), nombre:(C.tipo==='larga'?_regVal('rg-l-nom'):_regVal('rg-nombre')),
+    apellido:(C.tipo==='larga'?_regVal('rg-l-ape'):_regVal('rg-ape')),
+    documento:(C.tipo==='larga'?_regVal('rg-l-doc'):_regVal('rg-doc')),
+    telefono:(C.tipo==='larga'?_regVal('rg-l-tel'):_regVal('rg-tel')),
+    email:(C.tipo==='larga'?_regVal('rg-l-email'):_regVal('rg-email')),
+    nacionalidad:(C.tipo==='larga'?_regVal('rg-l-nac'):_regVal('rg-pais')),
+    direccion:(C.tipo==='larga'?_regVal('rg-l-dir'):_regVal('rg-dom')),
+    checkin:rv.checkin, checkout:rv.checkout, html:window._regSnapshotHTML(),
+    creado_por:((currentProfile&&currentProfile.nombre)||''), user_id:window._uid() };
+  var r=await sb.from('registros_hospedaje').insert(row);
+  if(r.error){
+    if(/(does not exist|schema cache|relation|could not find)/i.test(r.error.message||'')){
+      if(btn){ btn.disabled=false; btn.textContent='💾 Guardar registro'; }
+      showToast('El registro se puede imprimir, pero falta crear la tabla "registros_hospedaje" en la base para guardarlo. Avísale a Santiago.','info');
+      return;
+    }
+    if(btn){ btn.disabled=false; btn.textContent='💾 Guardar registro'; }
+    showToast('Error: '+r.error.message,'error'); return;
+  }
+  if(btn){ btn.disabled=false; btn.textContent='✓ Guardado'; }
+  showToast('✅ Registro guardado en el SO','success');
 };
 
 window._solImg = null;
