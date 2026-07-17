@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-17-reembolsos-soporte';
+const APP_VERSION = '2026-07-17-ventas-relevos-unificadas';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-17', version:'2026-07-17-ventas-relevos-unificadas', titulo:'Ventas del mes: cálculo único y consistente en TODAS las vistas (Dashboard, Rack, Informe, Reporte de ocupación)',
+    afecta:'Ventas / Dashboard / Rack / Informe Ejecutivo',
+    detalle:'Sol Santiago: las ventas del mes no coincidían entre pantallas y a veces BAJABAN. Causa: (1) el ajuste de relevos (día con CKO y CKI en el mismo apto) se leía de la tabla reservas, que traía tarifas corruptas (valores tipo $165/$340) y hacía que algunos días RESTARAN en vez de sumar; (2) el Dashboard no aplicaba ningún ajuste de relevos. Fix: los relevos ahora se calculan desde la tabla RACK (tarifas reales por noche) y todas las vistas usan la MISMA regla canónica de venta de alojamiento (_esVentaAloja, que además evita el doble-conteo de combos Two/Family Residence). Resultado: la venta del mes es idéntica en Dashboard, Rack, Informe y Reporte de ocupación. Los relevos legítimos suman correctamente; las reservas con tarifa basura en la tabla reservas deben depurarse aparte (no afectan ya el cálculo).' },
   { fecha:'2026-07-17', version:'2026-07-17-reembolsos-soporte', titulo:'Reembolsos: soporte por recibo o un PDF del lote completo, con check de soporte por recibo',
     afecta:'Reembolsos por lote',
     detalle:'Sol. Santiago (Fase 2): ahora hay dos formas de respaldar los recibos de un lote. (1) Soporte por recibo: cada recibo puede tener su propio archivo escaneado (botón 📤 en la fila). (2) Soporte del lote completo: se puede anexar un solo PDF con todo el lote (barra "📄 Soporte del lote"). Se agrega una columna "Soporte" con un check por recibo: ✅ si el recibo tiene su archivo (o su escaneo de registro) o si el lote tiene el PDF completo; ⛔ si no tiene respaldo. El check también sale en el comprobante/correo del lote. Requiere crear dos columnas de texto en la tabla reembolsos: soporte_url (por recibo) y soporte_pdf (del lote); mientras no existan, el archivo se sube y el sistema avisa que falta crear la columna. Los controles de subida son solo para roles de compras/administración/gerencia.' },
@@ -2050,6 +2053,20 @@ window._rkBuildRelevoMap = function(reservasRows){
   });
   return relevo;
 };
+// Ajuste de relevos CANÓNICO — fuente única: tabla rack (tarifas reales/noche). Devuelve {aj,cnt,map}.
+window._rkRelevoAj = function(rackRows){
+  var map = window._rkBuildRelevoMap(rackRows||[]);
+  var seen={}, aj=0, cnt=0;
+  (rackRows||[]).forEach(function(r){
+    if(!r||!r.apto) return;
+    var k=r.apto+'|'+String(r.fecha).slice(0,10); if(!map[k]||seen[k]) return; seen[k]=1;
+    var v=map[k];
+    var contado=(typeof window._esVentaAloja==='function' && window._esVentaAloja(r)) ? (Number(r.tarifa)||0) : 0;
+    var tS=Number(v.tarifaSale)||0, tE=Number(v.tarifaEntra)||0;
+    aj += (tS+tE)-contado; cnt += ((tS>0?1:0)+(tE>0?1:0))-(contado>0?1:0);
+  });
+  return {aj:aj, cnt:cnt, map:map};
+};
 
 // Cálculo único de KPIs del día — usado por Dashboard y Rack para que SIEMPRE concuerden.
 // getRec(apto) devuelve el registro de rack de ese apto para el día evaluado (o undefined).
@@ -2341,9 +2358,10 @@ async function renderDashboard() {
   const _fueraBaseN = rackMesAll.filter(r=>_baseSet.has(r.apto) && FUERA_MES.includes(r.estado)).length;
   const dispMes = Math.max(1, TOTAL_APTOS*daysInMonth - _fueraBaseN); // noches disponibles reales del mes (aptos x dias - fuera de servicio)
   const ocuMesN = rackMesAll.filter(r=>_baseSet.has(r.apto) && OCU_MES.includes(r.estado)).length;
-  const conTarifaMes = rackMesAll.filter(r=>OCU_MES.includes(r.estado)&&r.tarifa&&Number(r.tarifa)>0);
-  const ventasMes = conTarifaMes.reduce((s,r)=>s+Number(r.tarifa),0);
-  const adrMes = conTarifaMes.length>0 ? Math.round(ventasMes/conTarifaMes.length) : 0;
+  const conTarifaMes = rackMesAll.filter(r=>window._esVentaAloja(r));
+  const _vmRel = window._rkRelevoAj(rackMesAll);   // relevos desde RACK -> coincide con Rack/Informe/Export
+  const ventasMes = conTarifaMes.reduce((s,r)=>s+Number(r.tarifa),0) + _vmRel.aj;
+  const adrMes = (conTarifaMes.length+_vmRel.cnt)>0 ? Math.round(ventasMes/(conTarifaMes.length+_vmRel.cnt)) : 0;
   const ocuMesPct = dispMes>0 ? Math.round(ocuMesN/dispMes*100) : 0;
   const revpar = dispMes>0 ? Math.round(ventasMes/dispMes) : 0;
   // Variante por habitaciones (incluye A) — aptosFull
@@ -2704,14 +2722,10 @@ async function renderRack() {
 
   // Relevos del mes visible: cruzamos `reservas` (mismo filtro de edificio que el rack) para
   // reconstruir los días con check-OUT y check-IN el mismo día/apto. Clave 'apto|YYYY-MM-DD'.
-  window._rackRelevoMap = {};
-  try {
-    const { data: _rsvMes } = await sb.from('reservas')
-      .select('id,apto,nombre,checkin,checkout,tarifa')
-      .or(`edificio.eq.${EDIFICIO_ACTIVO},edificio.is.null`)
-      .lte('checkin', monthEnd).gte('checkout', monthStart);
-    window._rackRelevoMap = window._rkBuildRelevoMap(_rsvMes || []);
-  } catch (_e) { console.error('rack relevos map:', _e); window._rackRelevoMap = {}; }
+  // Relevos desde la propia tabla rack (tarifas reales por noche). Antes se leía de 'reservas',
+  // cuyas tarifas venían corruptas (valores tipo $165/$340) y hacían que las ventas RESTARAN.
+  try { window._rackRelevoMap = window._rkBuildRelevoMap((allRack||[]).filter(function(r){return r.edificio===EDIFICIO_ACTIVO;})); }
+  catch (_e) { console.error('rack relevos map:', _e); window._rackRelevoMap = {}; }
 
   const _noEntr = EB().noEntregados || [];
   let aptos = [...new Set([...EB().aptosFull, ...(allRack||[]).map(r => r.apto)])].filter(a => _noEntr.indexOf(a) < 0).sort((a,b) => {
@@ -2758,7 +2772,7 @@ async function renderRack() {
     'Check-out hoy': _rkHoy.filter(r=>r.estado==='Check-out hoy').map(r=>({apto:r.apto, huesped:r.huesped})),
   };
   const ocuPct   = indMes ? Math.round(indMes.ocu * 100) : Math.round(ocupHoy / (aptos.length||1) * 100);
-  const ventasMesRk_base = allRack.filter(r=> r.edificio===EDIFICIO_ACTIVO && ["Ocupado","Check-in hoy","Check-out hoy","Completo","Sale de viaje"].includes(r.estado) && Number(r.tarifa)>0).reduce((s,r)=>s+Number(r.tarifa),0);
+  const ventasMesRk_base = allRack.filter(r=> r.edificio===EDIFICIO_ACTIVO && window._esVentaAloja(r)).reduce((s,r)=>s+Number(r.tarifa),0);
   // Ajuste por relevos: la fila del rack aporta UNA tarifa; el día real vale tarifaSale+tarifaEntra.
   // Sumamos (par - lo que la base YA contó), con el MISMO criterio de "contado" que la base, y con
   // un Set para no procesar dos veces la misma celda. Resultado neto por celda = tarifaSale+tarifaEntra.
@@ -2770,7 +2784,7 @@ async function renderRack() {
     if(!v || _rkRelSeen.has(_rk)) return;
     _rkRelSeen.add(_rk);
     const _tS=Number(v.tarifaSale)||0, _tE=Number(v.tarifaEntra)||0;
-    const _contado = (["Ocupado","Check-in hoy","Check-out hoy","Completo","Sale de viaje"].includes(r.estado) && Number(r.tarifa)>0) ? Number(r.tarifa) : 0;
+    const _contado = window._esVentaAloja(r) ? (Number(r.tarifa)||0) : 0;
     _rkRelevoVentaAj += ((_tS+_tE) - _contado);
     _rkRelevoCountAj += (((_tS>0?1:0)+(_tE>0?1:0)) - (_contado>0?1:0));
   });
@@ -2784,7 +2798,7 @@ async function renderRack() {
   const _ocu21m=_mr.filter(r=>_s21.has(r.apto)&&_OCURK.includes(r.estado)).length;
   const _ocu33m=_mr.filter(r=>_s33.has(r.apto)&&_OCURK.includes(r.estado)).length;
   const _pct21m=Math.round(_ocu21m/_disp21m*100), _pct33m=Math.round(_ocu33m/_disp33m*100);
-  const _conTarM=_mr.filter(r=>_OCURK.includes(r.estado)&&Number(r.tarifa)>0);
+  const _conTarM=_mr.filter(r=>window._esVentaAloja(r));
   const _denAdrMes=_conTarM.length + _rkRelevoCountAj; // cada relevo aporta hasta 2 muestras de tarifa
   const _adrMes=_denAdrMes>0?Math.round(ventasMesRk/_denAdrMes):0;
   const _revparMes=Math.round(ventasMesRk/_disp21m);
@@ -7072,6 +7086,9 @@ function _rackEmailHTML(){
       if(esMesActual && d===corte){ if(ocFis) ocupHoy++; if(e==='Check-in hoy') ckiHoy++; if(e==='Check-out hoy') ckoHoy++; }
     }
   });
+  // Relevos: sumar la 2ª reserva del día en aptos con CKO+CKI el mismo día (coincide con Dashboard/Rack/Informe)
+  try{ var _exRows=[]; aptos.forEach(function(a){ for(var _d2=1;_d2<=dim;_d2++){ var _c2=rack[a]&&rack[a][_d2]; if(_c2) _exRows.push(_c2); } });
+    var _exRel=window._rkRelevoAj(_exRows); ventasMes += _exRel.aj; nochesTar += _exRel.cnt; }catch(_e){}
   const totalAptos = aptos.length || 1;
   const pctHoy = Math.round(ocupHoy/totalAptos*100);
   const pctMes = Math.round(nochesMes/(totalAptos*dim)*100);
@@ -11918,7 +11935,7 @@ async function renderInformeEjecutivo(){
     sb.from('contratos').select('apto,arrendatario,fecha_vencimiento,otro_si_vigencia,tipo'),
     sb.from('reservas').select('id,apto,nombre,checkin,checkout,tarifa').eq('edificio',ed).lte('checkin',mEnd).gte('checkout',mStart)
   ]);
-  const _ejecRelevo = window._rkBuildRelevoMap(rvR && rvR.data ? rvR.data : []);
+  const _ejecRelevo = window._rkBuildRelevoMap(rMes.data || []);   /* relevos desde RACK, no reservas */
   const k = (typeof calcKpisDia==='function') ? calcKpisDia(rHoy.data||[], _ejecRelevo) : {b21:{ocu:0,disp:1},cki:0,cko:0,ing:0,adr:0,pct21:0};
   const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
   const baseSet = new Set(EB().aptosBase);
@@ -11926,7 +11943,7 @@ async function renderInformeEjecutivo(){
   const ocuMesN = rmes.filter(r=>baseSet.has(r.apto)&&OCU.includes(r.estado)).length;
   const dispMes = Math.max(1, EB().aptosBase.length*dim);
   const ocuMesPct = Math.round(ocuMesN/dispMes*100);
-  const ventasMes_base = rmes.filter(r=>OCU.includes(r.estado)&&Number(r.tarifa)>0).reduce((s,r)=>s+Number(r.tarifa),0);
+  const ventasMes_base = rmes.filter(r=>window._esVentaAloja(r)).reduce((s,r)=>s+Number(r.tarifa),0);
   // Ajuste por relevos (misma técnica que ventasMesRk): sumamos (par - lo ya contado), una vez por celda.
   const _ejSeen = new Set(); let _ejRelAj = 0;
   rmes.forEach(function(r){
@@ -11935,7 +11952,7 @@ async function renderInformeEjecutivo(){
     const v = _ejecRelevo[_k2];
     if(!v || _ejSeen.has(_k2)) return;
     _ejSeen.add(_k2);
-    const _contado = (OCU.includes(r.estado) && Number(r.tarifa)>0) ? Number(r.tarifa) : 0;
+    const _contado = window._esVentaAloja(r) ? (Number(r.tarifa)||0) : 0;
     _ejRelAj += ((Number(v.tarifaSale)||0)+(Number(v.tarifaEntra)||0) - _contado);
   });
   const ventasMes = ventasMes_base + _ejRelAj;
