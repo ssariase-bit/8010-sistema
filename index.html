@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-17-ordenes-compra';
+const APP_VERSION = '2026-07-17-reembolsos-soporte';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-17', version:'2026-07-17-reembolsos-soporte', titulo:'Reembolsos: soporte por recibo o un PDF del lote completo, con check de soporte por recibo',
+    afecta:'Reembolsos por lote',
+    detalle:'Sol. Santiago (Fase 2): ahora hay dos formas de respaldar los recibos de un lote. (1) Soporte por recibo: cada recibo puede tener su propio archivo escaneado (botón 📤 en la fila). (2) Soporte del lote completo: se puede anexar un solo PDF con todo el lote (barra "📄 Soporte del lote"). Se agrega una columna "Soporte" con un check por recibo: ✅ si el recibo tiene su archivo (o su escaneo de registro) o si el lote tiene el PDF completo; ⛔ si no tiene respaldo. El check también sale en el comprobante/correo del lote. Requiere crear dos columnas de texto en la tabla reembolsos: soporte_url (por recibo) y soporte_pdf (del lote); mientras no existan, el archivo se sube y el sistema avisa que falta crear la columna. Los controles de subida son solo para roles de compras/administración/gerencia.' },
   { fecha:'2026-07-17', version:'2026-07-17-ordenes-compra', titulo:'"Órdenes de Pedido" ahora se llama "Órdenes de Compra"',
     afecta:'Compras · Inventario',
     detalle:'Sol. Santiago: el módulo que gestiona Andrés Leguizamón (compra de suministros de operación y venta a proveedor externo) pasa a llamarse "Órdenes de Compra" en toda la interfaz (menú, títulos, botones y el documento/correo). El consecutivo (OP-####), la tabla y el funcionamiento no cambian; solo el nombre visible. Primera fase de la remodelación de Compras/Inventario/Requisiciones/Reembolsos.' },
@@ -11158,7 +11161,8 @@ async function renderReembolsosList(){
   }
   var totGral=0, nRec=0, nPend=0;
   var html=ordenLotes.map(function(k){
-    var G=g[k], rows=G.rows, h=rows[0];
+    var G=g[k], rows=G.rows, h=rows[0]; var _lotePdf=(h&&h.soporte_pdf)||null;
+    var _lotePdfBar=(G.consec!=null?('<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 8px 8px;font-size:12px"><span style="font-weight:700;color:#1F3864">📄 Soporte del lote (PDF único):</span>'+(_lotePdf?'<a href="'+esc(_lotePdf)+'" target="_blank" style="color:#1d4ed8;text-decoration:none">Ver PDF ✅</a>':'<span style="color:#92400E">Sin PDF del lote</span>')+(puedeLote?' <label style="cursor:pointer;border:1px solid #1F3864;color:#1F3864;border-radius:6px;padding:2px 8px;font-size:11px">'+(_lotePdf?'Reemplazar':'Subir PDF')+'<input type="file" accept="application/pdf,image/*" style="display:none" onchange="window._loteSubirPdfLote('+G.consec+',this)"></label>':'')+'</div>'):'');
     var total=rows.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
     var pend=rows.filter(function(x){ return _APROB.indexOf(x.estado)<0; }).length;
     totGral+=total; nRec+=rows.length; if(pend) nPend++;
@@ -11168,6 +11172,8 @@ async function renderReembolsosList(){
     var abierto = !!window._REEMB_EXP[k];
     var det = rows.map(function(x,i){
       var ya=_APROB.indexOf(x.estado)>=0;
+      var _cub=!!(x.soporte_url||x.adjunto||_lotePdf);
+      var _sopCell=(_cub?(x.soporte_url?'<a href="'+esc(x.soporte_url)+'" target="_blank" title="Soporte del recibo" style="text-decoration:none">✅</a>':'<span title="Cubierto">✅</span>'):'<span style="color:#c00" title="Sin soporte">⛔</span>')+((puedeLote&&G.consec!=null)?' <label style="cursor:pointer" title="Subir soporte de este recibo">📤<input type="file" accept="image/*,application/pdf" style="display:none" onchange="window._loteSubirSoporteRecibo(\''+x.id+'\',this)"></label>':'');
       return '<tr style="background:#fafbfc;font-size:12px">'
         +'<td style="padding:4px 8px;color:#999">'+(i+1)+'</td>'
         +'<td style="padding:4px 8px">'+esc(fF(x.fecha_factura||x.fecha))+'</td>'
@@ -11175,6 +11181,7 @@ async function renderReembolsosList(){
         +'<td style="padding:4px 8px">'+esc(x.descripcion||'')+'</td>'
         +'<td style="padding:4px 8px;text-align:right;white-space:nowrap">'+fmt(x.valor)+'</td>'
         +'<td style="padding:4px 8px;text-align:center">'+(x.adjunto?'<a href="'+esc(x.adjunto)+'" target="_blank" style="color:#1d4ed8;text-decoration:none">📎</a>':'<span style="color:#c00" title="Sin recibo escaneado">⚠️</span>')+'</td>'
+        +'<td style="padding:4px 8px;text-align:center">'+_sopCell+'</td>'
         +'<td style="padding:4px 8px;text-align:center;color:'+(ya?'#065F46':'#92400E')+'">'+esc(x.estado||'')+'</td>'
         +'<td style="padding:4px 8px;text-align:right;white-space:nowrap">'+(typeof _btnsEdit==='function'?_btnsEdit('reembolsos',x.id):'')+'</td></tr>';
     }).join('');
@@ -11200,7 +11207,7 @@ async function renderReembolsosList(){
       +'<td style="text-align:right;font-weight:800;white-space:nowrap">'+fmt(total)+'</td>'
       +'<td style="text-align:center"><span style="background:'+col.b+';color:'+col.t+';font-weight:700;font-size:11px;padding:2px 10px;border-radius:10px;white-space:nowrap">'+estado+'</span></td>'
       +'<td style="white-space:nowrap;text-align:right">'+acc+'</td></tr>'
-      +(abierto?('<tr><td colspan="9" style="padding:0 0 10px 26px;background:#fafbfc"><table style="width:100%;border-collapse:collapse"><thead><tr style="font-size:11px;color:#666;text-align:left"><th style="padding:4px 8px">#</th><th style="padding:4px 8px">Fecha recibo</th><th style="padding:4px 8px">No.</th><th style="padding:4px 8px">Descripción</th><th style="padding:4px 8px;text-align:right">Valor</th><th style="padding:4px 8px;text-align:center">Adj.</th><th style="padding:4px 8px;text-align:center">Estado</th><th></th></tr></thead><tbody>'+det+'</tbody></table></td></tr>'):'')
+      +(abierto?('<tr><td colspan="9" style="padding:0 0 10px 26px;background:#fafbfc">'+_lotePdfBar+'<table style="width:100%;border-collapse:collapse"><thead><tr style="font-size:11px;color:#666;text-align:left"><th style="padding:4px 8px">#</th><th style="padding:4px 8px">Fecha recibo</th><th style="padding:4px 8px">No.</th><th style="padding:4px 8px">Descripción</th><th style="padding:4px 8px;text-align:right">Valor</th><th style="padding:4px 8px;text-align:center">Adj.</th><th style="padding:4px 8px;text-align:center">Soporte</th><th style="padding:4px 8px;text-align:center">Estado</th><th></th></tr></thead><tbody>'+det+'</tbody></table></td></tr>'):'')
       +'</tbody>';
   }).join('');
   document.getElementById('main-content').innerHTML=
@@ -11279,6 +11286,57 @@ window._loteEditarDatos=async function(consec){
   if(upd.error){ showToast('Error: '+upd.error.message,'error'); return; }
   showToast('✏️ Datos de '+ref+' actualizados ("'+emp+'"). Los recibos y valores no se tocaron.','success');
   renderReembolsosList();
+};
+
+// ── SOPORTES DE REEMBOLSO (Sol. Santiago — Fase 2) ─────────────────────────
+// Dos formas de respaldar los recibos de un lote:
+//   • Individual: cada recibo puede tener su archivo escaneado (columna reembolsos.soporte_url).
+//   • Lote completo: un solo PDF con todo el lote (columna reembolsos.soporte_pdf, replicada
+//     en TODAS las filas del consecutivo, igual que _loteEditarDatos).
+// El check "Soporte" muestra ✅ si el recibo tiene su archivo (soporte_url o el adjunto de
+// registro) O si el lote tiene el PDF completo; si no, ⛔. Si la columna aún no existe en la
+// BD, avisa por toast y NO rompe el flujo (mismo criterio que _loteGuardar/publicarComunicacion).
+window._loteSubirSoporteRecibo=async function(reciboId, inp){
+  if(!(typeof window._cmpEsCompras==='function' && window._cmpEsCompras())){ showToast('Subir soporte requiere rol de compras, administración o gerencia','error'); if(inp) inp.value=''; return; }
+  var f=inp && inp.files && inp.files[0]; if(!f){ return; }
+  if(f.size > 25*1024*1024){ showToast('El archivo supera 25 MB','error'); if(inp) inp.value=''; return; }
+  showToast('Subiendo soporte…','info');
+  var url=null;
+  try{
+    var _p='reembolsos/soporte_'+reciboId+'_'+Date.now()+'_'+String(f.name||'soporte').replace(/[^a-zA-Z0-9._-]/g,'_');
+    var up=await sb.storage.from('adjuntos').upload(_p,f,{cacheControl:'3600',upsert:false,contentType:f.type||undefined});
+    if(up.error){ showToast('No se pudo subir: '+up.error.message,'error'); if(inp) inp.value=''; return; }
+    url=sb.storage.from('adjuntos').getPublicUrl(_p).data.publicUrl;
+  }catch(e){ showToast('Error subiendo el soporte','error'); if(inp) inp.value=''; return; }
+  var u=await sb.from('reembolsos').update({ soporte_url:url }).eq('id', reciboId);
+  if(u.error && /(soporte_url|could not find|does not exist|schema cache|column)/i.test(u.error.message||'')){
+    showToast('Archivo subido, pero falta crear la columna "soporte_url" en la tabla reembolsos para guardar el soporte por recibo.','info');
+    return;
+  }
+  if(u.error){ showToast('Error: '+u.error.message,'error'); return; }
+  showToast('✅ Soporte del recibo guardado','success');
+  if(typeof renderReembolsosList==='function') renderReembolsosList();
+};
+window._loteSubirPdfLote=async function(consec, inp){
+  if(!(typeof window._cmpEsCompras==='function' && window._cmpEsCompras())){ showToast('Subir el PDF del lote requiere rol de compras, administración o gerencia','error'); if(inp) inp.value=''; return; }
+  var f=inp && inp.files && inp.files[0]; if(!f){ return; }
+  if(f.size > 25*1024*1024){ showToast('El archivo supera 25 MB','error'); if(inp) inp.value=''; return; }
+  showToast('Subiendo PDF del lote…','info');
+  var url=null;
+  try{
+    var _p='reembolsos/lote_R'+String(consec).padStart(4,'0')+'_'+Date.now()+'_'+String(f.name||'lote').replace(/[^a-zA-Z0-9._-]/g,'_');
+    var up=await sb.storage.from('adjuntos').upload(_p,f,{cacheControl:'3600',upsert:false,contentType:f.type||undefined});
+    if(up.error){ showToast('No se pudo subir: '+up.error.message,'error'); if(inp) inp.value=''; return; }
+    url=sb.storage.from('adjuntos').getPublicUrl(_p).data.publicUrl;
+  }catch(e){ showToast('Error subiendo el PDF','error'); if(inp) inp.value=''; return; }
+  var u=await sb.from('reembolsos').update({ soporte_pdf:url }).eq('edificio',EDIFICIO_ACTIVO).eq('consecutivo', consec);
+  if(u.error && /(soporte_pdf|could not find|does not exist|schema cache|column)/i.test(u.error.message||'')){
+    showToast('Archivo subido, pero falta crear la columna "soporte_pdf" en la tabla reembolsos para guardar el PDF del lote.','info');
+    return;
+  }
+  if(u.error){ showToast('Error: '+u.error.message,'error'); return; }
+  showToast('✅ PDF del lote R-'+String(consec).padStart(4,'0')+' guardado — todos los recibos quedan cubiertos','success');
+  if(typeof renderReembolsosList==='function') renderReembolsosList();
 };
 
 async function renderReembolsoLote(_consec){
@@ -11433,14 +11491,15 @@ function _loteComprobanteHTML(consec, rows){
   var fmt=function(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); };
   var total=rows.reduce(function(s,r){return s+(Number(r.valor)||0);},0);
   var h=rows[0]||{};
-  var filas=rows.map(function(r,i){ return '<tr><td style="border:1px solid #ccc;padding:6px;text-align:center">'+(i+1)+'</td><td style="border:1px solid #ccc;padding:6px;text-align:center;white-space:nowrap">R-'+String(consec).padStart(4,'0')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.fecha_factura||'')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.recibo_no||'—')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.descripcion||'')+'</td><td style="border:1px solid #ccc;padding:6px;text-align:right">'+fmt(r.valor)+'</td></tr>'; }).join('');
+  var _cub=function(r){ return !!(r.soporte_url||r.adjunto||h.soporte_pdf); };
+  var filas=rows.map(function(r,i){ return '<tr><td style="border:1px solid #ccc;padding:6px;text-align:center">'+(i+1)+'</td><td style="border:1px solid #ccc;padding:6px;text-align:center;white-space:nowrap">R-'+String(consec).padStart(4,'0')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.fecha_factura||'')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.recibo_no||'—')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.descripcion||'')+'</td><td style="border:1px solid #ccc;padding:6px;text-align:right">'+fmt(r.valor)+'</td><td style="border:1px solid #ccc;padding:6px;text-align:center">'+(_cub(r)?'✅':'⛔')+'</td></tr>'; }).join('');
   return '<div style="font-family:Arial,Helvetica,sans-serif;max-width:680px;margin:0 auto;color:#111;border:2px solid #1F3864;border-radius:8px;padding:20px">'
     +'<div style="text-align:center;font-size:16px;font-weight:800;color:#1F3864;border-bottom:2px solid #1F3864;padding-bottom:8px">'+esc(nb)+' — COMPROBANTE DE REEMBOLSO</div>'
     +'<div style="text-align:center;margin:10px 0;font-size:14px;font-weight:800;color:#1F3864;background:#eef3fb;border:1px solid #1F3864;border-radius:6px;padding:8px">Consecutivo interno del lote: R-'+String(consec).padStart(4,'0')+'</div>'
     +'<div style="display:flex;justify-content:space-between;margin:10px 0;font-size:13px"><div><b>Reembolso N°:</b> '+consec+'</div><div><b>Fecha:</b> '+esc(h.fecha||'')+'</div><div><b>Caja:</b> '+esc(h.caja||'')+'</div></div>'
     +'<table style="width:100%;font-size:13px;margin-bottom:8px"><tr><td style="width:50%"><b>Empresa/Proveedor:</b> '+esc(h.empresa||'')+'</td><td><b>Área:</b> '+esc(h.area||'')+'</td></tr><tr><td><b>Entregado por:</b> '+esc(h.entregado_por||'—')+'</td><td><b>Aprobado por:</b> '+esc(h.aprobado_por||'—')+'</td></tr></table>'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#1F3864;color:#fff"><th style="border:1px solid #ccc;padding:6px">#</th><th style="border:1px solid #ccc;padding:6px">Consec. lote</th><th style="border:1px solid #ccc;padding:6px">Fecha</th><th style="border:1px solid #ccc;padding:6px">No. Recibo</th><th style="border:1px solid #ccc;padding:6px">Descripción</th><th style="border:1px solid #ccc;padding:6px">Valor</th></tr></thead><tbody>'+filas+'</tbody>'
-    +'<tfoot><tr style="font-weight:800;background:#eef3fb"><td colspan="5" style="border:1px solid #ccc;padding:6px;text-align:right">TOTAL REEMBOLSO</td><td style="border:1px solid #ccc;padding:6px;text-align:right;color:#1A5C2E">'+fmt(total)+'</td></tr></tfoot></table>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#1F3864;color:#fff"><th style="border:1px solid #ccc;padding:6px">#</th><th style="border:1px solid #ccc;padding:6px">Consec. lote</th><th style="border:1px solid #ccc;padding:6px">Fecha</th><th style="border:1px solid #ccc;padding:6px">No. Recibo</th><th style="border:1px solid #ccc;padding:6px">Descripción</th><th style="border:1px solid #ccc;padding:6px">Valor</th><th style="border:1px solid #ccc;padding:6px">Soporte</th></tr></thead><tbody>'+filas+'</tbody>'
+    +'<tfoot><tr style="font-weight:800;background:#eef3fb"><td colspan="5" style="border:1px solid #ccc;padding:6px;text-align:right">TOTAL REEMBOLSO</td><td style="border:1px solid #ccc;padding:6px;text-align:right;color:#1A5C2E">'+fmt(total)+'</td><td style="border:1px solid #ccc;padding:6px"></td></tr></tfoot></table>'
     +(h.observaciones?('<div style="margin-top:10px;font-size:12px"><b>Obs:</b> '+esc(h.observaciones)+'</div>'):'')
     +'</div>';
 }
