@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-17-deshacer-checkin';
+const APP_VERSION = '2026-07-17-rack-relevos';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-17', version:'2026-07-17-rack-relevos', titulo:'Rack: relevos el mismo día (check-out y check-in en el mismo apto) muestran las dos reservas y suman las dos tarifas',
+    afecta:'Rack gráfico · Ingreso del día y del mes · ADR · Informe Ejecutivo',
+    detalle:'Sol. Santiago: como en la hotelería normal, cuando un apartamento se desocupa y se ocupa el mismo día, antes el Rack solo mostraba una de las dos reservas (guardaba una fila por apto/día) y contaba una sola tarifa, subestimando el ingreso. Ahora, en esos días de relevo la celda se pinta dividida: mitad naranja arriba con el huésped que SALE (CKO) y mitad azul abajo con el que ENTRA (CKI); al pasar el mouse o hacer clic se ven los dos nombres con sus tarifas. El ingreso del día y del mes, y el ADR, ahora suman las DOS tarifas del relevo (sin doblar). Se detecta cruzando las reservas al dibujar el Rack; no cambia el guardado ni el modelo de datos. Nota: si alguna tarifa está en dólares crudos (bug aparte), se suma tal cual hasta corregir ese punto.' },
   { fecha:'2026-07-17', version:'2026-07-17-deshacer-checkin', titulo:'Deshacer / corregir un check-in registrado por error',
     afecta:'Rack · Reservas · Informe CKI',
     detalle:'Sol. Juanita (Kubik): se evidenciaban check-in registrados en reservas con fecha de llegada aún futura, sin forma de corregirlos. Ahora, en el detalle del apartamento (modal), cuando una reserva tiene check-in registrado aparece el botón "↩️ Deshacer check-in" (solo para Gerencia y Administración). Pide confirmación mostrando la reserva y borra el registro de check-in (cki_at y cki_por); si la reserva también tenía check-out, lo borra también, porque un check-out sin check-in no tiene sentido. Sirve para corregir los check-in hechos antes de tiempo.' },
@@ -2014,9 +2017,39 @@ async function loadView(view) {
 const RACK_BASE21 = EB().aptosBase;
 const RACK_AS = EB().habitacionesA;
 
+// ── Relevos (check-OUT y check-IN el MISMO día en el MISMO apto) ─────────────────────────
+// La tabla `rack` guarda UNA fila por (apto,fecha); en un relevo eso oculta una de las dos
+// reservas y subestima el ingreso. Cruzamos `reservas` para reconstruir el par.
+// Devuelve { 'apto|YYYY-MM-DD': {nombreSale,tarifaSale,nombreEntra,tarifaEntra} }.
+window._rkBuildRelevoMap = function(reservasRows){
+  const _sale = {}, _entra = {};
+  (reservasRows||[]).forEach(function(r){
+    if(!r || !r.apto) return;
+    const cko = r.checkout ? String(r.checkout).slice(0,10) : '';
+    const cki = r.checkin  ? String(r.checkin).slice(0,10)  : '';
+    if(cko){ const k=r.apto+'|'+cko; if(!_sale[k])  _sale[k]=r; }   // reserva que SALE ese día
+    if(cki){ const k=r.apto+'|'+cki; if(!_entra[k]) _entra[k]=r; }  // reserva que ENTRA ese día
+  });
+  const relevo = {};
+  Object.keys(_sale).forEach(function(k){
+    const s=_sale[k], e=_entra[k];
+    if(!e) return;                                 // no hay entrante ese día -> no es relevo
+    if(String(s.id) === String(e.id)) return;      // debe ser una reserva DISTINTA
+    relevo[k] = {
+      nombreSale:  s.nombre || s.huesped || '',
+      tarifaSale:  Number(s.tarifa)||0,
+      nombreEntra: e.nombre || e.huesped || '',
+      tarifaEntra: Number(e.tarifa)||0,
+    };
+  });
+  return relevo;
+};
+
 // Cálculo único de KPIs del día — usado por Dashboard y Rack para que SIEMPRE concuerden.
 // getRec(apto) devuelve el registro de rack de ese apto para el día evaluado (o undefined).
-function calcKpisDia(registrosHoy){
+// relevoMap (opcional): { 'apto|fecha': {tarifaSale,tarifaEntra,...} }. Si viene, en los días de
+// relevo se cuentan AMBAS tarifas (reemplaza la tarifa única de la fila del rack).
+function calcKpisDia(registrosHoy, relevoMap){
   // Resolver duplicados (mismo apto/fecha) con criterio único: estado más relevante; en empate, el más reciente
   const PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'No Show':4,'Libre':1,'Sale de viaje':5 };
   const byApto = {};
@@ -2041,7 +2074,14 @@ function calcKpisDia(registrosHoy){
       const incluida = (r?.observaciones||'').includes('Apto completo'); // A de apto completo: fuera de inventario
       if (FUERA.includes(e) || incluida) return;
       disp++;
-      if (OCU.includes(e)){ ocu++; if (r && r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa)); }
+      if (OCU.includes(e)){
+        ocu++;
+        const _rkRel = (relevoMap && r) ? relevoMap[a+'|'+r.fecha] : null;
+        if (_rkRel){ // relevo: reemplaza la tarifa única de la fila por las DOS del par (no dobla)
+          if (Number(_rkRel.tarifaSale)>0)  tar.push(Number(_rkRel.tarifaSale));
+          if (Number(_rkRel.tarifaEntra)>0) tar.push(Number(_rkRel.tarifaEntra));
+        } else if (r && r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa));
+      }
       if (EN_CASA.includes(e)) enCasa++;
     });
     return {ocu, disp, tar, enCasa};
@@ -2656,6 +2696,17 @@ async function renderRack() {
   } catch (_e) { console.error('rack CKI/CKO map:', _e); }
   window._rackCkMap = _ckMap;
 
+  // Relevos del mes visible: cruzamos `reservas` (mismo filtro de edificio que el rack) para
+  // reconstruir los días con check-OUT y check-IN el mismo día/apto. Clave 'apto|YYYY-MM-DD'.
+  window._rackRelevoMap = {};
+  try {
+    const { data: _rsvMes } = await sb.from('reservas')
+      .select('id,apto,nombre,checkin,checkout,tarifa')
+      .or(`edificio.eq.${EDIFICIO_ACTIVO},edificio.is.null`)
+      .lte('checkin', monthEnd).gte('checkout', monthStart);
+    window._rackRelevoMap = window._rkBuildRelevoMap(_rsvMes || []);
+  } catch (_e) { console.error('rack relevos map:', _e); window._rackRelevoMap = {}; }
+
   const _noEntr = EB().noEntregados || [];
   let aptos = [...new Set([...EB().aptosFull, ...(allRack||[]).map(r => r.apto)])].filter(a => _noEntr.indexOf(a) < 0).sort((a,b) => {
     const na = parseInt(a); const nb = parseInt(b);
@@ -2690,7 +2741,7 @@ async function renderRack() {
   // KPIs — usar datos del Rack Gráfico oficial para el mes
   const todayDay = now.getDate();
   // Contar estados para HOY desde la BD (rack map)
-  const _kr = calcKpisDia(allRack.filter(r => r.fecha === TODAY));
+  const _kr = calcKpisDia(allRack.filter(r => r.fecha === TODAY), window._rackRelevoMap);
   const ocupHoy  = indMes ? Math.round(indMes.noches / daysInMonth) : _kr.b21.ocu;
   const ckiHoy   = _kr.cki;
   const ckoHoy   = _kr.cko;
@@ -2701,7 +2752,23 @@ async function renderRack() {
     'Check-out hoy': _rkHoy.filter(r=>r.estado==='Check-out hoy').map(r=>({apto:r.apto, huesped:r.huesped})),
   };
   const ocuPct   = indMes ? Math.round(indMes.ocu * 100) : Math.round(ocupHoy / (aptos.length||1) * 100);
-  const ventasMesRk = allRack.filter(r=> r.edificio===EDIFICIO_ACTIVO && ["Ocupado","Check-in hoy","Check-out hoy","Completo","Sale de viaje"].includes(r.estado) && Number(r.tarifa)>0).reduce((s,r)=>s+Number(r.tarifa),0);
+  const ventasMesRk_base = allRack.filter(r=> r.edificio===EDIFICIO_ACTIVO && ["Ocupado","Check-in hoy","Check-out hoy","Completo","Sale de viaje"].includes(r.estado) && Number(r.tarifa)>0).reduce((s,r)=>s+Number(r.tarifa),0);
+  // Ajuste por relevos: la fila del rack aporta UNA tarifa; el día real vale tarifaSale+tarifaEntra.
+  // Sumamos (par - lo que la base YA contó), con el MISMO criterio de "contado" que la base, y con
+  // un Set para no procesar dos veces la misma celda. Resultado neto por celda = tarifaSale+tarifaEntra.
+  const _rkRelSeen = new Set(); let _rkRelevoVentaAj = 0, _rkRelevoCountAj = 0;
+  allRack.forEach(function(r){
+    if(r.edificio!==EDIFICIO_ACTIVO) return;                 // mismo filtro estricto que la base
+    const _rk = r.apto+'|'+r.fecha;
+    const v = window._rackRelevoMap && window._rackRelevoMap[_rk];
+    if(!v || _rkRelSeen.has(_rk)) return;
+    _rkRelSeen.add(_rk);
+    const _tS=Number(v.tarifaSale)||0, _tE=Number(v.tarifaEntra)||0;
+    const _contado = (["Ocupado","Check-in hoy","Check-out hoy","Completo","Sale de viaje"].includes(r.estado) && Number(r.tarifa)>0) ? Number(r.tarifa) : 0;
+    _rkRelevoVentaAj += ((_tS+_tE) - _contado);
+    _rkRelevoCountAj += (((_tS>0?1:0)+(_tE>0?1:0)) - (_contado>0?1:0));
+  });
+  const ventasMesRk = ventasMesRk_base + _rkRelevoVentaAj;
   const _OCURK=["Ocupado","Check-in hoy","Check-out hoy","Completo","Sale de viaje"];
   const _FURK=["Bloqueado","Mantenimiento"];
   const _mr=allRack.filter(r=> r.edificio===EDIFICIO_ACTIVO);
@@ -2712,7 +2779,8 @@ async function renderRack() {
   const _ocu33m=_mr.filter(r=>_s33.has(r.apto)&&_OCURK.includes(r.estado)).length;
   const _pct21m=Math.round(_ocu21m/_disp21m*100), _pct33m=Math.round(_ocu33m/_disp33m*100);
   const _conTarM=_mr.filter(r=>_OCURK.includes(r.estado)&&Number(r.tarifa)>0);
-  const _adrMes=_conTarM.length?Math.round(ventasMesRk/_conTarM.length):0;
+  const _denAdrMes=_conTarM.length + _rkRelevoCountAj; // cada relevo aporta hasta 2 muestras de tarifa
+  const _adrMes=_denAdrMes>0?Math.round(ventasMesRk/_denAdrMes):0;
   const _revparMes=Math.round(ventasMesRk/_disp21m);
 
   const CELL_W = 36; // ancho celda en px (más grande)
@@ -2858,6 +2926,17 @@ async function renderRack() {
       let _ckSuf = '', _ckBadge = '', _ckLinea2 = apellido;
       if (_ckiHecho){ _ckSuf = ` · ✅ CKI ${_hhmm(_ckR.cki_at)}${_ckR.cki_por?(' por '+_ckR.cki_por):''}`; _ckBadge = '<span style="position:absolute;top:0;right:0;background:#1E7E34;color:#fff;font-size:7px;line-height:1;padding:1px 2px;border-radius:0 0 0 4px;font-weight:700">✓</span>'; _ckLinea2 = '🟢 '+_hhmm(_ckR.cki_at); }
       if (_ckoHecho){ _ckSuf = ` · ✅ CKO ${_hhmm(_ckR.cko_at)}${_ckR.cko_por?(' por '+_ckR.cko_por):''}`; _ckBadge = '<span style="position:absolute;top:0;right:0;background:#C2410C;color:#fff;font-size:7px;line-height:1;padding:1px 2px;border-radius:0 0 0 4px;font-weight:700">✓</span>'; _ckLinea2 = '🔴 '+_hhmm(_ckR.cko_at); }
+      const _rkRel = window._rackRelevoMap ? window._rackRelevoMap[apto+'|'+_fechaCelda] : null;
+      if (_rkRel){
+        const _apeS=(_rkRel.nombreSale||'').split(' ').slice(-1)[0].substring(0,6);
+        const _apeE=(_rkRel.nombreEntra||'').split(' ').slice(-1)[0].substring(0,6);
+        const _tS=Number(_rkRel.tarifaSale)||0, _tE=Number(_rkRel.tarifaEntra)||0;
+        const _titRel=(`Apto ${apto} · ${_fcT} · RELEVO — Sale (CKO): ${_rkRel.nombreSale||'—'} ($${_tS.toLocaleString('es-CO')}) · Entra (CKI): ${_rkRel.nombreEntra||'—'} ($${_tE.toLocaleString('es-CO')})`).replace(/"/g,'&quot;');
+        return `<td data-info="${_titRel}" data-rid="${rec?.id||''}" data-apto="${apto}" onclick="${onclick}" style="position:relative;padding:0;border:${border};cursor:${(rec?.id||canEdit)?'pointer':'default'};min-width:${CELL_W}px;max-width:${CELL_W}px;overflow:hidden;height:32px;${atenuar}">
+          <div title="Sale hoy (CKO): ${(_rkRel.nombreSale||'').replace(/"/g,'&quot;')} — $${_tS.toLocaleString('es-CO')}" style="background:#FBC97D;color:#854F0B;height:16px;line-height:15px;font-size:7px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid #fff;padding:0 1px">▲${_apeS}</div>
+          <div title="Entra hoy (CKI): ${(_rkRel.nombreEntra||'').replace(/"/g,'&quot;')} — $${_tE.toLocaleString('es-CO')}" style="background:#9EC5F0;color:#0C447C;height:16px;line-height:15px;font-size:7px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 1px">▼${_apeE}</div>
+        </td>`;
+      }
       return `<td data-info="${String(title+_ckSuf).replace(/"/g,'&quot;')}" data-rid="${rec?.id||''}" data-apto="${apto}" onclick="${onclick}" style="position:relative;background:${bgCelda};color:${colCelda};text-align:center;padding:2px 1px;border:${borderCelda};cursor:${(rec?.id||canEdit)?'pointer':'default'};min-width:${CELL_W}px;max-width:${CELL_W}px;overflow:hidden;height:32px;${atenuar}">
         ${_ckBadge}
         <div style="font-size:10px;font-weight:800;line-height:1.3">${codeCelda}</div>
@@ -3214,7 +3293,15 @@ function infoDiaRack(dia){
       const incluida = (r?.observaciones||'').includes('Apto completo');
       if (FUERA.includes(e) || incluida) return;
       disp++;
-      if (OCU.includes(e)){ ocu++; if (r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa)); }
+      if (OCU.includes(e)){
+        ocu++;
+        var _dISO = window._rackYear+'-'+String((window._rackMes||0)+1).toString().padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+        var _rkRel = window._rackRelevoMap ? window._rackRelevoMap[a+'|'+_dISO] : null;
+        if (_rkRel){ // relevo: reemplaza la tarifa única por las DOS del par (no dobla)
+          if (Number(_rkRel.tarifaSale)>0)  tar.push(Number(_rkRel.tarifaSale));
+          if (Number(_rkRel.tarifaEntra)>0) tar.push(Number(_rkRel.tarifaEntra));
+        } else if (r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa));
+      }
     });
     return {ocu, disp, tar};
   };
@@ -11759,23 +11846,37 @@ async function renderInformeEjecutivo(){
   const dim = new Date(y, now.getMonth()+1, 0).getDate();
   const mEnd = y+'-'+mo+'-'+String(dim).padStart(2,'0');
   document.getElementById('main-content').innerHTML = '<div class="page-title">📈 Informe Ejecutivo</div><div class="card"><p style="color:#888">Cargando datos…</p></div>';
-  const [rHoy, rMes, novR, mantR, salR, solR, conR] = await Promise.all([
+  const [rHoy, rMes, novR, mantR, salR, solR, conR, rvR] = await Promise.all([
     sb.from('rack').select('*').eq('fecha',TODAY).eq('edificio',ed),
-    window._rackFetchRango(mStart, mEnd, 'apto,estado,tarifa'),   // paginado: un mes supera las 1.000 filas de Supabase
+    window._rackFetchRango(mStart, mEnd, 'apto,estado,tarifa,fecha'),   // paginado: un mes supera las 1.000 filas de Supabase
     sb.from('novedades').select('descripcion,apto,estado,area,created_at').in('estado',['Abierto','En proceso','Escalado']),
     sb.from('mantenimiento').select('descripcion,apto,estado,fecha').in('estado',['Pendiente','En proceso']),
     sb.from('saldos_aptos').select('apto,arrendatario,saldo_total,fecha').eq('edificio',ed),
     sb.from('solicitudes').select('descripcion,prioridad,solicitante').eq('edificio',ed).eq('estado','Pendiente'),
-    sb.from('contratos').select('apto,arrendatario,fecha_vencimiento,otro_si_vigencia,tipo')
+    sb.from('contratos').select('apto,arrendatario,fecha_vencimiento,otro_si_vigencia,tipo'),
+    sb.from('reservas').select('id,apto,nombre,checkin,checkout,tarifa').eq('edificio',ed).lte('checkin',mEnd).gte('checkout',mStart)
   ]);
-  const k = (typeof calcKpisDia==='function') ? calcKpisDia(rHoy.data||[]) : {b21:{ocu:0,disp:1},cki:0,cko:0,ing:0,adr:0,pct21:0};
+  const _ejecRelevo = window._rkBuildRelevoMap(rvR && rvR.data ? rvR.data : []);
+  const k = (typeof calcKpisDia==='function') ? calcKpisDia(rHoy.data||[], _ejecRelevo) : {b21:{ocu:0,disp:1},cki:0,cko:0,ing:0,adr:0,pct21:0};
   const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
   const baseSet = new Set(EB().aptosBase);
   const rmes = rMes.data||[];
   const ocuMesN = rmes.filter(r=>baseSet.has(r.apto)&&OCU.includes(r.estado)).length;
   const dispMes = Math.max(1, EB().aptosBase.length*dim);
   const ocuMesPct = Math.round(ocuMesN/dispMes*100);
-  const ventasMes = rmes.filter(r=>OCU.includes(r.estado)&&Number(r.tarifa)>0).reduce((s,r)=>s+Number(r.tarifa),0);
+  const ventasMes_base = rmes.filter(r=>OCU.includes(r.estado)&&Number(r.tarifa)>0).reduce((s,r)=>s+Number(r.tarifa),0);
+  // Ajuste por relevos (misma técnica que ventasMesRk): sumamos (par - lo ya contado), una vez por celda.
+  const _ejSeen = new Set(); let _ejRelAj = 0;
+  rmes.forEach(function(r){
+    const _fk = r.fecha ? String(r.fecha).slice(0,10) : '';
+    const _k2 = r.apto+'|'+_fk;
+    const v = _ejecRelevo[_k2];
+    if(!v || _ejSeen.has(_k2)) return;
+    _ejSeen.add(_k2);
+    const _contado = (OCU.includes(r.estado) && Number(r.tarifa)>0) ? Number(r.tarifa) : 0;
+    _ejRelAj += ((Number(v.tarifaSale)||0)+(Number(v.tarifaEntra)||0) - _contado);
+  });
+  const ventasMes = ventasMes_base + _ejRelAj;
   const sal = salR.data||[]; const byApto={};
   sal.forEach(s=>{ if(!byApto[s.apto] || String(s.fecha)>String(byApto[s.apto].fecha)) byApto[s.apto]=s; });
   const carteraList = Object.values(byApto).filter(s=>Number(s.saldo_total)>0).sort((a,b)=>Number(b.saldo_total)-Number(a.saldo_total));
