@@ -273,6 +273,7 @@ textarea{resize:vertical;min-height:80px}
       Esta celda pertenece a una <strong>reserva</strong>. Para cambiar fechas, nombre o check-in/out, edítala desde la reserva (el rack se actualiza solo).
       <button type="button" onclick="_editarReservaDesdeRack()" style="margin-left:6px;background:var(--azul-m,#1D3461);color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600">✏️ Editar la reserva</button>
       <div id="m-reserva-cki" style="margin-top:6px;font-size:11.5px;color:#0C447C;line-height:1.6"></div>
+      <button type="button" id="m-reserva-undo-cki" onclick="window._deshacerCheckin(window._rackReservaId)" style="display:none;margin-top:8px;background:#9A4A40;color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600">↩️ Deshacer check-in</button>
     </div>
     <div class="form-group">
       <label>Estado</label>
@@ -476,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-17-solicitudes-modulos';
+const APP_VERSION = '2026-07-17-deshacer-checkin';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-17', version:'2026-07-17-deshacer-checkin', titulo:'Deshacer / corregir un check-in registrado por error',
+    afecta:'Rack · Reservas · Informe CKI',
+    detalle:'Sol. Juanita (Kubik): se evidenciaban check-in registrados en reservas con fecha de llegada aún futura, sin forma de corregirlos. Ahora, en el detalle del apartamento (modal), cuando una reserva tiene check-in registrado aparece el botón "↩️ Deshacer check-in" (solo para Gerencia y Administración). Pide confirmación mostrando la reserva y borra el registro de check-in (cki_at y cki_por); si la reserva también tenía check-out, lo borra también, porque un check-out sin check-in no tiene sentido. Sirve para corregir los check-in hechos antes de tiempo.' },
   { fecha:'2026-07-17', version:'2026-07-17-solicitudes-modulos', titulo:'Resolución de solicitudes: Listado de cargos, Registro de huésped, Magnifique, reembolso por lote y Contratos',
     afecta:'Listado de cargos · Registro de huésped · Recibos Magnifique · Reembolso por lote · Contratos',
     detalle:'Se resuelven varias solicitudes del equipo. (1) LISTADO DE CARGOS — Sol. Sebastián: se corrige un error por el que el IVA de Magnifique no entraba en la base del total (Magnifique no sumaba); ahora Magnifique se incluye en la base gravada y dispara el recálculo. Ojo: los registros guardados antes de este arreglo conservan su total anterior hasta que se reediten. (2) LISTADO DE CARGOS — Sol. Sebastián: se agrega la columna "Desayuno incluido", tomada del campo desayuno de la reserva del apartamento. (3) REGISTRO DE HUÉSPED — Sol. Sebastián: en la tarjeta corta (80|10) y en la larga (LTM3) los campos Apartamento, Cantidad de noches, Check-in, Check-out (CKO), Tarifa y su Valor en letras ahora se precargan desde la reserva y quedan editables y resaltados en amarillo. (4) RECIBOS MAGNIFIQUE — Sol. Sebastián (auditoría): se agrega un campo para adjuntar el recibo escaneado (imagen/PDF) y un botón "👁️ Ver recibo" para previsualizarlo. Requiere crear la columna adjunto en la tabla recibos_magnifique. (5) REEMBOLSO POR LOTE — Sol. Sebastián: el consecutivo interno del lote (R-####) ahora se muestra en el correo/comprobante, tanto en un encabezado destacado como en una columna por cada recibo. (6) CONTRATOS — Sol. Cristina (Kubik): se agrega una columna "Canon" y un filtro "Solo Canon". La clasificación es un SUPUESTO revisable por Gerencia: se marca con canon el contrato de larga estadía (duración total mayor o igual a 30 días); puede ajustarse el umbral. No cambia datos, es solo clasificación visual.' },
@@ -3305,7 +3309,7 @@ async function openAptoModal(id, num) {
   // Híbrido rack↔reserva: si la celda pertenece a una reserva, ofrecer editarla desde la reserva
   try{ var _rb=document.getElementById('m-reserva-banner'); if(_rb){ if(data && data.reserva_id){ window._rackReservaId=data.reserva_id; _rb.style.display='block';
       // Fase 3 (lectura): mostrar quién y cuándo hizo el check-in/out registrado en la reserva
-      var _ck=document.getElementById('m-reserva-cki'); if(_ck){ _ck.innerHTML=''; sb.from('reservas').select('cki_at,cki_por,cko_at,cko_por').eq('id',data.reserva_id).single().then(function(_rr){ var _r=_rr&&_rr.data; var _el=document.getElementById('m-reserva-cki'); if(!_r||!_el) return; var _fmt=function(t){ try{ return new Date(t).toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}); }catch(_){ return ''; } }; var _t=[]; if(_r.cki_at) _t.push('🟢 Check-in'+(_r.cki_por?(' por '+_r.cki_por):'')+' · '+_fmt(_r.cki_at)); if(_r.cko_at) _t.push('🔴 Check-out'+(_r.cko_por?(' por '+_r.cko_por):'')+' · '+_fmt(_r.cko_at)); _el.innerHTML=_t.join('<br>'); }).catch(function(){}); }
+      var _ck=document.getElementById('m-reserva-cki'); if(_ck){ _ck.innerHTML=''; var _ubc=document.getElementById('m-reserva-undo-cki'); if(_ubc) _ubc.style.display='none'; sb.from('reservas').select('cki_at,cki_por,cko_at,cko_por').eq('id',data.reserva_id).single().then(function(_rr){ var _r=_rr&&_rr.data; var _el=document.getElementById('m-reserva-cki'); if(!_r||!_el) return; var _fmt=function(t){ try{ return new Date(t).toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}); }catch(_){ return ''; } }; var _t=[]; if(_r.cki_at) _t.push('🟢 Check-in'+(_r.cki_por?(' por '+_r.cki_por):'')+' · '+_fmt(_r.cki_at)); if(_r.cko_at) _t.push('🔴 Check-out'+(_r.cko_por?(' por '+_r.cko_por):'')+' · '+_fmt(_r.cko_at)); _el.innerHTML=_t.join('<br>'); var _ubc2=document.getElementById('m-reserva-undo-cki'); if(_ubc2){ _ubc2.style.display=(_r.cki_at && typeof window._cmpEsCompras==='function' && window._cmpEsCompras())?'inline-block':'none'; } }).catch(function(){}); }
     } else { window._rackReservaId=null; _rb.style.display='none'; var _ck0=document.getElementById('m-reserva-cki'); if(_ck0) _ck0.innerHTML=''; } } }catch(_e){}
   document.getElementById('modal-apto-num').textContent = String(num).split(' · ')[0].trim();
   document.getElementById('m-estado').value  = data?.estado || 'Libre';
@@ -3464,6 +3468,35 @@ async function _linkCkiReserva(estado){
     }
   }catch(_e){}
 }
+// ── Deshacer / corregir un check-in ya registrado en la reserva ──
+// Protegido con el permiso del flujo de caja (_cmpEsCompras: gerencia_general, gerencia_operativa, administrador, compras).
+// Pone cki_at/cki_por en null; si además hay check-out, también borra cko_at/cko_por (un CKO sin CKI no tiene sentido).
+window._deshacerCheckin = async function(id){
+  if(!(typeof window._cmpEsCompras === 'function' && window._cmpEsCompras())){ showToast('Solo Gerencia o Administración pueden deshacer un check-in','error'); return; }
+  if(!id){ showToast('No hay una reserva asociada a esta celda','error'); return; }
+  try{
+    const { data:_r, error:_e } = await sb.from('reservas').select('id,apto,nombre,huesped,checkin,checkout,cki_at,cki_por,cko_at,cko_por').eq('id',id).single();
+    if(_e || !_r){ showToast('No se pudo leer la reserva'+(_e?(': '+_e.message):''),'error'); return; }
+    if(!_r.cki_at){ showToast('Esta reserva no tiene check-in registrado','info'); return; }
+    const _nom = (typeof window._nombreCompleto==='function' ? window._nombreCompleto(_r) : (_r.huesped||_r.nombre||'')) || '(sin nombre)';
+    const _tieneCko = !!_r.cko_at;
+    const _msg = '¿Deshacer el CHECK-IN de esta reserva?\n\n'
+      + 'Apto: '+(_r.apto||'-')+'\n'
+      + 'Huésped: '+_nom+'\n'
+      + 'Llegada: '+(_r.checkin||'-')+' · Salida: '+(_r.checkout||'-')+'\n'
+      + 'Check-in registrado: '+(_r.cki_por?('por '+_r.cki_por):'(sin nombre)')+(_r.cki_at?(' · '+_r.cki_at):'')+'\n\n'
+      + 'Se BORRARÁ el registro de check-in (cki_at y cki_por).'
+      + (_tieneCko ? '\n\n⚠️ Esta reserva también tiene CHECK-OUT registrado: también se borrará (un check-out sin check-in no tiene sentido).' : '');
+    if(!confirm(_msg)) return;
+    const _upd = { cki_at:null, cki_por:null };
+    if(_tieneCko){ _upd.cko_at=null; _upd.cko_por=null; }
+    const { error:_eu } = await sb.from('reservas').update(_upd).eq('id',id);
+    if(_eu){ showToast('No se pudo deshacer el check-in: '+_eu.message,'error'); return; }
+    showToast('↩️ Check-in deshecho'+(_tieneCko?' (y check-out)':''),'success');
+    try{ if(typeof closeModal==='function') closeModal('modal-apto'); }catch(_){}
+    try{ if(window._currentView==='rack' && typeof renderRack==='function') renderRack(); else if(typeof loadView==='function') loadView(window._currentView||'rack'); }catch(_){}
+  }catch(_ex){ showToast('Error al deshacer el check-in: '+((_ex&&_ex.message)||_ex),'error'); }
+};
 async function saveApto() {
   const aNum = document.getElementById('modal-apto-num').textContent;
   const fecha = _aptoData?.fecha || TODAY;
