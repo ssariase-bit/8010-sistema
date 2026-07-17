@@ -7928,9 +7928,10 @@ window._comTargetOptions = async function(){
   if(names.length) personas='<optgroup label="Personas">'+names.map(function(n){return '<option>'+esc(n)+'</option>';}).join('')+'</optgroup>';
   return deptos+personas;
 };
-// Sol Santiago: usuarios del SO que NO deben salir como destinatarios de comunicados.
-// Conservan su acceso al sistema; solo no se les dirigen comunicados.
-window._NO_DESTINATARIOS = [];
+// Sol Santiago: personas que NO deben salir como destinatarios de comunicados.
+// Conservan su acceso al sistema (si lo tienen); solo no se les dirigen comunicados.
+// Lista definida por Gerencia (17-jul-2026) — personal operativo que no gestiona el SO.
+window._NO_DESTINATARIOS = ['Ángela Díaz','Angie Viviana Obando','Guillermina Sanabria','José Waldo Rojas','Leonor Moreno','Luz Dary Rodríguez','María del Carmen Durán','María Jaqueline Bautista','Martha Cecilia Oyola Ducuara','Michael Manrique','Miguel Moreno','Yolimar Manzanillo'];
 
 // ── TRM oficial (datos.gov.co) ─────────────────────────────────────────────
 // Si la fecha es futura y aún no hay TRM publicada, se usa la última vigente.
@@ -9305,6 +9306,13 @@ window._comTipoStyle = function(t){
   };
   return m[t] || {bg:'#dbeafe',col:'#1e40af',ic:'📣',bd:'#1D3461'};
 };
+window._comTogglePub = function(){
+  var b=document.getElementById('com-pub-body'); var a=document.getElementById('com-pub-arrow');
+  if(!b) return; var abrir=(b.style.display==='none'||b.style.display==='');
+  b.style.display=abrir?'block':'none';
+  if(a) a.textContent=abrir?'▴ cerrar':'▾ abrir';
+  if(abrir){ var t=document.getElementById('com-msg'); if(t) setTimeout(function(){t.focus();},40); }
+};
 window.renderComunicaciones = async function(filtro){
   // Sol Santiago: el numerito rojo cuenta los comunicados sin leer dirigidos a mí, pero al entrar se
   // veía la lista completa. Si hay pendientes y no se pidió otro filtro, se abre directo en "Mis
@@ -9347,12 +9355,16 @@ window.renderComunicaciones = async function(filtro){
       + '</div>';
   }).join('') || '<div class="empty"><div class="empty-icon">📣</div><p>Sin comunicaciones'+(filtro==='pendientes'?' pendientes':'')+'.</p></div>';
   var _comChecks = puede ? await window._comTargetChecksHTML() : '';
-  var pubForm = puede ? ('<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">✍️ Publicar comunicado / llamado de atención</div></div>'
+  // Sol Santiago: el formulario de publicar queda PLEGADO por defecto para que al entrar se vean
+  // primero las comunicaciones anteriores y no toque bajar tanto. Se abre con un clic en el título.
+  var pubForm = puede ? ('<div class="card" style="margin-bottom:14px">'
+    + '<div class="card-header" style="cursor:pointer;user-select:none" onclick="window._comTogglePub()"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;width:100%">✍️ Publicar comunicado / llamado de atención <span id="com-pub-arrow" style="color:#888;font-size:13px;font-weight:400">▾ abrir</span></div></div>'
+    + '<div id="com-pub-body" style="display:none;margin-top:10px">'
     + '<div class="form-group"><label>Mensaje</label><textarea id="com-msg" spellcheck="true" lang="es" placeholder="Ej: Señores, veo que están dejando la luz prendida de afuera..." style="min-height:70px"></textarea></div>'
     + '<div class="form-group"><label>Tipo</label><select id="com-prio" style="max-width:260px">'+window._COM_TIPOS.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select></div>'
     + '<div class="form-group"><label>Dirigido a <span style="font-weight:400;color:#888;font-size:11px">(marca uno o varios; o "Todos")</span></label><div id="com-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px">'+_comChecks+'</div></div>'
     + '<div class="form-group"><label>Adjuntar archivo <span style="font-weight:400;color:#888;font-size:11px">(opcional — imagen, PDF, etc.)</span></label><input type="file" id="com-file" style="font-size:12px"></div>'
-    + '<button class="btn btn-success" onclick="publicarComunicacion(this)">📣 Publicar</button></div>') : '';
+    + '<button class="btn btn-success" onclick="publicarComunicacion(this)">📣 Publicar</button></div></div>') : '';
   var fbtn = function(v,l){ var on=(window._comFiltro===v); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderComunicaciones(\''+v+'\')">'+l+'</button>'; };
   document.getElementById('main-content').innerHTML =
     '<div class="page-title">📣 Comunicaciones</div>'
