@@ -476,10 +476,16 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-17-horarios-recibos';
+const APP_VERSION = '2026-07-17-solicitudes-modulos';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-17', version:'2026-07-17-solicitudes-modulos', titulo:'Resolución de solicitudes: Listado de cargos, Registro de huésped, Magnifique, reembolso por lote y Contratos',
+    afecta:'Listado de cargos · Registro de huésped · Recibos Magnifique · Reembolso por lote · Contratos',
+    detalle:'Se resuelven varias solicitudes del equipo. (1) LISTADO DE CARGOS — Sol. Sebastián: se corrige un error por el que el IVA de Magnifique no entraba en la base del total (Magnifique no sumaba); ahora Magnifique se incluye en la base gravada y dispara el recálculo. Ojo: los registros guardados antes de este arreglo conservan su total anterior hasta que se reediten. (2) LISTADO DE CARGOS — Sol. Sebastián: se agrega la columna "Desayuno incluido", tomada del campo desayuno de la reserva del apartamento. (3) REGISTRO DE HUÉSPED — Sol. Sebastián: en la tarjeta corta (80|10) y en la larga (LTM3) los campos Apartamento, Cantidad de noches, Check-in, Check-out (CKO), Tarifa y su Valor en letras ahora se precargan desde la reserva y quedan editables y resaltados en amarillo. (4) RECIBOS MAGNIFIQUE — Sol. Sebastián (auditoría): se agrega un campo para adjuntar el recibo escaneado (imagen/PDF) y un botón "👁️ Ver recibo" para previsualizarlo. Requiere crear la columna adjunto en la tabla recibos_magnifique. (5) REEMBOLSO POR LOTE — Sol. Sebastián: el consecutivo interno del lote (R-####) ahora se muestra en el correo/comprobante, tanto en un encabezado destacado como en una columna por cada recibo. (6) CONTRATOS — Sol. Cristina (Kubik): se agrega una columna "Canon" y un filtro "Solo Canon". La clasificación es un SUPUESTO revisable por Gerencia: se marca con canon el contrato de larga estadía (duración total mayor o igual a 30 días); puede ajustarse el umbral. No cambia datos, es solo clasificación visual.' },
+  { fecha:'2026-07-17', version:'2026-07-17-comunicaciones-destinatarios', titulo:'Comunicaciones: formulario plegable y depuración de destinatarios',
+    afecta:'Comunicaciones',
+    detalle:'Sol. Santiago: (1) el formulario "Publicar comunicado" queda plegado por defecto, de modo que al entrar se ven primero las comunicaciones anteriores y el formulario se abre con un clic en su título. (2) Se depura la lista de "Dirigido a": Gerencia definió que el personal operativo (camareras, mantenimiento, áreas públicas, chef y capitán de meseros marcados) no reciba comunicados; quedan solo los administrativos, gerencia y usuarios del sistema. La exclusión aplica en ambos edificios.' },
   { fecha:'2026-07-17', version:'2026-07-17-horarios-recibos', titulo:'Actualización de horarios del personal por reducción de jornada · Selección múltiple de recibos en Caja',
     afecta:'Control de Ingreso Personal · Caja y Movimientos · 8010 / Kubik',
     detalle:'(1) HORARIOS DEL PERSONAL: a solicitud de Fabio Malaver y por la reducción de la jornada legal, se ajusta la hora de salida en las opciones de horario asignado del Control de Ingreso de Personal (mismo listado para 8010 y Kubik). Cambios de salida: Camareras 3:50 PM a 3:25 PM; Mantenimiento (7:00 AM) 3:25 PM a 3:00 PM; Mantenimiento (8:00 AM) 5:45 PM a 5:20 PM; Áreas Públicas 2:20 PM a 1:55 PM. Importante: el cálculo de horas extras del Sistema Operativo es solo REFERENCIAL; el sistema oficial de nómina es BUK, y esta actualización solo alinea la referencia interna. Los registros históricos ya guardados conservan el horario con el que se registraron; solo cambian las opciones nuevas. (2) SELECCIÓN MÚLTIPLE DE RECIBOS: a solicitud de Sebastián Martínez, en el módulo de Caja se agregan casillas por fila (y un seleccionar todo) más un botón para cambiar en lote el estado de legalización de los recibos seleccionados (por ejemplo marcar como Histórico los que ya se pasaron por reembolso y fueron entregados). Se usan únicamente los estados que ya maneja el sistema (Histórico, Reembolsado, En lote, Pendiente de legalizar, Provisional) y la acción pide confirmación con el conteo. Disponible solo para roles con permiso de plata del flujo de caja (gerencia, administración o compras).' },
@@ -1646,6 +1652,7 @@ async function loadView(view) {
       {id:'total',label:'Total con propina ($)',type:'number'},
       {id:'valor_domicilio',type:'number',hidden:true,default:0},
       {id:'observaciones',label:'Observaciones',type:'text'},
+      {id:'adjunto',label:'📎 Recibo escaneado (imagen o PDF) — para revisión en auditoría',type:'file'},
     ]); break;
 
     // Listado General de Cargos
@@ -6426,11 +6433,11 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     ['gf-master','gf-extras'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', _scalc); });
     _scalc();
   }
-  // Sol Sebastián: Listado de Cargos — Total = (transporte + lavandería + minibar + varios + salas) + IVA
+  // Sol Sebastián: Listado de Cargos — Total = (transporte + lavandería + minibar + varios + salas + magnifique) + IVA
   if (tabla === 'listado_cargos') {
     var _lcalc=function(){
       var pm=function(id){ var e=document.getElementById(id); if(!e) return 0; var v=String(e.value||'').replace(/[^\d.-]/g,''); return parseFloat(v)||0; };
-      var base = pm('gf-transporte')+pm('gf-lavanderia')+pm('gf-minibar')+pm('gf-varios')+pm('gf-salas');
+      var base = pm('gf-transporte')+pm('gf-lavanderia')+pm('gf-minibar')+pm('gf-varios')+pm('gf-salas')+pm('gf-magnifique');
       var ivaEl = document.getElementById('gf-iva');
       var pct = ivaEl ? (parseFloat(String(ivaEl.value||'').replace('%',''))||0) : 0;
       var tot = document.getElementById('gf-total');
@@ -6440,7 +6447,7 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
         tot.title='Automático: base $'+Math.round(base).toLocaleString('es-CO')+' + IVA '+pct+'%';
       }
     };
-    ['gf-transporte','gf-lavanderia','gf-minibar','gf-varios','gf-salas'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', _lcalc); });
+    ['gf-transporte','gf-lavanderia','gf-minibar','gf-varios','gf-salas','gf-magnifique'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', _lcalc); });
     var _ivaEl=document.getElementById('gf-iva'); if(_ivaEl) _ivaEl.addEventListener('change', _lcalc);
     _lcalc();
   }
@@ -7297,6 +7304,19 @@ window.nuevoOtroSi = function(edif, apto, arr){
     if(typeof showToast==='function') showToast('Nuevo Otro Si para apto '+apto+' - '+arr+'. Completa las fechas del periodo.', 'success');
   }, 350);
 };
+window._CANON_MIN_DIAS = 30; // SUPUESTO revisable (Cristina/gerencia): larga estadia / LTM3 = canon de arrendamiento. Subir a 90/180 para restringir.
+window._contratoDiasVigencia = function(it){
+  var fi = it.base && it.base.fecha_inicio; if(!fi) return 0;
+  var cand = [it.base.fecha_vencimiento || fi];
+  if(it.base.otro_si_vigencia) cand.push(it.base.otro_si_vigencia);
+  (it.exts||[]).forEach(function(e){ if(e.fecha_vencimiento) cand.push(e.fecha_vencimiento); if(e.otro_si_vigencia) cand.push(e.otro_si_vigencia); });
+  var maxFin = cand.reduce(function(m,d){ return (String(d)>String(m)) ? d : m; }, cand[0]);
+  var d0 = new Date(String(fi).split('T')[0]), d1 = new Date(String(maxFin).split('T')[0]);
+  if(isNaN(d0.getTime())||isNaN(d1.getTime())) return 0;
+  return Math.round((d1 - d0) / 86400000);
+};
+window._contratoTieneCanon = function(it){ return window._contratoDiasVigencia(it) >= window._CANON_MIN_DIAS; };
+window._toggleCanonFiltro = function(){ window._contratoSoloCanon = !window._contratoSoloCanon; renderContratos(window._contratoFiltro || ''); };
 window.renderContratos = async function(filtroEdif){
   filtroEdif = filtroEdif || '';
   window._contratoFiltro = filtroEdif;
@@ -7315,11 +7335,16 @@ window.renderContratos = async function(filtroEdif){
     return { base:base, exts:exts, edif:base.edificio };
   });
   if(filtroEdif) items = items.filter(function(it){ return window._norm(it.edif)===window._norm(filtroEdif); });
+  if(window._contratoSoloCanon) items = items.filter(function(it){ return window._contratoTieneCanon(it); });
   items.sort(function(a,b){ return window._norm(a.base.apto).localeCompare(window._norm(b.base.apto), undefined, {numeric:true}); });
   var totalExt = items.reduce(function(s,it){ return s+it.exts.length; },0);
   var mkBtn = function(val,lab){ var on = window._norm(filtroEdif)===window._norm(val); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="renderContratos(\''+val+'\')">'+lab+'</button>'; };
   var body = items.map(function(it){
     var b = it.base;
+    var _tieneCanon = window._contratoTieneCanon(it);
+    var canonBadge = _tieneCanon
+      ? '<span style="background:#e0e7ff;color:#3730a3;padding:1px 8px;border-radius:8px;font-size:11px;font-weight:600" title="Larga estadia &ge; '+window._CANON_MIN_DIAS+' dias ('+window._contratoDiasVigencia(it)+' d) — canon de arrendamiento (supuesto)">Sí</span>'
+      : '<span style="color:#9a9a9a;font-size:11px" title="'+window._contratoDiasVigencia(it)+' dias">No</span>';
     var contrato = window._fmtD(b.fecha_inicio)+' → '+window._fmtD(b.fecha_vencimiento);
     var otro = '<span style="color:#9a9a9a">–</span>';
     if(it.exts.length){
@@ -7332,7 +7357,7 @@ window.renderContratos = async function(filtroEdif){
     var obs = b.observaciones ? window._escH(b.observaciones) : '<span style="color:#bbb">—</span>';
     var _pdf = b.adjunto ? '<a href="'+window._escA(b.adjunto)+'" target="_blank" style="font-size:11px;color:#1d4ed8;text-decoration:none;display:inline-block;margin-bottom:3px">📎 Ver PDF</a><br>' : '';
     var acc = _pdf + '<span title="Editar contrato" style="cursor:pointer" onclick="abrirEditarGen(\'contratos\',\''+b.id+'\')">✏️</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarGen(\'contratos\',\''+b.id+'\')">🗑️</span><br><button class="btn btn-outline btn-sm" style="margin-top:4px;font-size:11px" onclick="nuevoOtroSi(\''+window._escA(b.edificio)+'\',\''+window._escA(b.apto)+'\',\''+window._escA(b.arrendatario)+'\')">+ Otro Sí</button>';
-    return '<tr style="vertical-align:top"><td>'+window._escH(b.apto)+'</td><td>'+window._escH(b.arrendatario)+'</td><td>'+window._compania(b.edificio)+'</td><td style="white-space:nowrap">'+contrato+'</td><td>'+otro+'</td><td style="font-size:12px;color:#555">'+obs+'</td><td style="white-space:nowrap">'+acc+'</td></tr>';
+    return '<tr style="vertical-align:top"><td>'+window._escH(b.apto)+'</td><td>'+window._escH(b.arrendatario)+'</td><td>'+window._compania(b.edificio)+'</td><td style="text-align:center">'+canonBadge+'</td><td style="white-space:nowrap">'+contrato+'</td><td>'+otro+'</td><td style="font-size:12px;color:#555">'+obs+'</td><td style="white-space:nowrap">'+acc+'</td></tr>';
   }).join('');
   document.getElementById('main-content').innerHTML =
     '<div class="page-title">📄 Contratos — Trazabilidad</div>'+
@@ -7340,11 +7365,12 @@ window.renderContratos = async function(filtroEdif){
     '<div class="card-title">'+items.length+' contratos · '+totalExt+' Otro Sí</div>'+
     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+
     mkBtn('','Todos')+mkBtn('8010','8010')+mkBtn('kubik','Kubik')+
+    '<button class="btn btn-sm '+(window._contratoSoloCanon?'btn-success':'btn-outline')+'" onclick="_toggleCanonFiltro()" title="Mostrar solo contratos con canon (larga estadia >= '+ (window._CANON_MIN_DIAS||30) +' dias)">🏷️ Solo Canon</button>'+
     '<input type="text" onkeyup="buscarEnListado(this)" placeholder="🔎 Buscar..." style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">'+
     (typeof barraCompartir==='function'?barraCompartir():'')+
     '<button class="btn btn-success btn-sm" onclick="loadView(\'contratos-form\')">+ Nuevo registro</button>'+
     '</div></div>'+
-    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Apto</th><th>Arrendatario</th><th>Compañía</th><th>Contrato</th><th>Otro Sí</th><th>Observaciones</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Apto</th><th>Arrendatario</th><th>Compañía</th><th>Canon</th><th>Contrato</th><th>Otro Sí</th><th>Observaciones</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   return { ok:true };
 };
 
@@ -7608,6 +7634,33 @@ window._REG_CLAUSULAS = "PRIMERA. - Objeto: Por medio del presente Contrato, EL 
 window._regEsc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
 window._regFD = function(f){ if(!f) return ''; var p=String(f).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):String(f); };
 window._REG_MESES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+// Convierte un entero a letras en español (mayúsculas). Para denominación de tarifa.
+window._regNumLetras = function(n){
+  n = Math.round(Math.abs(Number(n)||0));
+  if(n===0) return 'CERO';
+  var U=['','UNO','DOS','TRES','CUATRO','CINCO','SEIS','SIETE','OCHO','NUEVE','DIEZ','ONCE','DOCE','TRECE','CATORCE','QUINCE','DIECISÉIS','DIECISIETE','DIECIOCHO','DIECINUEVE','VEINTE'];
+  var D=['','','','TREINTA','CUARENTA','CINCUENTA','SESENTA','SETENTA','OCHENTA','NOVENTA'];
+  var C=['','CIENTO','DOSCIENTOS','TRESCIENTOS','CUATROCIENTOS','QUINIENTOS','SEISCIENTOS','SETECIENTOS','OCHOCIENTOS','NOVECIENTOS'];
+  function dec(x){
+    if(x<=20) return U[x];
+    if(x<30) return 'VEINTI'+U[x-20];
+    var d=Math.floor(x/10), u=x%10;
+    return D[d]+(u?' Y '+U[u]:'');
+  }
+  function cen(x){
+    if(x===0) return '';
+    if(x===100) return 'CIEN';
+    var c=Math.floor(x/100), r=x%100;
+    return (C[c]+(r?' '+dec(r):'')).trim();
+  }
+  var out='';
+  var millones=Math.floor(n/1000000), resto=n%1000000;
+  var miles=Math.floor(resto/1000), uni=resto%1000;
+  if(millones) out += (millones===1?'UN MILLÓN':cen(millones)+' MILLONES');
+  if(miles) out += (out?' ':'') + (miles===1?'MIL':cen(miles)+' MIL');
+  if(uni) out += (out?' ':'') + cen(uni);
+  return out.trim();
+};
 
 // Entrada: desde la lista de reservas
 window._regHuesped = async function(id){
@@ -7654,9 +7707,13 @@ window._regRender = function(){
   var usd = (rv.moneda==='USD');
   var tnum = usd ? (Number(rv.tarifa_usd)||Number(rv.tarifa)||0) : (Number(rv.tarifa)||0);
   var tarifa = (usd?'USD ':'$ ') + Math.round(tnum).toLocaleString('es-CO') + (usd?' + IVA':'');
+  var noches = Number(rv.noches)||0;
+  var _regMon = usd ? 'DÓLARES' : 'PESOS';
+  var tletras = tnum>0 ? (window._regNumLetras(Math.round(tnum))+' '+_regMon+(usd?' MÁS IVA':'')) : '';
   var pago = rv.pago || 'Directo';
   var reincidente = !!(C.previo);
   var _in=function(id,val,ph){ return '<input id="'+id+'" value="'+esc(val)+'" placeholder="'+esc(ph||'')+'" style="width:100%;border:none;border-bottom:1px solid #bbb;padding:2px 3px;font:inherit;background:transparent">'; };
+  var _inH=function(id,val,ph){ return '<input id="'+id+'" value="'+esc(val)+'" placeholder="'+esc(ph||'')+'" title="Precargado desde la reserva — editable" style="width:100%;border:none;border-bottom:1px solid #f0b400;padding:2px 3px;font:inherit;background:#fff8d6">'; };
 
   var head = '<div class="page-title">🪪 Registro de huésped — '+esc(nombre||'(sin nombre)')+'</div>'
     + '<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px;max-width:820px">Reserva '+esc(rv.num_reserva||rv.numero||'')+' · Apto '+esc(apto)+' · '+esc(ci)+' → '+esc(co)+' · '+(Number(rv.noches)||0)+' noches.'
@@ -7684,7 +7741,11 @@ window._regRender = function(){
       + '<tr><td colspan="4" class="reg-sec">ACOMPAÑANTE(S)</td></tr>'
       + '<tr><td class="reg-lb">Nombre(s) y Apellido(s):</td><td class="reg-v" colspan="3">'+_in('rg-ac-nom','')+'</td></tr>'
       + '<tr><td class="reg-lb">Dirección:</td><td class="reg-v">'+_in('rg-ac-dir','')+'</td><td class="reg-lb">Sexo:</td><td class="reg-v">'+_in('rg-ac-sexo','')+'</td></tr>'
-      + '<tr><td colspan="2" class="reg-sec2">TARIFA SERVICIO DE HOSPEDAJE</td><td colspan="2" class="reg-v">'+_in('rg-tarifa',tarifa+' · Apto '+apto+' · '+ci+' → '+co)+'</td></tr>'
+      + '<tr><td colspan="4" class="reg-sec">DATOS DE LA RESERVA (precargados · editables)</td></tr>'
+      + '<tr><td class="reg-lb">Apartamento:</td><td class="reg-v">'+_inH('rg-apto',apto)+'</td><td class="reg-lb">Cantidad de noches:</td><td class="reg-v">'+_inH('rg-noches',noches)+'</td></tr>'
+      + '<tr><td class="reg-lb">Check-in:</td><td class="reg-v">'+_inH('rg-ci',ci)+'</td><td class="reg-lb">Check-out (CKO):</td><td class="reg-v">'+_inH('rg-co',co)+'</td></tr>'
+      + '<tr><td colspan="2" class="reg-sec2">TARIFA SERVICIO DE HOSPEDAJE</td><td colspan="2" class="reg-v">'+_inH('rg-tarifa',tarifa)+'</td></tr>'
+      + '<tr><td colspan="2" class="reg-sec2">Valor en letras:</td><td colspan="2" class="reg-v">'+_inH('rg-tarifa-letras',tletras)+'</td></tr>'
       + '<tr><td colspan="2" class="reg-sec2">FORMA DE PAGO:</td><td class="reg-v">'+_in('rg-pago',pago)+'</td><td class="reg-v">Mes CKO: '+_in('rg-mesco',mesco)+'</td></tr>'
       + '</tbody></table>'
       + '<div class="reg-clau">'+window._REG_CLAUSULAS+'</div>'
@@ -7693,8 +7754,9 @@ window._regRender = function(){
   } else {
     var lc=function(es,en,inp){ return '<div class="reg-lc"><div class="reg-ll"><b>'+esc(es)+'</b><br><i>'+esc(en)+'</i></div><div class="reg-lv">'+inp+'</div></div>'; };
     cuerpo = '<div id="reg-print" class="ltm3p"><div class="ltm3-head"><img src="'+window._REG_LOGO+'" class="ltm3-logo"><div class="ltm3-t">REGISTRO LTM3</div>'
-      + '<div class="ltm3-room"><b>HABITACIÓN</b> / ROOM<br>'+_in('rg-hab',apto)+'</div></div>'
-      + '<div class="ltm3-fecha">Fecha Llegada: '+_in('rg-ci',ci)+' &nbsp; Fecha Salida: '+_in('rg-co',co)+'</div>'
+      + '<div class="ltm3-room"><b>HABITACIÓN</b> / ROOM<br>'+_inH('rg-hab',apto)+'</div></div>'
+      + '<div class="ltm3-fecha">Fecha Llegada: '+_inH('rg-ci',ci)+' &nbsp; Fecha Salida (CKO): '+_inH('rg-co',co)+' &nbsp; Noches: '+_inH('rg-noches',noches)+'</div>'
+      + '<div class="ltm3-fecha">Tarifa: '+_inH('rg-tarifa',tarifa)+' &nbsp; Valor en letras: '+_inH('rg-tarifa-letras',tletras)+'</div>'
       + '<div class="reg-g2">'
         + lc('Nombre:','First Name:',_in('rg-l-nom',nombre))
         + lc('Apellidos:','Last Name:',_in('rg-l-ape',ape))
@@ -7775,7 +7837,7 @@ window._regGuardar = async function(btn){
   var C=window._regCtx, rv=C.rv;
   if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
   var row={ edificio:EDIFICIO_ACTIVO, reserva_id:rv.id, tipo:(C.tipo==='larga'?'LTM3':'80-10'),
-    apto:(C.tipo==='larga'?_regVal('rg-hab'):rv.apto), nombre:(C.tipo==='larga'?_regVal('rg-l-nom'):_regVal('rg-nombre')),
+    apto:(C.tipo==='larga'?_regVal('rg-hab'):(_regVal('rg-apto')||rv.apto)), nombre:(C.tipo==='larga'?_regVal('rg-l-nom'):_regVal('rg-nombre')),
     apellido:(C.tipo==='larga'?_regVal('rg-l-ape'):_regVal('rg-ape')),
     documento:(C.tipo==='larga'?_regVal('rg-l-doc'):_regVal('rg-doc')),
     telefono:(C.tipo==='larga'?_regVal('rg-l-tel'):_regVal('rg-tel')),
@@ -7842,6 +7904,20 @@ window.verImagenSolicitud = async function(id){
   if(r.error||!r.data||!r.data.imagen){ if(typeof showToast==='function') showToast('Sin imagen','error'); return; }
   var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px'; ov.onclick=function(){ov.remove();};
   ov.innerHTML='<img src="'+r.data.imagen+'" style="max-width:95%;max-height:95%;border-radius:8px">';
+  document.body.appendChild(ov);
+};
+window.verReciboMagnifique = async function(id){
+  var r=await sb.from('recibos_magnifique').select('adjunto,apto,arrendatario,fecha,total').eq('id',id).single();
+  if(r.error||!r.data||!r.data.adjunto){ if(typeof showToast==='function') showToast('Este recibo no tiene archivo escaneado adjunto','error'); return; }
+  var d=r.data;
+  var url=String(d.adjunto);
+  var esPdf=/\.pdf($|\?)/i.test(url);
+  var cab='<div style="color:#fff;font-size:13px;margin-bottom:10px;text-align:center;font-family:Arial,Helvetica,sans-serif">🍽️ '+String(d.apto||'').replace(/</g,'&lt;')+(d.arrendatario?(' · '+String(d.arrendatario).replace(/</g,'&lt;')):'')+(d.fecha?(' · '+String(d.fecha).substring(0,10)):'')+(d.total?(' · $'+(typeof fmtNum==='function'?fmtNum(Number(d.total)):d.total)):'')+'</div>';
+  var visor=esPdf
+    ? '<embed src="'+url+'" type="application/pdf" style="width:92vw;height:86vh;border-radius:8px;background:#fff">'
+    : '<img src="'+url+'" style="max-width:95vw;max-height:86vh;border-radius:8px;background:#fff">';
+  var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px'; ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.innerHTML=cab+visor+'<div style="margin-top:12px;display:flex;gap:10px"><a href="'+url+'" target="_blank" rel="noopener" style="background:#EEF2FF;color:#1D3461;font-weight:600;font-size:12px;padding:6px 14px;border-radius:8px;text-decoration:none">📎 Abrir / descargar</a><button onclick="this.parentNode.parentNode.remove()" style="background:#fff;color:#333;border:none;font-size:12px;padding:6px 14px;border-radius:8px;cursor:pointer">✖ Cerrar</button></div>';
   document.body.appendChild(ov);
 };
 window.cambiarEstadoSolicitud = async function(id,estado){ if(estado==='Hecho'){ return window.responderSolicitud(id); } await sb.from('solicitudes').update({estado:estado}).eq('id',id); if(typeof showToast==='function') showToast('Estado: '+estado,'success'); if(typeof renderSolicitudes==='function') renderSolicitudes(); };
@@ -9771,6 +9847,30 @@ async function renderList(tabla, titulo, formView, cols, headers) {
       <div style="overflow-x:auto"><table class="tabla" style="font-size:13px"><thead><tr><th>Apto / Cliente</th><th style="text-align:center">Recibos</th><th style="text-align:right">Total consumido</th></tr></thead><tbody>${filasR||'<tr><td colspan="3" style="text-align:center;color:#999;padding:14px">Sin recibos</td></tr>'}</tbody></table></div>
     </div>`;
   }
+  // Sol Santiago: columna "Desayuno incluido" en el Listado de cargos.
+  // Se toma del campo `desayuno` de la tabla reservas, cruzando por apartamento/edificio y,
+  // cuando hay fecha, por el rango checkin–checkout del cargo.
+  let _lcResvDes = [];
+  if (tabla === 'listado_cargos') {
+    try {
+      const _aptosDes = [...new Set(rows.map(r=>String(r.apto||'').trim()).filter(Boolean))];
+      if (_aptosDes.length) {
+        const _rvDes = await sb.from('reservas').select('apto,desayuno,checkin,checkout').eq('edificio', EDIFICIO_ACTIVO).in('apto', _aptosDes);
+        _lcResvDes = _rvDes.data || [];
+      }
+    } catch(_e){ _lcResvDes = []; }
+  }
+  const _lcCeldaDesayuno = (r) => {
+    if (tabla !== 'listado_cargos') return '';
+    const ap = String(r.apto||'').trim();
+    const f = String(r.fecha||'').slice(0,10);
+    let hit = _lcResvDes.find(x => String(x.apto||'').trim()===ap && f && String(x.checkin||'').slice(0,10)<=f && f<=String(x.checkout||'').slice(0,10));
+    if (!hit) hit = _lcResvDes.find(x => String(x.apto||'').trim()===ap);
+    const on = hit && (hit.desayuno===true || /^(true|s[ií]|1|x)$/i.test(String(hit.desayuno||'').trim()) || Number(hit.desayuno)>0);
+    return on
+      ? '<td style="text-align:center;color:#1A5C2E;font-weight:700">✅ Sí</td>'
+      : '<td style="text-align:center;color:#999">—</td>';
+  };
   const tableRows = rows.map(r => {
     const celdas = cols.map(c => {
       let v = r[c];
@@ -9805,11 +9905,15 @@ async function renderList(tabla, titulo, formView, cols, headers) {
       // Sol. Sebastián (14-jul-2026): se retira el botón de Rótulo de este listado.
       // Los rótulos se imprimen desde su propio módulo (Rótulos de Carpetas).
       acciones = `<td style="white-space:nowrap">${_btnsEdit(tabla, r.id)}</td>`;
+    } else if (esBaga) {
+      // Previsualización del recibo escaneado de Magnifique/Bagatelle para revisión en auditoría.
+      var _btnRec = r.adjunto ? `<button onclick="verReciboMagnifique('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:#1D3461;border-color:#1D3461">👁️ Ver recibo</button> ` : '';
+      acciones = `<td style="white-space:nowrap">${_btnRec}${_btnsEdit(tabla, r.id)}</td>`;
     } else {
       acciones = `<td style="white-space:nowrap">${_btnsEdit(tabla, r.id)}</td>`;
     }
     const _chkCel = _cajaPuede ? `<td style="text-align:center"><input type="checkbox" class="caja-chk" value="${r.id}"></td>` : '';
-    return `<tr>${_chkCel}${celdas}${acciones}</tr>`;
+    return `<tr>${_chkCel}${celdas}${_lcCeldaDesayuno(r)}${acciones}</tr>`;
   }).join('');
 
   document.getElementById('main-content').innerHTML = `
@@ -9827,7 +9931,7 @@ async function renderList(tabla, titulo, formView, cols, headers) {
       ${rows.length === 0
         ? '<div class="empty"><div class="empty-icon">📋</div><p>Sin registros todavía</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr>${_cajaPuede?'<th style="text-align:center"><input type="checkbox" title="Seleccionar todo" onclick="_cajaChkTodos(this)"></th>':''}${headers.map(h=>`<th onclick="ordenarTabla(this)" style="cursor:pointer" title="Clic para ordenar">${h} ⇅</th>`).join('')}<th></th></tr></thead>
+            <thead><tr>${_cajaPuede?'<th style="text-align:center"><input type="checkbox" title="Seleccionar todo" onclick="_cajaChkTodos(this)"></th>':''}${headers.map(h=>`<th onclick="ordenarTabla(this)" style="cursor:pointer" title="Clic para ordenar">${h} ⇅</th>`).join('')}${tabla==='listado_cargos'?'<th style="text-align:center">Desayuno incluido</th>':''}<th></th></tr></thead>
             <tbody>${tableRows}</tbody>
            </table></div>`}
     </div>`;
@@ -11206,13 +11310,14 @@ function _loteComprobanteHTML(consec, rows){
   var fmt=function(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); };
   var total=rows.reduce(function(s,r){return s+(Number(r.valor)||0);},0);
   var h=rows[0]||{};
-  var filas=rows.map(function(r,i){ return '<tr><td style="border:1px solid #ccc;padding:6px;text-align:center">'+(i+1)+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.fecha_factura||'')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.recibo_no||'—')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.descripcion||'')+'</td><td style="border:1px solid #ccc;padding:6px;text-align:right">'+fmt(r.valor)+'</td></tr>'; }).join('');
+  var filas=rows.map(function(r,i){ return '<tr><td style="border:1px solid #ccc;padding:6px;text-align:center">'+(i+1)+'</td><td style="border:1px solid #ccc;padding:6px;text-align:center;white-space:nowrap">R-'+String(consec).padStart(4,'0')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.fecha_factura||'')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.recibo_no||'—')+'</td><td style="border:1px solid #ccc;padding:6px">'+esc(r.descripcion||'')+'</td><td style="border:1px solid #ccc;padding:6px;text-align:right">'+fmt(r.valor)+'</td></tr>'; }).join('');
   return '<div style="font-family:Arial,Helvetica,sans-serif;max-width:680px;margin:0 auto;color:#111;border:2px solid #1F3864;border-radius:8px;padding:20px">'
     +'<div style="text-align:center;font-size:16px;font-weight:800;color:#1F3864;border-bottom:2px solid #1F3864;padding-bottom:8px">'+esc(nb)+' — COMPROBANTE DE REEMBOLSO</div>'
+    +'<div style="text-align:center;margin:10px 0;font-size:14px;font-weight:800;color:#1F3864;background:#eef3fb;border:1px solid #1F3864;border-radius:6px;padding:8px">Consecutivo interno del lote: R-'+String(consec).padStart(4,'0')+'</div>'
     +'<div style="display:flex;justify-content:space-between;margin:10px 0;font-size:13px"><div><b>Reembolso N°:</b> '+consec+'</div><div><b>Fecha:</b> '+esc(h.fecha||'')+'</div><div><b>Caja:</b> '+esc(h.caja||'')+'</div></div>'
     +'<table style="width:100%;font-size:13px;margin-bottom:8px"><tr><td style="width:50%"><b>Empresa/Proveedor:</b> '+esc(h.empresa||'')+'</td><td><b>Área:</b> '+esc(h.area||'')+'</td></tr><tr><td><b>Entregado por:</b> '+esc(h.entregado_por||'—')+'</td><td><b>Aprobado por:</b> '+esc(h.aprobado_por||'—')+'</td></tr></table>'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#1F3864;color:#fff"><th style="border:1px solid #ccc;padding:6px">#</th><th style="border:1px solid #ccc;padding:6px">Fecha</th><th style="border:1px solid #ccc;padding:6px">No. Recibo</th><th style="border:1px solid #ccc;padding:6px">Descripción</th><th style="border:1px solid #ccc;padding:6px">Valor</th></tr></thead><tbody>'+filas+'</tbody>'
-    +'<tfoot><tr style="font-weight:800;background:#eef3fb"><td colspan="4" style="border:1px solid #ccc;padding:6px;text-align:right">TOTAL REEMBOLSO</td><td style="border:1px solid #ccc;padding:6px;text-align:right;color:#1A5C2E">'+fmt(total)+'</td></tr></tfoot></table>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#1F3864;color:#fff"><th style="border:1px solid #ccc;padding:6px">#</th><th style="border:1px solid #ccc;padding:6px">Consec. lote</th><th style="border:1px solid #ccc;padding:6px">Fecha</th><th style="border:1px solid #ccc;padding:6px">No. Recibo</th><th style="border:1px solid #ccc;padding:6px">Descripción</th><th style="border:1px solid #ccc;padding:6px">Valor</th></tr></thead><tbody>'+filas+'</tbody>'
+    +'<tfoot><tr style="font-weight:800;background:#eef3fb"><td colspan="5" style="border:1px solid #ccc;padding:6px;text-align:right">TOTAL REEMBOLSO</td><td style="border:1px solid #ccc;padding:6px;text-align:right;color:#1A5C2E">'+fmt(total)+'</td></tr></tfoot></table>'
     +(h.observaciones?('<div style="margin-top:10px;font-size:12px"><b>Obs:</b> '+esc(h.observaciones)+'</div>'):'')
     +'</div>';
 }
