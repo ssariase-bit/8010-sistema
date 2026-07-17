@@ -476,10 +476,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-17-ajustes-seguimientos';
+const APP_VERSION = '2026-07-17-horarios-recibos';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-17', version:'2026-07-17-horarios-recibos', titulo:'Actualización de horarios del personal por reducción de jornada · Selección múltiple de recibos en Caja',
+    afecta:'Control de Ingreso Personal · Caja y Movimientos · 8010 / Kubik',
+    detalle:'(1) HORARIOS DEL PERSONAL: a solicitud de Fabio Malaver y por la reducción de la jornada legal, se ajusta la hora de salida en las opciones de horario asignado del Control de Ingreso de Personal (mismo listado para 8010 y Kubik). Cambios de salida: Camareras 3:50 PM a 3:25 PM; Mantenimiento (7:00 AM) 3:25 PM a 3:00 PM; Mantenimiento (8:00 AM) 5:45 PM a 5:20 PM; Áreas Públicas 2:20 PM a 1:55 PM. Importante: el cálculo de horas extras del Sistema Operativo es solo REFERENCIAL; el sistema oficial de nómina es BUK, y esta actualización solo alinea la referencia interna. Los registros históricos ya guardados conservan el horario con el que se registraron; solo cambian las opciones nuevas. (2) SELECCIÓN MÚLTIPLE DE RECIBOS: a solicitud de Sebastián Martínez, en el módulo de Caja se agregan casillas por fila (y un seleccionar todo) más un botón para cambiar en lote el estado de legalización de los recibos seleccionados (por ejemplo marcar como Histórico los que ya se pasaron por reembolso y fueron entregados). Se usan únicamente los estados que ya maneja el sistema (Histórico, Reembolsado, En lote, Pendiente de legalizar, Provisional) y la acción pide confirmación con el conteo. Disponible solo para roles con permiso de plata del flujo de caja (gerencia, administración o compras).' },
   { fecha:'2026-07-17', version:'2026-07-17-ajustes-seguimientos', titulo:'Paquetes fuera de Seguimientos por Turno en 8010 · Aptos completos ocultos en Estado de Huéspedes (8010)',
     afecta:'Seguimientos por Turno · Estado de Huéspedes / Ocupación · 8010',
     detalle:'Solicitado por Sebastián Martínez. (1) SEGUIMIENTOS POR TURNO: en 8010 los paquetes/encargos ya no aparecen en Seguimientos por Turno, porque tienen su propio módulo y se estaban viendo dos veces. La creación de la copia ya se evitaba desde el 15 de julio (solo Kubik la conserva); ahora, además, las entradas históricas de paquetes que habían quedado registradas en Seguimientos de 8010 se ocultan de la vista. En Kubik se conservan, que es donde se solicitó. (2) ESTADO DE HUÉSPEDES / OCUPACIÓN: en 8010 los apartamentos hermanos "A" que quedan incluidos en un apto completo (por ejemplo 501A, 502A, 702A) ya no salen como fila aparte, pues su información ya está en el apto principal. El ajuste es solo visual: el porcentaje de ocupación, el conteo de aptos y los totales de la tabla se siguen calculando igual que antes y NO cambian.' },
@@ -1919,7 +1922,7 @@ async function loadView(view) {
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del empleado',type:'nombre3',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:_CARGOS()},
-      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:25 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 2:20 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:50 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','7:30 AM - 4:30 PM (Administrador · Turno 6)','8:00 AM - 5:00 PM','8:00 AM - 5:45 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
+      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:00 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 1:55 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:25 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','7:30 AM - 4:30 PM (Administrador · Turno 6)','8:00 AM - 5:00 PM','8:00 AM - 5:20 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
@@ -9740,6 +9743,11 @@ async function renderList(tabla, titulo, formView, cols, headers) {
   const esVisitantes = tabla === 'visitantes';
   const esPaquetes = tabla === 'paquetes';
   const esBaga = tabla === 'recibos_magnifique';
+  // Sol. Sebastián (17-jul-2026): selección múltiple de recibos en Caja para cambiar
+  // su estado de legalización en lote (p. ej. marcar como 'Histórico' los ya entregados).
+  // Se protege con el mismo permiso de plata del flujo de caja (_cmpEsCompras: gerencia/administración/compras).
+  const esCaja = tabla === 'caja';
+  const _cajaPuede = esCaja && (typeof window._cmpEsCompras === 'function') && window._cmpEsCompras();
   const totVentas = esBaga ? rows.reduce((s,r)=>s+(Number(r.total)||0),0) : 0;
   let resumenBaga = '';
   if(esBaga){
@@ -9788,7 +9796,8 @@ async function renderList(tabla, titulo, formView, cols, headers) {
     } else {
       acciones = `<td style="white-space:nowrap">${_btnsEdit(tabla, r.id)}</td>`;
     }
-    return `<tr>${celdas}${acciones}</tr>`;
+    const _chkCel = _cajaPuede ? `<td style="text-align:center"><input type="checkbox" class="caja-chk" value="${r.id}"></td>` : '';
+    return `<tr>${_chkCel}${celdas}${acciones}</tr>`;
   }).join('');
 
   document.getElementById('main-content').innerHTML = `
@@ -9799,17 +9808,51 @@ async function renderList(tabla, titulo, formView, cols, headers) {
         <div class="card-title">${rows.length} registros${esBaga?` <span id="baga-total" style="margin-left:14px;color:var(--verde);font-weight:700">💰 Total ventas: $${fmtNum(totVentas)} <span style="font-size:11px;color:#888">(${rows.length} recibos)</span></span>`:''}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input type="text" onkeyup="buscarEnListado(this)" placeholder="${esBaga?'🔎 Buscar por apto, huésped, área...':'🔎 Buscar...'}" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
+          ${_cajaPuede?`<button class="btn btn-outline btn-sm" onclick="_cajaCambiarEstadoSel()" title="Cambiar el estado de legalización de los recibos seleccionados" style="color:#1D3461;border-color:#1D3461">🔄 Cambiar estado de seleccionados</button>`:''}
           ${barraCompartir()}<button class="btn btn-success btn-sm" onclick="loadView('${formView}')">+ Nuevo registro</button>
         </div>
       </div>
       ${rows.length === 0
         ? '<div class="empty"><div class="empty-icon">📋</div><p>Sin registros todavía</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr>${headers.map(h=>`<th onclick="ordenarTabla(this)" style="cursor:pointer" title="Clic para ordenar">${h} ⇅</th>`).join('')}<th></th></tr></thead>
+            <thead><tr>${_cajaPuede?'<th style="text-align:center"><input type="checkbox" title="Seleccionar todo" onclick="_cajaChkTodos(this)"></th>':''}${headers.map(h=>`<th onclick="ordenarTabla(this)" style="cursor:pointer" title="Clic para ordenar">${h} ⇅</th>`).join('')}<th></th></tr></thead>
             <tbody>${tableRows}</tbody>
            </table></div>`}
     </div>`;
 }
+
+// ── Sol. Sebastián (17-jul-2026): selección múltiple de recibos en Caja ──
+// Permite marcar varios recibos y cambiar su estado de legalización en lote.
+// Usa únicamente los estados que ya maneja la columna estado_legal (no inventa valores).
+// Protegido con el permiso de plata del flujo de caja (_cmpEsCompras).
+window._cajaChkTodos = function(master){
+  var on = !!(master && master.checked);
+  document.querySelectorAll('#main-content .caja-chk').forEach(function(c){
+    var tr = c.closest('tr');
+    if(tr && tr.style.display === 'none') return; // respeta el filtro de búsqueda
+    c.checked = on;
+  });
+};
+window._cajaCambiarEstadoSel = async function(){
+  if(!(typeof window._cmpEsCompras === 'function' && window._cmpEsCompras())){
+    showToast('Cambiar el estado de recibos requiere rol de compras, administración o gerencia','error'); return;
+  }
+  var seleccion = Array.prototype.slice.call(document.querySelectorAll('#main-content .caja-chk:checked'))
+    .map(function(c){ return c.value; }).filter(function(v){ return v; });
+  if(!seleccion.length){ showToast('Selecciona al menos un recibo','info'); return; }
+  var ESTADOS = ['Histórico','Reembolsado','En lote','Pendiente de legalizar','Provisional'];
+  var menu = ESTADOS.map(function(e,i){ return (i+1)+') '+e; }).join('\n');
+  var op = prompt('Nuevo estado de legalización para '+seleccion.length+' recibo(s):\n'+menu+'\n\nEscribe el número (1-'+ESTADOS.length+'):','1');
+  if(op === null) return;
+  var idx = parseInt(String(op).trim(),10) - 1;
+  if(isNaN(idx) || idx < 0 || idx >= ESTADOS.length){ showToast('Opción no válida','error'); return; }
+  var nuevo = ESTADOS[idx];
+  if(!confirm('¿Cambiar el estado de '+seleccion.length+' recibo(s) a "'+nuevo+'"?\n\nEsta acción es masiva y no se puede deshacer automáticamente.')) return;
+  var r = await sb.from('caja').update({ estado_legal: nuevo }).in('id', seleccion);
+  if(r && r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('✅ '+seleccion.length+' recibo(s) actualizados a "'+nuevo+'"','success');
+  if(typeof loadView === 'function') loadView('caja-list');
+};
 
 // ═══════════════════════════════════════════════════════════
 
