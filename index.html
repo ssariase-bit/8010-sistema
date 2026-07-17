@@ -2321,7 +2321,7 @@ async function renderDashboard() {
   // subestimaba la venta del mes (julio 2026: $10.288.306 menos de lo real).
   const [rHoy, rMes, novRes, mantRes, turnosHoy, turnosUlt] = await Promise.all([
     sb.from('rack').select('*').eq('fecha', TODAY).eq('edificio', EDIFICIO_ACTIVO).order('estado', { ascending: true }),
-    window._rackFetchRango(monthStart, monthEnd, 'apto,estado,tarifa,huesped,fecha'),
+    window._rackFetchRango(monthStart, monthEnd, 'id,apto,estado,tarifa,huesped,nombre,fecha,checkin,checkout'),
     sb.from('novedades').select('*').in('estado',['Abierto','En proceso','Escalado']).order('created_at',{ascending:false}),
     sb.from('mantenimiento').select('*').in('estado',['Pendiente','En proceso']).gte('fecha', new Date(Date.now()-90*24*60*60*1000).toISOString().split('T')[0]).order('created_at',{ascending:false}),
     sb.from('turnos').select('*').eq('fecha', TODAY).order('created_at',{ascending:false}),
@@ -11927,7 +11927,7 @@ async function renderInformeEjecutivo(){
   document.getElementById('main-content').innerHTML = '<div class="page-title">📈 Informe Ejecutivo</div><div class="card"><p style="color:#888">Cargando datos…</p></div>';
   const [rHoy, rMes, novR, mantR, salR, solR, conR, rvR] = await Promise.all([
     sb.from('rack').select('*').eq('fecha',TODAY).eq('edificio',ed),
-    window._rackFetchRango(mStart, mEnd, 'apto,estado,tarifa,fecha'),   // paginado: un mes supera las 1.000 filas de Supabase
+    window._rackFetchRango(mStart, mEnd, 'id,apto,estado,tarifa,nombre,fecha,checkin,checkout'),   // paginado: un mes supera las 1.000 filas de Supabase
     sb.from('novedades').select('descripcion,apto,estado,area,created_at').in('estado',['Abierto','En proceso','Escalado']),
     sb.from('mantenimiento').select('descripcion,apto,estado,fecha').in('estado',['Pendiente','En proceso']),
     sb.from('saldos_aptos').select('apto,arrendatario,saldo_total,fecha').eq('edificio',ed),
