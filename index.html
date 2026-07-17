@@ -476,10 +476,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-17-solicitudes-julio';
+const APP_VERSION = '2026-07-17-ajustes-seguimientos';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-17', version:'2026-07-17-ajustes-seguimientos', titulo:'Paquetes fuera de Seguimientos por Turno en 8010 · Aptos completos ocultos en Estado de Huéspedes (8010)',
+    afecta:'Seguimientos por Turno · Estado de Huéspedes / Ocupación · 8010',
+    detalle:'Solicitado por Sebastián Martínez. (1) SEGUIMIENTOS POR TURNO: en 8010 los paquetes/encargos ya no aparecen en Seguimientos por Turno, porque tienen su propio módulo y se estaban viendo dos veces. La creación de la copia ya se evitaba desde el 15 de julio (solo Kubik la conserva); ahora, además, las entradas históricas de paquetes que habían quedado registradas en Seguimientos de 8010 se ocultan de la vista. En Kubik se conservan, que es donde se solicitó. (2) ESTADO DE HUÉSPEDES / OCUPACIÓN: en 8010 los apartamentos hermanos "A" que quedan incluidos en un apto completo (por ejemplo 501A, 502A, 702A) ya no salen como fila aparte, pues su información ya está en el apto principal. El ajuste es solo visual: el porcentaje de ocupación, el conteo de aptos y los totales de la tabla se siguen calculando igual que antes y NO cambian.' },
   { fecha:'2026-07-17', version:'2026-07-17-solicitudes-julio', titulo:'Acompañantes que ya no desaparecen · Entidad en Informe de Reembolsos · Columna Magnifique en Cargos · Ajustes en Entrega de Efectivo',
     afecta:'Rack · Estado de Huéspedes / Ocupación · Informe de Reembolsos · Listado de Cargos · Entrega de Efectivos · 8010',
     detalle:'Solicitado por Sebastián Martínez. (1) ACOMPAÑANTES: al guardar los acompañantes (tanto la lista con estado como el texto libre) desde el Rack, el dato ahora se propaga a TODAS las filas del rack de esa misma estadía (mismo apto, entre checkin y checkout), no solo al día que se estaba viendo. Antes se guardaba en un solo día y al mirar otro día parecía que los acompañantes desaparecían (reportado varias veces). Si la fila no tiene checkin/checkout se conserva el comportamiento anterior (solo ese día). Con esto los acompañantes vuelven a verse en Estado de Huéspedes / Ocupación. (2) INFORME DE REEMBOLSOS: se agregó un selector de Entidad para el encabezado; en 8010 se puede elegir entre 80|10 Ochenta Diez Urban Living SAS y LTM3 S.A.S, y la razón social + NIT del informe salen según lo elegido (los datos se toman de la tabla fiscal del sistema, no se digitan a mano). En Kubik queda 8i8. (3) LISTADO DE CARGOS: se agregó la columna "Magnifique ($)" en el formulario y en el listado, análoga a las demás columnas de cargo; no se incluye en el total automático para no alterar lo que se cobra. (4) ENTREGA DE EFECTIVO: en "Administrador que entrega" el campo ahora inicia en blanco ("— Seleccionar —") en lugar de quedar preseleccionado en una persona; se conservan Adriana Bernal y Jonathan Zambrano como opciones. El campo de destino/cajilla no es obligatorio para registrar la entrega.' },
@@ -6990,7 +6993,11 @@ async function renderSeguimientosTurno(){
   let q = sb.from('seguimientos_turno').select('*').eq('edificio', EDIFICIO_ACTIVO);
   if(!verTodo){ q = q.gte('fecha', _ini).lte('fecha', _fin); }
   const { data } = await q.order('fecha',{ascending:false}).order('created_at',{ascending:false});
-  const rows = data || [];
+  // Sol Sebastián (8010): los paquetes/encargos tienen su propio módulo y no deben duplicarse
+  // aquí. La inserción nueva ya se evita (solo Kubik conserva la copia en Seguimientos), pero las
+  // entradas históricas de 8010 seguían apareciendo; se ocultan de la vista en 8010. En Kubik se
+  // conservan, que es donde se solicitó.
+  const rows = (data || []).filter(r => !(EDIFICIO_ACTIVO==='8010' && String(r.detalle||'').startsWith('📦 Paquete/encargo:')));
   const esc = s => String(s==null?'':s).replace(/</g,'&lt;');
   const badge = e => { const cl = e==='Resuelto'?'resuelto':(e==='En seguimiento'?'proceso':'alta'); return `<span class="badge b-${cl}">${esc(e||'Pendiente')}</span>`; };
   const _hPersona = n => { n=String(n||'').trim().toLowerCase(); if(!n) return 0; let h=0; for(let i=0;i<n.length;i++) h=(h*31+n.charCodeAt(i))%360; return h; };
@@ -11666,7 +11673,11 @@ async function renderEstadoHuespedes() {
       g.forEach(x=>{ if(x!==principal) x._comboOculto = true; });
     });
   })();
-  const rowsVis = rows.filter(r => !r._comboOculto);
+  // Sol Sebastián (8010): los aptos hermanos "A" incluidos en un apto completo (501A, 502A, 702A…)
+  // ya quedan reflejados en el apto principal; se ocultan de la tabla de Estado de Huéspedes. Se
+  // filtran SOLO de la vista (rowsVis); los totales y el % de ocupación se calculan sobre `rows` y
+  // NO cambian con este ajuste.
+  const rowsVis = rows.filter(r => !r._comboOculto && !(EDIFICIO_ACTIVO==='8010' && String(r.observaciones||'').includes('Apto completo')));
   // Empresa/acompañantes de la reserva activa hoy (para reflejar en Estado de Huéspedes)
   let _resMap = {};
   try { const _rv = await sb.from('reservas').select('id,apto,empresa,acompanantes,desayuno').eq('edificio', EDIFICIO_ACTIVO).lte('checkin', today).gte('checkout', today); (_rv.data||[]).forEach(x=>{ if(x.apto && !_resMap[x.apto]) _resMap[x.apto]=x; }); } catch(e){}
