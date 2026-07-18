@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-17-iva-txn-auto';
+const APP_VERSION = '2026-07-18-extras-reposicion';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-18', version:'2026-07-18-extras-reposicion', titulo:'Horas Extra: la reposición ya no genera extra (Sol. Santiago)',
+    afecta:'Cuadro de Horas Extra / cálculo de extras',
+    detalle:'En turnos normales, las horas extra ahora se calculan como TIEMPO TOTAL TRABAJADO menos la DURACIÓN del turno pactado, con una gracia de 10 minutos como umbral. Antes se contaba por separado lo que se quedaba después de la salida más lo que llegaba temprano, lo que hacía que reponer una llegada tarde generara extra indebida. Ahora: llegar 2h antes y salir 2h antes = 0 extra; llegar 2h antes y salir a la hora = 2h extra; llegar tarde y reponer = 0 extra. Los turnos de 12h se mantienen (horas 9 a 12 son extra por ley). Los recargos (nocturno 35%, extra diurna 25%, nocturna 75%, dominical/festivo 90% desde jul-2026, franja 7pm-6am) ya estaban al día con la Ley 2466 de 2025 y no cambian.' },
   { fecha:'2026-07-17', version:'2026-07-17-iva-txn-auto', titulo:'Reservas: el IVA vuelve a calcularse automáticamente al crear la reserva (Sol. Juanita — KL)',
     afecta:'Creación de reservas / IVA',
     detalle:'El selector de IVA no recalculaba y el resumen no mostraba el IVA. Ahora, al cambiar el IVA (IVA 19% se suma, exento, excluido), el resumen muestra automáticamente el desglose: base + IVA = total con IVA. El total guardado sigue siendo por tarifa; esto es solo el cálculo/visualización que se había perdido.' },
@@ -10313,9 +10316,11 @@ function calcExtraMin(cargo, horarioStr, ingreso, salida, baseOverride){
     const base = (Number(baseOverride)>0) ? Number(baseOverride) : 480;
     extra = Math.max(0, total - base);
   } else if (h && h.fin!=null){
-    // Turnos normales: extra = lo que se quedó DESPUÉS de su hora de salida pactada
-    const salMin = _timeToMin(salida);
-    if (salMin!=null){ let d = salMin - h.fin; if (d < -720) d += 1440; var _ingM = _timeToMin(ingreso); var _early = 0; if(_ingM!=null && h.inicio!=null){ _early = h.inicio - _ingM; if(_early < -720) _early += 1440; } extra = Math.max(0, d) + Math.max(0, _early); }
+    // Turnos normales (Sol. Santiago): extra = tiempo TOTAL trabajado − duración del turno pactado,
+    // con gracia de 10 min como umbral. Así la reposición (llegar tarde y salir tarde por igual) NO
+    // genera extra, y llegar temprano solo genera extra si no se compensa saliendo temprano.
+    if (durHorario!=null && total!=null){ const _exc = total - durHorario; extra = (_exc > 10) ? _exc : 0; }
+    else { const salMin = _timeToMin(salida); if (salMin!=null){ let d = salMin - h.fin; if (d < -720) d += 1440; var _ingM = _timeToMin(ingreso); var _early = 0; if(_ingM!=null && h.inicio!=null){ _early = h.inicio - _ingM; if(_early < -720) _early += 1440; } extra = Math.max(0, d) + Math.max(0, _early); } }
   } else if (total!=null){
     // Sin horario válido: respaldo = total menos jornada ordinaria legal de 8h (480 min)
     const base = (Number(baseOverride)>0) ? Number(baseOverride) : 480;
