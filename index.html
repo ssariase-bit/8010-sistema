@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-17-ventas-relevos-unificadas';
+const APP_VERSION = '2026-07-17-iva-txn-auto';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-17', version:'2026-07-17-iva-txn-auto', titulo:'Reservas: el IVA vuelve a calcularse automáticamente al crear la reserva (Sol. Juanita — KL)',
+    afecta:'Creación de reservas / IVA',
+    detalle:'El selector de IVA no recalculaba y el resumen no mostraba el IVA. Ahora, al cambiar el IVA (IVA 19% se suma, exento, excluido), el resumen muestra automáticamente el desglose: base + IVA = total con IVA. El total guardado sigue siendo por tarifa; esto es solo el cálculo/visualización que se había perdido.' },
   { fecha:'2026-07-17', version:'2026-07-17-ventas-relevos-unificadas', titulo:'Ventas del mes: cálculo único y consistente en TODAS las vistas (Dashboard, Rack, Informe, Reporte de ocupación)',
     afecta:'Ventas / Dashboard / Rack / Informe Ejecutivo',
     detalle:'Sol Santiago: las ventas del mes no coincidían entre pantallas y a veces BAJABAN. Causa: (1) el ajuste de relevos (día con CKO y CKI en el mismo apto) se leía de la tabla reservas, que traía tarifas corruptas (valores tipo $165/$340) y hacía que algunos días RESTARAN en vez de sumar; (2) el Dashboard no aplicaba ningún ajuste de relevos. Fix: los relevos ahora se calculan desde la tabla RACK (tarifas reales por noche) y todas las vistas usan la MISMA regla canónica de venta de alojamiento (_esVentaAloja, que además evita el doble-conteo de combos Two/Family Residence). Resultado: la venta del mes es idéntica en Dashboard, Rack, Informe y Reporte de ocupación. Los relevos legítimos suman correctamente; las reservas con tarifa basura en la tabla reservas deben depurarse aparte (no afectan ya el cálculo).' },
@@ -5560,7 +5563,7 @@ function renderNuevaReserva() {
           </div>
           <div class="form-group">
             <label>IVA</label>
-            <select id="res-iva" style="font-weight:600">
+            <select id="res-iva" style="font-weight:600" onchange="if(typeof calcReserva==='function')calcReserva()">
               <option value="encima">IVA 19% (se suma)</option><option value="exento">Exento de IVA</option><option value="excluido">Excluido (canon de arrendamiento)</option>
             </select>
           </div>
@@ -5803,8 +5806,10 @@ function calcReserva() {
       const resumen = document.getElementById('res-resumen');
       resumen.classList.remove('hidden');
       const fmtD = d => { const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; };
+      var _ivaModo = document.getElementById('res-iva') ? document.getElementById('res-iva').value : 'incluido';
+      var _ivaInfo = (typeof window._ivaCalc==='function') ? window._ivaCalc(total, _ivaModo) : null;
       document.getElementById('res-resumen-texto').innerHTML =
-        `Apto <strong>${apto}</strong> · ${_unid} ${_uLbl}${_unid>1?'s':''} · ${fmtD(ci)} → ${fmtD(co)} · ${porNoche ? 'Tarifa mixta' : 'Tarifa: $'+_tarNoche.toLocaleString('es-CO')+'/'+_uLbl+(_esMes?' (canon $'+tarifa.toLocaleString('es-CO')+'/mes)':'')} · <strong>Total: $${total.toLocaleString('es-CO')}</strong>`;
+        `Apto <strong>${apto}</strong> · ${_unid} ${_uLbl}${_unid>1?'s':''} · ${fmtD(ci)} → ${fmtD(co)} · ${porNoche ? 'Tarifa mixta' : 'Tarifa: $'+_tarNoche.toLocaleString('es-CO')+'/'+_uLbl+(_esMes?' (canon $'+tarifa.toLocaleString('es-CO')+'/mes)':'')} · <strong>Total: $${total.toLocaleString('es-CO')}</strong>` + (_ivaInfo ? ` · <span style="color:#1F3864;font-weight:600">${_ivaInfo.tag}</span> <span style="color:#555">${_ivaInfo.msg}</span>` : '');
     }
   }
 }
