@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-18-oc-lista-colapsada';
+const APP_VERSION = '2026-07-18-solicitudes-lote';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-18', version:'2026-07-18-solicitudes-lote', titulo:'Lote de solicitudes: Air House (PH1+PH2), combos reconocidos en rack, Entrega de Efectivos, Magnifique fuera de Kubik y NIT en Factura',
+    afecta:'Reservas · Rack · Entrega de Efectivos · Listado de Cargos · Generar Factura',
+    detalle:'(1) AIR HOUSE (Sol. Juanita KL): en creación de reservas se agregó la combinación "Air House" que ocupa PH1+PH2 (igual que Famili/Two Residence y Suite Deluxe). (2) COMBOS EN RACK (duda Juanita KL): las reservas combinadas (FR/TR/SD/Air House) ya NO se marcan en rojo como "no está en rack": el chequeo ahora reconoce que un combo ocupa varios aptos físicos (ej. FR7 = 701+702) y valida contra esos. (3) ENTREGA DE EFECTIVOS (Sol. Andrés Parga, 8010): el selector "Administrador que entrega" ya no lista a Adriana/Jonathan (que son quienes reciben) sino a los administradores de Front que entregan. (4) MAGNIFIQUE (Sol. Ricardo Vallejo, KL): el campo/columna "Magnifique" ya no aparece en el Registro de Cargos de Kubik (en KL el restaurante es Bagatelle). (5) GENERAR FACTURA (Sol. Ricardo Vallejo, KL): el NIT es ahora el primer campo del cliente y, al digitarlo, autocompleta razón social, dirección, email y teléfono si ese NIT ya se facturó antes.' },
   { fecha:'2026-07-18', version:'2026-07-18-oc-lista-colapsada', titulo:'Órdenes de Compra: la lista deja de ser un chorrero — productos colapsados (Sol. Santiago)',
     afecta:'Órdenes de Compra / Requisiciones (listado)',
     detalle:'En el listado de órdenes, los productos ya no se vuelcan todos apilados (fila gigante). Ahora aparece un resumen "📦 N productos" que se despliega al hacer clic para ver el detalle en línea; el detalle completo sigue disponible al abrir o imprimir la orden. Aplica a órdenes de compra y requisiciones.' },
@@ -1691,8 +1694,8 @@ async function loadView(view) {
 
     // Listado General de Cargos
     case 'cargos-list': await renderList('listado_cargos','📋 Listado General de Cargos','cargos-form',
-      ['fecha','semana','apto','arrendatario','num_comanda','transporte','lavanderia','minibar','varios','salas','magnifique','iva','total','observaciones'],
-      ['Fecha','Semana','Apto','Arrendatario','Comanda','Transporte','Lavandería','Minibar','Varios','Salas','Magnifique','IVA','Total','Comentarios']); break;
+      ['fecha','semana','apto','arrendatario','num_comanda','transporte','lavanderia','minibar','varios','salas','magnifique','iva','total','observaciones'].filter(function(k){return !(EDIFICIO_ACTIVO==='kubik'&&k==='magnifique');}),
+      ['Fecha','Semana','Apto','Arrendatario','Comanda','Transporte','Lavandería','Minibar','Varios','Salas','Magnifique','IVA','Total','Comentarios'].filter(function(k){return !(EDIFICIO_ACTIVO==='kubik'&&k==='Magnifique');})); break;
     case 'cargos-form': renderGenForm('listado_cargos','📋 Registrar Cargo',[
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'semana',label:'Semana (ej: 25 MAY - 31 MAY)',type:'text'},
@@ -1707,7 +1710,7 @@ async function loadView(view) {
       {id:'utilidad_minibar',label:'Utilidad minibar ($)',type:'number',default:'0'},
       {id:'varios',label:'Varios ($)',type:'number',default:'0'},
       {id:'salas',label:'Salas ($)',type:'number',default:'0'},
-      {id:'magnifique',label:'Magnifique ($)',type:'number',default:'0'},
+      ...(EDIFICIO_ACTIVO==='kubik'?[]:[{id:'magnifique',label:'Magnifique ($)',type:'number',default:'0'}]),
       {id:'iva',label:'IVA',type:'select',opts:['19%','8%','5%']},
       {id:'total',label:'Total ($) — automático (base + IVA)',type:'number',default:'0'},
       {id:'observaciones',label:'Observaciones',type:'text'},
@@ -1723,7 +1726,7 @@ async function loadView(view) {
            {id:'arrendatario',label:'Arrendatario (a)',type:'nombre3',default:''},
            {id:'fv',label:'FV',type:'text',default:''},
            {id:'valor',label:'Valor ($)',type:'money',default:''},
-           {id:'administrador_entrega',label:'Administrador que entrega',type:'select',opts:[{v:'',l:'— Seleccionar —'},'Adriana Bernal','Jonathan Zambrano']},
+           {id:'administrador_entrega',label:'Administrador que entrega',type:'select',opts:[{v:'',l:'— Seleccionar —'},'Juan Martínez','Andrés Parga','Sebastián Martínez','Fabio Malaver']},
            {id:'fecha_entrega',label:'Fecha de entrega',type:'date',default:''}]
         : []),
       ...(EDIFICIO_ACTIVO==='kubik'
@@ -2867,7 +2870,7 @@ async function renderRack() {
   // combinada. Detecta FR/TR/SD por los sufijos (y respeta el tipo declarado si existe).
   const _pisoDe = a => { a=String(a); if(/^PH/i.test(a)) return 'PH'; const m=a.match(/^(\d+?)(\d\d)([A-Z]?)$/); return m?m[1]:a; };
   const _sufDe = a => { const m=String(a).match(/(\d\d[A-Z]?)$/); return m?m[1]:String(a); };
-  const _nombreCombo = aps => { const s=aps.map(_sufDe).sort().join('+'); if(s==='01+02')return{nombre:'Famili Residence',sigla:'FR'}; if(s==='02+03')return{nombre:'Two Residence',sigla:'TR'}; if(s==='04+04A')return{nombre:'Suite Deluxe',sigla:'SD'}; return{nombre:'Unidad combinada',sigla:'Combo'}; };
+  const _nombreCombo = aps => { const s=aps.map(_sufDe).sort().join('+'); if(s==='PH1+PH2')return{nombre:'Air House',sigla:'AH'}; if(s==='01+02')return{nombre:'Famili Residence',sigla:'FR'}; if(s==='02+03')return{nombre:'Two Residence',sigla:'TR'}; if(s==='04+04A')return{nombre:'Suite Deluxe',sigla:'SD'}; return{nombre:'Unidad combinada',sigla:'Combo'}; };
   const _OCU_CK = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
   const _porHF = {};
   (allRack||[]).forEach(function(r){
@@ -5466,9 +5469,11 @@ async function renderDashServicios() {
 // ── Kubik: nombres comerciales por unidad y combinaciones (pisos 2 al 9) ──
 const _KUBIK_UNID = { '01':{n:'Grand Residence',m2:100}, '02':{n:'Smart',m2:29}, '03':{n:'One Residence',m2:56}, '04':{n:'Suit Home',m2:42}, '04A':{n:'Deluxe',m2:37}, 'PH1':{n:'Pent House Mountain View'}, 'PH2':{n:'Pent House Park View'} };
 const _KUBIK_COMBOS = { 'FR':{n:'Famili Residence',m2:130,suf:['01','02']}, 'TR':{n:'Two Residence',m2:85,suf:['02','03']}, 'SD':{n:'Suite Deluxe',m2:79,suf:['04','04A']} };
+window._aptosFisicosDe = function(apto){ apto=String(apto==null?'':apto).trim(); if(apto==='AH') return ['PH1','PH2']; var _m=/^(FR|TR|SD)(\d+)$/.exec(apto); if(_m){ var _s={FR:['01','02'],TR:['02','03'],SD:['04','04A']}[_m[1]]; return _s.map(function(x){return _m[2]+x;}); } return [apto]; };
+window._facNitLookup = async function(){ try{ var el=document.getElementById('fac-cli-nit'); if(!el) return; var nit=String(el.value||'').replace(/[.\s-]/g,'').trim(); if(nit.length<4) return; var q=await sb.from('facturas').select('cliente,cliente_nit,cliente_dir,email,telefono,created_at').order('created_at',{ascending:false}).limit(400); var rows=(q.data||[]).filter(function(r){ return String(r.cliente_nit||'').replace(/[.\s-]/g,'')===nit; }); if(!rows.length) return; var r=rows[0]; var setIf=function(id,v){ var e=document.getElementById(id); if(e && !String(e.value||'').trim() && v){ e.value=v; } }; setIf('fac-cli-nombre', r.cliente); setIf('fac-cli-dir', r.cliente_dir); setIf('fac-cli-email', r.email); setIf('fac-cli-tel', r.telefono); if(typeof showToast==='function') showToast('Datos traídos del NIT '+nit+(r.cliente?(' · '+r.cliente):''),'success'); }catch(_e){} };
 function _kubikUnidad(apto){ apto=String(apto||'').trim(); if(_KUBIK_UNID[apto]) return Object.assign({suf:apto},_KUBIK_UNID[apto]); var m=/^(\d)(\d{2}A?)$/.exec(apto); if(!m) return null; var b=_KUBIK_UNID[m[2]]; if(!b) return null; return {n:b.n,m2:b.m2,piso:m[1],suf:m[2]}; }
 // Nombre comercial para mostrar junto al código (ej: "201 · Grand Residence")
-function _kubikLabel(apto){ if((((EB&&EB().nombre)||'').indexOf('8010')>-1)) return apto; var c=/^(FR|TR|SD)(\d+)$/.exec(String(apto||'')); if(c){ var cc=_KUBIK_COMBOS[c[1]]; return cc?(cc.n+' '+c[2]+' ('+cc.suf.map(function(s){return c[2]+s;}).join('+')+')'):apto; } var u=_kubikUnidad(apto); return u?(apto+' · '+u.n):apto; }
+function _kubikLabel(apto){ if((((EB&&EB().nombre)||'').indexOf('8010')>-1)) return apto; if(String(apto||'')==='AH') return 'Air House (PH1+PH2)'; var c=/^(FR|TR|SD)(\d+)$/.exec(String(apto||'')); if(c){ var cc=_KUBIK_COMBOS[c[1]]; return cc?(cc.n+' '+c[2]+' ('+cc.suf.map(function(s){return c[2]+s;}).join('+')+')'):apto; } var u=_kubikUnidad(apto); return u?(apto+' · '+u.n):apto; }
 // Sol Sebastián (8010): los cargos son por edificio. En 8010 no existen Recepcionista,
 // Capitán de Meseros ni "Otro", y los cargos gerenciales son los reales (GG / Operativa / Eventos).
 // Kubik conserva su propia lista. Se mantiene "Gerente" oculto en el histórico de registros viejos.
@@ -5514,6 +5519,7 @@ function _kubikAptoOptions(){
       comb+='<option value="'+c+f+'">'+cc.n+' · Piso '+f+' ('+us.join('+')+', '+cc.m2+' m²)</option>';
     });
   }
+  comb+='<option value="AH">Air House · PH1+PH2 (243 m²)</option>';
   // Sol Cristina: los Penthouses quedaban al final, después de 24 combinadas, y no se encontraban.
   // Van justo después de las individuales.
   return '<optgroup label="Individuales">'+ind+'</optgroup>'+(ph?'<optgroup label="Penthouses">'+ph+'</optgroup>':'')+'<optgroup label="Combinadas (ocupan 2 aptos)">'+comb+'</optgroup>';
@@ -5906,7 +5912,8 @@ async function guardarReserva() {
   const _trM = /^TR(\d+)$/.exec(apto);
   const _frM = /^FR(\d+)$/.exec(apto);
   const _sdM = /^SD(\d+)$/.exec(apto);
-  const _aptosW = _trM ? [_trM[1]+'02', _trM[1]+'03'] : (_frM ? [_frM[1]+'01', _frM[1]+'02'] : (_sdM ? [_sdM[1]+'04', _sdM[1]+'04A'] : [apto]));
+  const _ahM = /^AH$/.exec(apto);
+  const _aptosW = window._aptosFisicosDe(apto);
   const _adjSel = Array.from((document.getElementById('res-adjuntos')||{}).selectedOptions||[]).map(o=>o.value).filter(a=>a&&_aptosW.indexOf(a)<0);
   const _aptosW2 = [..._aptosW, ..._adjSel];
   const _nCombo = _aptosW2.length;
@@ -5952,11 +5959,11 @@ async function guardarReserva() {
     const _tCanon = _canonMensual ? window._canonNoche(_canonMensual, fecha) : null;
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : (_tCanon !== null ? _tCanon : tarifa);
     const tNocheCOP = _esUSDr ? Math.round(tNoche*_trmR) : tNoche; // USD→COP (la TRM ya está validada arriba)
-    for (const _a of _aptosW2){ const _sib=(_adjSel.length>0 && _a!==apto); const _tA=_sib?null:(tNocheCOP||null); const _tU=(_esUSDr && !_sib)?(tNoche||null):null; rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) }); }
+    for (const _a of _aptosW2){ const _sib=(_adjSel.length>0 && _a!==apto); const _tA=_sib?null:(tNocheCOP||null); const _tU=(_esUSDr && !_sib)?(tNoche||null):null; rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _ahM ? 'Air House' : (_trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null)))) }); }
   }
   // Día de check-out
   const dco = new Date(co);
-  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null))) });
+  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _ahM ? 'Air House' : (_trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null)))) });
 
   // Guardia anti-borrado: avisar si esas fechas ya tienen una reserva de OTRO huésped (evita sobrescribir por error)
   try{
@@ -7763,11 +7770,11 @@ window.renderReservas = async function(filtro){
     // Cruce con el rack de HOY
     var _OCU={'Ocupado':1,'Check-in hoy':1,'Check-out hoy':1,'Completo':1,'Sale de viaje':1};
     var _enRango=(r.checkin && r.checkout && String(r.checkin)<=TODAY && TODAY<=String(r.checkout));
-    var _rk=(window._rvRackHoy||{})[String(r.apto)]; var _enRack, _rowStyle='';
+    var _rkMap=(window._rvRackHoy||{}); var _apsF=(window._aptosFisicosDe?window._aptosFisicosDe(r.apto):[String(r.apto)]); var _enRack, _rowStyle=''; var _hn='', _match=false;
+    for(var _ai=0; _ai<_apsF.length; _ai++){ var _rkC=_rkMap[String(_apsF[_ai])]; if(!_rkC) continue; var _hnC=window._nombreCompleto(_rkC); if(!_hn && _hnC) _hn=_hnC; if(_OCU[_rkC.estado] && window._rvNameMatch(_hnC, r.nombre)){ _match=true; break; } }
     if(!_enRango){ _enRack='<span style="color:#bbb" title="No aplica hoy">—</span>'; }
-    else { var _ocup=_rk && _OCU[_rk.estado]; var _hn=_rk?window._nombreCompleto(_rk):''; var _match=_ocup && window._rvNameMatch(_hn, r.nombre);
-      if(_match){ _enRack='<span style="color:#1A5C2E;font-weight:700" title="Coincide con el rack">✓</span>'; }
-      else { _enRack='<span style="color:#C0392B;font-weight:700" title="No coincide con el rack de hoy'+(_hn?(' (rack: '+_hn+')'):' (apto libre)')+'">✗</span>'; _rowStyle=' style="background:#FDF3F2"'; } }
+    else if(_match){ _enRack='<span style="color:#1A5C2E;font-weight:700" title="Coincide con el rack">✓</span>'; }
+    else { _enRack='<span style="color:#C0392B;font-weight:700" title="No coincide con el rack de hoy'+(_hn?(' (rack: '+_hn+')'):' (apto libre)')+'">✗</span>'; _rowStyle=' style="background:#FDF3F2"'; }
     return '<tr'+_rowStyle+'><td style="white-space:nowrap"><strong style="cursor:pointer;color:#1D3461;text-decoration:underline" title="Ver detalle de la reserva" onclick="verDetalleReserva(\''+r.id+'\')">'+window._rvEsc(r.numero||r.num_reserva||'-')+'</strong></td><td style="white-space:nowrap;font-size:12px">'+(r.num_reserva?window._rvEsc(r.num_reserva):'<span style="color:#bbb">—</span>')+'</td><td style="white-space:nowrap;font-size:11px;color:#6B7280">'+window._rvFmtD(r.created_at)+'</td><td>'+window._rvEsc(r.apto)+'</td><td>'+window._rvEsc(r.nombre)+'</td><td>'+(r.empresa?window._rvEsc(r.empresa):'<span style="color:#bbb">—</span>')+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkin)+'</td><td style="white-space:nowrap">'+window._rvFmtD(r.checkout)+'</td><td>'+(r.noches||'')+'</td><td style="white-space:nowrap">'+_tnStr+'</td><td style="white-space:nowrap">'+_tmStr+'</td><td style="white-space:nowrap;font-weight:600">'+_ttStr+'</td><td>'+window._rvEsc(r.canal)+'</td><td>'+window._rvEsc(r.cxc_razon)+'</td><td style="text-align:center">'+_enRack+'</td><td style="min-width:150px">'+window._revGerCell('reservas', r)+'</td><td style="white-space:nowrap"><span title="Ver detalle" style="cursor:pointer;font-size:14px" onclick="verDetalleReserva(\''+r.id+'\')">👁️</span> <span title="Hacer Check-In (CKI)" style="cursor:pointer;font-size:13px" onclick="ckiDesdeReserva(\''+r.id+'\')">🟢</span> <span title="Editar" style="cursor:pointer" onclick="editarReserva(\''+r.id+'\')">✏️</span> <span title="Regenerar confirmación" style="cursor:pointer" onclick="regenerarConfirmacion(\''+r.id+'\')">📄</span> <span title="Registro de huésped (corta/larga estadía)" style="cursor:pointer" onclick="_regHuesped(\''+r.id+'\')">🪪</span> <span title="Histórico de cambios" style="cursor:pointer" onclick="verHistorialReserva(\''+r.id+'\')">📜</span> <span title="Eliminar" style="cursor:pointer" onclick="eliminarReserva(\''+r.id+'\')">🗑️</span></td></tr>';
   };
   var body=rows.map(window._rvRowHTML).join('');
@@ -12521,8 +12528,8 @@ function renderFacturaGen(){
   +'<div class="form-group"><label>Fecha de la factura *</label><input type="date" id="fac-fecha" value="'+((ed&&ed.fecha)?String(ed.fecha).slice(0,10):TODAY)+'"><div style="font-size:11px;color:var(--gris-t);margin-top:2px">Es la fecha en que se generó la factura, no la de hoy. Cámbiala si estás digitando una anterior.</div></div>'
   +'</div></div>'
   +'<div class="form-section"><div class="form-section-title">👤 Cliente</div><div class="form-row">'
-  +'<div class="form-group"><label>Titular / Razón social *</label><input type="text" id="fac-cli-nombre"></div>'
-  +'<div class="form-group"><label>C.C / NIT</label><input type="text" id="fac-cli-nit"></div></div>'
+  +'<div class="form-group"><label>C.C / NIT <span style="font-weight:400;color:#6B7280;font-size:11px">(digítalo primero — autocompleta si ya se facturó)</span></label><input type="text" id="fac-cli-nit" onchange="window._facNitLookup&&window._facNitLookup()"></div>'
+  +'<div class="form-group"><label>Titular / Razón social *</label><input type="text" id="fac-cli-nombre"></div></div>'
   +'<div class="form-row"><div class="form-group"><label>Dirección</label><input type="text" id="fac-cli-dir"></div>'
   +'<div class="form-group"><label>Email</label><input type="text" id="fac-cli-email"></div>'
   +'<div class="form-group"><label>Teléfono</label><input type="text" id="fac-cli-tel"></div></div></div>'
