@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-18-ordenes-alimentan-inventario';
+const APP_VERSION = '2026-07-18-inv-min-en-linea';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-18', version:'2026-07-18-inv-min-en-linea', titulo:'Inventario: stock mínimo editable en el propio listado (Sol. Santiago/Andrés)',
+    afecta:'Inventario',
+    detalle:'La columna Mínimo ahora es una casilla editable directamente en el listado: Andrés escribe el stock mínimo que considere para cada producto y se guarda solo, sin abrir el formulario de edición. Cuando la existencia baja a ese número o menos, el producto salta en alerta (banner y resaltado). Como cada producto tiene su propio mínimo, no hay que fijar un valor único para todos.' },
   { fecha:'2026-07-18', version:'2026-07-18-ordenes-alimentan-inventario', titulo:'Las órdenes de compra ahora alimentan el inventario (Sol. Santiago)',
     afecta:'Compras / Inventario',
     detalle:'Al marcar una orden como Recibida, sus productos entran al inventario: si el producto ya existe (por enlace o por nombre) se le suma la cantidad; si no existe, se CREA con el proveedor de la orden, unidad, valor y cantidad. Antes solo actualizaba productos previamente enlazados, por eso el inventario quedaba vacío aunque hubiera órdenes recibidas. Los productos creados quedan enlazados a la orden para no duplicar en reingresos.' },
@@ -8866,6 +8869,12 @@ window._cmpBorrar = async function(id){
 // ═══════════════════════════════════════════════════════════════════════════
 window._INV_CATS = ['Aseo','Papelería','Amenities','Mantenimiento','Lencería','Cocina','Dotación','Tecnología','Otros'];
 
+window._invSetMin = async function(id, val){
+  var n = Math.max(0, Math.round(Number(val)||0));
+  var u = await sb.from('inventario').update({ stock_min: n }).eq('id', id);
+  if(u.error){ showToast('No se pudo guardar el mínimo: '+u.error.message,'error'); return; }
+  showToast('Mínimo guardado: '+n,'success');
+};
 window._invLista = async function(){
   var r = await sb.from('inventario').select('*').order('proveedor',{ascending:true}).order('producto',{ascending:true}).limit(1000);
   if(r.error){
@@ -8920,7 +8929,7 @@ window._invLista = async function(){
               +'<td style="font-size:11px;color:var(--gris-t)">'+window._cmpEsc(x.categoria||'—')+'</td>'
               +'<td>'+window._cmpEsc(x.proveedor||'(sin proveedor)')+'</td>'
               +'<td style="text-align:right;font-weight:700'+(bajo?';color:#B45309':'')+'">'+Number(x.cantidad||0)+'</td>'
-              +'<td style="text-align:right;color:var(--gris-t)">'+(Number(x.stock_min||0)||'—')+'</td>'
+              +'<td style="text-align:right"><input type="number" min="0" class="inv-min" value="'+Number(x.stock_min||0)+'" style="width:60px;font-size:12px;text-align:right" title="Stock mínimo (lo define Andrés). Al bajar a este número o menos, salta la alarma." onchange="window._invSetMin(\''+x.id+'\',this.value)"></td>'
               +'<td style="font-size:11px">'+window._cmpEsc(x.unidad||'und')+'</td>'
               +'<td style="text-align:right;white-space:nowrap">'+(Number(x.valor_unit||0)?window._cmpMoney(x.valor_unit):'—')+'</td>'
               +'<td><input type="number" class="inv-qty" data-id="'+x.id+'" min="1" value="'+(bajo?Math.max(1,Number(x.stock_min||1)):1)+'" style="width:90px;font-size:12px;text-align:right"></td>'
