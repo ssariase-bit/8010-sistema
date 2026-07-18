@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-18-extras-reposicion';
+const APP_VERSION = '2026-07-18-ordenes-alimentan-inventario';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-18', version:'2026-07-18-ordenes-alimentan-inventario', titulo:'Las órdenes de compra ahora alimentan el inventario (Sol. Santiago)',
+    afecta:'Compras / Inventario',
+    detalle:'Al marcar una orden como Recibida, sus productos entran al inventario: si el producto ya existe (por enlace o por nombre) se le suma la cantidad; si no existe, se CREA con el proveedor de la orden, unidad, valor y cantidad. Antes solo actualizaba productos previamente enlazados, por eso el inventario quedaba vacío aunque hubiera órdenes recibidas. Los productos creados quedan enlazados a la orden para no duplicar en reingresos.' },
   { fecha:'2026-07-18', version:'2026-07-18-extras-reposicion', titulo:'Horas Extra: la reposición ya no genera extra (Sol. Santiago)',
     afecta:'Cuadro de Horas Extra / cálculo de extras',
     detalle:'En turnos normales, las horas extra ahora se calculan como TIEMPO TOTAL TRABAJADO menos la DURACIÓN del turno pactado, con una gracia de 10 minutos como umbral. Antes se contaba por separado lo que se quedaba después de la salida más lo que llegaba temprano, lo que hacía que reponer una llegada tarde generara extra indebida. Ahora: llegar 2h antes y salir 2h antes = 0 extra; llegar 2h antes y salir a la hora = 2h extra; llegar tarde y reponer = 0 extra. Los turnos de 12h se mantienen (horas 9 a 12 son extra por ley). Los recargos (nocturno 35%, extra diurna 25%, nocturna 75%, dominical/festivo 90% desde jul-2026, franja 7pm-6am) ya estaban al día con la Ley 2466 de 2025 y no cambian.' },
@@ -8665,19 +8668,33 @@ window._cmpAvanzar = async function(id, nuevo){
   if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
 
   // Al recibir la mercancía, las existencias del inventario suben solas.
-  var sumado = 0;
+  // Sol Santiago: si el producto NO existe en el inventario, se CREA (con el proveedor de la orden);
+  // si ya existe (por inv_id o por nombre) se le suma la cantidad. Así las órdenes alimentan el inventario.
+  var sumado = 0, creados = 0;
   if(nuevo==='Recibida'){
     var its = Array.isArray(r0.data.items)?r0.data.items:[];
+    var _prov = r0.data.proveedor||'';
+    var _norm = function(x){ return String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim(); };
+    var _invAll = await sb.from('inventario').select('id,producto,cantidad');
+    var _byName = {}; if(_invAll.data){ _invAll.data.forEach(function(z){ _byName[_norm(z.producto)] = z; }); }
+    var _cambio = false;
     for(var i=0;i<its.length;i++){
-      if(!its[i].inv_id) continue;
-      var p = await sb.from('inventario').select('id,cantidad,producto').eq('id',its[i].inv_id).single();
-      if(p.error||!p.data) continue;
-      var nueva = Number(p.data.cantidad||0) + Number(its[i].cant||0);
-      var u = await sb.from('inventario').update({ cantidad: nueva }).eq('id', its[i].inv_id);
-      if(!u.error) sumado++;
+      var _cant = Number(its[i].cant||0); if(!_cant || !String(its[i].desc||'').trim()) continue;
+      var _rec = its[i].inv_id ? (_invAll.data||[]).find(function(z){return z.id===its[i].inv_id;}) : _byName[_norm(its[i].desc)];
+      if(_rec){
+        var nueva = Number(_rec.cantidad||0) + _cant;
+        var u = await sb.from('inventario').update({ cantidad: nueva }).eq('id', _rec.id);
+        if(!u.error){ sumado++; _rec.cantidad = nueva; if(!its[i].inv_id){ its[i].inv_id = _rec.id; _cambio = true; } }
+      } else {
+        var reg = { producto:String(its[i].desc).trim(), proveedor:_prov, categoria:'Otros', unidad:(its[i].und||'und'), valor_unit:Number(its[i].valor)||0, cantidad:_cant, stock_min:0, observaciones:'Creado desde '+(r0.data.consecutivo||'orden de compra'), activo:true };
+        var ins = await sb.from('inventario').insert([reg]).select('id').single();
+        if(!ins.error && ins.data){ its[i].inv_id = ins.data.id; _byName[_norm(reg.producto)] = { id:ins.data.id, producto:reg.producto, cantidad:_cant }; creados++; _cambio = true; }
+      }
     }
+    if(_cambio){ try{ await sb.from('compras').update({ items: its }).eq('id', id); }catch(_e){} }
   }
-  showToast('✅ '+r0.data.consecutivo+' → '+nuevo+(sumado?(' · inventario actualizado ('+sumado+' producto'+(sumado>1?'s':'')+')'):''),'success');
+  var _invMsg = (creados||sumado) ? (' · inventario: '+(creados?(creados+' nuevo'+(creados>1?'s':'')):'')+((creados&&sumado)?', ':'')+(sumado?(sumado+' actualizado'+(sumado>1?'s':'')):'')) : '';
+  showToast('✅ '+r0.data.consecutivo+' → '+nuevo+_invMsg,'success');
   loadView(window._CMP[r0.data.tipo].lista);
 };
 
