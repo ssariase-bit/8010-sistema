@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-18-inv-por-categoria';
+const APP_VERSION = '2026-07-18-oc-lista-colapsada';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-18', version:'2026-07-18-oc-lista-colapsada', titulo:'Órdenes de Compra: la lista deja de ser un chorrero — productos colapsados (Sol. Santiago)',
+    afecta:'Órdenes de Compra / Requisiciones (listado)',
+    detalle:'En el listado de órdenes, los productos ya no se vuelcan todos apilados (fila gigante). Ahora aparece un resumen "📦 N productos" que se despliega al hacer clic para ver el detalle en línea; el detalle completo sigue disponible al abrir o imprimir la orden. Aplica a órdenes de compra y requisiciones.' },
   { fecha:'2026-07-18', version:'2026-07-18-inv-por-categoria', titulo:'Inventario: productos organizados por categoría (Sol. Santiago)',
     afecta:'Inventario',
     detalle:'El listado de inventario deja de ser una fila corrida: ahora los productos salen agrupados y ordenados por categoría (Aseo, Cocina, Amenities, etc.), con un encabezado por cada categoría, para verlos clasificados de un vistazo. Se categorizaron automáticamente los productos ya cargados.' },
@@ -8303,7 +8306,8 @@ window._cmpLista = async function(tipo){
               +'<td>'+window._cmpEsc(x.solicitante||'—')+'</td>'
               +(C.conValores?('<td>'+window._cmpEsc(x.proveedor||'—')+'</td>'):'')
               +'<td style="max-width:280px;font-size:11px;line-height:1.5">'
-                + its.map(function(i){ return '· '+(i.fec?('<span style="color:#999">'+String(i.fec).slice(5)+'</span> '):'')+window._cmpEsc(i.desc)+' <strong>×'+window._cmpEsc(i.cant)+'</strong>'+(i.und?(' '+window._cmpEsc(i.und)):'')+(Number(i.subtotal)>0?(' — '+window._cmpMoney(i.subtotal)):''); }).join('<br>')
+                +'<details><summary style="cursor:pointer;font-weight:700;color:#1F3864;padding:2px 0">📦 '+its.length+' producto'+(its.length!==1?'s':'')+' ▾</summary><div style="margin-top:4px">'
+                + its.map(function(i){ return '· '+(i.fec?('<span style="color:#999">'+String(i.fec).slice(5)+'</span> '):'')+window._cmpEsc(i.desc)+' <strong>×'+window._cmpEsc(i.cant)+'</strong>'+(i.und?(' '+window._cmpEsc(i.und)):'')+(Number(i.subtotal)>0?(' — '+window._cmpMoney(i.subtotal)):''); }).join('<br>')+'</div></details>'
                 +((!C.conValores && Number(x.total)>0)?('<div style="margin-top:4px;font-weight:800">Total: '+window._cmpMoney(x.total)+(Number(x.iva)>0?(' <span style="font-weight:400;color:var(--gris-t)">(sub '+window._cmpMoney(x.subtotal)+' + IVA '+window._cmpMoney(x.iva)+')</span>'):'')+'</div>'):'')
               +'</td>'
               +(C.conValores?('<td style="text-align:right;font-weight:700;white-space:nowrap">'+window._cmpMoney((Number(x.subtotal||x.total)||0)+(Number(x.iva)||0))
