@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-20-horario-camareras';
+const APP_VERSION = '2026-07-20-maleta-apto';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-20', version:'2026-07-20-maleta-apto', titulo:'Registrar Maleta en Bodega: se agrego el campo Apartamento (Sol. Ricardo Vallejo, KL)',
+    afecta:'Maletas en Bodega (formulario y listado)',
+    detalle:'El formulario de Registrar Maleta en Bodega ahora tiene el campo "Apartamento" (selector de apartamentos) y el listado muestra la columna Apto. Se creo la columna apto en la tabla maletas.' },
   { fecha:'2026-07-20', version:'2026-07-20-horario-camareras', titulo:'Horario de camareras 8:00 AM - 3:00 PM (Sol. Nancy Medina, KL)',
     afecta:'Ingreso de Personal / Horario asignado',
     detalle:'Se agrego la opcion de horario "8:00 AM - 3:00 PM (Camareras)" en el selector de Horario asignado, correspondiente al nuevo turno con la reduccion de jornada. El cuadro de horas extra lo reconoce automaticamente (7h de turno).' },
@@ -1787,11 +1790,12 @@ async function loadView(view) {
       {id:'pernocta',label:'¿Pernocta en el edificio?',type:'select',opts:['false','true']},
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
-    case 'maletas-list':       await renderList('maletas','🧳 Maletas en Bodega','maletas-form',['fecha_ingreso','ticket_no','huesped','descripcion','color','marca','estado'],['Fecha','Ticket','Huésped','Descripción','Color','Marca','Estado']); break;
+    case 'maletas-list':       await renderList('maletas','🧳 Maletas en Bodega','maletas-form',['fecha_ingreso','ticket_no','apto','huesped','descripcion','color','marca','estado'],['Fecha','Ticket','Apto','Huésped','Descripción','Color','Marca','Estado']); break;
     case 'maletas-form':       renderGenForm('maletas','🧳 Registrar Maleta en Bodega',[
       {id:'fecha_ingreso',label:'Fecha ingreso',type:'date',default:TODAY,req:true},
       {id:'ticket_no',label:'No. Ticket',type:'text'},
       {id:'huesped',label:'Huésped',type:'nombre3',req:true},
+      {id:'apto',label:'Apartamento',type:'select',opts:EB().aptosFull},
       {id:'descripcion',label:'Descripción de la maleta',type:'text',req:true},
       {id:'color',label:'Color',type:'text'},
       {id:'marca',label:'Marca',type:'text'},
