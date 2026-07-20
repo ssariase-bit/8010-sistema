@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-20-financiero-kl-pyg';
+const APP_VERSION = '2026-07-20-financiero-kl-flujo';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-20', version:'2026-07-20-financiero-kl-flujo', titulo:'Financiero KL — Fase 2: pestana Flujo de Caja (Sol. Santiago)',
+    afecta:'Menu Kubik / Financiero KL',
+    detalle:'El modulo Financiero KL ahora tiene pestanas: PYG y Flujo de Caja. El Flujo (base caja) trae recaudos, egresos pagados y aportes como inputs; calcula solo el flujo del mes, la caja acumulada, la diferencia de conciliacion y la posicion neta (caja + CxC - CxP). El saldo de extracto y las CxP (del aging) son inputs. Sembrado abr-jun 2026: caja jun-30 463.073, CxP -100.294.073, conciliacion en 0. Siguientes fases: checks de integridad y cruce con el rack.' },
   { fecha:'2026-07-20', version:'2026-07-20-financiero-kl-pyg', titulo:'Nuevo modulo Financiero KL — PYG mensual (Sol. Santiago, Gerencia)',
     afecta:'Menu Kubik / Financiero KL',
     detalle:'Fase 1: modulo "Financiero KL" (solo Kubik, confidencial) con el PYG de 8i8 Operadora. Estructura de cuentas sembrada con el ejecutado abr-jun 2026 ya corregido (incluye codigos huerfanos 51015 y 5170), NOI preoperativo -107.4M. 12 columnas mensuales, vistas Real/Proyeccion/Variacion, edicion inline por linea (solo Gerencia General), subtotales y NOI automaticos, notas por cuenta. Reutiliza finanzas_pyg con edificio=kubik/entidad=8I8; NO toca 8010. Siguientes fases: Flujo de Caja, checks y cruce con el rack.' },
@@ -13032,7 +13035,8 @@ function _klSerie(map,def){
   if(def.calc==='net'){ var ing=_klSum(map,KL_ING),cos=_klSum(map,KL_COS),nop=_klSum(map,KL_NOP),deu=_klSum(map,KL_DEU); return ing.map(function(v,i){return v-cos[i]-nop[i]-deu[i];}); }
   return [0,0,0,0,0,0,0,0,0,0,0,0];
 }
-async function renderFinanzasKL(){
+async function renderFinanzasKL(){ var st=window._finKLState; st.tab=st.tab||'pyg'; if(st.tab==='flujo') return _klFlujo(); return _klPYG(); }
+async function _klPYG(){
   var mc=document.getElementById('main-content');
   var editable=(currentProfile&&currentProfile.rol==='gerente_general');
   var st=window._finKLState;
@@ -13080,7 +13084,7 @@ async function renderFinanzasKL(){
     body+='<tr style="'+rowStyle+'">'+nameCell+cells+'<td style="text-align:right;font-weight:700;background:'+(isSub?'#eaf0ea':'#f3f6fb')+'">'+_klNum(totA)+'</td></tr>';
   });
   mc.innerHTML=
-    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💰 Financiero KL — PYG '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+anioSel+vSel+'</div></div>'
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💰 Financiero KL — PYG '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+_klTabBar(st)+anioSel+vSel+'</div></div>'
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">8i8 Operadora SAS · NIT 902026873-8 · Preoperativo ejecutado abr–jun 2026 (corregido, con códigos huérfanos). Operación mes 1 = jul-2026. Edita cualquier celda en Real o Proyección y se guarda solo; los subtotales y el NOI se calculan solos. Valores en pesos.'+(editable?'':' <b>(solo lectura — edición: Gerencia General)</b>')+'</div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
     + kpi('Ingresos — '+KL_MC[mi], ingR[mi], ingP[mi],'var(--azul)')
@@ -13112,6 +13116,89 @@ async function finKLNota(cEnc){
   var resp=await window._sbFromRaw('finanzas_notas').upsert(patch,{onConflict:'edificio,anio,entidad,cuenta'});
   if(resp&&resp.error){ showToast('Error al guardar nota: '+resp.error.message,'error'); return; }
   showToast(txt?'💬 Comentario guardado':'Comentario borrado','success'); renderFinanzasKL();
+}
+
+function _klTabBar(st){ var tabs=[['pyg','PYG'],['flujo','Flujo de Caja']]; return '<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden;margin-right:8px">'+tabs.map(function(t){ return '<button onclick="window._finKLState.tab=\''+t[0]+'\';renderFinanzasKL()" style="border:none;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700;background:'+(t[0]===st.tab?'#1D3461':'#fff')+';color:'+(t[0]===st.tab?'#fff':'#1D3461')+'">'+t[1]+'</button>'; }).join('')+'</div>'; }
+var FLUJO_L=[
+ {c:'Ingresos recaudados',k:'in'},
+ {c:'Egresos pagados',k:'in'},
+ {c:'Fondos de capital (aportes)',k:'in'},
+ {c:'FLUJO DEL MES',k:'calc',v:'flujo'},
+ {c:'Caja inicial',k:'calc',v:'ini',bal:true},
+ {c:'CAJA FINAL (disponible)',k:'calc',v:'fin',bal:true},
+ {c:'Saldo extracto bancario',k:'in',bal:true},
+ {c:'Diferencia de conciliación',k:'calc',v:'dif',bal:true},
+ {c:'Cuentas por Cobrar (CxC)',k:'in',bal:true},
+ {c:'Cuentas por Pagar (CxP)',k:'in',bal:true},
+ {c:'POSICIÓN NETA (caja + CxC − CxP)',k:'calc',v:'pos',bal:true}
+];
+async function finKLFlujoSet(inp){
+  var cuenta=decodeURIComponent(inp.getAttribute('data-c')), tipo=inp.getAttribute('data-t'), m=inp.getAttribute('data-m');
+  if(tipo!=='real'&&tipo!=='ppto') return;
+  var val=_klParse(inp.value); inp.value=val?_klNum(val):'';
+  var r=(window._finKLFlujoRows||[]).find(function(x){return x.entidad==='FLUJO'&&x.cuenta===cuenta&&x.tipo===tipo;});
+  var patch={updated_at:new Date().toISOString()}; try{patch.updated_by=(window._uid&&window._uid())||null;}catch(e){} patch['m'+m]=val;
+  var resp;
+  if(r){ r['m'+m]=val; resp=await window._sbFromRaw('finanzas_pyg').update(patch).eq('id',r.id); }
+  else { var ins=Object.assign({edificio:'kubik',entidad:'FLUJO',anio:window._finKLState.anio,cuenta:cuenta,tipo:tipo},patch); resp=await window._sbFromRaw('finanzas_pyg').insert(ins); }
+  if(resp&&resp.error){ showToast('Error al guardar: '+resp.error.message,'error'); return; }
+  showToast('Guardado','success'); renderFinanzasKL();
+}
+async function _klFlujo(){
+  var mc=document.getElementById('main-content');
+  var editable=(currentProfile&&currentProfile.rol==='gerente_general');
+  var st=window._finKLState;
+  mc.innerHTML='<div class="page-title">💰 Financiero KL — Flujo de Caja</div><p style="color:var(--gris-t)">Cargando…</p>';
+  var q=await window._sbFromRaw('finanzas_pyg').select('*').eq('edificio','kubik').eq('entidad','FLUJO').eq('anio',st.anio);
+  if(q.error){ mc.innerHTML='<div class="page-title">💰 Financiero KL — Flujo de Caja</div><div class="card" style="max-width:640px"><p style="font-size:14px">⚠️ '+(q.error.message||'')+'</p></div>'; return; }
+  var rows=q.data||[]; window._finKLFlujoRows=rows;
+  var Z=function(){return [0,0,0,0,0,0,0,0,0,0,0,0];};
+  var buildMap=function(tp){ var m={}; rows.forEach(function(r){ if(r.tipo===tp){ var a=[]; for(var i=1;i<=12;i++)a.push(Number(r['m'+i])||0); m[r.cuenta]=a; } }); return m; };
+  var mapR=buildMap('real'), mapP=buildMap('ppto');
+  var sel=function(c){ var r=mapR[c]||Z(), p=mapP[c]||Z(); return st.vista==='ppto'?p:(st.vista==='var'?r.map(function(v,i){return v-p[i];}):r); };
+  var recaudos=sel('Ingresos recaudados'), egresos=sel('Egresos pagados'), fondos=sel('Fondos de capital (aportes)'), extracto=sel('Saldo extracto bancario'), cxc=sel('Cuentas por Cobrar (CxC)'), cxp=sel('Cuentas por Pagar (CxP)');
+  var flujo=Z(),cajaIni=Z(),cajaFin=Z(),dif=Z(),pos=Z(); var prev=0; var lastM=-1;
+  for(var m=0;m<12;m++){
+    var fl=recaudos[m]-egresos[m]+fondos[m]; flujo[m]=fl; cajaIni[m]=prev; cajaFin[m]=prev+fl; prev=cajaFin[m];
+    dif[m]=cajaFin[m]-extracto[m]; pos[m]=cajaFin[m]+cxc[m]+cxp[m];
+    if(recaudos[m]||egresos[m]||fondos[m]||extracto[m]||cxc[m]||cxp[m]) lastM=m;
+  }
+  var calcArr={flujo:flujo,ini:cajaIni,fin:cajaFin,dif:dif,pos:pos};
+  var hoyM=(TODAY.slice(0,4)==String(st.anio))?parseInt(TODAY.slice(5,7),10):12;
+  var f$=function(n){ return '$'+_klNum(n); };
+  var anioSel='<select onchange="window._finKLState.anio=parseInt(this.value,10);renderFinanzasKL()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px;font-weight:700">'+[2026,2027].map(function(y){ return '<option value="'+y+'" '+(y===st.anio?'selected':'')+'>'+y+'</option>'; }).join('')+'</select>';
+  var vistas=[['real','Real'],['ppto','Proyección'],['var','Variación']];
+  var vSel='<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden">'+vistas.map(function(v){ return '<button onclick="window._finKLState.vista=\''+v[0]+'\';renderFinanzasKL()" style="border:none;padding:7px 12px;font-size:12px;cursor:pointer;background:'+(v[0]===st.vista?'var(--azul)':'#fff')+';color:'+(v[0]===st.vista?'#fff':'var(--azul)')+'">'+v[1]+'</button>'; }).join('')+'</div>';
+  var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:230px;z-index:2">Concepto</th>'+KL_MC.map(function(mm){ return '<th style="text-align:right;min-width:84px">'+mm+'</th>'; }).join('')+'<th style="text-align:right;min-width:100px;background:#16284a">Año</th>';
+  var body='';
+  FLUJO_L.forEach(function(def){
+    var isCalc=def.k==='calc';
+    var arr= isCalc? calcArr[def.v] : sel(def.c);
+    var bold=(def.c.indexOf('CAJA FINAL')>=0||def.c.indexOf('POSICI')>=0||def.c==='FLUJO DEL MES');
+    var rowStyle= bold?'background:#eefbf2;font-weight:800':(isCalc?'background:#f6f6f7;font-weight:700':'');
+    var bg= bold?'#eefbf2':(isCalc?'#f6f6f7':'#fff');
+    var nameCell='<td style="position:sticky;left:0;background:'+bg+';text-align:left;font-size:12px;'+((isCalc||bold)?'font-weight:700':'')+'">'+def.c+'</td>';
+    var cells='';
+    for(var m=0;m<12;m++){
+      var beyond=(def.bal||isCalc)&&(m>lastM)&&(lastM>=0);
+      if(!isCalc && editable && st.vista!=='var'){
+        var raw=(st.vista==='ppto'?(mapP[def.c]||Z()):(mapR[def.c]||Z()))[m];
+        cells+='<td style="padding:1px"><input type="text" value="'+(raw?_klNum(raw):'')+'" data-c="'+encodeURIComponent(def.c)+'" data-t="'+st.vista+'" data-m="'+(m+1)+'" onchange="finKLFlujoSet(this)" style="width:80px;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:11px;text-align:right'+((m+1===hoyM)?';background:#fff7e6':'')+'"></td>';
+      } else {
+        var v=arr[m]; var col='';
+        if(def.v==='dif'){ col=';color:'+(v===0?'#1A7D3C':'#C0392B')+';font-weight:700'; }
+        var show= beyond?'':((v===0&&!bold&&def.v!=='dif')?'·':_klNum(v));
+        cells+='<td style="text-align:right;font-size:11px'+col+((m+1===hoyM)?';background:#fff7e6':'')+'">'+show+'</td>';
+      }
+    }
+    var totV= def.bal? (lastM>=0?arr[lastM]:0) : arr.reduce(function(s,v){return s+v;},0);
+    body+='<tr style="'+rowStyle+'">'+nameCell+cells+'<td style="text-align:right;font-weight:700;background:'+(isCalc?'#eaf0ea':'#f3f6fb')+'">'+((def.bal&&lastM<0)?'·':_klNum(totV))+'</td></tr>';
+  });
+  mc.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💰 Financiero KL — Flujo de Caja '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+_klTabBar(st)+anioSel+vSel+'</div></div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">8i8 Operadora SAS · Banco de Occidente. Recaudos, pagos y aportes son inputs; el flujo del mes, la caja acumulada, la diferencia de conciliación y la posición neta se calculan solos. El <b>saldo de extracto</b> y las <b>CxP</b> (del aging) se digitan. Diferencia en verde = conciliado. Valores en pesos.'+(editable?'':' <b>(solo lectura — edición: Gerencia General)</b>')+'</div>'
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Caja inicial = caja final del mes anterior. Posición neta = caja disponible + CxC − CxP. Columna Año: para saldos (caja, extracto, CxP, posición) muestra el último mes con datos; para flujos, la suma del año.</p></div>';
 }
 
 window._finState = window._finState || { entidad:'80-10', anio:2026, vista:'real' };
