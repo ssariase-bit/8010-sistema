@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-20-financiero-kl-flujo';
+const APP_VERSION = '2026-07-20-financiero-kl-check';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-20', version:'2026-07-20-financiero-kl-check', titulo:'Financiero KL — Fase 3: pestana Check de integridad (Sol. Santiago)',
+    afecta:'Menu Kubik / Financiero KL',
+    detalle:'Tercera pestana "Check": reconcilia lo capturado en el PYG (ingresos y costos) y en el Flujo contra los totales de control del auxiliar (creditos 4xxx, debitos 5xxx) y el movimiento de banco. Se digitan tres controles por mes; el modulo calcula las 4 diferencias y da un veredicto verde/rojo por mes: un mes solo cuadra (se puede publicar) cuando las 4 diferencias son 0. Sembrado abr-jun 2026 conciliados. La alerta de codigos de actividad huerfanos se activara con el importador del auxiliar (siguiente fase).' },
   { fecha:'2026-07-20', version:'2026-07-20-financiero-kl-flujo', titulo:'Financiero KL — Fase 2: pestana Flujo de Caja (Sol. Santiago)',
     afecta:'Menu Kubik / Financiero KL',
     detalle:'El modulo Financiero KL ahora tiene pestanas: PYG y Flujo de Caja. El Flujo (base caja) trae recaudos, egresos pagados y aportes como inputs; calcula solo el flujo del mes, la caja acumulada, la diferencia de conciliacion y la posicion neta (caja + CxC - CxP). El saldo de extracto y las CxP (del aging) son inputs. Sembrado abr-jun 2026: caja jun-30 463.073, CxP -100.294.073, conciliacion en 0. Siguientes fases: checks de integridad y cruce con el rack.' },
@@ -13035,7 +13038,7 @@ function _klSerie(map,def){
   if(def.calc==='net'){ var ing=_klSum(map,KL_ING),cos=_klSum(map,KL_COS),nop=_klSum(map,KL_NOP),deu=_klSum(map,KL_DEU); return ing.map(function(v,i){return v-cos[i]-nop[i]-deu[i];}); }
   return [0,0,0,0,0,0,0,0,0,0,0,0];
 }
-async function renderFinanzasKL(){ var st=window._finKLState; st.tab=st.tab||'pyg'; if(st.tab==='flujo') return _klFlujo(); return _klPYG(); }
+async function renderFinanzasKL(){ var st=window._finKLState; st.tab=st.tab||'pyg'; if(st.tab==='flujo') return _klFlujo(); if(st.tab==='check') return _klCheck(); return _klPYG(); }
 async function _klPYG(){
   var mc=document.getElementById('main-content');
   var editable=(currentProfile&&currentProfile.rol==='gerente_general');
@@ -13118,7 +13121,7 @@ async function finKLNota(cEnc){
   showToast(txt?'💬 Comentario guardado':'Comentario borrado','success'); renderFinanzasKL();
 }
 
-function _klTabBar(st){ var tabs=[['pyg','PYG'],['flujo','Flujo de Caja']]; return '<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden;margin-right:8px">'+tabs.map(function(t){ return '<button onclick="window._finKLState.tab=\''+t[0]+'\';renderFinanzasKL()" style="border:none;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700;background:'+(t[0]===st.tab?'#1D3461':'#fff')+';color:'+(t[0]===st.tab?'#fff':'#1D3461')+'">'+t[1]+'</button>'; }).join('')+'</div>'; }
+function _klTabBar(st){ var tabs=[['pyg','PYG'],['flujo','Flujo de Caja'],['check','Check']]; return '<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden;margin-right:8px">'+tabs.map(function(t){ return '<button onclick="window._finKLState.tab=\''+t[0]+'\';renderFinanzasKL()" style="border:none;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700;background:'+(t[0]===st.tab?'#1D3461':'#fff')+';color:'+(t[0]===st.tab?'#fff':'#1D3461')+'">'+t[1]+'</button>'; }).join('')+'</div>'; }
 var FLUJO_L=[
  {c:'Ingresos recaudados',k:'in'},
  {c:'Egresos pagados',k:'in'},
@@ -13199,6 +13202,90 @@ async function _klFlujo(){
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">8i8 Operadora SAS · Banco de Occidente. Recaudos, pagos y aportes son inputs; el flujo del mes, la caja acumulada, la diferencia de conciliación y la posición neta se calculan solos. El <b>saldo de extracto</b> y las <b>CxP</b> (del aging) se digitan. Diferencia en verde = conciliado. Valores en pesos.'+(editable?'':' <b>(solo lectura — edición: Gerencia General)</b>')+'</div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
     +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Caja inicial = caja final del mes anterior. Posición neta = caja disponible + CxC − CxP. Columna Año: para saldos (caja, extracto, CxP, posición) muestra el último mes con datos; para flujos, la suma del año.</p></div>';
+}
+
+async function _klCheck(){
+  var mc=document.getElementById('main-content');
+  var editable=(currentProfile&&currentProfile.rol==='gerente_general');
+  var st=window._finKLState;
+  mc.innerHTML='<div class="page-title">💰 Financiero KL — Check</div><p style="color:var(--gris-t)">Cargando…</p>';
+  var q=await window._sbFromRaw('finanzas_pyg').select('*').eq('edificio','kubik').eq('anio',st.anio);
+  if(q.error){ mc.innerHTML='<div class="page-title">💰 Financiero KL — Check</div><div class="card" style="max-width:640px"><p style="font-size:14px">⚠️ '+(q.error.message||'')+'</p></div>'; return; }
+  var all=q.data||[]; window._finKLChkRows=all.filter(function(r){return r.entidad==='CHECK';});
+  var Z=function(){return [0,0,0,0,0,0,0,0,0,0,0,0];};
+  var mapOf=function(ent,tp){ var m={}; all.forEach(function(r){ if(r.entidad===ent&&r.tipo===tp){ var a=[]; for(var i=1;i<=12;i++)a.push(Number(r['m'+i])||0); m[r.cuenta]=a; } }); return m; };
+  var sum=function(map,list){ var a=Z(); list.forEach(function(c){ var s=map[c]; if(s)for(var i=0;i<12;i++)a[i]+=s[i]; }); return a; };
+  var pyg=mapOf('8I8','real'), flj=mapOf('FLUJO','real'), chk=mapOf('CHECK','real');
+  var ingCap=sum(pyg,KL_ING), cosCap=sum(pyg,KL_COS.concat(KL_NOP));
+  var recaudos=flj['Ingresos recaudados']||Z(), egresos=flj['Egresos pagados']||Z(), fondos=flj['Fondos de capital (aportes)']||Z(), extracto=flj['Saldo extracto bancario']||Z();
+  var flujoCap=Z(),cajaFin=Z(),difConc=Z(),prev=0;
+  for(var m=0;m<12;m++){ flujoCap[m]=recaudos[m]-egresos[m]+fondos[m]; cajaFin[m]=prev+flujoCap[m]; prev=cajaFin[m]; difConc[m]=cajaFin[m]-extracto[m]; }
+  var cred4=chk['Créditos 4xxx del auxiliar (ingresos)']||Z();
+  var deb5=chk['Débitos 5xxx del auxiliar (costos)']||Z();
+  var movB=chk['Movimiento neto de banco']||Z();
+  var difIng=ingCap.map(function(v,i){return v-cred4[i];});
+  var difCos=cosCap.map(function(v,i){return v-deb5[i];});
+  var difFlu=flujoCap.map(function(v,i){return v-movB[i];});
+  var lastM=-1; for(var m=0;m<12;m++){ if(ingCap[m]||cosCap[m]||recaudos[m]||egresos[m]||cred4[m]||deb5[m]||movB[m]) lastM=m; }
+  var cuadra=Z(); for(var m=0;m<12;m++){ cuadra[m]=(difIng[m]===0&&difCos[m]===0&&difFlu[m]===0&&difConc[m]===0)?1:0; }
+  var hoyM=(TODAY.slice(0,4)==String(st.anio))?parseInt(TODAY.slice(5,7),10):12;
+  var anioSel='<select onchange="window._finKLState.anio=parseInt(this.value,10);renderFinanzasKL()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px;font-weight:700">'+[2026,2027].map(function(y){ return '<option value="'+y+'" '+(y===st.anio?'selected':'')+'>'+y+'</option>'; }).join('')+'</select>';
+  var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:250px;z-index:2">Verificación</th>'+KL_MC.map(function(mm){ return '<th style="text-align:right;min-width:84px">'+mm+'</th>'; }).join('');
+  var rowsDef=[
+    {c:'Ingresos capturados (PYG)',a:ingCap},
+    {c:'Créditos 4xxx del auxiliar (ingresos)',in:true},
+    {c:'Δ Ingresos (debe ser 0)',a:difIng,dif:true},
+    {c:'Costos capturados (PYG)',a:cosCap},
+    {c:'Débitos 5xxx del auxiliar (costos)',in:true},
+    {c:'Δ Costos (debe ser 0)',a:difCos,dif:true},
+    {c:'Flujo capturado (recaudos − pagos + aportes)',a:flujoCap},
+    {c:'Movimiento neto de banco',in:true},
+    {c:'Δ Flujo vs banco (debe ser 0)',a:difFlu,dif:true},
+    {c:'Diferencia de conciliación (caja − extracto)',a:difConc,dif:true},
+    {c:'ESTADO DEL MES',verd:true}
+  ];
+  var body='';
+  rowsDef.forEach(function(def){
+    var isVerd=!!def.verd, isDif=!!def.dif, isIn=!!def.in;
+    var rowStyle=isVerd?'background:#1D3461;color:#fff;font-weight:800':(isDif?'background:#f6f6f7;font-weight:700':'');
+    var bg=isVerd?'#1D3461':(isDif?'#f6f6f7':'#fff');
+    var fg=isVerd?'#fff':'#222';
+    var nameCell='<td style="position:sticky;left:0;background:'+bg+';color:'+fg+';text-align:left;font-size:12px;'+((isDif||isVerd)?'font-weight:700':'')+'">'+def.c+'</td>';
+    var cells='';
+    for(var m=0;m<12;m++){
+      var beyond=(m>lastM)&&(lastM>=0);
+      if(isVerd){
+        var ok=cuadra[m], txt=beyond?'':(ok?'✓':'✗'), c=ok?'#7CF5A0':'#FF8080';
+        cells+='<td style="text-align:center;font-size:13px;font-weight:800;color:'+c+'">'+txt+'</td>';
+      } else if(isIn && editable){
+        var raw=(chk[def.c]||Z())[m];
+        cells+='<td style="padding:1px"><input type="text" value="'+(raw?_klNum(raw):'')+'" data-c="'+encodeURIComponent(def.c)+'" data-m="'+(m+1)+'" onchange="finKLChkSet(this)" style="width:80px;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:11px;text-align:right'+((m+1===hoyM)?';background:#fff7e6':'')+'"></td>';
+      } else {
+        var arr=isIn?(chk[def.c]||Z()):def.a; var v=arr[m]; var col='';
+        if(isDif){ col=';color:'+(v===0?'#1A7D3C':'#C0392B')+';font-weight:700'; }
+        var show=beyond?'':((v===0&&!isDif)?'·':_klNum(v));
+        cells+='<td style="text-align:right;font-size:11px'+col+((m+1===hoyM)?';background:#fff7e6':'')+'">'+show+'</td>';
+      }
+    }
+    body+='<tr style="'+rowStyle+'">'+nameCell+cells+'</tr>';
+  });
+  var nOk=0,nTot=0; for(var m=0;m<=lastM;m++){ nTot++; if(cuadra[m])nOk++; }
+  mc.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💰 Financiero KL — Check de integridad '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+_klTabBar(st)+anioSel+'</div></div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Reconcilia lo capturado en el PYG y el Flujo contra los <b>totales de control del auxiliar</b> (créditos 4xxx, débitos 5xxx) y el movimiento de banco. Digitas los tres controles del mes; el resto se calcula. <b>Un mes solo se puede publicar cuando las cuatro diferencias son 0</b> (✓ verde). Valores en pesos.'+(editable?'':' <b>(solo lectura)</b>')+'</div>'
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">'+(nTot>0?('Meses conciliados: '+nOk+' de '+nTot+' con datos. '):'')+'La alerta automática de <b>códigos de actividad huérfanos</b> se activa con el importador del auxiliar (siguiente fase). El check compara PYG (entidad 8I8) y Flujo (entidad FLUJO) contra los controles (entidad CHECK).</p></div>';
+}
+async function finKLChkSet(inp){
+  var cuenta=decodeURIComponent(inp.getAttribute('data-c')), m=inp.getAttribute('data-m');
+  var val=_klParse(inp.value); inp.value=val?_klNum(val):'';
+  var r=(window._finKLChkRows||[]).find(function(x){return x.entidad==='CHECK'&&x.cuenta===cuenta&&x.tipo==='real';});
+  var patch={updated_at:new Date().toISOString()}; try{patch.updated_by=(window._uid&&window._uid())||null;}catch(e){} patch['m'+m]=val;
+  var resp;
+  if(r){ r['m'+m]=val; resp=await window._sbFromRaw('finanzas_pyg').update(patch).eq('id',r.id); }
+  else { var ins=Object.assign({edificio:'kubik',entidad:'CHECK',anio:window._finKLState.anio,cuenta:cuenta,tipo:'real'},patch); resp=await window._sbFromRaw('finanzas_pyg').insert(ins); }
+  if(resp&&resp.error){ showToast('Error al guardar: '+resp.error.message,'error'); return; }
+  showToast('Guardado','success'); renderFinanzasKL();
 }
 
 window._finState = window._finState || { entidad:'80-10', anio:2026, vista:'real' };
