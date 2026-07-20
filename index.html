@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-20-financiero-kl-check';
+const APP_VERSION = '2026-07-20-financiero-kl-cruce';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-20', version:'2026-07-20-financiero-kl-cruce', titulo:'Financiero KL — Fase 4: pestana Cruce con el rack (Sol. Santiago)',
+    afecta:'Menu Kubik / Financiero KL',
+    detalle:'Cuarta pestana "Cruce": ocupacion, noches vendidas, ADR y RevPAR reales salen directo del rack de Kubik (no se digitan). El ingreso de alojamiento del rack se compara contra lo capturado en el PYG (Delta Rack-PYG, alerta si difieren) y contra la proyeccion (mes 1 = jul-2026), con % de cumplimiento (verde >=100, ambar 80-99, rojo <80). Con esto queda cerrada la estructura de 4 pestanas del modulo. Falta el importador CSV por codigo (con alerta de codigos huerfanos).' },
   { fecha:'2026-07-20', version:'2026-07-20-financiero-kl-check', titulo:'Financiero KL — Fase 3: pestana Check de integridad (Sol. Santiago)',
     afecta:'Menu Kubik / Financiero KL',
     detalle:'Tercera pestana "Check": reconcilia lo capturado en el PYG (ingresos y costos) y en el Flujo contra los totales de control del auxiliar (creditos 4xxx, debitos 5xxx) y el movimiento de banco. Se digitan tres controles por mes; el modulo calcula las 4 diferencias y da un veredicto verde/rojo por mes: un mes solo cuadra (se puede publicar) cuando las 4 diferencias son 0. Sembrado abr-jun 2026 conciliados. La alerta de codigos de actividad huerfanos se activara con el importador del auxiliar (siguiente fase).' },
@@ -13038,7 +13041,7 @@ function _klSerie(map,def){
   if(def.calc==='net'){ var ing=_klSum(map,KL_ING),cos=_klSum(map,KL_COS),nop=_klSum(map,KL_NOP),deu=_klSum(map,KL_DEU); return ing.map(function(v,i){return v-cos[i]-nop[i]-deu[i];}); }
   return [0,0,0,0,0,0,0,0,0,0,0,0];
 }
-async function renderFinanzasKL(){ var st=window._finKLState; st.tab=st.tab||'pyg'; if(st.tab==='flujo') return _klFlujo(); if(st.tab==='check') return _klCheck(); return _klPYG(); }
+async function renderFinanzasKL(){ var st=window._finKLState; st.tab=st.tab||'pyg'; if(st.tab==='flujo') return _klFlujo(); if(st.tab==='check') return _klCheck(); if(st.tab==='cruce') return _klCruce(); return _klPYG(); }
 async function _klPYG(){
   var mc=document.getElementById('main-content');
   var editable=(currentProfile&&currentProfile.rol==='gerente_general');
@@ -13121,7 +13124,7 @@ async function finKLNota(cEnc){
   showToast(txt?'💬 Comentario guardado':'Comentario borrado','success'); renderFinanzasKL();
 }
 
-function _klTabBar(st){ var tabs=[['pyg','PYG'],['flujo','Flujo de Caja'],['check','Check']]; return '<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden;margin-right:8px">'+tabs.map(function(t){ return '<button onclick="window._finKLState.tab=\''+t[0]+'\';renderFinanzasKL()" style="border:none;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700;background:'+(t[0]===st.tab?'#1D3461':'#fff')+';color:'+(t[0]===st.tab?'#fff':'#1D3461')+'">'+t[1]+'</button>'; }).join('')+'</div>'; }
+function _klTabBar(st){ var tabs=[['pyg','PYG'],['flujo','Flujo de Caja'],['check','Check'],['cruce','Cruce']]; return '<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden;margin-right:8px">'+tabs.map(function(t){ return '<button onclick="window._finKLState.tab=\''+t[0]+'\';renderFinanzasKL()" style="border:none;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700;background:'+(t[0]===st.tab?'#1D3461':'#fff')+';color:'+(t[0]===st.tab?'#fff':'#1D3461')+'">'+t[1]+'</button>'; }).join('')+'</div>'; }
 var FLUJO_L=[
  {c:'Ingresos recaudados',k:'in'},
  {c:'Egresos pagados',k:'in'},
@@ -13286,6 +13289,73 @@ async function finKLChkSet(inp){
   else { var ins=Object.assign({edificio:'kubik',entidad:'CHECK',anio:window._finKLState.anio,cuenta:cuenta,tipo:'real'},patch); resp=await window._sbFromRaw('finanzas_pyg').insert(ins); }
   if(resp&&resp.error){ showToast('Error al guardar: '+resp.error.message,'error'); return; }
   showToast('Guardado','success'); renderFinanzasKL();
+}
+
+async function _klCruce(){
+  var mc=document.getElementById('main-content');
+  var st=window._finKLState;
+  mc.innerHTML='<div class="page-title">💰 Financiero KL — Cruce con operación</div><p style="color:var(--gris-t)">Cargando rack…</p>';
+  var Z=function(){return [0,0,0,0,0,0,0,0,0,0,0,0];};
+  var dim=[31,28,31,30,31,30,31,31,30,31,30,31];
+  var nAptos=12; try{ nAptos=(EB().aptosBase||[]).length||42; }catch(e){ nAptos=42; }
+  // fetch kubik rack for the year (paginated)
+  var y=st.anio; var desde=y+'-01-01', hasta=y+'-12-31';
+  var rack=[]; var from=0;
+  while(true){ var r=await window._sbFromRaw('rack').select('apto,estado,tarifa,fecha,tipo').eq('edificio','kubik').gte('fecha',desde).lte('fecha',hasta).range(from,from+999); if(r.error){ mc.innerHTML='<div class="page-title">💰 Financiero KL — Cruce</div><div class="card"><p>⚠️ '+(r.error.message||'')+'</p></div>'; return; } var d=r.data||[]; rack.push.apply(rack,d); if(d.length<1000)break; from+=1000; }
+  var sold=Z(), ingR=Z();
+  rack.forEach(function(x){ var m=parseInt(String(x.fecha).slice(5,7),10)-1; if(m<0||m>11)return; if(window._esVentaAloja&&window._esVentaAloja(x)){ sold[m]++; ingR[m]+=Number(x.tarifa)||0; } });
+  var avail=Z(),ocup=Z(),adr=Z(),revpar=Z();
+  for(var m=0;m<12;m++){ avail[m]=nAptos*dim[m]; ocup[m]=avail[m]?sold[m]/avail[m]:0; adr[m]=sold[m]?ingR[m]/sold[m]:0; revpar[m]=avail[m]?ingR[m]/avail[m]:0; }
+  // PYG alojamiento capturado + proyeccion
+  var q=await window._sbFromRaw('finanzas_pyg').select('cuenta,entidad,tipo,m1,m2,m3,m4,m5,m6,m7,m8,m9,m10,m11,m12').eq('edificio','kubik').eq('anio',st.anio);
+  var all=q.data||[];
+  var pick=function(ent,cta){ var r=all.find(function(x){return x.entidad===ent&&x.cuenta===cta&&x.tipo==='real';}); var a=Z(); if(r)for(var i=0;i<12;i++)a[i]=Number(r['m'+(i+1)])||0; return a; };
+  var pygAloj=pick('8I8','Ing Alojamiento');
+  var proyAloj=pick('PROY','Ing Alojamiento proyectado');
+  var difRP=ingR.map(function(v,i){return v-pygAloj[i];});
+  var cumpl=ingR.map(function(v,i){return proyAloj[i]?v/proyAloj[i]:0;});
+  var lastM=-1; for(var m=0;m<12;m++){ if(sold[m]||pygAloj[m]||proyAloj[m]) lastM=m; }
+  var hoyM=(TODAY.slice(0,4)==String(st.anio))?parseInt(TODAY.slice(5,7),10):12;
+  var pctS=function(x){ return (x*100).toFixed(1)+'%'; };
+  var anioSel='<select onchange="window._finKLState.anio=parseInt(this.value,10);renderFinanzasKL()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px;font-weight:700">'+[2026,2027].map(function(yy){ return '<option value="'+yy+'" '+(yy===st.anio?'selected':'')+'>'+yy+'</option>'; }).join('')+'</select>';
+  var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:250px;z-index:2">Indicador (real del rack)</th>'+KL_MC.map(function(mm){ return '<th style="text-align:right;min-width:84px">'+mm+'</th>'; }).join('');
+  var rowsDef=[
+    {c:'Noches vendidas',a:sold,int:true},
+    {c:'Ocupación %',a:ocup,pct:true},
+    {c:'ADR (tarifa promedio)',a:adr},
+    {c:'RevPAR',a:revpar},
+    {c:'Ingreso alojamiento — Rack (real)',a:ingR,bold:true},
+    {c:'Ingreso alojamiento — PYG (capturado)',a:pygAloj},
+    {c:'Δ Rack − PYG',a:difRP,dif:true},
+    {c:'Ingreso alojamiento — Proyección',a:proyAloj},
+    {c:'% Cumplimiento (Rack / Proy)',a:cumpl,pct:true,cumpl:true}
+  ];
+  var body='';
+  rowsDef.forEach(function(def){
+    var bold=!!def.bold;
+    var rowStyle=bold?'background:#eefbf2;font-weight:800':(def.dif?'background:#f6f6f7;font-weight:700':'');
+    var bg=bold?'#eefbf2':(def.dif?'#f6f6f7':'#fff');
+    var nameCell='<td style="position:sticky;left:0;background:'+bg+';text-align:left;font-size:12px;'+((bold||def.dif)?'font-weight:700':'')+'">'+def.c+'</td>';
+    var cells='';
+    for(var m=0;m<12;m++){
+      var beyond=(m>lastM)&&(lastM>=0);
+      var v=def.a[m]; var col='';
+      if(def.dif){ col=';color:'+(v===0?'#9aa':(v>=0?'#1A7D3C':'#C0392B'))+';font-weight:700'; }
+      if(def.cumpl && v>0){ col=';font-weight:700;color:'+(v>=1?'#1A7D3C':(v>=0.8?'#B8860B':'#C0392B')); }
+      var show;
+      if(beyond) show='';
+      else if(def.pct) show=(def.a[m]===0&&!def.cumpl)?'·':pctS(v);
+      else if(def.int) show=(v===0)?'·':Math.round(v).toLocaleString('es-CO');
+      else show=(v===0&&!def.dif)?'·':_klNum(v);
+      cells+='<td style="text-align:right;font-size:11px'+col+((m+1===hoyM)?';background:#fff7e6':'')+'">'+show+'</td>';
+    }
+    body+='<tr style="'+rowStyle+'">'+nameCell+cells+'</tr>';
+  });
+  mc.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💰 Financiero KL — Cruce con operación '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+_klTabBar(st)+anioSel+'</div></div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Ocupación, noches, ADR y RevPAR salen <b>directo del rack</b> ('+nAptos+' aptos Kubik) — no se digitan. El ingreso de alojamiento del rack se compara contra lo capturado en el PYG (si difieren, revisar) y contra la proyección (mes 1 = jul‑2026). Valores en pesos.</div>'
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Δ Rack − PYG: si el alojamiento facturado/registrado (PYG) no coincide con lo que dice el rack, hay algo mal cargado (así se detectó el caso de las noches en USD crudo). % Cumplimiento: verde ≥100%, ámbar 80–99%, rojo &lt;80%. Datos del rack de Kubik.</p></div>';
 }
 
 window._finState = window._finState || { entidad:'80-10', anio:2026, vista:'real' };
