@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-20-maleta-apto';
+const APP_VERSION = '2026-07-20-financiero-kl-pyg';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-20', version:'2026-07-20-financiero-kl-pyg', titulo:'Nuevo modulo Financiero KL — PYG mensual (Sol. Santiago, Gerencia)',
+    afecta:'Menu Kubik / Financiero KL',
+    detalle:'Fase 1: modulo "Financiero KL" (solo Kubik, confidencial) con el PYG de 8i8 Operadora. Estructura de cuentas sembrada con el ejecutado abr-jun 2026 ya corregido (incluye codigos huerfanos 51015 y 5170), NOI preoperativo -107.4M. 12 columnas mensuales, vistas Real/Proyeccion/Variacion, edicion inline por linea (solo Gerencia General), subtotales y NOI automaticos, notas por cuenta. Reutiliza finanzas_pyg con edificio=kubik/entidad=8I8; NO toca 8010. Siguientes fases: Flujo de Caja, checks y cruce con el rack.' },
   { fecha:'2026-07-20', version:'2026-07-20-maleta-apto', titulo:'Registrar Maleta en Bodega: se agrego el campo Apartamento (Sol. Ricardo Vallejo, KL)',
     afecta:'Maletas en Bodega (formulario y listado)',
     detalle:'El formulario de Registrar Maleta en Bodega ahora tiene el campo "Apartamento" (selector de apartamentos) y el listado muestra la columna Apto. Se creo la columna apto en la tabla maletas.' },
@@ -1428,6 +1431,9 @@ const MENU_COMPLETO = [
       { id: 'finanzas', icon: '📊', label: 'Estado de Resultados' },
       { id: 'nomina', icon: '💼', label: 'Nómina' },
     ] : []),
+    ...(EDIFICIO_ACTIVO==='kubik' ? [
+      { id: 'financiero-kl', icon: '💰', label: 'Financiero KL' },
+    ] : []),
   { id: 'indicadores', icon: '📊', label: 'Indicadores Ocup./Ventas' },
   { id: 'ventas-linea', icon: '💵', label: 'Ventas por Línea (mes a mes)' },
   { id: 'inventario-list', icon: '📦', label: 'Inventario' },
@@ -1483,13 +1489,13 @@ window._puedeConfidencial = function(){ return window._enLista(window._WL_CONFID
 window._puedeExtrasTodos = function(){ return window._enLista(window._WL_EXTRAS_8010, window._WL_EXTRAS_KL_EXTRA); };
 window._puedeSistema = function(){ return (currentProfile&&currentProfile.rol)==='gerente_general'; };
 // Ítems restringidos por grupo
-window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','nomina','indicadores','ventas-linea','personal-list'];
+window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','financiero-kl','nomina','indicadores','ventas-linea','personal-list'];
 window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma'];
 // Módulos construidos sobre el presupuesto 2026 y las entidades 80-10 / LTM3 / PH (solo 8010): no se muestran en Kubik
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
 // Sol Santiago: procesos que son ÚNICAMENTE de Kubik. En 8010 no existen y no deben aparecer:
 // entrega de llaves/accesos, inventario de loza, check list de turnos y revistas nocturnas.
-window._ITEMS_SOLO_KUBIK = ['revistas-list','loza-list','entrega-llaves','checklist-turnos'];
+window._ITEMS_SOLO_KUBIK = ['revistas-list','loza-list','entrega-llaves','checklist-turnos','financiero-kl'];
 window._itemPermitido = function(it){
   var _rol = currentProfile && currentProfile.rol;
   if(it.roles && it.roles.indexOf(_rol)<0) return false;
@@ -1990,6 +1996,7 @@ async function loadView(view) {
     case 'resumen-ventas': await renderResumenVentas(); break;
     case 'ventas-ppto': await renderVentasPpto(); break;
     case 'finanzas': await renderFinanzas(); break;
+    case 'financiero-kl': await renderFinanzasKL(); break;
     case 'indicadores': await renderIndicadores(); break;
     case 'ventas-linea': await renderVentasLinea(); break;
     case 'nomina': await (EDIFICIO_ACTIVO==='kubik' ? renderNomina() : renderNomina8010()); break;
@@ -12995,6 +13002,118 @@ async function renderVentasPpto(){
 }
 // ═══════════════════════════════════════════════════════════
 // ═══ MÓDULO FINANCIERO — Estado de Resultados editable (gemelo del Excel) ═══
+// ═══ Financiero KL (Kubik / 8i8 Operadora) — PYG mensual editable (Sol. Santiago) ═══
+window._finKLState = window._finKLState || { anio:2026, vista:'real' };
+var KL_MC=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function _klNum(n){ return Math.round(Number(n)||0).toLocaleString('es-CO'); }
+function _klParse(s){ var x=String(s).replace(/[^0-9-]/g,''); return parseInt(x,10)||0; }
+var KL_ING=['Ing Alojamiento','Ing Atelier + Sala de junta','Ing Lavandería','Ing Alimentos y Bebidas','Otros Ing no Operacionales','Ajuste comercial'];
+var KL_COS=['Gasto Habitaciones','Costos y Gastos A&B','Gasto Personal Administrativo','Honorarios','Arrendamientos','Diversos','Servicios','Mantenimiento y Reparaciones','Mercadeo y Ventas','Gastos Bancarios','Impuestos','Ajuste — códigos no mapeados (51015 · 5170)'];
+var KL_NOP=['Management Fee','Comisión Fiduciaria','Predial','ICA','Dotación y Reposición de Activos','Seguros'];
+var KL_DEU=['Servicio a la Deuda'];
+var KL_LINEAS=[];
+KL_ING.forEach(function(c){KL_LINEAS.push({c:c,k:'det',grp:'ING'});});
+KL_LINEAS.push({c:'TOTAL INGRESOS',k:'sub',calc:'ing'});
+KL_COS.forEach(function(c){KL_LINEAS.push({c:c,k:'det',grp:'COS'});});
+KL_LINEAS.push({c:'COSTOS PREOPERATIVOS',k:'sub',calc:'cos'});
+KL_NOP.forEach(function(c){KL_LINEAS.push({c:c,k:'det',grp:'NOP'});});
+KL_LINEAS.push({c:'GASTOS NO OPERATIVOS',k:'sub',calc:'nop'});
+KL_LINEAS.push({c:'NOI',k:'sub',calc:'noi'});
+KL_DEU.forEach(function(c){KL_LINEAS.push({c:c,k:'det',grp:'DEU'});});
+KL_LINEAS.push({c:'UTILIDAD / PÉRDIDA NETA',k:'sub',calc:'net'});
+function _klMap(rows,tipo){ var m={}; (rows||[]).forEach(function(r){ if(r.tipo===tipo){ var a=[]; for(var i=1;i<=12;i++)a.push(Number(r['m'+i])||0); m[r.cuenta]=a; } }); return m; }
+function _klSum(map,list){ var a=[0,0,0,0,0,0,0,0,0,0,0,0]; list.forEach(function(c){ var s=map[c]; if(s)for(var i=0;i<12;i++)a[i]+=s[i]; }); return a; }
+function _klSerie(map,def){
+  if(def.k==='det') return map[def.c]||[0,0,0,0,0,0,0,0,0,0,0,0];
+  if(def.calc==='ing') return _klSum(map,KL_ING);
+  if(def.calc==='cos') return _klSum(map,KL_COS);
+  if(def.calc==='nop') return _klSum(map,KL_NOP);
+  if(def.calc==='noi'){ var ing=_klSum(map,KL_ING),cos=_klSum(map,KL_COS),nop=_klSum(map,KL_NOP); return ing.map(function(v,i){return v-cos[i]-nop[i];}); }
+  if(def.calc==='net'){ var ing=_klSum(map,KL_ING),cos=_klSum(map,KL_COS),nop=_klSum(map,KL_NOP),deu=_klSum(map,KL_DEU); return ing.map(function(v,i){return v-cos[i]-nop[i]-deu[i];}); }
+  return [0,0,0,0,0,0,0,0,0,0,0,0];
+}
+async function renderFinanzasKL(){
+  var mc=document.getElementById('main-content');
+  var editable=(currentProfile&&currentProfile.rol==='gerente_general');
+  var st=window._finKLState;
+  mc.innerHTML='<div class="page-title">💰 Financiero KL — PYG</div><p style="color:var(--gris-t)">Cargando…</p>';
+  var q=await window._sbFromRaw('finanzas_pyg').select('*').eq('edificio','kubik').eq('entidad','8I8').eq('anio',st.anio);
+  if(q.error){ mc.innerHTML='<div class="page-title">💰 Financiero KL — PYG</div><div class="card" style="max-width:640px"><p style="font-size:14px">⚠️ No se pudo cargar <code>finanzas_pyg</code>: '+(q.error.message||'')+'</p></div>'; return; }
+  var rows=q.data||[]; window._finKLRows=rows;
+  var nq=await window._sbFromRaw('finanzas_notas').select('*').eq('edificio','kubik').eq('entidad','8I8').eq('anio',st.anio); var notas={}; ((nq&&nq.data)||[]).forEach(function(n){ notas['8I8|'+n.cuenta]=n.nota; }); window._finKLNotas=notas;
+  var mapR=_klMap(rows,'real'), mapP=_klMap(rows,'ppto');
+  var hoyM=(TODAY.slice(0,4)==String(st.anio))?parseInt(TODAY.slice(5,7),10):12;
+  var f$=function(n){ return '$'+_klNum(n); };
+  var ingR=_klSum(mapR,KL_ING), ingP=_klSum(mapP,KL_ING);
+  var resR=_klSerie(mapR,{k:'sub',calc:'net'}), resP=_klSerie(mapP,{k:'sub',calc:'net'});
+  var sum=function(a,n){ var s=0; for(var i=0;i<n;i++)s+=a[i]; return s; };
+  var mi=Math.min(hoyM,12)-1;
+  var pcol=function(p){ return p>=100?'#1A7D3C':(p>=80?'#B8860B':'#C0392B'); };
+  var kpi=function(t,rv,pv,col){ var p=pv?Math.round(rv/pv*100):0; return '<div style="flex:1;min-width:180px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:14px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div><div style="font-size:19px;font-weight:800;color:'+(col||'var(--azul)')+';white-space:nowrap">'+f$(rv)+'</div><div style="font-size:11px;color:var(--gris-t)">Proy: '+f$(pv)+' · <span style="color:'+pcol(p)+';font-weight:700">'+p+'%</span></div></div>'; };
+  var anioSel='<select onchange="window._finKLState.anio=parseInt(this.value,10);renderFinanzasKL()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px;font-weight:700">'+[2026,2027].map(function(y){ return '<option value="'+y+'" '+(y===st.anio?'selected':'')+'>'+y+'</option>'; }).join('')+'</select>';
+  var vistas=[['real','Real'],['ppto','Proyección'],['var','Variación']];
+  var vSel='<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden">'+vistas.map(function(v){ return '<button onclick="window._finKLState.vista=\''+v[0]+'\';renderFinanzasKL()" style="border:none;padding:7px 12px;font-size:12px;cursor:pointer;background:'+(v[0]===st.vista?'var(--azul)':'#fff')+';color:'+(v[0]===st.vista?'#fff':'var(--azul)')+'">'+v[1]+'</button>'; }).join('')+'</div>';
+  var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:230px;z-index:2">Cuenta</th>'+KL_MC.map(function(m){ return '<th style="text-align:right;min-width:84px">'+m+'</th>'; }).join('')+'<th style="text-align:right;min-width:100px;background:#16284a">Total Año</th>';
+  var body='';
+  KL_LINEAS.forEach(function(def){
+    var isSub=def.k==='sub';
+    var serieR=_klSerie(mapR,def), serieP=_klSerie(mapP,def);
+    var serie= st.vista==='ppto'?serieP : st.vista==='var'? serieR.map(function(v,i){return v-serieP[i];}) : serieR;
+    var totA=serie.reduce(function(s,v){return s+v;},0);
+    var isNOI=(def.c==='NOI'||def.c==='UTILIDAD / PÉRDIDA NETA');
+    var rowStyle=isSub?(isNOI?'background:#eefbf2;font-weight:800':(def.c==='TOTAL INGRESOS'?'background:#eef3fb;font-weight:700':'background:#f6f6f7;font-weight:700')):'';
+    var ntxt=(!isSub&&notas['8I8|'+def.c])||'';
+    var nico=isSub?'':' <span onclick="finKLNota(\''+encodeURIComponent(def.c)+'\')" title="'+(ntxt?String(ntxt).replace(/"/g,'&quot;'):'Agregar comentario')+'" style="cursor:pointer;font-size:11px;opacity:'+(ntxt?'1':'0.3')+'">💬</span>';
+    var bg=isSub?(isNOI?'#eefbf2':(def.c==='TOTAL INGRESOS'?'#eef3fb':'#f6f6f7')):'#fff';
+    var nameCell='<td style="position:sticky;left:0;background:'+bg+';text-align:left;font-size:12px;'+(isSub?'font-weight:700':'')+'">'+def.c+nico+(ntxt?'<div style="font-size:10px;color:#B8860B;font-style:italic;margin-top:1px">↳ '+String(ntxt).replace(/</g,'&lt;')+'</div>':'')+'</td>';
+    var cells='';
+    for(var m=0;m<12;m++){
+      if(isSub||st.vista==='var'||!editable){
+        var v=serie[m]; var col='';
+        if(st.vista==='var'){ var good=(def.grp==='COS'||def.grp==='NOP'||def.grp==='DEU')?(v<=0):(v>=0); col=';color:'+(v===0?'#9aa':(good?'#1A7D3C':'#C0392B')); }
+        cells+='<td style="text-align:right;font-size:11px'+col+((m+1===hoyM)?';background:#fff7e6':'')+'">'+((v===0&&!isSub)?'·':_klNum(v))+'</td>';
+      } else {
+        var raw=(st.vista==='ppto'?serieP:serieR)[m];
+        cells+='<td style="padding:1px"><input type="text" value="'+(raw?_klNum(raw):'')+'" data-c="'+encodeURIComponent(def.c)+'" data-t="'+st.vista+'" data-m="'+(m+1)+'" onchange="finKLSet(this)" style="width:80px;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:11px;text-align:right'+((m+1===hoyM)?';background:#fff7e6':'')+'"></td>';
+      }
+    }
+    body+='<tr style="'+rowStyle+'">'+nameCell+cells+'<td style="text-align:right;font-weight:700;background:'+(isSub?'#eaf0ea':'#f3f6fb')+'">'+_klNum(totA)+'</td></tr>';
+  });
+  mc.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💰 Financiero KL — PYG '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+anioSel+vSel+'</div></div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">8i8 Operadora SAS · NIT 902026873-8 · Preoperativo ejecutado abr–jun 2026 (corregido, con códigos huérfanos). Operación mes 1 = jul-2026. Edita cualquier celda en Real o Proyección y se guarda solo; los subtotales y el NOI se calculan solos. Valores en pesos.'+(editable?'':' <b>(solo lectura — edición: Gerencia General)</b>')+'</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
+    + kpi('Ingresos — '+KL_MC[mi], ingR[mi], ingP[mi],'var(--azul)')
+    + kpi('Resultado — '+KL_MC[mi], resR[mi], resP[mi],'#1A5C2E')
+    + kpi('Ingresos YTD', sum(ingR,hoyM), sum(ingP,hoyM),'var(--azul)')
+    + kpi('Resultado YTD', sum(resR,hoyM), sum(resP,hoyM),'#1A5C2E')
+    +'</div>'
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Columna naranja = mes en curso. Variación = Real − Proyección (verde a favor). Este módulo es exclusivo de KL (8i8): no contiene datos de 8010/LTM3.</p></div>';
+}
+async function finKLSet(inp){
+  var cuenta=decodeURIComponent(inp.getAttribute('data-c')), tipo=inp.getAttribute('data-t'), m=inp.getAttribute('data-m');
+  if(tipo!=='real'&&tipo!=='ppto') return;
+  var val=_klParse(inp.value); inp.value=val?_klNum(val):'';
+  var r=(window._finKLRows||[]).find(function(x){return x.entidad==='8I8'&&x.cuenta===cuenta&&x.tipo===tipo;});
+  var patch={updated_at:new Date().toISOString()}; try{patch.updated_by=(window._uid&&window._uid())||null;}catch(e){} patch['m'+m]=val;
+  var resp;
+  if(r){ r['m'+m]=val; resp=await window._sbFromRaw('finanzas_pyg').update(patch).eq('id',r.id); }
+  else { var ins=Object.assign({edificio:'kubik',entidad:'8I8',anio:window._finKLState.anio,cuenta:cuenta,tipo:tipo},patch); resp=await window._sbFromRaw('finanzas_pyg').insert(ins); }
+  if(resp&&resp.error){ showToast('Error al guardar: '+resp.error.message,'error'); return; }
+  showToast('Guardado','success'); renderFinanzasKL();
+}
+async function finKLNota(cEnc){
+  var cuenta=decodeURIComponent(cEnc); var anio=window._finKLState.anio;
+  var actual=(window._finKLNotas&&window._finKLNotas['8I8|'+cuenta])||'';
+  var txt=prompt('💬 Comentario para "'+cuenta+'" (8i8 · '+anio+'):', actual);
+  if(txt===null) return; txt=String(txt).trim();
+  var patch={edificio:'kubik',anio:anio,entidad:'8I8',cuenta:cuenta,nota:txt,updated_at:new Date().toISOString()}; try{patch.updated_by=(window._uid&&window._uid())||null;}catch(e){}
+  var resp=await window._sbFromRaw('finanzas_notas').upsert(patch,{onConflict:'edificio,anio,entidad,cuenta'});
+  if(resp&&resp.error){ showToast('Error al guardar nota: '+resp.error.message,'error'); return; }
+  showToast(txt?'💬 Comentario guardado':'Comentario borrado','success'); renderFinanzasKL();
+}
+
 window._finState = window._finState || { entidad:'80-10', anio:2026, vista:'real' };
 function _finRAW(t){ return (typeof window._sbFromRaw==='function')? window._sbFromRaw(t) : sb.from(t); }
 var FIN_LINEAS=[ // orden de presentación del P&L
