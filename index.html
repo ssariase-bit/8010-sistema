@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-18-solicitudes-lote';
+const APP_VERSION = '2026-07-20-horario-camareras';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-20', version:'2026-07-20-horario-camareras', titulo:'Horario de camareras 8:00 AM - 3:00 PM (Sol. Nancy Medina, KL)',
+    afecta:'Ingreso de Personal / Horario asignado',
+    detalle:'Se agrego la opcion de horario "8:00 AM - 3:00 PM (Camareras)" en el selector de Horario asignado, correspondiente al nuevo turno con la reduccion de jornada. El cuadro de horas extra lo reconoce automaticamente (7h de turno).' },
   { fecha:'2026-07-18', version:'2026-07-18-solicitudes-lote', titulo:'Lote de solicitudes: Air House (PH1+PH2), combos reconocidos en rack, Entrega de Efectivos, Magnifique fuera de Kubik y NIT en Factura',
     afecta:'Reservas · Rack · Entrega de Efectivos · Listado de Cargos · Generar Factura',
     detalle:'(1) AIR HOUSE (Sol. Juanita KL): en creación de reservas se agregó la combinación "Air House" que ocupa PH1+PH2 (igual que Famili/Two Residence y Suite Deluxe). (2) COMBOS EN RACK (duda Juanita KL): las reservas combinadas (FR/TR/SD/Air House) ya NO se marcan en rojo como "no está en rack": el chequeo ahora reconoce que un combo ocupa varios aptos físicos (ej. FR7 = 701+702) y valida contra esos. (3) ENTREGA DE EFECTIVOS (Sol. Andrés Parga, 8010): el selector "Administrador que entrega" ya no lista a Adriana/Jonathan (que son quienes reciben) sino a los administradores de Front que entregan. (4) MAGNIFIQUE (Sol. Ricardo Vallejo, KL): el campo/columna "Magnifique" ya no aparece en el Registro de Cargos de Kubik (en KL el restaurante es Bagatelle). (5) GENERAR FACTURA (Sol. Ricardo Vallejo, KL): el NIT es ahora el primer campo del cliente y, al digitarlo, autocompleta razón social, dirección, email y teléfono si ese NIT ya se facturó antes.' },
@@ -1966,7 +1969,7 @@ async function loadView(view) {
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del empleado',type:'nombre3',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:_CARGOS()},
-      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:00 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 1:55 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:25 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','7:30 AM - 4:30 PM (Administrador · Turno 6)','8:00 AM - 5:00 PM','8:00 AM - 5:20 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
+      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:00 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 1:55 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:25 PM (Camareras)','8:00 AM - 3:00 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','7:30 AM - 4:30 PM (Administrador · Turno 6)','8:00 AM - 5:00 PM','8:00 AM - 5:20 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
