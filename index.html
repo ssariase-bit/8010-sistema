@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-21-bagatelle-carta';
+const APP_VERSION = '2026-07-21-bagatelle-editable';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-21', version:'2026-07-21-bagatelle-editable', titulo:'Carta Bagatelle editable: catalogo en base de datos (Sol. Santiago, KL)',
+    afecta:'Menu Kubik / Carta Bagatelle / Recibo Bagatelle',
+    detalle:'La carta de Bagatelle ahora vive en una tabla (catalogo_bagatelle) que se puede editar desde el nuevo modulo "Carta Bagatelle" en el menu de Kubik: cambiar precios, agregar o editar productos. El selector del recibo lee los precios de esa tabla en vivo (con la carta embebida como respaldo si la tabla no responde). Solo Kubik.' },
   { fecha:'2026-07-21', version:'2026-07-21-bagatelle-carta', titulo:'Recibo Bagatelle: catalogo de la carta con precio (Sol. Santiago, KL)',
     afecta:'Recibo Bagatelle (Kubik) / Registrar Recibo',
     detalle:'Se cargo la carta completa de Bagatelle (357 productos con precio, de la carta digital) como catalogo. En el recibo, el campo Producto ahora es un selector con buscador: al elegir un producto se autocompleta el valor unitario y el total suma solo a Valor comanda. Sigue permitiendo escribir productos manuales. Solo aplica a Kubik/Bagatelle; Magnifique (8010) queda igual.' },
@@ -1461,6 +1464,7 @@ const MENU_COMPLETO = [
   { id: 'reembolsos-lote', icon: '➕', label: 'Registrar Recibos' },
   { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
   { id: 'magnifique-list', icon: '🍽️', label: EDIFICIO_ACTIVO==='kubik'?'Recibos Bagatelle':'Recibos Magnifique' },
+  { id: 'carta-bagatelle-list', icon: '🥐', label: 'Carta Bagatelle' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
   { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
@@ -1507,7 +1511,7 @@ window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma'];
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
 // Sol Santiago: procesos que son ÚNICAMENTE de Kubik. En 8010 no existen y no deben aparecer:
 // entrega de llaves/accesos, inventario de loza, check list de turnos y revistas nocturnas.
-window._ITEMS_SOLO_KUBIK = ['revistas-list','loza-list','entrega-llaves','checklist-turnos','financiero-kl'];
+window._ITEMS_SOLO_KUBIK = ['revistas-list','loza-list','entrega-llaves','checklist-turnos','financiero-kl','carta-bagatelle-list'];
 window._itemPermitido = function(it){
   var _rol = currentProfile && currentProfile.rol;
   if(it.roles && it.roles.indexOf(_rol)<0) return false;
@@ -1696,6 +1700,12 @@ async function loadView(view) {
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     // Recibos Magnifique
+    case 'carta-bagatelle-list': await renderList('catalogo_bagatelle','🥐 Carta Bagatelle','carta-bagatelle-form',['categoria','producto','precio','activo'],['Categoría','Producto','Precio ($)','Activo']); break;
+    case 'carta-bagatelle-form': renderGenForm('catalogo_bagatelle','🥐 Producto de la Carta',[
+      {id:'producto',label:'Producto',type:'text',req:true},
+      {id:'categoria',label:'Categoría',type:'text'},
+      {id:'precio',label:'Precio ($)',type:'number',req:true},
+    ]); break;
     case 'magnifique-list': await renderList('recibos_magnifique','🍽️ Recibos '+(EDIFICIO_ACTIVO==='kubik'?'Bagatelle':'Magnifique'),'magnifique-form',
       ['fecha','apto','arrendatario','num_comanda','productos','valor_recibo','iva','propina','total'],
       ['Fecha','Apto','Arrendatario','Comanda','Productos','Valor','IVA','Propina 10%','Total']); break;
@@ -6389,6 +6399,22 @@ window._bagaCartaInit = function(){
   dl.innerHTML=opts.join('');
   window._bagaPX=px; window._bagaDL=true; return px;
 };
+window._bagaCartaRefresh = async function(){
+  try{
+    var _t=(window._sbFromRaw?window._sbFromRaw('catalogo_bagatelle'):sb.from('catalogo_bagatelle'));
+    var q=await _t.select('producto,precio,categoria,orden').eq('edificio','kubik').eq('activo',true).order('orden');
+    if(q.error||!q.data||!q.data.length) return;
+    var px={}, opts=[];
+    q.data.forEach(function(r){ var name=r.producto, price=Number(r.precio)||0, cat=r.categoria;
+      if(price>0 && px[name]==null) px[name]=price;
+      var lbl=(price>0?('$'+price.toLocaleString('es-CO')):'')+(cat?(' \u00b7 '+cat):'');
+      opts.push('<option value="'+String(name).replace(/"/g,'&quot;')+'" label="'+lbl.replace(/"/g,'&quot;')+'">'); });
+    var dl=document.getElementById('dl-baga-prod');
+    if(!dl){ dl=document.createElement('datalist'); dl.id='dl-baga-prod'; document.body.appendChild(dl); }
+    dl.innerHTML=opts.join('');
+    window._bagaPX=px;
+  }catch(_e){}
+};
 function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window._genEditId=null;
   const nombre = currentProfile?.nombre || '';
   const fieldsHTML = campos.filter(f => !f.hidden).map(f => {
@@ -6476,7 +6502,7 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     // Lista de productos (producto + cantidad + valor unitario) -> suma a Valor comanda
     (function(){
       const prodTa=document.getElementById('gf-productos'); if(!prodTa) return;
-      var _isBaga=(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik'); var _px=_isBaga?window._bagaCartaInit():null;
+      var _isBaga=(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik'); if(_isBaga){ window._bagaCartaInit(); if(window._bagaCartaRefresh) window._bagaCartaRefresh(); }
       const grp=prodTa.closest('.form-group'); const row=grp?grp.closest('.form-row'):null;
       const wrap=document.createElement('div'); wrap.className='form-group';
       wrap.innerHTML='<label>Productos</label><div id="mq-lines"></div><button type="button" id="mq-add" class="btn btn-outline btn-sm" style="margin-top:6px">+ Agregar producto</button>';
@@ -6500,7 +6526,7 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
         const d=document.createElement('div'); d.className='mq-line'; d.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
         d.innerHTML='<input type="text" placeholder="'+(_isBaga?'Producto (elige de la carta)':'Producto')+'" class="mq-p" '+(_isBaga?'list="dl-baga-prod" ':'')+'style="flex:2"><input type="number" placeholder="Cant" class="mq-c" value="1" style="flex:0 0 70px"><input type="number" placeholder="Vr unit" class="mq-v" style="flex:0 0 110px"><button type="button" class="mq-x btn btn-outline btn-sm">X</button>';
         var _p=d.querySelector('.mq-p'), _v=d.querySelector('.mq-v');
-        if(_isBaga && _px){ _p.addEventListener('change',function(){ var nm=_p.value.trim(); if(_px[nm]!=null && !(parseFloat(_v.value)>0)) _v.value=_px[nm]; sync(); }); }
+        if(_isBaga){ _p.addEventListener('change',function(){ var _px=window._bagaPX||{}; var nm=_p.value.trim(); if(_px[nm]!=null && !(parseFloat(_v.value)>0)) _v.value=_px[nm]; sync(); }); }
         d.querySelectorAll('input').forEach(function(i){ i.addEventListener('input',sync); });
         d.querySelector('.mq-x').addEventListener('click',function(){ d.remove(); sync(); });
         cont.appendChild(d);
