@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-21-flujo-caja';
+const APP_VERSION = '2026-07-21-fin-edificio-fix';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-21', version:'2026-07-21-fin-edificio-fix', titulo:'Fix: Cartera/Flujo/Por Pagar filtran por edificio (Sol. Santiago)',
+    afecta:'Cartera / Flujo de Caja / Por Pagar',
+    detalle:'La tabla reservas no se filtraba por edificio, por lo que Cartera y Flujo mezclaban 8010 con Kubik. Se agrego el filtro por edificio activo en reservas y cxp.' },
   { fecha:'2026-07-21', version:'2026-07-21-flujo-caja', titulo:'Modulo Flujo de Caja proyeccion mes y semana (Sol. Santiago, KL)',
     afecta:'Menu / Flujo de Caja',
     detalle:'Proyeccion por mes o por semana (toggle) con cobros esperados (cartera) menos pagos (CxP por vencimiento), neto y acumulado por periodo.' },
@@ -12733,8 +12736,8 @@ window._setFlujoModo=function(m){ window._flujoModo=m; renderFlujoCaja(); };
 async function renderFlujoCaja(){
   var modo=window._flujoModo||'mes';
   var money=function(n){var x=Math.round(Number(n)||0); return (x<0?'-$':'$')+Math.abs(x).toLocaleString('es-CO');};
-  var res=await sb.from('reservas').select('checkin,checkout,tarifa,estado_pago,created_at').neq('estado_pago','Pagado').limit(5000);
-  var cxpq=await sb.from('cxp').select('fecha_vencimiento,valor,estado').limit(5000);
+  var res=await sb.from('reservas').select('checkin,checkout,tarifa,estado_pago,created_at').eq('edificio',EDIFICIO_ACTIVO).neq('estado_pago','Pagado').limit(5000);
+  var cxpq=await sb.from('cxp').select('fecha_vencimiento,valor,estado').eq('edificio',EDIFICIO_ACTIVO).limit(5000);
   var cob=(res.data||[]).filter(function(x){return Number(x.tarifa)>0;}).map(function(x){return {d:x.checkout||x.checkin||x.created_at, v:Number(x.tarifa)||0};});
   var pag=(cxpq.data||[]).filter(function(x){return (x.estado||'Pendiente')!=='Pagado' && x.fecha_vencimiento;}).map(function(x){return {d:x.fecha_vencimiento, v:Number(x.valor)||0};});
   var MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -12752,7 +12755,7 @@ async function renderFlujoCaja(){
   document.getElementById('main-content').innerHTML='<div class="page-title">📅 Flujo de Caja — Proyección ('+(modo==='mes'?'mensual':'semanal')+')</div><div style="font-size:12px;color:#6B7280;margin-bottom:10px">Cobros esperados = cartera por cobrar (por fecha de estadía). Pagos = cuentas por pagar (por vencimiento). Es proyección, no caja real.</div><div style="display:flex;gap:6px;margin-bottom:12px">'+btn('mes','Por mes')+btn('semana','Por semana')+'</div><div class="card"><div class="card-header"><div class="card-title">Cobros '+money(tc)+' · Pagos '+money(tp)+' · Neto '+money(tc-tp)+'</div></div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>'+(modo==='mes'?'Mes':'Semana')+'</th><th style="text-align:right">Cobros esperados</th><th style="text-align:right">Pagos</th><th style="text-align:right">Neto</th><th style="text-align:right">Acumulado</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 async function renderPorPagar(){
-  var r=await sb.from('cxp').select('*').limit(4000);
+  var r=await sb.from('cxp').select('*').eq('edificio',EDIFICIO_ACTIVO).limit(4000);
   if(r.error){ document.getElementById('main-content').innerHTML='<div class="page-title">💸 Por Pagar</div><div class="card" style="max-width:560px"><p style="padding:14px">⚠️ '+(r.error.message||'')+'</p></div>'; return; }
   var all=r.data||[];
   var rows=all.filter(function(x){ return (x.estado||'Pendiente')!=='Pagado'; });
@@ -12769,7 +12772,7 @@ async function renderPorPagar(){
   document.getElementById('main-content').innerHTML='<div class="page-title">💸 Por Pagar — Cuentas por Pagar (proveedores)</div><div style="font-size:12px;color:#6B7280;margin-bottom:10px">Corte del reporte: 19-jul-2026 · '+pagadas+' marcadas pagadas</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'+card('Total por pagar',tot,'#7C3AED')+card('Vencido',venc,'#C0392B')+card('Por vencer',porV,'#1A5C2E')+card('Sin fecha',sinF,'#6B7280')+'</div><div class="card"><div class="card-header"><div class="card-title">'+rows.length+' documentos por pagar · '+money(tot)+'</div></div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Proveedor</th><th>Documento</th><th>Concepto</th><th>Valor</th><th>Vence</th><th>Mora</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 }
 async function renderCartera(){
-  var r=await sb.from('reservas').select('*').neq('estado_pago','Pagado').limit(3000);
+  var r=await sb.from('reservas').select('*').eq('edificio',EDIFICIO_ACTIVO).neq('estado_pago','Pagado').limit(3000);
   if(r.error){ document.getElementById('main-content').innerHTML='<div class="page-title">💰 Cartera</div><div class="card" style="max-width:560px"><p style="font-size:14px">⚠️ '+(r.error.message||'')+'</p></div>'; return; }
   var rows=(r.data||[]).filter(function(x){ return (Number(x.tarifa)||0)>0; });
   var hoy=new Date(); hoy.setHours(0,0,0,0);
