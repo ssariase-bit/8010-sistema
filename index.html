@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-21-por-pagar-cxp';
+const APP_VERSION = '2026-07-21-flujo-caja';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-21', version:'2026-07-21-flujo-caja', titulo:'Modulo Flujo de Caja proyeccion mes y semana (Sol. Santiago, KL)',
+    afecta:'Menu / Flujo de Caja',
+    detalle:'Proyeccion por mes o por semana (toggle) con cobros esperados (cartera) menos pagos (CxP por vencimiento), neto y acumulado por periodo.' },
   { fecha:'2026-07-21', version:'2026-07-21-por-pagar-cxp', titulo:'Modulo Por Pagar (CxP) + Proveedores (Sol. Santiago, KL)',
     afecta:'Menu / Por Pagar / Proveedores',
     detalle:'Nuevo modulo Por Pagar: 76 documentos por pagar (corte 19-jul) por proveedor con vencimiento, dias de mora, total/vencido/por vencer y boton Pagar. Nuevo modulo Proveedores para el acuerdo de pago.' },
@@ -1477,6 +1480,7 @@ const MENU_COMPLETO = [
   { id: 'cartera-list', icon: '💰', label: 'Cartera (por cobrar)' },
   { id: 'por-pagar-list', icon: '💸', label: 'Por Pagar (CxP)' },
   { id: 'proveedores-list', icon: '🏭', label: 'Proveedores' },
+  { id: 'flujo-caja-list', icon: '📅', label: 'Flujo de Caja' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
   { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
@@ -1667,6 +1671,7 @@ async function loadView(view) {
     case 'nota-credito':  await renderNotaCreditoPicker(); break;
     case 'cartera-list': await renderCartera(); break;
     case 'por-pagar-list': await renderPorPagar(); break;
+    case 'flujo-caja-list': await renderFlujoCaja(); break;
     case 'proveedores-list': await renderList('proveedores','🏭 Proveedores','proveedores-form',['nombre','nit','acuerdo_pago','contacto','activo'],['Proveedor','NIT','Acuerdo de pago','Contacto','Activo']); break;
     case 'proveedores-form': renderGenForm('proveedores','🏭 Proveedor',[{id:'nombre',label:'Proveedor',type:'text',req:true},{id:'nit',label:'NIT',type:'text'},{id:'acuerdo_pago',label:'Acuerdo de pago (dias / condiciones)',type:'text'},{id:'contacto',label:'Contacto',type:'text'}]); break;
     case 'facturas-list': await renderFacturasList(); break;
@@ -12723,6 +12728,29 @@ function generarFacturaPDF(f){
 function _facMesRange(m){ if(!m) return {_mes:''}; var y=Number(m.slice(0,4)), mo=Number(m.slice(5,7)); var last=new Date(y,mo,0).getDate(); return {_mes:m, ini:m+'-01', fin:m+'-'+String(last).padStart(2,'0')}; }
 window._facSetMes=function(m){ var cur=window._facFiltro||{}; var base=_facMesRange(m); window._facFiltro=Object.assign({}, cur, {ini:base.ini||null, fin:base.fin||null, _mes:base._mes||''}); renderFacturasList(); };
 window._cxpPagar=async function(id){ try{ await sb.from('cxp').update({estado:'Pagado', fecha_pago:(typeof TODAY!=='undefined'?TODAY:new Date().toISOString().slice(0,10))}).eq('id',id); if(typeof showToast==='function')showToast('Marcada como pagada','success'); }catch(e){} renderPorPagar(); };
+window._flujoModo=window._flujoModo||'mes';
+window._setFlujoModo=function(m){ window._flujoModo=m; renderFlujoCaja(); };
+async function renderFlujoCaja(){
+  var modo=window._flujoModo||'mes';
+  var money=function(n){var x=Math.round(Number(n)||0); return (x<0?'-$':'$')+Math.abs(x).toLocaleString('es-CO');};
+  var res=await sb.from('reservas').select('checkin,checkout,tarifa,estado_pago,created_at').neq('estado_pago','Pagado').limit(5000);
+  var cxpq=await sb.from('cxp').select('fecha_vencimiento,valor,estado').limit(5000);
+  var cob=(res.data||[]).filter(function(x){return Number(x.tarifa)>0;}).map(function(x){return {d:x.checkout||x.checkin||x.created_at, v:Number(x.tarifa)||0};});
+  var pag=(cxpq.data||[]).filter(function(x){return (x.estado||'Pendiente')!=='Pagado' && x.fecha_vencimiento;}).map(function(x){return {d:x.fecha_vencimiento, v:Number(x.valor)||0};});
+  var MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  function per(dstr){ var dt=new Date(String(dstr).slice(0,10)+'T00:00:00'); if(isNaN(dt)) return null;
+    if(modo==='mes'){ var k=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'); return {k:k, lbl:MES[dt.getMonth()]+' '+dt.getFullYear(), ord:k}; }
+    var day=(dt.getDay()+6)%7; var mon=new Date(dt); mon.setDate(dt.getDate()-day); var mk=mon.getFullYear()+'-'+String(mon.getMonth()+1).padStart(2,'0')+'-'+String(mon.getDate()).padStart(2,'0'); return {k:mk, lbl:'Sem '+mon.getDate()+' '+MES[mon.getMonth()], ord:mk};
+  }
+  var M={};
+  function add(arr,campo){ arr.forEach(function(x){ var p=per(x.d); if(!p)return; if(!M[p.k])M[p.k]={lbl:p.lbl,ord:p.ord,cob:0,pag:0}; M[p.k][campo]+=x.v; }); }
+  add(cob,'cob'); add(pag,'pag');
+  var keys=Object.keys(M).sort(function(a,b){return M[a].ord<M[b].ord?-1:1;});
+  var acc=0, tc=0, tp=0;
+  var rows=keys.map(function(k){ var m=M[k]; var neto=m.cob-m.pag; acc+=neto; tc+=m.cob; tp+=m.pag; var nc=neto>=0?'#1A5C2E':'#C0392B'; var ac=acc>=0?'#1A5C2E':'#C0392B'; return '<tr><td><strong>'+m.lbl+'</strong></td><td style="text-align:right;color:#1A5C2E">'+money(m.cob)+'</td><td style="text-align:right;color:#C0392B">'+money(m.pag)+'</td><td style="text-align:right;font-weight:700;color:'+nc+'">'+money(neto)+'</td><td style="text-align:right;font-weight:700;color:'+ac+'">'+money(acc)+'</td></tr>'; }).join('')||'<tr><td colspan="5" style="text-align:center;color:#999;padding:18px">Sin datos</td></tr>';
+  var btn=function(mm,t){ return '<button class="btn btn-sm '+(modo===mm?'btn-success':'btn-outline')+'" onclick="window._setFlujoModo(\''+mm+'\')">'+t+'</button>'; };
+  document.getElementById('main-content').innerHTML='<div class="page-title">📅 Flujo de Caja — Proyección ('+(modo==='mes'?'mensual':'semanal')+')</div><div style="font-size:12px;color:#6B7280;margin-bottom:10px">Cobros esperados = cartera por cobrar (por fecha de estadía). Pagos = cuentas por pagar (por vencimiento). Es proyección, no caja real.</div><div style="display:flex;gap:6px;margin-bottom:12px">'+btn('mes','Por mes')+btn('semana','Por semana')+'</div><div class="card"><div class="card-header"><div class="card-title">Cobros '+money(tc)+' · Pagos '+money(tp)+' · Neto '+money(tc-tp)+'</div></div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>'+(modo==='mes'?'Mes':'Semana')+'</th><th style="text-align:right">Cobros esperados</th><th style="text-align:right">Pagos</th><th style="text-align:right">Neto</th><th style="text-align:right">Acumulado</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
 async function renderPorPagar(){
   var r=await sb.from('cxp').select('*').limit(4000);
   if(r.error){ document.getElementById('main-content').innerHTML='<div class="page-title">💸 Por Pagar</div><div class="card" style="max-width:560px"><p style="padding:14px">⚠️ '+(r.error.message||'')+'</p></div>'; return; }
