@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-21-cartera-por-cobrar';
+const APP_VERSION = '2026-07-21-por-pagar-cxp';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-21', version:'2026-07-21-por-pagar-cxp', titulo:'Modulo Por Pagar (CxP) + Proveedores (Sol. Santiago, KL)',
+    afecta:'Menu / Por Pagar / Proveedores',
+    detalle:'Nuevo modulo Por Pagar: 76 documentos por pagar (corte 19-jul) por proveedor con vencimiento, dias de mora, total/vencido/por vencer y boton Pagar. Nuevo modulo Proveedores para el acuerdo de pago.' },
   { fecha:'2026-07-21', version:'2026-07-21-cartera-por-cobrar', titulo:'Modulo Cartera (cuentas por cobrar) por reserva (Sol. Santiago, KL)',
     afecta:'Menu / Cartera',
     detalle:'Nuevo modulo Cartera: reservas con estado de pago distinto de Pagado, con saldo, estadia, dias de antiguedad, buckets 0-30/31-60/61-90/+90 y total por cobrar.' },
@@ -1472,6 +1475,8 @@ const MENU_COMPLETO = [
   { id: 'magnifique-list', icon: '🍽️', label: EDIFICIO_ACTIVO==='kubik'?'Recibos Bagatelle':'Recibos Magnifique' },
   { id: 'carta-bagatelle-list', icon: '🥐', label: 'Carta Bagatelle' },
   { id: 'cartera-list', icon: '💰', label: 'Cartera (por cobrar)' },
+  { id: 'por-pagar-list', icon: '💸', label: 'Por Pagar (CxP)' },
+  { id: 'proveedores-list', icon: '🏭', label: 'Proveedores' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
   { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
@@ -1661,6 +1666,9 @@ async function loadView(view) {
     case 'factura-gen':   renderFacturaGen(); break;
     case 'nota-credito':  await renderNotaCreditoPicker(); break;
     case 'cartera-list': await renderCartera(); break;
+    case 'por-pagar-list': await renderPorPagar(); break;
+    case 'proveedores-list': await renderList('proveedores','🏭 Proveedores','proveedores-form',['nombre','nit','acuerdo_pago','contacto','activo'],['Proveedor','NIT','Acuerdo de pago','Contacto','Activo']); break;
+    case 'proveedores-form': renderGenForm('proveedores','🏭 Proveedor',[{id:'nombre',label:'Proveedor',type:'text',req:true},{id:'nit',label:'NIT',type:'text'},{id:'acuerdo_pago',label:'Acuerdo de pago (dias / condiciones)',type:'text'},{id:'contacto',label:'Contacto',type:'text'}]); break;
     case 'facturas-list': await renderFacturasList(); break;
     case 'facturas-composicion': await renderFacturasComposicion(); break;
     case 'facturacion-vs-rack': await renderFacturacionVsRack(); break;
@@ -12714,6 +12722,24 @@ function generarFacturaPDF(f){
 }
 function _facMesRange(m){ if(!m) return {_mes:''}; var y=Number(m.slice(0,4)), mo=Number(m.slice(5,7)); var last=new Date(y,mo,0).getDate(); return {_mes:m, ini:m+'-01', fin:m+'-'+String(last).padStart(2,'0')}; }
 window._facSetMes=function(m){ var cur=window._facFiltro||{}; var base=_facMesRange(m); window._facFiltro=Object.assign({}, cur, {ini:base.ini||null, fin:base.fin||null, _mes:base._mes||''}); renderFacturasList(); };
+window._cxpPagar=async function(id){ try{ await sb.from('cxp').update({estado:'Pagado', fecha_pago:(typeof TODAY!=='undefined'?TODAY:new Date().toISOString().slice(0,10))}).eq('id',id); if(typeof showToast==='function')showToast('Marcada como pagada','success'); }catch(e){} renderPorPagar(); };
+async function renderPorPagar(){
+  var r=await sb.from('cxp').select('*').limit(4000);
+  if(r.error){ document.getElementById('main-content').innerHTML='<div class="page-title">💸 Por Pagar</div><div class="card" style="max-width:560px"><p style="padding:14px">⚠️ '+(r.error.message||'')+'</p></div>'; return; }
+  var all=r.data||[];
+  var rows=all.filter(function(x){ return (x.estado||'Pendiente')!=='Pagado'; });
+  var pagadas=all.length-rows.length;
+  var hoy=new Date(); hoy.setHours(0,0,0,0);
+  function moraDe(x){ if(!x.fecha_vencimiento) return null; var t=new Date(String(x.fecha_vencimiento).slice(0,10)); return Math.floor((hoy-t)/86400000); }
+  var money=function(n){return '$'+Math.round(Number(n)||0).toLocaleString('es-CO');};
+  rows.forEach(function(x){ x.__m=moraDe(x); x.__v=Number(x.valor)||0; });
+  rows.sort(function(a,b){ var am=(a.__m==null?-99999:a.__m), bm=(b.__m==null?-99999:b.__m); return bm-am; });
+  var tot=0,venc=0,porV=0,sinF=0;
+  rows.forEach(function(x){ tot+=x.__v; if(x.__m==null) sinF+=x.__v; else if(x.__m>0) venc+=x.__v; else porV+=x.__v; });
+  var card=function(t,v,c){ return '<div style="flex:1;min-width:150px;background:#fff;border:1px solid #eee;border-left:4px solid '+c+';border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#6B7280">'+t+'</div><div style="font-size:18px;font-weight:700">'+money(v)+'</div></div>'; };
+  var body=rows.map(function(x){ var m=x.__m; var txt=m==null?'sin fecha':(m>0?(m+' d vencido'):(m===0?'vence hoy':('faltan '+(-m)+' d'))); var col=m==null?'#6B7280':(m>0?'#C0392B':(m===0?'#B7791F':'#1A5C2E')); return '<tr><td>'+(x.proveedor||'-')+'</td><td style="font-size:11px">'+(x.documento||'')+'</td><td style="font-size:11px;color:#6B7280">'+(x.concepto||'')+'</td><td style="text-align:right;font-weight:600">'+money(x.__v)+'</td><td style="font-size:11px">'+(x.fecha_vencimiento?fmtDate(x.fecha_vencimiento):'-')+'</td><td style="text-align:center;color:'+col+';font-weight:700;font-size:11px">'+txt+'</td><td style="white-space:nowrap"><button class="btn btn-outline btn-sm" style="color:#1A5C2E" onclick="window._cxpPagar(\''+x.id+'\')">✓ Pagar</button></td></tr>'; }).join('')||'<tr><td colspan="7" style="text-align:center;color:#999;padding:18px">Nada por pagar</td></tr>';
+  document.getElementById('main-content').innerHTML='<div class="page-title">💸 Por Pagar — Cuentas por Pagar (proveedores)</div><div style="font-size:12px;color:#6B7280;margin-bottom:10px">Corte del reporte: 19-jul-2026 · '+pagadas+' marcadas pagadas</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'+card('Total por pagar',tot,'#7C3AED')+card('Vencido',venc,'#C0392B')+card('Por vencer',porV,'#1A5C2E')+card('Sin fecha',sinF,'#6B7280')+'</div><div class="card"><div class="card-header"><div class="card-title">'+rows.length+' documentos por pagar · '+money(tot)+'</div></div><div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Proveedor</th><th>Documento</th><th>Concepto</th><th>Valor</th><th>Vence</th><th>Mora</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+}
 async function renderCartera(){
   var r=await sb.from('reservas').select('*').neq('estado_pago','Pagado').limit(3000);
   if(r.error){ document.getElementById('main-content').innerHTML='<div class="page-title">💰 Cartera</div><div class="card" style="max-width:560px"><p style="font-size:14px">⚠️ '+(r.error.message||'')+'</p></div>'; return; }
