@@ -1487,7 +1487,7 @@ const MENU_COMPLETO = [
   { id: 'por-pagar-list', icon: '💸', label: 'Por Pagar (CxP)' },
   { id: 'proveedores-list', icon: '🏭', label: 'Proveedores' },
   { id: 'flujo-caja-list', icon: '📅', label: 'Flujo de Caja' },
-  { id: 'flujo-semanal-list', icon: '📆', label: 'Flujo Semanal' }, { id: 'recaudo-list', icon: '💰', label: 'Recaudo x Cliente' },
+  { id: 'flujo-semanal-list', icon: '📆', label: 'Flujo Semanal' }, { id: 'recaudo-list', icon: '💰', label: 'Recaudo x Cliente' }, { id: 'flujo-mes-list', icon: '📅', label: 'Flujo de Caja Mes' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
   { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
@@ -2053,6 +2053,125 @@ window.renderFlujoSemanal=async function(){
   };
 })();
  await window.renderRecaudo(); break;
+ case 'flujo-mes-list': 
+(function(){
+  var _pad=function(n){return n<10?'0'+n:''+n;};
+  var _ed=function(){return (typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO?EDIFICIO_ACTIVO:'8010');};
+  var _fmt=function(n){return (window._fsFmt?window._fsFmt(n):Math.round(+n||0).toLocaleString('es-CO'));};
+  var _MES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var _mesLabel=function(m){if(window._fsMesLabel)return window._fsMesLabel(m);var y=+m.slice(0,4),mm=+m.slice(5,7);return (_MES[mm-1]||m)+' '+y;};
+  var _esc=function(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  var _prevMes=function(m){var y=+m.slice(0,4),mm=+m.slice(5,7)-1;if(mm<1){mm=12;y--;}return y+'-'+_pad(mm);};
+
+  window._fmKey=function(ed,mes){return 'flujo_sem_'+ed+'_'+mes;};
+  window._fmLoad=async function(ed,mes){
+    try{var r=await sb.from('config').select('valor').eq('id',window._fmKey(ed,mes)).maybeSingle();
+      if(r.data&&r.data.valor)return JSON.parse(r.data.valor);}catch(e){}
+    return null;
+  };
+  window._fmConsEmp=function(emp){
+    var saf=emp.saldoAnt||[];
+    var nw=(emp.ingresos&&emp.ingresos[0]&&emp.ingresos[0].v)?emp.ingresos[0].v.length:(saf.length||5);
+    var si=(+saf[0]||0);
+    var sum=function(v){return (v||[]).reduce(function(a,b){return a+(+b||0);},0);};
+    var ing=(emp.ingresos||[]).map(function(l){return {n:l.n,t:sum(l.v)};});
+    var egr=(emp.egresos||[]).map(function(l){return {n:l.n,t:sum(l.v)};});
+    var tIng=ing.reduce(function(a,l){return a+l.t;},0);
+    var tEgr=egr.reduce(function(a,l){return a+l.t;},0);
+    var sfLast=0;
+    for(var w=0;w<nw;w++){
+      var iw=(emp.ingresos||[]).reduce(function(a,l){return a+(+((l.v||[])[w])||0);},0);
+      var ew=(emp.egresos||[]).reduce(function(a,l){return a+(+((l.v||[])[w])||0);},0);
+      sfLast=(+saf[w]||0)+iw-ew;
+    }
+    var neto=tIng-tEgr;
+    return {id:emp.id,nombre:emp.nombre||emp.id,si:si,ing:ing,egr:egr,tIng:tIng,tEgr:tEgr,neto:neto,sf:sfLast,ajuste:sfLast-si-neto,nw:nw};
+  };
+  window._fmNav=function(delta){
+    var mes=window._fmMes||(window._fsMes||(new Date().getFullYear()+'-'+_pad(new Date().getMonth()+1)));
+    var y=+mes.slice(0,4),m=+mes.slice(5,7)+delta;while(m<1){m+=12;y--;}while(m>12){m-=12;y++;}
+    window._fmMes=y+'-'+_pad(m);window.renderFlujoMes();
+  };
+
+  window.renderFlujoMes=async function(){
+    var mc=document.getElementById('main-content');if(!mc)return;
+    var ed=_ed();
+    var mes=window._fmMes||window._fsMes||(new Date().getFullYear()+'-'+_pad(new Date().getMonth()+1));
+    window._fmMes=mes;
+    mc.innerHTML='<div style="padding:20px;color:#666">Consolidando '+_esc(_mesLabel(mes))+'…</div>';
+    var data=await window._fmLoad(ed,mes);
+    if(!data||!data.empresas){
+      mc.innerHTML='<div style="padding:16px 18px;max-width:900px;margin:0 auto"><h2 style="font-size:20px">📅 Flujo de Caja Mes</h2><div style="background:#fff7ed;border:1px solid #fdba74;color:#9a3412;padding:12px;border-radius:8px;margin-top:10px">Aún no hay Flujo Semanal cargado para <b>'+_esc(_mesLabel(mes))+'</b> en '+_esc(ed)+'.<br>Abre <b>Flujo Semanal</b>, captura ese mes, y aquí lo verás consolidado.</div><div style="margin-top:12px"><button onclick="window._fmNav(-1)" style="border:1px solid #ccc;background:#fff;border-radius:6px;padding:5px 12px;cursor:pointer">‹ mes anterior</button> <button onclick="window._fmNav(1)" style="border:1px solid #ccc;background:#fff;border-radius:6px;padding:5px 12px;cursor:pointer">mes siguiente ›</button></div></div>';
+      return;
+    }
+    var cons=(data.empresas||[]).map(window._fmConsEmp);
+    var tot={si:0,tIng:0,tEgr:0,neto:0,sf:0,ajuste:0};
+    cons.forEach(function(c){tot.si+=c.si;tot.tIng+=c.tIng;tot.tEgr+=c.tEgr;tot.neto+=c.neto;tot.sf+=c.sf;tot.ajuste+=c.ajuste;});
+    // continuity vs previous month
+    var prev=_prevMes(mes);var prevData=await window._fmLoad(ed,prev);var prevSF=null;
+    if(prevData&&prevData.empresas){prevSF=prevData.empresas.map(window._fmConsEmp).reduce(function(a,c){return a+c.sf;},0);}
+
+    var cols=cons.map(function(c){return c.id;});
+    var money=function(n){var neg=n<0;return '<span style="color:'+(neg?'#b91c1c':'#111')+'">'+(neg?'(':'')+'$'+_fmt(Math.abs(n))+(neg?')':'')+'</span>';};
+    var h='';
+    h+='<div style="padding:16px 18px;max-width:1050px;margin:0 auto">';
+    h+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px">';
+    h+='<h2 style="margin:0;font-size:20px">📅 Flujo de Caja Mes</h2>';
+    h+='<div style="display:flex;align-items:center;gap:6px;margin-left:auto">';
+    h+='<button onclick="window._fmNav(-1)" style="border:1px solid #ccc;background:#fff;border-radius:6px;padding:3px 9px;cursor:pointer">‹</button>';
+    h+='<b style="min-width:130px;text-align:center;display:inline-block">'+_esc(_mesLabel(mes))+'</b>';
+    h+='<button onclick="window._fmNav(1)" style="border:1px solid #ccc;background:#fff;border-radius:6px;padding:3px 9px;cursor:pointer">›</button>';
+    h+='</div></div>';
+    h+='<div style="font-size:12px;color:#666;margin-bottom:10px">Edificio <b>'+_esc(ed)+'</b> · consolidado de las '+(cons[0]?cons[0].nw:5)+' semanas · valores negativos en (paréntesis) y rojo</div>';
+    // continuity badge
+    if(prevSF!==null){
+      var diff=tot.si-prevSF;var ok=Math.abs(diff)<=1;
+      h+='<div style="background:'+(ok?'#ecfdf5':'#fff7ed')+';border:1px solid '+(ok?'#6ee7b7':'#fdba74')+';color:'+(ok?'#065f46':'#9a3412')+';padding:8px 10px;border-radius:8px;font-size:13px;margin-bottom:12px">'+(ok?'✓ El saldo inicial de '+_esc(_mesLabel(mes))+' enlaza con el cierre de '+_esc(_mesLabel(prev))+' ($'+_fmt(tot.si)+').':'⚠ El saldo inicial de '+_esc(_mesLabel(mes))+' ($'+_fmt(tot.si)+') NO coincide con el cierre de '+_esc(_mesLabel(prev))+' ($'+_fmt(prevSF)+'). Diferencia: $'+_fmt(diff)+'.')+'</div>';
+    }else{
+      h+='<div style="background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;padding:8px 10px;border-radius:8px;font-size:12.5px;margin-bottom:12px">No hay Flujo Semanal de '+_esc(_mesLabel(prev))+' para verificar el enlace del saldo inicial.</div>';
+    }
+    // summary matrix
+    h+='<div style="overflow:auto;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:16px">';
+    h+='<table style="border-collapse:collapse;width:100%;font-size:13px;min-width:'+(240+(cols.length+1)*130)+'px">';
+    h+='<thead><tr style="background:#f1f5f9"><th style="text-align:left;padding:9px 12px;position:sticky;left:0;background:#f1f5f9">Concepto</th>';
+    cons.forEach(function(c){h+='<th style="padding:9px 10px;text-align:right;min-width:120px">'+_esc(c.id)+'</th>';});
+    h+='<th style="padding:9px 12px;text-align:right;min-width:130px;background:#e0f2fe">TOTAL</th></tr></thead><tbody>';
+    var rowDef=[['Saldo inicial','si','#fff'],['(+) Ingresos','tIng','#f0fdf4'],['(–) Egresos','tEgr','#fef2f2'],['(=) Movimiento neto','neto','#fff'],['Saldo final','sf','#eff6ff']];
+    rowDef.forEach(function(rd){
+      var bold=(rd[1]==='sf'||rd[1]==='neto');
+      h+='<tr style="border-top:1px solid #eee;background:'+rd[2]+';font-weight:'+(bold?'700':'500')+'"><td style="padding:8px 12px;position:sticky;left:0;background:'+rd[2]+'">'+rd[0]+'</td>';
+      cons.forEach(function(c){var v=(rd[1]==='tEgr')? -c[rd[1]] : c[rd[1]]; if(rd[1]==='tEgr'){h+='<td style="padding:8px 10px;text-align:right">'+money(-c.tEgr)+'</td>';}else{h+='<td style="padding:8px 10px;text-align:right">'+money(c[rd[1]])+'</td>';}});
+      var tv=(rd[1]==='tEgr')? -tot.tEgr : tot[rd[1]];
+      h+='<td style="padding:8px 12px;text-align:right;background:#e0f2fe">'+money(tv)+'</td></tr>';
+    });
+    // ajuste row only if any
+    var anyAj=cons.some(function(c){return Math.abs(c.ajuste)>1;})||Math.abs(tot.ajuste)>1;
+    if(anyAj){
+      h+='<tr style="border-top:1px solid #eee;background:#fffbeb;font-size:12px;color:#92400e"><td style="padding:6px 12px;position:sticky;left:0;background:#fffbeb">Ajustes de saldo intra-mes*</td>';
+      cons.forEach(function(c){h+='<td style="padding:6px 10px;text-align:right">'+money(c.ajuste)+'</td>';});
+      h+='<td style="padding:6px 12px;text-align:right;background:#fef3c7">'+money(tot.ajuste)+'</td></tr>';
+    }
+    h+='</tbody></table></div>';
+    if(anyAj)h+='<div style="font-size:11.5px;color:#92400e;margin:-8px 0 14px">*Ajustes intra-mes: hubo saldos iniciales cargados en semanas posteriores a la 1 (inyecciones/traslados). Saldo final = Saldo inicial + Movimiento neto + Ajustes.</div>';
+    // per-empresa detail
+    cons.forEach(function(c){
+      h+='<div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden">';
+      h+='<div style="background:#0f172a;color:#fff;padding:8px 12px;font-weight:600">'+_esc(c.nombre)+' <span style="color:#94a3b8;font-weight:400">· cierre mes: </span>'+money(c.sf).replace('color:#111','color:#fff')+'</div>';
+      h+='<table style="border-collapse:collapse;width:100%;font-size:12.5px">';
+      h+='<tr style="background:#f0fdf4"><td style="padding:6px 12px;font-weight:600" colspan="2">INGRESOS</td></tr>';
+      c.ing.forEach(function(l){if(l.t===0)return;h+='<tr style="border-top:1px solid #f1f5f9"><td style="padding:5px 12px 5px 22px">'+_esc(l.n)+'</td><td style="padding:5px 12px;text-align:right">'+money(l.t)+'</td></tr>';});
+      h+='<tr style="border-top:1px solid #e5e7eb;font-weight:600"><td style="padding:6px 12px">Total ingresos</td><td style="padding:6px 12px;text-align:right">'+money(c.tIng)+'</td></tr>';
+      h+='<tr style="background:#fef2f2"><td style="padding:6px 12px;font-weight:600" colspan="2">EGRESOS</td></tr>';
+      c.egr.forEach(function(l){if(l.t===0)return;h+='<tr style="border-top:1px solid #f1f5f9"><td style="padding:5px 12px 5px 22px">'+_esc(l.n)+'</td><td style="padding:5px 12px;text-align:right">'+money(-l.t)+'</td></tr>';});
+      h+='<tr style="border-top:1px solid #e5e7eb;font-weight:600"><td style="padding:6px 12px">Total egresos</td><td style="padding:6px 12px;text-align:right">'+money(-c.tEgr)+'</td></tr>';
+      h+='</table></div>';
+    });
+    h+='<div style="font-size:11.5px;color:#888;margin-top:6px">Este mes se calcula sumando las semanas del Flujo Semanal. Para editar cifras, hazlo en <b>Flujo Semanal</b>; aquí solo se consolida.</div>';
+    h+='</div>';
+    mc.innerHTML=h;
+  };
+})();
+ await window.renderFlujoMes(); break;
     case 'proveedores-list': await renderList('proveedores','🏭 Proveedores','proveedores-form',['nombre','nit','acuerdo_pago','contacto','activo'],['Proveedor','NIT','Acuerdo de pago','Contacto','Activo']); break;
     case 'proveedores-form': renderGenForm('proveedores','🏭 Proveedor',[{id:'nombre',label:'Proveedor',type:'text',req:true},{id:'nit',label:'NIT',type:'text'},{id:'acuerdo_pago',label:'Acuerdo de pago (dias / condiciones)',type:'text'},{id:'contacto',label:'Contacto',type:'text'}]); break;
     case 'facturas-list': await renderFacturasList(); break;
