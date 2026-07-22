@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-21-fin-edificio-fix';
+const APP_VERSION = '2026-07-22-aviso-factura';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-07-22', version:'2026-07-22-aviso-factura', titulo:'Aviso automatico a Contabilidad al emitir factura (Sol. Santiago, KL)',
+    afecta:'Generar Factura',
+    detalle:'Al guardar una factura NUEVA se envia correo de aviso a Contabilidad (8i8: contador y admin.fin; 8010: zareth) con numero, cliente, total, emisor y apto. Solo facturas nuevas. No se envia nada al cliente.' },
   { fecha:'2026-07-21', version:'2026-07-21-fin-edificio-fix', titulo:'Fix: Cartera/Flujo/Por Pagar filtran por edificio (Sol. Santiago)',
     afecta:'Cartera / Flujo de Caja / Por Pagar',
     detalle:'La tabla reservas no se filtraba por edificio, por lo que Cartera y Flujo mezclaban 8010 con Kubik. Se agrego el filtro por edificio activo en reservas y cxp.' },
@@ -12604,6 +12607,15 @@ function _facLineaRow(c,v,t,d,f){ var dv=d?String(d).replace(/"/g,'&quot;'):''; 
 function _facAddLinea(){ document.getElementById('fac-lineas').insertAdjacentHTML('beforeend',_facLineaRow('Alojamiento','','Exento')); }
 function _facRecalc(){ var sub=0,imp=0; document.querySelectorAll('#fac-lineas tr').forEach(function(tr){ var val=Number((tr.querySelector('.fl-valor')||{}).value)||0; var tasa=FAC_TASAS[(tr.querySelector('.fl-tasa')||{}).value]||0; var i=Math.round(val*tasa); sub+=val; imp+=i; var c=tr.querySelector('.fl-imp'); if(c)c.textContent='$ '+i.toLocaleString('es-CO'); });
   var f=function(n){return '$ '+Math.round(n).toLocaleString('es-CO');}; var tot=sub+imp; var ab=Number((document.getElementById('fac-abono')||{}).value)||0; var so=document.getElementById('fac-sub'),io=document.getElementById('fac-imp'),to=document.getElementById('fac-tot'),sa=document.getElementById('fac-saldo'); if(so)so.textContent=f(sub); if(io)io.textContent=f(imp); if(to)to.textContent=f(tot); if(sa)sa.textContent=f(tot-ab); }
+window._facAviso=function(f){ try{
+  var edi=(f&&f.edificio)||EDIFICIO_ACTIVO;
+  var dest = edi==='kubik' ? ['contador@8i8op.com','admin.fin@8i8op.com'] : ['zareth.varela@8010urbanliving.com'];
+  var num=(f&&f.numero)||''; var cli=(f&&f.cliente)||''; var tot=(f&&f.total)||0; var emi=(f&&f.emitida_por)||'';
+  var money='$'+Math.round(Number(tot)||0).toLocaleString('es-CO');
+  var html='<div style="font-family:Arial,sans-serif;font-size:14px;color:#222"><h3 style="color:#1D3A5F">🧾 Nueva factura emitida</h3><p>Se emitió la factura <strong>'+num+'</strong>:</p><table style="border-collapse:collapse;font-size:14px"><tr><td style="padding:4px 12px;color:#666">Cliente</td><td style="padding:4px 12px"><strong>'+cli+'</strong></td></tr><tr><td style="padding:4px 12px;color:#666">Total</td><td style="padding:4px 12px"><strong>'+money+'</strong></td></tr><tr><td style="padding:4px 12px;color:#666">Emitida por</td><td style="padding:4px 12px">'+emi+'</td></tr><tr><td style="padding:4px 12px;color:#666">Apartamento</td><td style="padding:4px 12px">'+((f&&f.apto)||'-')+'</td></tr><tr><td style="padding:4px 12px;color:#666">Fecha</td><td style="padding:4px 12px">'+((f&&f.fecha)||'')+'</td></tr></table><p style="color:#888;font-size:12px;margin-top:14px">Aviso automático del Sistema Operativo — documento interno de control, no reemplaza la factura DIAN.</p></div>';
+  sb.functions.invoke('enviar-informe',{ body:{ edificio:edi, to:dest, cc:[], subject:'Nueva factura '+num+' — '+cli+' ('+money+')', html:html } }).then(function(){}).catch(function(){});
+  if(typeof showToast==='function') showToast('Aviso enviado a Contabilidad','success');
+ }catch(_e){} };
 function renderFacturaGen(){
   var ed=window._facEdit||null;
   var nc=window._facNC||null;
@@ -12706,6 +12718,7 @@ async function facturaGuardar(conPDF){
   if(r.error){ showToast('Error al guardar: '+r.error.message,'error'); return; }
   window._facEdit=null; window._facNC=null;
   showToast('✓ '+(nc?'Nota crédito':'Factura')+' '+((r.data&&r.data.numero)||'')+' '+(ed?'actualizada':'guardada'),'success');
+  try{ if(!ed && !nc && window._facAviso){ window._facAviso((r&&r.data)||fac); } }catch(_e){}
   if(conPDF) generarFacturaPDF(r.data||fac);
   else loadView('facturas-list');
 }
