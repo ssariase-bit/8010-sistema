@@ -1487,6 +1487,7 @@ const MENU_COMPLETO = [
   { id: 'por-pagar-list', icon: '💸', label: 'Por Pagar (CxP)' },
   { id: 'proveedores-list', icon: '🏭', label: 'Proveedores' },
   { id: 'flujo-caja-list', icon: '📅', label: 'Flujo de Caja' },
+  { id: 'flujo-semanal-list', icon: '📆', label: 'Flujo Semanal' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
   { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
@@ -1678,6 +1679,114 @@ async function loadView(view) {
     case 'cartera-list': await renderCartera(); break;
     case 'por-pagar-list': await renderPorPagar(); break;
     case 'flujo-caja-list': await renderFlujoCaja(); break;
+    case 'flujo-semanal-list': 
+(function(){
+function _fsPad(n){return n<10?'0'+n:''+n;}
+window._fsMesActual=function(){var d=new Date();return d.getFullYear()+'-'+_fsPad(d.getMonth()+1);};
+window._fsMesLabel=function(mes){var M=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];var y=+mes.slice(0,4),m=+mes.slice(5,7);return M[m-1]+' '+y;};
+window._fsWeeks=function(mes){var y=+mes.slice(0,4),m=+mes.slice(5,7);var dim=new Date(y,m,0).getDate();var w=[];var s=1;while(s<=dim){var e=Math.min(s+6,dim);w.push({label:_fsPad(s)+'–'+_fsPad(e)});s=e+1;}return w;};
+window._fsKey=function(mes){return 'flujo_sem_'+(typeof EDIFICIO_ACTIVO!=='undefined'?EDIFICIO_ACTIVO:'x')+'_'+mes;};
+window._fsDefault=function(nw){
+  var mk=function(names){return names.map(function(n){return {n:n,v:Array(nw).fill(0)};});};
+  return {saldoInicial:0,
+    ingresos:mk(['Recaudo cartera 8i8','Aportes socios','Ingresos eventos / Bagatelle','Otros ingresos']),
+    egresos:mk(['Nómina 8i8','Obligaciones laborales','Proveedores','Servicios públicos','Impuestos / GMF','Cajas menores','Management fee','Servicio a la deuda','Otros egresos']),
+    tipos:Array(nw).fill('PPTO')};
+};
+window._fsFix=function(d,nw){
+  d.saldoInicial=+d.saldoInicial||0;
+  ['ingresos','egresos'].forEach(function(s){(d[s]||[]).forEach(function(r){r.v=r.v||[];while(r.v.length<nw)r.v.push(0);r.v=r.v.slice(0,nw);r.v=r.v.map(function(x){return +x||0;});});});
+  d.tipos=d.tipos||[];while(d.tipos.length<nw)d.tipos.push('PPTO');d.tipos=d.tipos.slice(0,nw);
+  return d;
+};
+window._fsLoad=async function(mes){
+  var nw=_fsWeeks(mes).length;
+  try{var r=await sb.from('config').select('valor').eq('id',_fsKey(mes)).maybeSingle();
+    if(r.data&&r.data.valor){return _fsFix(JSON.parse(r.data.valor),nw);}}catch(e){}
+  return _fsDefault(nw);
+};
+window._fsSaveNow=async function(){try{await sb.from('config').upsert({id:_fsKey(window._fsMes),valor:JSON.stringify(window._fsData),updated_at:new Date().toISOString()});}catch(e){}};
+window._fsSave=function(){clearTimeout(window._fsSaveT);window._fsSaveT=setTimeout(window._fsSaveNow,700);};
+window._fsFmt=function(n){n=Math.round(+n||0);return n.toLocaleString('es-CO');};
+window._fsCalc=function(){
+  var d=window._fsData,nw=d.tipos.length;
+  var ti=[],te=[],ca=[],sa=[],sf=[];
+  for(var w=0;w<nw;w++){
+    var si=0,se=0;
+    d.ingresos.forEach(function(r){si+=+r.v[w]||0;});
+    d.egresos.forEach(function(r){se+=+r.v[w]||0;});
+    var ant=(w===0)?(+d.saldoInicial||0):sf[w-1];
+    ti[w]=si;te[w]=se;sa[w]=ant;ca[w]=ant+si;sf[w]=ant+si-se;
+  }
+  return {ti:ti,te:te,ca:ca,sa:sa,sf:sf,nw:nw};
+};
+window._fsRecalc=function(){
+  var c=window._fsCalc(),d=window._fsData;
+  var set=function(id,val,neg){var el=document.getElementById(id);if(!el)return;el.textContent='$'+_fsFmt(val);el.style.color=(neg&&val<0)?'#c0392b':'';el.style.fontWeight=(id.indexOf('sf-')>=0)?'700':'';};
+  var sumRow=function(arr){return arr.reduce(function(a,b){return a+(+b||0);},0);};
+  for(var w=0;w<c.nw;w++){set('fs-sant-'+w,c.sa[w],true);set('fs-ting-'+w,c.ti[w]);set('fs-caja-'+w,c.ca[w],true);set('fs-tegr-'+w,c.te[w]);set('fs-sf-'+w,c.sf[w],true);}
+  set('fs-ting-tot',sumRow(c.ti));set('fs-tegr-tot',sumRow(c.te));
+  set('fs-caja-tot',c.ca.length?c.ca[c.ca.length-1]:0,true);
+  set('fs-sf-tot',c.sf.length?c.sf[c.sf.length-1]:0,true);
+  d.ingresos.forEach(function(r,i){set('fs-rt-i-'+i,sumRow(r.v));});
+  d.egresos.forEach(function(r,i){set('fs-rt-e-'+i,sumRow(r.v));});
+};
+window._fsSetVal=function(sec,i,w,val){var n=parseFloat((val||'').toString().replace(/[^0-9.\-]/g,''))||0;window._fsData[sec][i].v[w]=n;window._fsRecalc();window._fsSave();};
+window._fsSetName=function(sec,i,val){window._fsData[sec][i].n=(val||'').trim()||'(sin nombre)';window._fsSave();};
+window._fsSetSaldoIni=function(val){window._fsData.saldoInicial=parseFloat((val||'').toString().replace(/[^0-9.\-]/g,''))||0;window._fsRecalc();window._fsSave();};
+window._fsAddRow=function(sec){var nw=window._fsData.tipos.length;window._fsData[sec].push({n:'Nuevo '+(sec==='ingresos'?'ingreso':'egreso'),v:Array(nw).fill(0)});window._fsSaveNow();window.renderFlujoSemanal();};
+window._fsDelRow=function(sec,i){window._fsData[sec].splice(i,1);window._fsSaveNow();window.renderFlujoSemanal();};
+window._fsToggleTipo=function(w){window._fsData.tipos[w]=window._fsData.tipos[w]==='REAL'?'PPTO':'REAL';window._fsSaveNow();window.renderFlujoSemanal();};
+window._fsNav=function(delta){var y=+window._fsMes.slice(0,4),m=+window._fsMes.slice(5,7)+delta;while(m<1){m+=12;y--;}while(m>12){m-=12;y++;}window._fsMes=y+'-'+_fsPad(m);window.renderFlujoSemanal();};
+window.renderFlujoSemanal=async function(){
+  var mc=document.getElementById('main-content');if(!mc)return;
+  if(!window._fsMes)window._fsMes=_fsMesActual();
+  var mes=window._fsMes,wks=_fsWeeks(mes),nw=wks.length;
+  window._fsData=await _fsLoad(mes);
+  var d=window._fsData;
+  var esc=function(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');};
+  var inp=function(sec,i,w){return '<input type=\"text\" value=\"'+_fsFmt(d[sec][i].v[w])+'\" oninput=\"_fsSetVal(\''+sec+'\','+i+','+w+',this.value)\" onfocus=\"this.value=(this.value||\'\').replace(/[^0-9.\\-]/g,\'\')\" onblur=\"this.value=_fsFmt(this.value)\" style=\"width:100%;border:1px solid #e2e8f0;border-radius:4px;padding:4px 6px;text-align:right;font-size:12px;\">';};
+  var h='';
+  h+='<div style=\"display:flex;align-items:center;gap:12px;margin-bottom:6px;\">';
+  h+='<h1 style=\"margin:0;font-size:20px;\">📆 Flujo de Caja Semanal</h1>';
+  h+='<button onclick=\"_fsNav(-1)\" style=\"padding:4px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;\">◀</button>';
+  h+='<b style=\"font-size:16px;min-width:150px;text-align:center;\">'+_fsMesLabel(mes)+'</b>';
+  h+='<button onclick=\"_fsNav(1)\" style=\"padding:4px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;\">▶</button>';
+  h+='</div>';
+  h+='<div style=\"color:#64748b;font-size:12px;margin-bottom:10px;\">La caja de una semana pasa como saldo inicial de la siguiente. Marca cada semana como REAL o PPTO. Todo es editable y se guarda solo.</div>';
+  h+='<div style=\"overflow-x:auto;\"><table class=\"tabla\" style=\"width:100%;border-collapse:collapse;font-size:12px;min-width:720px;\">';
+  h+='<thead><tr style=\"background:#1e293b;color:#fff;\"><th style=\"text-align:left;padding:8px;min-width:200px;\">DETALLE</th>';
+  for(var w=0;w<nw;w++){var t=d.tipos[w];h+='<th style=\"padding:6px;min-width:110px;text-align:center;\">Sem '+(w+1)+'<br><span style=\"font-weight:400;\">'+wks[w].label+'</span><br><span onclick=\"_fsToggleTipo('+w+')\" style=\"cursor:pointer;display:inline-block;margin-top:3px;padding:1px 7px;border-radius:8px;font-size:10px;background:'+(t==='REAL'?'#16a34a':'#f59e0b')+';color:#fff;\">'+t+'</span></th>';}
+  h+='<th style=\"padding:8px;min-width:120px;text-align:center;background:#0f172a;\">TOTAL MES</th></tr></thead><tbody>';
+  var money=function(id,neg){return '<td id=\"'+id+'\" style=\"text-align:right;padding:6px 8px;\"></td>';};
+  h+='<tr style=\"background:#f8fafc;\"><td style=\"padding:6px 8px;font-weight:600;\">SALDO ANTERIOR CAJA</td>';
+  h+='<td style=\"padding:4px 6px;\"><input type=\"text\" value=\"'+_fsFmt(d.saldoInicial)+'\" oninput=\"_fsSetSaldoIni(this.value)\" onfocus=\"this.value=(this.value||\'\').replace(/[^0-9.\\-]/g,\'\')\" onblur=\"this.value=_fsFmt(this.value)\" style=\"width:100%;border:1px solid #cbd5e1;border-radius:4px;padding:4px 6px;text-align:right;font-size:12px;\"></td>';
+  for(var w=1;w<nw;w++){h+=money('fs-sant-'+w);}
+  h+='<td></td></tr>';
+  h+='<tr style=\"background:#ecfdf5;\"><td colspan=\"'+(nw+2)+'\" style=\"padding:5px 8px;font-weight:700;color:#065f46;\">INGRESOS</td></tr>';
+  d.ingresos.forEach(function(r,i){
+    h+='<tr><td style=\"padding:3px 8px;\"><span onclick=\"_fsDelRow(\'ingresos\','+i+')\" style=\"cursor:pointer;color:#cbd5e1;margin-right:6px;\">🗑</span><input type=\"text\" value=\"'+esc(r.n)+'\" onblur=\"_fsSetName(\'ingresos\','+i+',this.value)\" style=\"border:none;border-bottom:1px dashed #e2e8f0;font-size:12px;width:78%;\"></td>';
+    for(var w=0;w<nw;w++){h+='<td style=\"padding:3px 5px;\">'+inp('ingresos',i,w)+'</td>';}
+    h+='<td id=\"fs-rt-i-'+i+'\" style=\"text-align:right;padding:4px 8px;color:#475569;\"></td></tr>';
+  });
+  h+='<tr><td style=\"padding:3px 8px;\"><button onclick=\"_fsAddRow(\'ingresos\')\" style=\"font-size:11px;color:#059669;background:none;border:none;cursor:pointer;\">＋ agregar ingreso</button></td><td colspan=\"'+(nw+1)+'\"></td></tr>';
+  h+='<tr style=\"background:#d1fae5;font-weight:700;\"><td style=\"padding:6px 8px;\">TOTAL INGRESOS</td>';for(var w=0;w<nw;w++){h+=money('fs-ting-'+w);}h+=money('fs-ting-tot')+'</tr>';
+  h+='<tr style=\"background:#eff6ff;font-weight:700;\"><td style=\"padding:6px 8px;\">CAJA DISPONIBLE</td>';for(var w=0;w<nw;w++){h+=money('fs-caja-'+w);}h+=money('fs-caja-tot')+'</tr>';
+  h+='<tr style=\"background:#fef2f2;\"><td colspan=\"'+(nw+2)+'\" style=\"padding:5px 8px;font-weight:700;color:#991b1b;\">EGRESOS</td></tr>';
+  d.egresos.forEach(function(r,i){
+    h+='<tr><td style=\"padding:3px 8px;\"><span onclick=\"_fsDelRow(\'egresos\','+i+')\" style=\"cursor:pointer;color:#cbd5e1;margin-right:6px;\">🗑</span><input type=\"text\" value=\"'+esc(r.n)+'\" onblur=\"_fsSetName(\'egresos\','+i+',this.value)\" style=\"border:none;border-bottom:1px dashed #e2e8f0;font-size:12px;width:78%;\"></td>';
+    for(var w=0;w<nw;w++){h+='<td style=\"padding:3px 5px;\">'+inp('egresos',i,w)+'</td>';}
+    h+='<td id=\"fs-rt-e-'+i+'\" style=\"text-align:right;padding:4px 8px;color:#475569;\"></td></tr>';
+  });
+  h+='<tr><td style=\"padding:3px 8px;\"><button onclick=\"_fsAddRow(\'egresos\')\" style=\"font-size:11px;color:#dc2626;background:none;border:none;cursor:pointer;\">＋ agregar egreso</button></td><td colspan=\"'+(nw+1)+'\"></td></tr>';
+  h+='<tr style=\"background:#fee2e2;font-weight:700;\"><td style=\"padding:6px 8px;\">TOTAL EGRESOS</td>';for(var w=0;w<nw;w++){h+=money('fs-tegr-'+w);}h+=money('fs-tegr-tot')+'</tr>';
+  h+='<tr style=\"background:#0f172a;color:#fff;font-weight:700;\"><td style=\"padding:8px;\">SALDO FINAL DE CAJA</td>';for(var w=0;w<nw;w++){h+='<td id=\"fs-sf-'+w+'\" style=\"text-align:right;padding:8px;\"></td>';}h+='<td id=\"fs-sf-tot\" style=\"text-align:right;padding:8px;\"></td></tr>';
+  h+='</tbody></table></div>';
+  mc.innerHTML=h;
+  window._fsRecalc();
+};
+})();
+ await renderFlujoSemanal(); break;
     case 'proveedores-list': await renderList('proveedores','🏭 Proveedores','proveedores-form',['nombre','nit','acuerdo_pago','contacto','activo'],['Proveedor','NIT','Acuerdo de pago','Contacto','Activo']); break;
     case 'proveedores-form': renderGenForm('proveedores','🏭 Proveedor',[{id:'nombre',label:'Proveedor',type:'text',req:true},{id:'nit',label:'NIT',type:'text'},{id:'acuerdo_pago',label:'Acuerdo de pago (dias / condiciones)',type:'text'},{id:'contacto',label:'Contacto',type:'text'}]); break;
     case 'facturas-list': await renderFacturasList(); break;
