@@ -1487,7 +1487,7 @@ const MENU_COMPLETO = [
   { id: 'por-pagar-list', icon: '💸', label: 'Por Pagar (CxP)' },
   { id: 'proveedores-list', icon: '🏭', label: 'Proveedores' },
   { id: 'flujo-caja-list', icon: '📅', label: 'Flujo de Caja' },
-  { id: 'flujo-semanal-list', icon: '📆', label: 'Flujo Semanal' },
+  { id: 'flujo-semanal-list', icon: '📆', label: 'Flujo Semanal' }, { id: 'recaudo-list', icon: '💰', label: 'Recaudo x Cliente' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
   { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
@@ -1821,6 +1821,238 @@ window.renderFlujoSemanal=async function(){
 };
 })();
  await renderFlujoSemanal(); break;
+ case 'recaudo-list': 
+(function(){
+  var _pad=function(n){return n<10?'0'+n:''+n;};
+  var _ed=function(){return (typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO?EDIFICIO_ACTIVO:'8010');};
+  var _fmt=function(n){return (window._fsFmt?window._fsFmt(n):Math.round(+n||0).toLocaleString('es-CO'));};
+  var _mesLabel=function(m){return (window._fsMesLabel?window._fsMesLabel(m):m);};
+  var _mesActual=function(){return (window._fsMesActual?window._fsMesActual():(new Date().getFullYear()+'-'+_pad(new Date().getMonth()+1)));};
+  var _ranges=function(mes){var y=+mes.slice(0,4),m=+mes.slice(5,7);var dim=new Date(y,m,0).getDate();var r=[];var s=1;while(s<=dim){var e=Math.min(s+6,dim);r.push([s,e]);s=e+1;}return r;};
+  var _esc=function(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+
+  window._rcMap=window._rcMap||{};
+  window._rcOv=window._rcOv||{};
+  window._rcKeyOv=function(ed,mes){return 'rc_ov_'+ed+'_'+mes;};
+
+  window._rcLoad=async function(ed,mes){
+    try{
+      var r=await sb.from('config').select('id,valor').in('id',['rc_map',window._rcKeyOv(ed,mes)]);
+      window._rcMap={};window._rcOv={};
+      (r.data||[]).forEach(function(row){
+        if(row.id==='rc_map'){try{window._rcMap=JSON.parse(row.valor)||{};}catch(e){}}
+        else{try{window._rcOv=JSON.parse(row.valor)||{};}catch(e){}}
+      });
+    }catch(e){window._rcMap=window._rcMap||{};window._rcOv=window._rcOv||{};}
+  };
+  window._rcSaveMap=function(){clearTimeout(window._rcSaveMapT);window._rcSaveMapT=setTimeout(function(){try{sb.from('config').upsert({id:'rc_map',valor:JSON.stringify(window._rcMap),updated_at:new Date().toISOString()});}catch(e){}},500);};
+  window._rcSaveOv=function(){clearTimeout(window._rcSaveOvT);window._rcSaveOvT=setTimeout(function(){try{var st=window._rcSt;sb.from('config').upsert({id:window._rcKeyOv(st.ed,st.mes),valor:JSON.stringify(window._rcOv),updated_at:new Date().toISOString()});}catch(e){}},500);};
+
+  window._rcFetch=async function(ed,mes){
+    var y=+mes.slice(0,4),m=+mes.slice(5,7);var dim=new Date(y,m,0).getDate();
+    var a=mes+'-01',b=mes+'-'+_pad(dim);
+    var r=await sb.from('facturas').select('cliente,cliente_nit,fecha,total,tipo').eq('edificio',ed).gte('fecha',a).lte('fecha',b);
+    if(r.error)throw new Error(r.error.message||'consulta');
+    return r.data||[];
+  };
+
+  window._rcBuild=function(rows,ranges){
+    var map={};
+    rows.forEach(function(f){
+      var key=String(f.cliente_nit||f.cliente||'SN');
+      var day=+String(f.fecha||'').slice(8,10);
+      var wi=-1;for(var i=0;i<ranges.length;i++){if(day>=ranges[i][0]&&day<=ranges[i][1]){wi=i;break;}}
+      if(wi<0)return;
+      var val=+f.total||0;
+      var signed=(f.tipo&&/nota/i.test(f.tipo))?-Math.abs(val):val;
+      if(!map[key])map[key]={key:key,nom:(f.cliente||key),nit:(f.cliente_nit||''),fact:ranges.map(function(){return 0;})};
+      if(f.cliente)map[key].nom=f.cliente;
+      map[key].fact[wi]+=signed;
+    });
+    return Object.keys(map).map(function(k){return map[k];});
+  };
+
+  window._rcSetEmp=function(key,val){
+    if(val){window._rcMap[key]=val;}else{delete window._rcMap[key];}
+    window._rcSaveMap();
+    var st=window._rcSt;if(st){for(var i=0;i<st.clients.length;i++){if(st.clients[i].key===key){st.clients[i].emp=val;break;}}}
+    _rcTotals();
+    var row=document.querySelector('tr[data-rk="'+CSS.escape(key)+'"]');
+    if(row){row.style.background=val?'':'#fff7ed';}
+  };
+  window._rcSetRec=function(inp){
+    var key=inp.getAttribute('data-k'),w=+inp.getAttribute('data-w');
+    var st=window._rcSt;if(!st)return;
+    var c=null;for(var i=0;i<st.clients.length;i++){if(st.clients[i].key===key){c=st.clients[i];break;}}
+    if(!c)return;
+    var raw=inp.value.replace(/[^0-9\-]/g,'');
+    var v=raw===''?c.fact[w]:(+raw||0);
+    c.rec[w]=v;
+    if(!window._rcOv[key])window._rcOv[key]=[];
+    window._rcOv[key][w]=v;
+    window._rcSaveOv();
+    c.totR=c.rec.reduce(function(a,b){return a+b;},0);
+    var tc=document.querySelector('td[data-rt="'+CSS.escape(key)+'"]');if(tc)tc.textContent='$'+_fmt(c.totR);
+    inp.style.color=(v!==c.fact[w])?'#1d4ed8':'#111';
+    _rcTotals();
+  };
+  window._rcReset=function(key){
+    var st=window._rcSt;if(!st)return;
+    delete window._rcOv[key];window._rcSaveOv();
+    var c=null;for(var i=0;i<st.clients.length;i++){if(st.clients[i].key===key){c=st.clients[i];break;}}
+    if(!c)return;
+    c.rec=c.fact.slice();c.totR=c.rec.reduce(function(a,b){return a+b;},0);
+    window.renderRecaudo();
+  };
+  window._rcNav=function(delta){
+    var mes=window._rcMes||_mesActual();
+    var y=+mes.slice(0,4),m=+mes.slice(5,7)+delta;
+    while(m<1){m+=12;y--;}while(m>12){m-=12;y++;}
+    window._rcMes=y+'-'+_pad(m);window.renderRecaudo();
+  };
+  window._rcFilter=function(){
+    var q=(document.getElementById('rc-q')||{}).value||'';q=q.toLowerCase().trim();
+    var only=(document.getElementById('rc-only')||{}).checked;
+    var rows=document.querySelectorAll('#rc-tbody tr');
+    rows.forEach(function(tr){
+      var nm=(tr.getAttribute('data-nm')||'').toLowerCase();
+      var emp=tr.getAttribute('data-emp')||'';
+      var show=(!q||nm.indexOf(q)>=0)&&(!only||!emp);
+      tr.style.display=show?'':'none';
+    });
+  };
+
+  window._rcTotals=function(){
+    var st=window._rcSt;if(!st)return;var wk=st.ranges.length;
+    var tF={LTM3:z(wk),OT:z(wk),SN:z(wk)},tR={LTM3:z(wk),OT:z(wk),SN:z(wk)};
+    function z(n){return Array(n).fill(0);}
+    st.clients.forEach(function(c){
+      var g=(c.emp==='LTM3'||c.emp==='OT')?c.emp:'SN';
+      for(var w=0;w<wk;w++){tF[g][w]+=c.fact[w];tR[g][w]+=c.rec[w];}
+    });
+    ['LTM3','OT','SN'].forEach(function(g){
+      for(var w=0;w<wk;w++){
+        var e=document.getElementById('rc-t-'+g+'-'+w);if(e)e.textContent='$'+_fmt(tR[g][w]);
+      }
+      var sumR=tR[g].reduce(function(a,b){return a+b;},0);
+      var et=document.getElementById('rc-tt-'+g);if(et)et.textContent='$'+_fmt(sumR);
+    });
+    for(var w=0;w<wk;w++){
+      var all=tR.LTM3[w]+tR.OT[w]+tR.SN[w];
+      var ea=document.getElementById('rc-t-ALL-'+w);if(ea)ea.textContent='$'+_fmt(all);
+    }
+    var gt=tR.LTM3.concat(tR.OT,tR.SN).reduce(function(a,b){return a+b;},0);
+    var eg=document.getElementById('rc-tt-ALL');if(eg)eg.textContent='$'+_fmt(gt);
+    var snClients=st.clients.filter(function(c){return !(c.emp==='LTM3'||c.emp==='OT')&&c.totR!==0;}).length;
+    var warn=document.getElementById('rc-warn');
+    if(warn)warn.style.display=snClients>0?'block':'none';
+    if(warn)warn.innerHTML='⚠ '+snClients+' cliente(s) con recaudo aún <b>sin asignar</b> a LTM3 u OT — no se llevarán al flujo hasta asignarlos.';
+  };
+
+  window._rcPush=async function(){
+    var st=window._rcSt;if(!st)return;var wk=st.ranges.length;
+    var stt=document.getElementById('rc-status');
+    var tot={LTM3:Array(wk).fill(0),OT:Array(wk).fill(0)};
+    st.clients.forEach(function(c){if(c.emp==='LTM3'||c.emp==='OT'){for(var w=0;w<wk;w++)tot[c.emp][w]+=Math.round(c.rec[w]||0);}});
+    var key='flujo_sem_'+st.ed+'_'+st.mes;var fd=null;
+    try{var r=await sb.from('config').select('valor').eq('id',key).maybeSingle();if(r.data&&r.data.valor)fd=JSON.parse(r.data.valor);}catch(e){}
+    if(!fd||!fd.empresas){if(stt){stt.style.color='#b45309';stt.textContent='No encontré el flujo de '+_mesLabel(st.mes)+' en '+st.ed+'. Abre primero Flujo Semanal ese mes y vuelve.';}return;}
+    var applied=[];
+    fd.empresas.forEach(function(emp){
+      if(emp.id!=='LTM3'&&emp.id!=='OT')return;
+      var line=null;
+      if(emp.ingresos){for(var i=0;i<emp.ingresos.length;i++){if(/recaudo\s*cartera/i.test(emp.ingresos[i].n)){line=emp.ingresos[i];break;}}}
+      if(!line&&emp.ingresos&&emp.ingresos.length)line=emp.ingresos[0];
+      if(line){for(var w=0;w<wk;w++){line.v[w]=Math.round(tot[emp.id][w]||0);}applied.push(emp.id);}
+    });
+    try{await sb.from('config').upsert({id:key,valor:JSON.stringify(fd),updated_at:new Date().toISOString()});}catch(e){if(stt){stt.style.color='#b00';stt.textContent='Error guardando flujo: '+e.message;}return;}
+    if(window._fsMes===st.mes){window._fsData=fd;if(window._fsRecalc){try{window._fsRecalc();}catch(e){}}}
+    if(stt){stt.style.color='#047857';stt.textContent='✔ Recaudo llevado al Flujo ('+applied.join(', ')+') para '+_mesLabel(st.mes)+'. Ábrelo en Flujo Semanal para verlo.';}
+  };
+
+  window._rcHtml=function(clients,weeks,ed,mes){
+    var wk=weeks.length;
+    var h='';
+    h+='<div style="padding:16px 18px;max-width:1180px;margin:0 auto">';
+    h+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px">';
+    h+='<h2 style="margin:0;font-size:20px">💰 Recaudo por Cliente</h2>';
+    h+='<div style="display:flex;align-items:center;gap:6px;margin-left:auto">';
+    h+='<button onclick="window._rcNav(-1)" style="border:1px solid #ccc;background:#fff;border-radius:6px;padding:3px 9px;cursor:pointer">‹</button>';
+    h+='<b style="min-width:120px;text-align:center;display:inline-block">'+_esc(_mesLabel(mes))+'</b>';
+    h+='<button onclick="window._rcNav(1)" style="border:1px solid #ccc;background:#fff;border-radius:6px;padding:3px 9px;cursor:pointer">›</button>';
+    h+='</div></div>';
+    h+='<div style="font-size:12px;color:#666;margin-bottom:10px">Edificio <b>'+_esc(ed)+'</b> · '+clients.length+' clientes facturados · celdas azules = recaudo ajustado (distinto a lo facturado)</div>';
+    h+='<div id="rc-warn" style="display:none;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;padding:8px 10px;border-radius:8px;font-size:13px;margin-bottom:10px"></div>';
+    h+='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">';
+    h+='<input id="rc-q" oninput="window._rcFilter()" placeholder="Buscar cliente…" style="border:1px solid #ccc;border-radius:6px;padding:5px 9px;font-size:13px;width:220px">';
+    h+='<label style="font-size:13px;color:#444"><input id="rc-only" type="checkbox" onchange="window._rcFilter()"> solo sin asignar</label>';
+    h+='<button onclick="window._rcPush()" style="margin-left:auto;background:#0f766e;color:#fff;border:0;border-radius:7px;padding:7px 14px;font-size:13px;cursor:pointer">⬆ Llevar recaudo al Flujo</button>';
+    h+='</div>';
+    h+='<div id="rc-status" style="font-size:13px;margin-bottom:8px"></div>';
+    h+='<div style="overflow:auto;border:1px solid #e5e7eb;border-radius:10px">';
+    h+='<table style="border-collapse:collapse;width:100%;font-size:12.5px;min-width:'+(360+wk*120)+'px">';
+    h+='<thead><tr style="background:#f1f5f9;position:sticky;top:0">';
+    h+='<th style="text-align:left;padding:8px 10px;position:sticky;left:0;background:#f1f5f9;min-width:190px">Cliente</th>';
+    h+='<th style="padding:8px 6px">Empresa</th>';
+    for(var w=0;w<wk;w++)h+='<th style="padding:8px 6px;text-align:right;min-width:104px">Sem '+(w+1)+'<br><span style="font-weight:400;color:#888;font-size:11px">'+_esc(weeks[w].label)+'</span></th>';
+    h+='<th style="padding:8px 8px;text-align:right;min-width:100px">Total</th></tr></thead>';
+    h+='<tbody id="rc-tbody">';
+    clients.forEach(function(c){
+      var sn=!(c.emp==='LTM3'||c.emp==='OT');
+      h+='<tr data-rk="'+_esc(c.key)+'" data-nm="'+_esc(c.nom)+'" data-emp="'+_esc(c.emp)+'" style="border-top:1px solid #eee;'+(sn?'background:#fff7ed':'')+'">';
+      h+='<td style="padding:6px 10px;position:sticky;left:0;background:'+(sn?'#fff7ed':'#fff')+'"><div style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+_esc(c.nom)+'">'+_esc(c.nom)+'</div><div style="color:#999;font-size:10.5px">'+_esc(c.nit||'')+'</div></td>';
+      h+='<td style="padding:4px 6px;text-align:center"><select onchange="window._rcSetEmp(\''+_esc(c.key).replace(/'/g,"\\'")+'\',this.value)" style="border:1px solid #ccc;border-radius:5px;padding:3px;font-size:12px"><option value=""'+(c.emp?'':' selected')+'>—</option><option value="LTM3"'+(c.emp==='LTM3'?' selected':'')+'>LTM3</option><option value="OT"'+(c.emp==='OT'?' selected':'')+'>OT</option></select></td>';
+      for(var w=0;w<wk;w++){
+        var diff=(c.rec[w]!==c.fact[w]);
+        h+='<td style="padding:3px 5px;text-align:right"><input data-k="'+_esc(c.key)+'" data-w="'+w+'" value="'+_fmt(c.rec[w])+'" onfocus="this.select()" onchange="window._rcSetRec(this)" title="Facturado: $'+_fmt(c.fact[w])+'" style="width:96px;text-align:right;border:1px solid #ddd;border-radius:5px;padding:4px 5px;font-size:12px;color:'+(diff?'#1d4ed8':'#111')+'">';
+        h+='<div style="color:#aaa;font-size:9.5px;text-align:right;padding-right:3px">F:$'+_fmt(c.fact[w])+'</div></td>';
+      }
+      h+='<td data-rt="'+_esc(c.key)+'" style="padding:6px 8px;text-align:right;font-weight:600">$'+_fmt(c.totR)+'</td></tr>';
+    });
+    h+='</tbody>';
+    h+='<tfoot style="font-weight:700">';
+    var foot=[['LTM3','#ecfeff'],['OT','#eef2ff'],['SN','#fff7ed']];
+    var lbl={LTM3:'Recaudo LTM3',OT:'Recaudo OT',SN:'Sin asignar'};
+    foot.forEach(function(g){
+      h+='<tr style="border-top:2px solid #cbd5e1;background:'+g[1]+'"><td style="padding:7px 10px;position:sticky;left:0;background:'+g[1]+'">'+lbl[g[0]]+'</td><td></td>';
+      for(var w=0;w<wk;w++)h+='<td id="rc-t-'+g[0]+'-'+w+'" style="padding:7px 5px;text-align:right">$0</td>';
+      h+='<td id="rc-tt-'+g[0]+'" style="padding:7px 8px;text-align:right">$0</td></tr>';
+    });
+    h+='<tr style="border-top:2px solid #0f766e;background:#f0fdfa"><td style="padding:8px 10px;position:sticky;left:0;background:#f0fdfa">TOTAL RECAUDO</td><td></td>';
+    for(var w=0;w<wk;w++)h+='<td id="rc-t-ALL-'+w+'" style="padding:8px 5px;text-align:right">$0</td>';
+    h+='<td id="rc-tt-ALL" style="padding:8px 8px;text-align:right">$0</td></tr>';
+    h+='</tfoot></table></div>';
+    h+='<div style="font-size:11.5px;color:#888;margin-top:8px">Fuente: facturas emitidas (por fecha de emisión). El recaudo es editable porque la fecha de pago real puede diferir. Ajusta las celdas y usa "Llevar recaudo al Flujo".</div>';
+    h+='</div>';
+    return h;
+  };
+
+  window.renderRecaudo=async function(){
+    var mc=document.getElementById('main-content');if(!mc)return;
+    var ed=_ed();
+    var mes=window._rcMes||window._fsMes||_mesActual();
+    window._rcMes=mes;
+    mc.innerHTML='<div style="padding:20px;color:#666">Cargando recaudo de '+_esc(_mesLabel(mes))+'…</div>';
+    await window._rcLoad(ed,mes);
+    var ranges=_ranges(mes);
+    var weeks=(window._fsWeeks?window._fsWeeks(mes):ranges.map(function(r){return {label:_pad(r[0])+'–'+_pad(r[1])};}));
+    var rows;
+    try{rows=await window._rcFetch(ed,mes);}catch(e){mc.innerHTML='<div style="padding:20px;color:#b00">Error cargando facturas: '+_esc(e.message)+'</div>';return;}
+    var clients=window._rcBuild(rows,ranges);
+    clients.forEach(function(c){
+      c.emp=window._rcMap[c.key]||'';
+      var ov=window._rcOv[c.key];
+      c.rec=ranges.map(function(_x,w){return (ov&&ov[w]!=null)?+ov[w]:c.fact[w];});
+      c.totF=c.fact.reduce(function(a,b){return a+b;},0);
+      c.totR=c.rec.reduce(function(a,b){return a+b;},0);
+    });
+    clients.sort(function(a,b){return b.totF-a.totF;});
+    window._rcSt={ed:ed,mes:mes,ranges:ranges,clients:clients};
+    mc.innerHTML=window._rcHtml(clients,weeks,ed,mes);
+    window._rcTotals();
+  };
+})();
+ await window.renderRecaudo(); break;
     case 'proveedores-list': await renderList('proveedores','🏭 Proveedores','proveedores-form',['nombre','nit','acuerdo_pago','contacto','activo'],['Proveedor','NIT','Acuerdo de pago','Contacto','Activo']); break;
     case 'proveedores-form': renderGenForm('proveedores','🏭 Proveedor',[{id:'nombre',label:'Proveedor',type:'text',req:true},{id:'nit',label:'NIT',type:'text'},{id:'acuerdo_pago',label:'Acuerdo de pago (dias / condiciones)',type:'text'},{id:'contacto',label:'Contacto',type:'text'}]); break;
     case 'facturas-list': await renderFacturasList(); break;
