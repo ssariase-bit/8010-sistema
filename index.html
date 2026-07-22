@@ -2222,7 +2222,7 @@ window.renderFlujoSemanal=async function(){
     // ── COMPRAS: Órdenes de Pedido y Requisiciones Internas ──
     case 'compras-ordenes':     await window._cmpLista('orden_pedido'); break;
     case 'compras-requis':      await window._cmpLista('requisicion'); break;
-    case 'compras-orden-form':  window._cmpForm('orden_pedido'); break;
+    case 'compras-orden-form':  window._cmpForm('orden_pedido'); (function(){window._cmpIvaPct=function(pct){var sub=0;document.querySelectorAll('#cmp-rows .cmp-row').forEach(function(r){var c=parseFloat((r.querySelector('.cmp-cant')||{}).value)||0;var v=parseFloat((r.querySelector('.cmp-val')||{}).value)||0;sub+=c*v;});var iva=document.getElementById('cmp-iva');if(iva){iva.value=Math.round(sub*(parseFloat(pct)||0)/100);if(window._cmpTotal)window._cmpTotal();}};var tries=0;var iv=setInterval(function(){tries++;var iva=document.getElementById('cmp-iva');if(iva){clearInterval(iv);if(!document.getElementById('cmp-iva-pct')){var sel=document.createElement('select');sel.id='cmp-iva-pct';sel.title='Elegir % de IVA';sel.style.cssText='margin-right:6px;padding:3px 6px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;';[['','IVA %'],['0','0% exento'],['5','5% (café)'],['8','8% impoconsumo'],['16','16%'],['19','19%']].forEach(function(o){var op=document.createElement('option');op.value=o[0];op.textContent=o[1];sel.appendChild(op);});sel.onchange=function(){if(this.value!==''){window._cmpIvaPct(this.value);}};iva.parentElement.insertBefore(sel,iva);}}else if(tries>60){clearInterval(iv);}},50);})(); break;
     case 'compras-requis-form': window._cmpForm('requisicion'); break;
     // ── INVENTARIO (alimenta las Órdenes de Pedido) ──
     case 'inventario-list':     await window._invLista(); break;
