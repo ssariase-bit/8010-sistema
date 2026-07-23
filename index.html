@@ -10419,28 +10419,44 @@ window._comEditar = async function(id){
     var c = r.data;
     var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
     var tipos = (window._COM_TIPOS||['Comunicado']);
+    var checksHTML=''; try{ checksHTML = await window._comTargetChecksHTML(); }catch(e){ checksHTML=''; }
     var old=document.getElementById('com-edit-ov'); if(old) old.remove();
     var ov=document.createElement('div'); ov.id='com-edit-ov';
     ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:28px 12px';
     var opts=tipos.map(function(t){return '<option'+(t===c.prioridad?' selected':'')+'>'+esc(t)+'</option>';}).join('');
-    ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:620px;width:100%;padding:18px 20px;box-shadow:0 12px 44px rgba(0,0,0,.32)">'
+    ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;padding:18px 20px;box-shadow:0 12px 44px rgba(0,0,0,.32)">'
       +'<div style="font-size:16px;font-weight:700;margin-bottom:12px">✏️ Editar comunicado</div>'
       +'<div class="form-group"><label>Título</label><input id="ce-tit" value="'+esc(c.titulo||'')+'" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box"></div>'
-      +'<div class="form-group"><label>Mensaje</label><textarea id="ce-msg" spellcheck="true" lang="es" style="width:100%;min-height:120px;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box">'+esc(c.mensaje||'')+'</textarea></div>'
+      +'<div class="form-group"><label>Mensaje</label><textarea id="ce-msg" spellcheck="true" lang="es" style="width:100%;min-height:110px;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box">'+esc(c.mensaje||'')+'</textarea></div>'
       +'<div class="form-group"><label>Tipo</label><select id="ce-prio" style="max-width:280px;padding:7px;border:1px solid #ddd;border-radius:8px">'+opts+'</select></div>'
-      +'<div class="form-group"><label>Dirigido a</label><input id="ce-dir" value="'+esc(c.dirigido_a||'')+'" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box"></div>'
+      +'<div class="form-group"><label>Dirigido a <span style="font-weight:400;color:#888;font-size:11px">(marca uno o varios; o "Todos")</span></label><div id="ce-dir-box" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px;max-height:190px;overflow:auto">'+checksHTML+'</div>'
+      +'<input id="ce-dir-txt" value="'+esc(c.dirigido_a||'')+'" placeholder="…o escribe destinatarios manualmente" style="width:100%;margin-top:6px;padding:6px 9px;border:1px solid #ddd;border-radius:8px;font-size:12px;box-sizing:border-box"></div>'
       +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-outline" onclick="var o=document.getElementById(\'com-edit-ov\');if(o)o.remove();">Cancelar</button><button class="btn btn-success" onclick="window._comGuardarEdicion(\''+id+'\')">💾 Guardar cambios</button></div>'
       +'</div>';
     ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
     document.body.appendChild(ov);
+    try{
+      var cur=String(c.dirigido_a||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+      var isTodos = (cur.length===0 || cur.indexOf('Todos')>-1);
+      var box=document.getElementById('ce-dir-box');
+      if(box){ box.querySelectorAll('input.com-dir-chk').forEach(function(chk){
+        if(isTodos){ if(chk.value==='Todos') chk.checked=true; }
+        else if(cur.indexOf(String(chk.value).trim())>-1){ chk.checked=true; }
+      }); }
+    }catch(e){}
     var t=document.getElementById('ce-msg'); if(t){ t.focus(); }
   }catch(e){ alert('Error: '+e.message); }
 };
 window._comGuardarEdicion = async function(id){
-  var tit=document.getElementById('ce-tit'), msg=document.getElementById('ce-msg'), prio=document.getElementById('ce-prio'), dir=document.getElementById('ce-dir');
+  var tit=document.getElementById('ce-tit'), msg=document.getElementById('ce-msg'), prio=document.getElementById('ce-prio');
   if(!msg||!msg.value.trim()){ alert('El mensaje no puede quedar vacío.'); return; }
+  var box=document.getElementById('ce-dir-box');
+  var anyChk = box && box.querySelectorAll('input.com-dir-chk:checked').length>0;
+  var dir;
+  if(anyChk){ dir = window._comGetDir('ce-dir-box'); }
+  else { var tx=document.getElementById('ce-dir-txt'); dir = (tx&&tx.value.trim())?tx.value.trim():'Todos'; }
   try{
-    var upd={ titulo:(tit&&tit.value.trim()?tit.value.trim():null), mensaje:msg.value.trim(), prioridad:(prio?prio.value:null), dirigido_a:(dir&&dir.value.trim()?dir.value.trim():null) };
+    var upd={ titulo:(tit&&tit.value.trim()?tit.value.trim():null), mensaje:msg.value.trim(), prioridad:(prio?prio.value:null), dirigido_a:dir };
     var r=await sb.from('comunicaciones').update(upd).eq('id',id);
     if(r.error){ alert('No se pudo guardar: '+r.error.message); return; }
     var ov=document.getElementById('com-edit-ov'); if(ov) ov.remove();
