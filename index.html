@@ -1487,7 +1487,7 @@ const MENU_COMPLETO = [
   { id: 'por-pagar-list', icon: '💸', label: 'Por Pagar (CxP)' },
   { id: 'proveedores-list', icon: '🏭', label: 'Proveedores' },
   { id: 'flujo-caja-list', icon: '📅', label: 'Flujo de Caja' },
-  { id: 'flujo-semanal-list', icon: '📆', label: 'Flujo Semanal' }, { id: 'recaudo-list', icon: '💰', label: 'Recaudo x Cliente' }, { id: 'flujo-mes-list', icon: '📅', label: 'Flujo de Caja Mes' },
+  { id: 'flujo-semanal-list', icon: '📆', label: 'Flujo Semanal' }, { id: 'recaudo-list', icon: '💰', label: 'Recaudo x Cliente' }, { id: 'flujo-mes-list', icon: '📅', label: 'Flujo de Caja Mes' }, { id: 'proveedores-aging-list', icon: '🏢', label: 'Proveedores x Pagar' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
   { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
@@ -2172,6 +2172,106 @@ window.renderFlujoSemanal=async function(){
   };
 })();
  await window.renderFlujoMes(); break;
+ case 'proveedores-aging-list': 
+(function(){
+  var _pad=function(n){return n<10?'0'+n:''+n;};
+  var _ed=function(){return (typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO?EDIFICIO_ACTIVO:'8010');};
+  var _fmt=function(n){return (window._fsFmt?window._fsFmt(n):Math.round(+n||0).toLocaleString('es-CO'));};
+  var _esc=function(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  var BK=['Corriente','1–30','31–60','61–90','91–120','+120'];
+
+  window._paKey=function(ed){return 'prov_aging_'+ed;};
+  window._paUid=function(){return 'p'+Math.floor(Math.random()*1e9).toString(36)+(''+(new Date().getTime())).slice(-5);};
+
+  window._paLoad=async function(ed){
+    var saved=null;
+    try{var r=await sb.from('config').select('valor').eq('id',window._paKey(ed)).maybeSingle();if(r.data&&r.data.valor)saved=JSON.parse(r.data.valor);}catch(e){}
+    if(saved&&saved.provs&&saved.provs.length)return saved.provs;
+    // seed from proveedores table for this edificio
+    var provs=[];
+    try{
+      var pr=await sb.from('proveedores').select('id,nombre,nit,edificio,activo').eq('edificio',ed);
+      (pr.data||[]).forEach(function(p){ if(p.activo===false)return; provs.push({id:'db'+p.id, nom:p.nombre||'(sin nombre)', nit:p.nit||'', emp:'', b:[0,0,0,0,0,0]}); });
+    }catch(e){}
+    return provs;
+  };
+  window._paSave=function(){clearTimeout(window._paSaveT);window._paSaveT=setTimeout(function(){try{var st=window._paSt;sb.from('config').upsert({id:window._paKey(st.ed),valor:JSON.stringify({provs:st.provs}),updated_at:new Date().toISOString()});}catch(e){}},500);};
+
+  window._paFind=function(id){var st=window._paSt;if(!st)return null;for(var i=0;i<st.provs.length;i++)if(st.provs[i].id===id)return st.provs[i];return null;};
+  window._paSetB=function(inp){
+    var id=inp.getAttribute('data-id'),k=+inp.getAttribute('data-k');
+    var p=window._paFind(id);if(!p)return;
+    var v=+(inp.value.replace(/[^0-9\-]/g,''))||0;p.b[k]=v;
+    window._paSave();
+    var tot=p.b.reduce(function(a,b){return a+b;},0);
+    var tc=document.querySelector('td[data-pt="'+CSS.escape(id)+'"]');if(tc)tc.textContent='$'+_fmt(tot);
+    window._paTotals();
+  };
+  window._paSetEmp=function(id,val){var p=window._paFind(id);if(!p)return;p.emp=val;window._paSave();var row=document.querySelector('tr[data-pk="'+CSS.escape(id)+'"]');if(row)row.setAttribute('data-emp',val);window._paTotals();};
+  window._paSetNom=function(id,val){var p=window._paFind(id);if(!p)return;p.nom=val;window._paSave();};
+  window._paSetNit=function(id,val){var p=window._paFind(id);if(!p)return;p.nit=val;window._paSave();};
+  window._paAdd=function(){var st=window._paSt;if(!st)return;st.provs.push({id:window._paUid(),nom:'',nit:'',emp:'',b:[0,0,0,0,0,0]});window._paSave();window.renderProvAging();};
+  window._paDel=function(id){var st=window._paSt;if(!st)return;for(var i=0;i<st.provs.length;i++){if(st.provs[i].id===id){st.provs.splice(i,1);break;}}window._paSave();window.renderProvAging();};
+
+  window._paTotals=function(){
+    var st=window._paSt;if(!st)return;
+    var bt=[0,0,0,0,0,0];var venc=0,tot=0;
+    var empT={LTM3:0,OT:0,SN:0};
+    st.provs.forEach(function(p){
+      var pt=0;for(var k=0;k<6;k++){bt[k]+=(+p.b[k]||0);pt+=(+p.b[k]||0);if(k>=4)venc+=(+p.b[k]||0);}
+      tot+=pt;var g=(p.emp==='LTM3'||p.emp==='OT')?p.emp:'SN';empT[g]+=pt;
+    });
+    for(var k=0;k<6;k++){var e=document.getElementById('pa-bt-'+k);if(e)e.textContent='$'+_fmt(bt[k]);}
+    var et=document.getElementById('pa-tt');if(et)et.textContent='$'+_fmt(tot);
+    var ev=document.getElementById('pa-venc');if(ev)ev.textContent='$'+_fmt(venc);
+    ['LTM3','OT','SN'].forEach(function(g){var e=document.getElementById('pa-emp-'+g);if(e)e.textContent='$'+_fmt(empT[g]);});
+  };
+
+  window.renderProvAging=async function(){
+    var mc=document.getElementById('main-content');if(!mc)return;
+    var ed=_ed();
+    mc.innerHTML='<div style="padding:20px;color:#666">Cargando proveedores…</div>';
+    var provs;
+    try{provs=await window._paLoad(ed);}catch(e){mc.innerHTML='<div style="padding:20px;color:#b00">Error: '+_esc(e.message)+'</div>';return;}
+    window._paSt={ed:ed,provs:provs};
+    var h='';
+    h+='<div style="padding:16px 18px;max-width:1200px;margin:0 auto">';
+    h+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px"><h2 style="margin:0;font-size:20px">🏢 Proveedores por Pagar</h2>';
+    h+='<button onclick="window._paAdd()" style="margin-left:auto;background:#0f766e;color:#fff;border:0;border-radius:7px;padding:7px 14px;font-size:13px;cursor:pointer">➕ Agregar proveedor</button></div>';
+    h+='<div style="font-size:12px;color:#666;margin-bottom:10px">Edificio <b>'+_esc(ed)+'</b> · '+provs.length+' proveedores · antigüedad de saldos por pagar · columnas <b>91–120</b> y <b>+120</b> son vencido crítico (rojo)</div>';
+    if(!provs.length)h+='<div style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:10px">No hay proveedores cargados para '+_esc(ed)+'. Usa <b>➕ Agregar proveedor</b> para empezar, o pásame tu Excel de cartera de proveedores y los siembro.</div>';
+    h+='<div style="overflow:auto;border:1px solid #e5e7eb;border-radius:10px">';
+    h+='<table style="border-collapse:collapse;width:100%;font-size:12.5px;min-width:1050px">';
+    h+='<thead><tr style="background:#f1f5f9"><th style="text-align:left;padding:8px 10px;position:sticky;left:0;background:#f1f5f9;min-width:200px">Proveedor</th><th style="padding:8px 6px">Empresa</th>';
+    BK.forEach(function(b,i){var crit=i>=4;h+='<th style="padding:8px 6px;text-align:right;min-width:96px'+(crit?';color:#b91c1c':'')+'">'+b+'</th>';});
+    h+='<th style="padding:8px 8px;text-align:right;min-width:104px">Total</th><th style="padding:8px 4px"></th></tr></thead><tbody id="pa-tbody">';
+    provs.forEach(function(p){
+      var pt=p.b.reduce(function(a,b){return a+(+b||0);},0);
+      h+='<tr data-pk="'+_esc(p.id)+'" data-emp="'+_esc(p.emp)+'" style="border-top:1px solid #eee">';
+      h+='<td style="padding:4px 10px;position:sticky;left:0;background:#fff"><input value="'+_esc(p.nom)+'" oninput="window._paSetNom(\''+_esc(p.id)+'\',this.value)" placeholder="Nombre proveedor" style="width:170px;border:1px solid #eee;border-radius:5px;padding:4px 6px;font-size:12px;font-weight:600"><div><input value="'+_esc(p.nit||'')+'" oninput="window._paSetNit(\''+_esc(p.id)+'\',this.value)" placeholder="NIT" style="width:120px;border:1px solid #f1f5f9;border-radius:4px;padding:2px 5px;font-size:10.5px;color:#888;margin-top:2px"></div></td>';
+      h+='<td style="padding:4px 6px;text-align:center"><select onchange="window._paSetEmp(\''+_esc(p.id)+'\',this.value)" style="border:1px solid #ccc;border-radius:5px;padding:3px;font-size:12px"><option value=""'+(p.emp?'':' selected')+'>—</option><option value="LTM3"'+(p.emp==='LTM3'?' selected':'')+'>LTM3</option><option value="OT"'+(p.emp==='OT'?' selected':'')+'>OT</option></select></td>';
+      for(var k=0;k<6;k++){var crit=k>=4;h+='<td style="padding:3px 5px;text-align:right"><input data-id="'+_esc(p.id)+'" data-k="'+k+'" value="'+_fmt(p.b[k])+'" onfocus="this.select()" onchange="window._paSetB(this)" style="width:90px;text-align:right;border:1px solid #ddd;border-radius:5px;padding:4px 5px;font-size:12px'+(crit?';color:#b91c1c;background:#fef2f2':'')+'"></td>';}
+      h+='<td data-pt="'+_esc(p.id)+'" style="padding:6px 8px;text-align:right;font-weight:600">$'+_fmt(pt)+'</td>';
+      h+='<td style="padding:4px"><button onclick="window._paDel(\''+_esc(p.id)+'\')" title="Eliminar" style="border:0;background:none;color:#cbd5e1;cursor:pointer;font-size:15px">✕</button></td></tr>';
+    });
+    h+='</tbody>';
+    h+='<tfoot style="font-weight:700"><tr style="border-top:2px solid #0f766e;background:#f0fdfa"><td style="padding:8px 10px;position:sticky;left:0;background:#f0fdfa">TOTAL POR PAGAR</td><td></td>';
+    for(var k=0;k<6;k++){var crit=k>=4;h+='<td id="pa-bt-'+k+'" style="padding:8px 5px;text-align:right'+(crit?';color:#b91c1c':'')+'">$0</td>';}
+    h+='<td id="pa-tt" style="padding:8px 8px;text-align:right">$0</td><td></td></tr></tfoot>';
+    h+='</table></div>';
+    h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">';
+    h+='<div style="flex:1;min-width:180px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 12px"><div style="font-size:11.5px;color:#991b1b">Vencido crítico (+90 días)</div><div id="pa-venc" style="font-size:18px;font-weight:700;color:#b91c1c">$0</div></div>';
+    h+='<div style="flex:1;min-width:150px;background:#ecfeff;border:1px solid #a5f3fc;border-radius:10px;padding:10px 12px"><div style="font-size:11.5px;color:#155e75">Por pagar LTM3</div><div id="pa-emp-LTM3" style="font-size:16px;font-weight:700">$0</div></div>';
+    h+='<div style="flex:1;min-width:150px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:10px 12px"><div style="font-size:11.5px;color:#3730a3">Por pagar OT</div><div id="pa-emp-OT" style="font-size:16px;font-weight:700">$0</div></div>';
+    h+='<div style="flex:1;min-width:150px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 12px"><div style="font-size:11.5px;color:#9a3412">Sin asignar</div><div id="pa-emp-SN" style="font-size:16px;font-weight:700">$0</div></div>';
+    h+='</div>';
+    h+='<div style="font-size:11.5px;color:#888;margin-top:10px">Este es el detalle de la cartera con proveedores. El vencido crítico (+90 días) es la presión inmediata sobre la caja del Flujo. Etiqueta cada proveedor a LTM3 u OT para relacionarlo con el flujo de cada compañía.</div>';
+    h+='</div>';
+    mc.innerHTML=h;
+    window._paTotals();
+  };
+})();
+ await window.renderProvAging(); break;
     case 'proveedores-list': await renderList('proveedores','🏭 Proveedores','proveedores-form',['nombre','nit','acuerdo_pago','contacto','activo'],['Proveedor','NIT','Acuerdo de pago','Contacto','Activo']); break;
     case 'proveedores-form': renderGenForm('proveedores','🏭 Proveedor',[{id:'nombre',label:'Proveedor',type:'text',req:true},{id:'nit',label:'NIT',type:'text'},{id:'acuerdo_pago',label:'Acuerdo de pago (dias / condiciones)',type:'text'},{id:'contacto',label:'Contacto',type:'text'}]); break;
     case 'facturas-list': await renderFacturasList(); break;
