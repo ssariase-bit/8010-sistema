@@ -2769,7 +2769,7 @@ function calcKpisDia(registrosHoy, relevoMap){
   const getRec = (a) => byApto[a];
   const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
   const FUERA = ['Bloqueado','Mantenimiento'];
-  const EN_CASA = ['Ocupado','Completo','Sale de viaje']; // ocupado real, sin CKI/CKO (esos tienen su propio contador)
+  const EN_CASA = ['Ocupado','Completo','Sale de viaje','Check-out hoy']; // ocupado real, sin CKI/CKO (esos tienen su propio contador)
   const calc = (lista) => {
     let ocu=0, disp=0, enCasa=0; const tar=[];
     lista.forEach(a=>{
