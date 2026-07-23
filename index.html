@@ -1487,7 +1487,7 @@ const MENU_COMPLETO = [
   { id: 'por-pagar-list', icon: '💸', label: 'Por Pagar (CxP)' },
   { id: 'proveedores-list', icon: '🏭', label: 'Proveedores' },
   { id: 'flujo-caja-list', icon: '📅', label: 'Flujo de Caja' },
-  { id: 'flujo-semanal-list', icon: '📆', label: 'Flujo Semanal' }, { id: 'recaudo-list', icon: '💰', label: 'Recaudo x Cliente' }, { id: 'flujo-mes-list', icon: '📅', label: 'Flujo de Caja Mes' }, { id: 'proveedores-aging-list', icon: '🏢', label: 'Proveedores x Pagar' }, { id: 'sala-juntas-list', icon: '🏛️', label: 'Sala de Juntas' },
+  { id: 'flujo-semanal-list', icon: '📆', label: 'Flujo Semanal' }, { id: 'recaudo-list', icon: '💰', label: 'Recaudo x Cliente' }, { id: 'flujo-mes-list', icon: '📅', label: 'Flujo de Caja Mes' }, { id: 'proveedores-aging-list', icon: '🏢', label: 'Proveedores x Pagar' }, { id: 'sala-juntas-list', icon: '🏛️', label: 'Sala de Juntas' }, { id: 'reposicion-list', icon: '📦', label: 'Reposición Aptos' },
   { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
   { id: 'check-carpetas-list', icon: '📂', label: 'Check Carpetas' },
     { id: 'rotulos', icon: '🏷️', label: 'Rótulos de Carpetas' },
@@ -2344,6 +2344,68 @@ window.renderFlujoSemanal=async function(){
   };
 })();
  await window.renderSalaJuntas(); break;
+ case 'reposicion-list': 
+(function(){
+  var _ed=function(){return (typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO?EDIFICIO_ACTIVO:'kubik');};
+  var _fmt=function(n){return (window._fsFmt?window._fsFmt(n):Math.round(+n||0).toLocaleString('es-CO'));};
+  var _esc=function(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  var _uid=function(){return 'rp'+Math.floor(Math.random()*1e9).toString(36)+(''+(new Date().getTime())).slice(-5);};
+
+  window._rpKey=function(ed){return 'reposicion_'+ed;};
+  window._rpLoad=async function(ed){
+    try{var r=await sb.from('config').select('valor').eq('id',window._rpKey(ed)).maybeSingle();if(r.data&&r.data.valor){var o=JSON.parse(r.data.valor);return (o&&o.items)?o.items:[];}}catch(e){}
+    return [];
+  };
+  window._rpSave=function(){clearTimeout(window._rpT);window._rpT=setTimeout(function(){try{var st=window._rpSt;sb.from('config').upsert({id:window._rpKey(st.ed),valor:JSON.stringify({items:st.items}),updated_at:new Date().toISOString()});}catch(e){}},500);};
+  window._rpFind=function(id){var st=window._rpSt;if(!st)return null;for(var i=0;i<st.items.length;i++)if(st.items[i].id===id)return st.items[i];return null;};
+  window._rpSet=function(id,campo,val){var it=window._rpFind(id);if(!it)return;it[campo]=val;window._rpSave();if(campo==='cantidad')window._rpTot();};
+  window._rpAdd=function(){var st=window._rpSt;if(!st)return;st.items.push({id:_uid(),fecha:'',articulo:'',apto:'',cantidad:1,responsable:'',notas:''});window._rpSave();window.renderReposicion();};
+  window._rpDel=function(id){var st=window._rpSt;if(!st)return;for(var i=0;i<st.items.length;i++){if(st.items[i].id===id){st.items.splice(i,1);break;}}window._rpSave();window.renderReposicion();};
+  window._rpTot=function(){
+    var st=window._rpSt;if(!st)return;var u=0;st.items.forEach(function(x){u+=(+x.cantidad||0);});
+    var e1=document.getElementById('rp-u');if(e1)e1.textContent=u;
+    var e2=document.getElementById('rp-c');if(e2)e2.textContent=st.items.length;
+  };
+
+  window.renderReposicion=async function(){
+    var mc=document.getElementById('main-content');if(!mc)return;
+    var ed=_ed();
+    mc.innerHTML='<div style="padding:20px;color:#666">Cargando…</div>';
+    var items;
+    try{items=await window._rpLoad(ed);}catch(e){mc.innerHTML='<div style="padding:20px;color:#b00">Error: '+_esc(e.message)+'</div>';return;}
+    items.sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
+    window._rpSt={ed:ed,items:items};
+    var h='';
+    h+='<div style="padding:16px 18px;max-width:1120px;margin:0 auto">';
+    h+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px"><h2 style="margin:0;font-size:20px">📦 Reposición para Aptos</h2>';
+    h+='<button onclick="window._rpAdd()" style="margin-left:auto;background:#0f766e;color:#fff;border:0;border-radius:7px;padding:7px 14px;font-size:13px;cursor:pointer">➕ Registrar salida</button></div>';
+    h+='<div style="font-size:12px;color:#666;margin-bottom:12px">Edificio <b>'+_esc(ed)+'</b> · '+items.length+' registros · electrodomésticos y objetos que salen de reposición hacia los apartamentos</div>';
+    if(!items.length)h+='<div style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:10px">Aún no hay registros. Usa <b>➕ Registrar salida</b> cada vez que se saque un electrodoméstico u objeto para un apartamento.</div>';
+    h+='<div style="overflow:auto;border:1px solid #e5e7eb;border-radius:10px">';
+    h+='<table style="border-collapse:collapse;width:100%;font-size:12.5px;min-width:880px">';
+    h+='<thead><tr style="background:#f1f5f9"><th style="padding:8px 8px;text-align:left">Fecha</th><th style="padding:8px 8px;text-align:left;min-width:200px">Artículo / electrodoméstico</th><th style="padding:8px 8px">Apto destino</th><th style="padding:8px 6px;text-align:right">Cant.</th><th style="padding:8px 8px;text-align:left;min-width:150px">Responsable</th><th style="padding:8px 8px;text-align:left;min-width:170px">Notas</th><th></th></tr></thead><tbody>';
+    items.forEach(function(x){
+      h+='<tr style="border-top:1px solid #eee">';
+      h+='<td style="padding:4px 8px"><input type="date" value="'+_esc(x.fecha)+'" onchange="window._rpSet(\''+x.id+'\',\'fecha\',this.value)" style="border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:12px"></td>';
+      h+='<td style="padding:4px 8px"><input value="'+_esc(x.articulo)+'" oninput="window._rpSet(\''+x.id+'\',\'articulo\',this.value)" placeholder="Ej: Nevera, TV, licuadora…" style="width:200px;border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:12px"></td>';
+      h+='<td style="padding:4px 8px;text-align:center"><input value="'+_esc(x.apto)+'" oninput="window._rpSet(\''+x.id+'\',\'apto\',this.value)" placeholder="Apto" style="width:80px;text-align:center;border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:12px"></td>';
+      h+='<td style="padding:4px 6px;text-align:right"><input value="'+_esc(x.cantidad)+'" onfocus="this.select()" onchange="window._rpSet(\''+x.id+'\',\'cantidad\',(+this.value.replace(/[^0-9]/g,\'\')||0)); window._rpTot();" style="width:56px;text-align:right;border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:12px"></td>';
+      h+='<td style="padding:4px 8px"><input value="'+_esc(x.responsable)+'" oninput="window._rpSet(\''+x.id+'\',\'responsable\',this.value)" placeholder="Quién lo sacó" style="width:150px;border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:12px"></td>';
+      h+='<td style="padding:4px 8px"><input value="'+_esc(x.notas)+'" oninput="window._rpSet(\''+x.id+'\',\'notas\',this.value)" placeholder="Notas…" style="width:170px;border:1px solid #eee;border-radius:5px;padding:4px 6px;font-size:12px"></td>';
+      h+='<td style="padding:4px 6px"><button onclick="window._rpDel(\''+x.id+'\')" title="Eliminar" style="border:0;background:none;color:#cbd5e1;cursor:pointer;font-size:15px">✕</button></td></tr>';
+    });
+    h+='</tbody></table></div>';
+    h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">';
+    h+='<div style="flex:1;min-width:150px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px"><div style="font-size:11.5px;color:#1e40af">Unidades sacadas</div><div id="rp-u" style="font-size:18px;font-weight:700;color:#1d4ed8">0</div></div>';
+    h+='<div style="flex:1;min-width:130px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px"><div style="font-size:11.5px;color:#475569">Registros</div><div id="rp-c" style="font-size:16px;font-weight:700">0</div></div>';
+    h+='</div>';
+    h+='<div style="font-size:11.5px;color:#888;margin-top:10px">Registro de electrodomésticos y objetos que salen de reposición hacia los apartamentos. Se guarda automáticamente.</div>';
+    h+='</div>';
+    mc.innerHTML=h;
+    window._rpTot();
+  };
+})();
+ await window.renderReposicion(); break;
     case 'proveedores-list': await renderList('proveedores','🏭 Proveedores','proveedores-form',['nombre','nit','acuerdo_pago','contacto','activo'],['Proveedor','NIT','Acuerdo de pago','Contacto','Activo']); break;
     case 'proveedores-form': renderGenForm('proveedores','🏭 Proveedor',[{id:'nombre',label:'Proveedor',type:'text',req:true},{id:'nit',label:'NIT',type:'text'},{id:'acuerdo_pago',label:'Acuerdo de pago (dias / condiciones)',type:'text'},{id:'contacto',label:'Contacto',type:'text'}]); break;
     case 'facturas-list': await renderFacturasList(); break;
