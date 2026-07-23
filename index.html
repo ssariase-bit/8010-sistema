@@ -10412,6 +10412,42 @@ window._comTogglePub = function(){
   if(a) a.textContent=abrir?'▴ cerrar':'▾ abrir';
   if(abrir){ var t=document.getElementById('com-msg'); if(t) setTimeout(function(){t.focus();},40); }
 };
+window._comEditar = async function(id){
+  try{
+    var r = await sb.from('comunicaciones').select('*').eq('id',id).single();
+    if(r.error||!r.data){ alert('No se pudo cargar el comunicado.'); return; }
+    var c = r.data;
+    var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+    var tipos = (window._COM_TIPOS||['Comunicado']);
+    var old=document.getElementById('com-edit-ov'); if(old) old.remove();
+    var ov=document.createElement('div'); ov.id='com-edit-ov';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:28px 12px';
+    var opts=tipos.map(function(t){return '<option'+(t===c.prioridad?' selected':'')+'>'+esc(t)+'</option>';}).join('');
+    ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:620px;width:100%;padding:18px 20px;box-shadow:0 12px 44px rgba(0,0,0,.32)">'
+      +'<div style="font-size:16px;font-weight:700;margin-bottom:12px">✏️ Editar comunicado</div>'
+      +'<div class="form-group"><label>Título</label><input id="ce-tit" value="'+esc(c.titulo||'')+'" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box"></div>'
+      +'<div class="form-group"><label>Mensaje</label><textarea id="ce-msg" spellcheck="true" lang="es" style="width:100%;min-height:120px;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box">'+esc(c.mensaje||'')+'</textarea></div>'
+      +'<div class="form-group"><label>Tipo</label><select id="ce-prio" style="max-width:280px;padding:7px;border:1px solid #ddd;border-radius:8px">'+opts+'</select></div>'
+      +'<div class="form-group"><label>Dirigido a</label><input id="ce-dir" value="'+esc(c.dirigido_a||'')+'" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box"></div>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-outline" onclick="var o=document.getElementById(\'com-edit-ov\');if(o)o.remove();">Cancelar</button><button class="btn btn-success" onclick="window._comGuardarEdicion(\''+id+'\')">💾 Guardar cambios</button></div>'
+      +'</div>';
+    ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
+    document.body.appendChild(ov);
+    var t=document.getElementById('ce-msg'); if(t){ t.focus(); }
+  }catch(e){ alert('Error: '+e.message); }
+};
+window._comGuardarEdicion = async function(id){
+  var tit=document.getElementById('ce-tit'), msg=document.getElementById('ce-msg'), prio=document.getElementById('ce-prio'), dir=document.getElementById('ce-dir');
+  if(!msg||!msg.value.trim()){ alert('El mensaje no puede quedar vacío.'); return; }
+  try{
+    var upd={ titulo:(tit&&tit.value.trim()?tit.value.trim():null), mensaje:msg.value.trim(), prioridad:(prio?prio.value:null), dirigido_a:(dir&&dir.value.trim()?dir.value.trim():null) };
+    var r=await sb.from('comunicaciones').update(upd).eq('id',id);
+    if(r.error){ alert('No se pudo guardar: '+r.error.message); return; }
+    var ov=document.getElementById('com-edit-ov'); if(ov) ov.remove();
+    if(typeof renderComunicaciones==='function') renderComunicaciones(window._comFiltro||'activas');
+  }catch(e){ alert('Error: '+e.message); }
+};
+
 window.renderComunicaciones = async function(filtro){
   // Sol Santiago: el numerito rojo cuenta los comunicados sin leer dirigidos a mí, pero al entrar se
   // veía la lista completa. Si hay pendientes y no se pidió otro filtro, se abre directo en "Mis
@@ -10441,10 +10477,11 @@ window.renderComunicaciones = async function(filtro){
     var leidosTxt = leidos.length ? '<div style="font-size:11px;color:#555;margin-top:6px">✅ Leído por ('+leidos.length+'): '+leidos.map(function(l){return esc(l.nombre)+' <span style="color:#999">'+fmt(l.at)+'</span>';}).join(' · ')+'</div>' : '<div style="font-size:11px;color:#b45309;margin-top:6px">Aún nadie ha marcado leído.</div>';
     var respHtml = resp.length ? resp.map(function(r){ return '<div style="border-left:3px solid #94a3b8;padding:5px 10px;margin:6px 0;background:#f8fafc;border-radius:0 6px 6px 0"><div style="font-size:11px;color:#666"><strong>'+esc(r.autor||'-')+'</strong> · '+fmt(r.at)+'</div><div style="font-size:12.5px;margin-top:2px;white-space:pre-wrap">'+esc(r.texto||'')+'</div></div>'; }).join('') : '<div style="color:#999;font-size:11.5px;margin:4px 0">Sin respuestas todavía.</div>';
     var delBtn = (puede || c.autor===yo) ? '<span title="Archivar" style="cursor:pointer;color:#9a4a40;font-size:13px;margin-left:8px" onclick="archivarComunicacion(\''+c.id+'\')">🗑️</span>' : '';
+    var editBtn = (puede || c.autor===yo) ? '<span title="Editar" style="cursor:pointer;color:#1D3461;font-size:13px;margin-left:8px" onclick="window._comEditar(\''+c.id+'\')">✏️</span>' : '';
     return '<div style="border:1px solid #e2e4e8;border-left:4px solid '+ts.bd+';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
       + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+prioBadge+' '+_chipPersona(c.autor||'')+' <span style="font-size:11px;color:#666">· '+fmt(c.created_at)+' · Para: <strong>'+esc(c.dirigido_a||'Todos')+'</strong></span></div>'
-      + '<div style="display:flex;gap:4px;align-items:center">'+readBtn+delBtn+'</div></div>'
+      + '<div style="display:flex;gap:4px;align-items:center">'+readBtn+editBtn+delBtn+'</div></div>'
       + (c.titulo?'<div style="font-weight:700;margin-top:6px">'+esc(c.titulo)+'</div>':'')
       + '<div style="font-size:14px;margin-top:6px;white-space:pre-wrap;line-height:1.5">'+esc(c.mensaje)+'</div>'
       + (c.adjunto?('<div style="margin-top:8px"><a href="'+esc(c.adjunto)+'" target="_blank" rel="noopener" style="display:inline-block;background:#EEF2FF;color:#1D3461;font-weight:600;font-size:12px;padding:5px 12px;border-radius:8px;text-decoration:none">📎 Ver / descargar archivo</a></div>'):'')
