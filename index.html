@@ -1139,6 +1139,7 @@ const NAV_ITEMS = {
     { section: 'Financiero / Admin' },
     { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
     { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
+    { id: 'fact-devengado', icon: '⚖️', label: 'Facturado vs Devengado' },
     { id: 'ventas-ppto', icon: '🎯', label: 'Ventas vs Presupuesto' },
     { id: 'finanzas', icon: '📊', label: 'Estado de Resultados' },
     { id: 'nomina', icon: '💼', label: 'Nómina' },
@@ -1291,6 +1292,7 @@ const NAV_ITEMS = {
     { section: 'Financiero' },
     { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
     { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
+    { id: 'fact-devengado', icon: '⚖️', label: 'Facturado vs Devengado' },
     { id: 'ventas-ppto', icon: '🎯', label: 'Ventas vs Presupuesto' },
     { id: 'finanzas', icon: '📊', label: 'Estado de Resultados' },
     { id: 'nomina', icon: '💼', label: 'Nómina' },
@@ -1459,6 +1461,7 @@ const MENU_COMPLETO = [
   { section: 'Financiero / Admin' },
   { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
     { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
+    { id: 'fact-devengado', icon: '⚖️', label: 'Facturado vs Devengado' },
     ...(EDIFICIO_ACTIVO==='8010' ? [
       { id: 'ventas-ppto', icon: '🎯', label: 'Ventas vs Presupuesto' },
       { id: 'finanzas', icon: '📊', label: 'Estado de Resultados' },
@@ -2771,6 +2774,7 @@ window.renderFlujoSemanal=async function(){
     case 'estado-huespedes': await renderEstadoHuespedes(); break;
     case 'ingresos': await renderIngresos(); break;
     case 'resumen-ventas': await renderResumenVentas(); break;
+        case 'fact-devengado': await renderFactDevengado(); break;
     case 'ventas-ppto': await renderVentasPpto(); break;
     case 'finanzas': await renderFinanzas(); break;
     case 'financiero-kl': await renderFinanzasKL(); break;
@@ -13754,6 +13758,138 @@ function _alojaDe(rk){
   });
   return {aloja:aloja, noches:noches, ent:ent};
 }
+window.renderFactDevengado = async function(){
+  var mc=document.getElementById('main-content'); if(!mc) return;
+  if(!(window._puedeConfidencial&&window._puedeConfidencial())){
+    mc.innerHTML='<div class="page-title">⚖️ Facturado vs Devengado</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Módulo confidencial. Solo usuarios autorizados.</p></div>';
+    return;
+  }
+  var ed=(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO)?EDIFICIO_ACTIVO:'8010';
+  var mesSel=window._fdvMes||((typeof TODAY!=='undefined'?TODAY:new Date().toISOString()).slice(0,7));
+  window._fdvMes=mesSel;
+  var P=mesSel.split('-'), Y=+P[0], Mo=+P[1];
+  var dim=new Date(Y,Mo,0).getDate();
+  var ini=mesSel+'-01', fin=mesSel+'-'+String(dim).padStart(2,'0');
+  var _MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][Mo-1];
+  var _f=function(n){return '$'+Math.round(+n||0).toLocaleString('es-CO');};
+  var _esc=function(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  mc.innerHTML='<div class="page-title">⚖️ Facturado vs Devengado — '+_MN+' '+Y+'</div><p style="color:var(--gris-t)">Cargando…</p>';
+
+  var mStart=Date.UTC(Y,Mo-1,1), mEnd=Date.UTC(Y,Mo,1), DAY=86400000;
+  var parse=function(s){ if(!s) return null; s=String(s).trim();
+    var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return Date.UTC(+m[1],+m[2]-1,+m[3]);
+    m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(m) return Date.UTC(+m[3],+m[2]-1,+m[1]); return null; };
+  var norm=function(s){return (s==null?'':String(s)).trim().toUpperCase();};
+  var digits=function(s){var m=String(s==null?'':s).match(/\d+/);return m?m[0]:'';};
+  var nameKey=function(nm,ap){return norm(nm).replace(/[^A-Z]/g,'').slice(0,10)+'|'+norm(ap);};
+
+  var facts, resv, cfg;
+  try{
+    var fR=await sb.from('facturas').select('id,numero,fecha,total,tipo,perfil,apto,cliente,num_reserva').eq('edificio',ed).gte('fecha',ini).lte('fecha',fin);
+    if(fR.error) throw fR.error;
+    facts=fR.data||[];
+    var rR=await sb.from('reservas').select('numero,num_reserva,apto,nombre,checkin,checkout,noches').eq('edificio',ed);
+    resv=rR.data||[];
+    var cR=await sb.from('config').select('valor').eq('id','puente_rev_'+ed+'_'+mesSel).maybeSingle();
+    cfg=(cR.data&&cR.data.valor)?JSON.parse(cR.data.valor):{byId:{}};
+    if(!cfg.byId) cfg.byId={};
+  }catch(e){ mc.innerHTML='<div class="page-title">⚖️ Facturado vs Devengado</div><div class="card"><p style="color:#b00">Error: '+_esc(e.message)+'</p></div>'; return; }
+
+  // reserva indexes
+  var byNR={}, byNRdig={}, byNumDig={}, byName={};
+  resv.forEach(function(r){
+    if(r.num_reserva!=null){ byNR[norm(r.num_reserva)]=r; var d=digits(r.num_reserva); if(d&&!byNRdig[d]) byNRdig[d]=r; }
+    if(r.numero!=null){ var d2=digits(r.numero); if(d2&&!byNumDig[d2]) byNumDig[d2]=r; }
+    if(r.nombre&&r.apto){ var k=nameKey(r.nombre,r.apto); if(!byName[k]) byName[k]=r; }
+  });
+  var findR=function(f){ var nr=f.num_reserva, r;
+    r=byNR[norm(nr)]; if(r) return r;
+    var d=digits(nr); if(d){ r=byNRdig[d]; if(r) return r; r=byNumDig[d]; if(r) return r; }
+    r=byName[nameKey(f.cliente,f.apto)]; if(r) return r; return null; };
+
+  var rows=[], tFact=0, tDev=0, tOtros=0, tSin=0, nSin=0;
+  facts.forEach(function(f){
+    var T=+f.total||0; tFact+=T;
+    var r=findR(f);
+    var ci=r?parse(r.checkin):null, co=r?parse(r.checkout):null;
+    var estado, totN=null, mesN=null, dev=null, otros=null;
+    if(r&&ci&&co&&co>ci){
+      totN=Math.round((co-ci)/DAY);
+      mesN=Math.max(0,(Math.min(co,mEnd)-Math.max(ci,mStart))/DAY);
+      mesN=Math.round(mesN);
+      dev=T*(mesN/totN); otros=T-dev;
+      estado='enlazada'; tDev+=dev; tOtros+=otros;
+    } else { estado='sin-enlace'; tSin+=T; nSin++; }
+    rows.push({f:f, T:T, r:r, estado:estado, totN:totN, mesN:mesN, dev:dev, otros:otros});
+  });
+  rows.sort(function(a,b){ if(a.estado!==b.estado) return a.estado==='sin-enlace'?-1:1; return b.T-a.T; });
+
+  window._fdvSt={ed:ed, mes:mesSel, cfg:cfg};
+
+  var h='';
+  h+='<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px">';
+  h+='<div class="page-title" style="margin-bottom:0">⚖️ Facturado vs Devengado — '+_MN+' '+Y+'</div>';
+  h+='<input type="month" value="'+mesSel+'" onchange="window._fdvMes=this.value;window.renderFactDevengado()" style="padding:7px;border:1px solid #ccc;border-radius:6px;font-size:13px">';
+  h+='<span style="font-size:12px;color:#666">Edificio <b>'+_esc(ed)+'</b></span></div>';
+  h+='<div style="font-size:12.5px;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;margin-bottom:14px">La <b>facturación</b> registra el total de cada factura emitida en el mes (puede incluir la estadía completa de una reserva que cruza meses). El <b>devengado</b> prorratea ese total por las <b>noches consumidas dentro del mes</b> — la misma base del módulo Resumen de Ventas. Las diferencias son normales; lo accionable es la columna <b>Sin enlace</b>.</div>';
+
+  // cards
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
+  h+='<div style="flex:1;min-width:170px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:11px 13px"><div style="font-size:11.5px;color:#1e40af">Facturado del mes</div><div style="font-size:18px;font-weight:700;color:#1d4ed8">'+_f(tFact)+'</div><div style="font-size:11px;color:#64748b">'+facts.length+' facturas</div></div>';
+  h+='<div style="flex:1;min-width:170px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:11px 13px"><div style="font-size:11.5px;color:#065f46">Devengado del mes (enlazado)</div><div style="font-size:18px;font-weight:700;color:#047857">'+_f(tDev)+'</div></div>';
+  h+='<div style="flex:1;min-width:170px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:11px 13px"><div style="font-size:11.5px;color:#92400e">Diferido a otros meses</div><div style="font-size:18px;font-weight:700;color:#b45309">'+_f(tOtros)+'</div></div>';
+  h+='<div style="flex:1;min-width:170px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:11px 13px"><div style="font-size:11.5px;color:#991b1b">Sin enlace · revisar</div><div style="font-size:18px;font-weight:700;color:#dc2626">'+_f(tSin)+'</div><div style="font-size:11px;color:#64748b">'+nSin+' facturas</div></div>';
+  h+='</div>';
+
+  h+='<div style="overflow:auto;border:1px solid #e5e7eb;border-radius:10px">';
+  h+='<table style="border-collapse:collapse;width:100%;font-size:12px;min-width:1040px">';
+  h+='<thead><tr style="background:#f1f5f9">'
+    +'<th style="padding:7px 8px;text-align:left">N°</th>'
+    +'<th style="padding:7px 8px;text-align:left;min-width:170px">Cliente</th>'
+    +'<th style="padding:7px 6px">Apto</th>'
+    +'<th style="padding:7px 6px">Perfil</th>'
+    +'<th style="padding:7px 8px;text-align:right">Total facturado</th>'
+    +'<th style="padding:7px 6px;text-align:right">Noch. tot</th>'
+    +'<th style="padding:7px 6px;text-align:right">Noch. mes</th>'
+    +'<th style="padding:7px 8px;text-align:right">Devengado mes</th>'
+    +'<th style="padding:7px 8px;text-align:right">Otros meses</th>'
+    +'<th style="padding:7px 6px">Estado</th>'
+    +'<th style="padding:7px 6px">Rev.</th>'
+    +'<th style="padding:7px 8px;text-align:left;min-width:150px">Nota de revisión</th></tr></thead><tbody>';
+  rows.forEach(function(o){
+    var f=o.f, sin=(o.estado==='sin-enlace');
+    var rv=(cfg.byId[f.id]||{});
+    var bg=sin?'background:#fff7f7;':'';
+    h+='<tr style="border-top:1px solid #eee;'+bg+'">';
+    h+='<td style="padding:4px 8px;white-space:nowrap">'+_esc(f.numero||'—')+'</td>';
+    h+='<td style="padding:4px 8px">'+_esc(f.cliente||'—')+'</td>';
+    h+='<td style="padding:4px 6px;text-align:center">'+_esc(f.apto||'—')+'</td>';
+    h+='<td style="padding:4px 6px;text-align:center;font-size:11px">'+_esc(f.perfil||'')+'</td>';
+    h+='<td style="padding:4px 8px;text-align:right;white-space:nowrap">'+_f(o.T)+'</td>';
+    h+='<td style="padding:4px 6px;text-align:right">'+(o.totN==null?'—':o.totN)+'</td>';
+    h+='<td style="padding:4px 6px;text-align:right">'+(o.mesN==null?'—':o.mesN)+'</td>';
+    h+='<td style="padding:4px 8px;text-align:right;white-space:nowrap;color:#047857">'+(o.dev==null?'—':_f(o.dev))+'</td>';
+    h+='<td style="padding:4px 8px;text-align:right;white-space:nowrap;color:#b45309">'+(o.otros==null?'—':_f(o.otros))+'</td>';
+    h+='<td style="padding:4px 6px;text-align:center">'+(sin?'<span style="color:#dc2626;font-weight:600;font-size:11px">Sin enlace</span>':'<span style="color:#16a34a;font-size:11px">Enlazada</span>')+'</td>';
+    h+='<td style="padding:4px 6px;text-align:center"><input type="checkbox" '+(rv.rev?'checked':'')+' onchange="window._fdvSet(\''+f.id+'\',\'rev\',this.checked)"></td>';
+    h+='<td style="padding:4px 8px"><input value="'+_esc(rv.nota||'')+'" oninput="window._fdvSet(\''+f.id+'\',\'nota\',this.value)" placeholder="Período / clasificación…" style="width:150px;border:1px solid #ddd;border-radius:5px;padding:3px 6px;font-size:11.5px"></td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div style="font-size:11.5px;color:#888;margin-top:10px">Enlace factura↔reserva por número de reserva y por apto+huésped. Las <b>Sin enlace</b> (arriendos LTM3, alojamiento corporativo, eventos o reservas no vinculadas) requieren que Administración/Auditoría confirmen el período. Marcar <b>Rev.</b> y anotar el período; se guarda automáticamente.</div>';
+  mc.innerHTML=h;
+
+  window._fdvSet=function(id,campo,val){
+    var st=window._fdvSt; if(!st) return;
+    if(!st.cfg.byId[id]) st.cfg.byId[id]={};
+    st.cfg.byId[id][campo]=val;
+    clearTimeout(window._fdvT);
+    window._fdvT=setTimeout(function(){
+      try{ sb.from('config').upsert({id:'puente_rev_'+st.ed+'_'+st.mes, valor:JSON.stringify({byId:st.cfg.byId}), updated_at:new Date().toISOString()}); }catch(e){}
+    },500);
+  };
+};
+
 async function renderResumenVentas(){
   var _rolOK = currentProfile && (currentProfile.rol==='gerente_general'||currentProfile.rol==='asesora');
   if(!_rolOK){ document.getElementById('main-content').innerHTML='<div class="page-title">💵 Resumen de Ventas</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Solo gerencia.</p></div>'; return; }
