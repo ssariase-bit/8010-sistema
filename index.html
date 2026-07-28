@@ -3029,13 +3029,15 @@ async function renderIndicadores(){
   const OCU = ['Ocupado','Check-in hoy','Completo','Sale de viaje'];
   main.innerHTML = '<div class="page-title">📊 Indicadores de Ocupación y Ventas</div><p style="color:var(--gris-t)">Cargando datos del rack…</p>';
   const [curR, prevR] = await Promise.all([
-    _rackRango('estado,tarifa,fecha', yr+'-01-01', yr+'-12-31'),
-    _rackRango('estado,tarifa,fecha', (yr-1)+'-01-01', (yr-1)+'-12-31')
+    _rackRango('estado,tarifa,fecha,apto', yr+'-01-01', yr+'-12-31'),
+    _rackRango('estado,tarifa,fecha,apto', (yr-1)+'-01-01', (yr-1)+'-12-31')
   ]);
+  const _vendSet = new Set(vendibles);
   function agg(rows){
     const m = Array.from({length:12}, ()=>({noches:0,nTar:0,ventas:0}));
     const FUERA=['Libre','Bloqueado','Mantenimiento'];
     (rows||[]).forEach(r=>{
+      if(!_vendSet.has(r.apto)) return;
       const mi = parseInt(String(r.fecha).slice(5,7),10)-1;
       if(isNaN(mi)||mi<0||mi>11) return;
       const t=Number(r.tarifa)||0;
@@ -15823,6 +15825,7 @@ async function ckiAutollenar(){
       }
     }catch(e){}
     if(!((document.getElementById('cki-tarifa')||{}).value)){ if(d.moneda==='USD' && d.tarifa_usd) set('cki-tarifa', d.tarifa_usd); else if(d.tarifa) set('cki-tarifa', d.tarifa); }
+    try{ var _ckiU=document.getElementById('cki-unidad'); if(_ckiU){ _ckiU.value=(String(d.tipo_tarifa)==='TxD')?'Días':'Noches'; } }catch(e){}
     if(typeof calcCKI==='function') calcCKI();
     var _cortMsg=(window._ckiNochesPagas!=null && window._ckiNochesTotal!=null && window._ckiNochesTotal>window._ckiNochesPagas)?(' · ☕ '+(window._ckiNochesTotal-window._ckiNochesPagas)+' noche(s) de cortesía'):'';
     if(typeof showToast==='function') showToast('📋 Datos traídos de la reserva: '+(d.huesped||partes.nombre||apto)+_cortMsg,'success');
