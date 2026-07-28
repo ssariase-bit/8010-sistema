@@ -4387,9 +4387,9 @@ async function _linkCkiReserva(estado){
     if(!_rid) return;
     var _quien = (currentProfile && currentProfile.nombre) || (currentUser && currentUser.email) || '';
     if(estado==='Ocupado' || estado==='Completo'){
-      await sb.from('reservas').update({ cki_at: new Date().toISOString(), cki_por: _quien }).eq('id', _rid).is('cki_at', null);
+      await sb.from('reservas').update({ cki_at: new Date().toISOString(), cki_por: _quien }).eq('id', _rid).is('cki_at', null).or('checkin.is.null,checkin.lte.'+TODAY);
     } else if(estado==='Check-out hoy'){
-      await sb.from('reservas').update({ cko_at: new Date().toISOString(), cko_por: _quien }).eq('id', _rid).is('cko_at', null);
+      await sb.from('reservas').update({ cko_at: new Date().toISOString(), cko_por: _quien }).eq('id', _rid).is('cko_at', null).or('checkout.is.null,checkout.lte.'+TODAY);
     }
   }catch(_e){}
 }
