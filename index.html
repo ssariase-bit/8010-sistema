@@ -6979,7 +6979,7 @@ function generarConfirmacion(r) {
 <title>Confirmación Reserva ${r.numero}/${new Date().getFullYear().toString().slice(-2)} — ${r.nombre}</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: 'Arial', sans-serif; font-size: 12px; color: #333; background: white; }
+  body { font-family: 'Arial', sans-serif; font-size: 12px; color: #333; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .page { width: 21cm; min-height: 29.7cm; margin: 0 auto; padding: 2cm 2.5cm; }
   h1 { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 24px; letter-spacing: 2px; }
   .fecha { margin-bottom: 20px; font-size: 12px; }
