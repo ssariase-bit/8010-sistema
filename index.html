@@ -3544,6 +3544,8 @@ async function renderRack() {
   // cuyas tarifas venían corruptas (valores tipo $165/$340) y hacían que las ventas RESTARAN.
   try { window._rackRelevoMap = window._rkBuildRelevoMap((allRack||[]).filter(function(r){return r.edificio===EDIFICIO_ACTIVO;})); }
   catch (_e) { console.error('rack relevos map:', _e); window._rackRelevoMap = {}; }
+  // Respaldo visual de relevos desde reservas: el CKI se ve aunque la reserva entrante aun no este aplicada al rack. NO afecta ventas (ventas usa solo _rackRelevoMap del rack).
+  try { var _ldRel=new Date(year,month+1,0).getDate(); var _desdeM=year+'-'+String(month+1).padStart(2,'0')+'-01'; var _hastaM=year+'-'+String(month+1).padStart(2,'0')+'-'+String(_ldRel).padStart(2,'0'); var _rvRel=await sb.from('reservas').select('id,apto,nombre,checkin,checkout,tarifa').eq('edificio',EDIFICIO_ACTIVO).lte('checkin',_hastaM).gte('checkout',_desdeM); window._rackRelevoVisual=window._rkBuildRelevoMap((_rvRel.data||[])); } catch(_e2){ window._rackRelevoVisual={}; }
 
   const _noEntr = EB().noEntregados || [];
   let aptos = [...new Set([...EB().aptosFull, ...(allRack||[]).map(r => r.apto)])].filter(a => _noEntr.indexOf(a) < 0).sort((a,b) => {
@@ -3764,7 +3766,7 @@ async function renderRack() {
       let _ckSuf = '', _ckBadge = '', _ckLinea2 = apellido;
       if (_ckiHecho){ _ckSuf = ` · ✅ CKI ${_hhmm(_ckR.cki_at)}${_ckR.cki_por?(' por '+_ckR.cki_por):''}`; _ckBadge = '<span style="position:absolute;top:0;right:0;background:#1E7E34;color:#fff;font-size:7px;line-height:1;padding:1px 2px;border-radius:0 0 0 4px;font-weight:700">✓</span>'; _ckLinea2 = '🟢 '+_hhmm(_ckR.cki_at); }
       if (_ckoHecho){ _ckSuf = ` · ✅ CKO ${_hhmm(_ckR.cko_at)}${_ckR.cko_por?(' por '+_ckR.cko_por):''}`; _ckBadge = '<span style="position:absolute;top:0;right:0;background:#C2410C;color:#fff;font-size:7px;line-height:1;padding:1px 2px;border-radius:0 0 0 4px;font-weight:700">✓</span>'; _ckLinea2 = '🔴 '+_hhmm(_ckR.cko_at); }
-      const _rkRel = window._rackRelevoMap ? window._rackRelevoMap[apto+'|'+_fechaCelda] : null;
+      const _rkRel = (window._rackRelevoMap && window._rackRelevoMap[apto+'|'+_fechaCelda]) || (window._rackRelevoVisual && window._rackRelevoVisual[apto+'|'+_fechaCelda]) || null;
       if (_rkRel){
         const _apeS=(_rkRel.nombreSale||'').split(' ').slice(-1)[0].substring(0,6);
         const _apeE=(_rkRel.nombreEntra||'').split(' ').slice(-1)[0].substring(0,6);
