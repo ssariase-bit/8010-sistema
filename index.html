@@ -3066,10 +3066,11 @@ async function renderIndicadores(){
     const ocu=disp?Math.round(o.noches/disp*100):0;
     const revpar=disp?Math.round(o.ventas/disp):0;
     const despN=disp?Math.max(0,disp-o.noches):0;
-    totN+=o.noches; totDisp+=disp; totVen+=o.ventas; totTar+=o.nTar;
+    if((yr<new Date().getFullYear())||(yr===new Date().getFullYear()&&i<=new Date().getMonth())){ totN+=o.noches; totDisp+=disp; totVen+=o.ventas; totTar+=o.nTar;
     const S=sem[i<6?0:1]; S.n+=o.noches; S.d+=disp; S.v+=o.ventas; S.t+=o.nTar;
-    prevN+=prev[i].noches; prevVen+=prev[i].ventas; prevTar+=prev[i].nTar;
+    prevN+=prev[i].noches; prevVen+=prev[i].ventas; prevTar+=prev[i].nTar; }
     if(!_op){ filas+='<tr style="color:#c2c2c2;font-style:italic"><td style="text-align:left">'+MES[i]+'</td><td colspan="7" style="text-align:center">— no operaba —</td></tr>'; continue; }
+    if(yr===new Date().getFullYear() && i>new Date().getMonth()){ filas+='<tr style="color:#c2c2c2;font-style:italic"><td style="text-align:left">'+MES[i]+'</td><td colspan="7" style="text-align:center">— aún no transcurre —</td></tr>'; continue; }
     const vacio=(o.noches===0&&o.ventas===0);
     filas+='<tr style="'+(vacio?'color:#b9b9b9':'')+'">'
       +'<td style="font-weight:600;text-align:left">'+MES[i]+'</td>'
