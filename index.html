@@ -10917,6 +10917,8 @@ async function renderList(tabla, titulo, formView, cols, headers) {
   // Se protege con el mismo permiso de plata del flujo de caja (_cmpEsCompras: gerencia/administración/compras).
   const esCaja = tabla === 'caja';
   const _cajaPuede = esCaja && (typeof window._cmpEsCompras === 'function') && window._cmpEsCompras();
+  const esMaleta = tabla === 'maletas';
+  const _maletaPuede = esMaleta;
   const totVentas = esBaga ? rows.reduce((s,r)=>s+(Number(r.total)||0),0) : 0;
   let resumenBaga = '';
   if(esBaga){
@@ -10993,7 +10995,7 @@ async function renderList(tabla, titulo, formView, cols, headers) {
     } else {
       acciones = `<td style="white-space:nowrap">${_btnsEdit(tabla, r.id)}</td>`;
     }
-    const _chkCel = _cajaPuede ? `<td style="text-align:center"><input type="checkbox" class="caja-chk" value="${r.id}"></td>` : '';
+    const _chkCel = _cajaPuede ? `<td style="text-align:center"><input type="checkbox" class="caja-chk" value="${r.id}"></td>` : (_maletaPuede ? `<td style="text-align:center"><input type="checkbox" class="mal-chk" value="${r.id}"></td>` : '');
     return `<tr>${_chkCel}${celdas}${_lcCeldaDesayuno(r)}${acciones}</tr>`;
   }).join('');
 
@@ -11005,14 +11007,14 @@ async function renderList(tabla, titulo, formView, cols, headers) {
         <div class="card-title">${rows.length} registros${esBaga?` <span id="baga-total" style="margin-left:14px;color:var(--verde);font-weight:700">💰 Total ventas: $${fmtNum(totVentas)} <span style="font-size:11px;color:#888">(${rows.length} recibos)</span></span>`:''}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input type="text" onkeyup="buscarEnListado(this)" placeholder="${esBaga?'🔎 Buscar por apto, huésped, área...':'🔎 Buscar...'}" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">
-          ${_cajaPuede?`<button class="btn btn-outline btn-sm" onclick="_cajaCambiarEstadoSel()" title="Cambiar el estado de legalización de los recibos seleccionados" style="color:#1D3461;border-color:#1D3461">🔄 Cambiar estado de seleccionados</button>`:''}
+          ${_cajaPuede?`<button class="btn btn-outline btn-sm" onclick="_cajaCambiarEstadoSel()" title="Cambiar el estado de legalización de los recibos seleccionados" style="color:#1D3461;border-color:#1D3461">🔄 Cambiar estado de seleccionados</button>`:''}${_maletaPuede?`<button class="btn btn-outline btn-sm" onclick="_maletaCambiarEstadoSel()" title="Cambiar el estado de las maletas seleccionadas" style="color:#1D3461;border-color:#1D3461">🔄 Cambiar estado de seleccionadas</button>`:''}
           ${barraCompartir()}<button class="btn btn-success btn-sm" onclick="loadView('${formView}')">+ Nuevo registro</button>
         </div>
       </div>
       ${rows.length === 0
         ? '<div class="empty"><div class="empty-icon">📋</div><p>Sin registros todavía</p></div>'
         : `<div style="overflow-x:auto"><table class="tabla">
-            <thead><tr>${_cajaPuede?'<th style="text-align:center"><input type="checkbox" title="Seleccionar todo" onclick="_cajaChkTodos(this)"></th>':''}${headers.map(h=>`<th onclick="ordenarTabla(this)" style="cursor:pointer" title="Clic para ordenar">${h} ⇅</th>`).join('')}${tabla==='listado_cargos'?'<th style="text-align:center">Desayuno incluido</th>':''}<th></th></tr></thead>
+            <thead><tr>${_cajaPuede?'<th style="text-align:center"><input type="checkbox" title="Seleccionar todo" onclick="_cajaChkTodos(this)"></th>':''}${_maletaPuede?'<th style="text-align:center"><input type="checkbox" title="Seleccionar todo" onclick="_maletaChkTodos(this)"></th>':''}${headers.map(h=>`<th onclick="ordenarTabla(this)" style="cursor:pointer" title="Clic para ordenar">${h} ⇅</th>`).join('')}${tabla==='listado_cargos'?'<th style="text-align:center">Desayuno incluido</th>':''}<th></th></tr></thead>
             <tbody>${tableRows}</tbody>
            </table></div>`}
     </div>`;
@@ -11022,6 +11024,8 @@ async function renderList(tabla, titulo, formView, cols, headers) {
 // Permite marcar varios recibos y cambiar su estado de legalización en lote.
 // Usa únicamente los estados que ya maneja la columna estado_legal (no inventa valores).
 // Protegido con el permiso de plata del flujo de caja (_cmpEsCompras).
+window._maletaChkTodos=function(master){var on=!!(master&&master.checked);document.querySelectorAll('#main-content .mal-chk').forEach(function(c){var tr=c.closest('tr');if(tr&&tr.style.display==='none')return;c.checked=on;});};
+window._maletaCambiarEstadoSel=async function(){var sel=Array.prototype.slice.call(document.querySelectorAll('#main-content .mal-chk:checked')).map(function(c){return c.value;}).filter(function(v){return v;});if(!sel.length){showToast('Selecciona al menos una maleta','info');return;}var op=prompt('Estado para '+sel.length+' maleta(s): escribe 1 = En bodega, 2 = Entregada','2');if(op===null)return;var idx=parseInt(String(op).trim(),10);var nuevo=(idx===1)?'En bodega':(idx===2)?'Entregada':null;if(!nuevo){showToast('Opcion no valida','error');return;}if(!confirm('Cambiar '+sel.length+' maleta(s) a: '+nuevo+' ?'))return;var r=await sb.from('maletas').update({estado:nuevo}).in('id',sel).eq('edificio',EDIFICIO_ACTIVO);if(r&&r.error){showToast('Error: '+r.error.message,'error');return;}showToast(sel.length+' maleta(s) actualizadas','success');if(typeof loadView==='function')loadView('maletas-list');};
 window._cajaChkTodos = function(master){
   var on = !!(master && master.checked);
   document.querySelectorAll('#main-content .caja-chk').forEach(function(c){
