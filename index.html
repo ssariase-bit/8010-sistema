@@ -2362,22 +2362,22 @@ window.renderFlujoSemanal=async function(){
   window._rpSave=function(){clearTimeout(window._rpT);window._rpT=setTimeout(function(){try{var st=window._rpSt;sb.from('config').upsert({id:window._rpKey(st.ed),valor:JSON.stringify({items:st.items}),updated_at:new Date().toISOString()});}catch(e){}},500);};
   window._rpFind=function(id){var st=window._rpSt;if(!st)return null;for(var i=0;i<st.items.length;i++)if(st.items[i].id===id)return st.items[i];return null;};
   window._rpSet=function(id,campo,val){var it=window._rpFind(id);if(!it)return;it[campo]=val;window._rpSave();if(campo==='cantidad')window._rpTot();};
-  window._rpAdd=function(){var st=window._rpSt;if(!st)return;st.items.push({id:_uid(),fecha:'',articulo:'',apto:'',cantidad:1,responsable:'',notas:''});window._rpSave();window.renderReposicion();};
-  window._rpDel=function(id){var st=window._rpSt;if(!st)return;for(var i=0;i<st.items.length;i++){if(st.items[i].id===id){st.items.splice(i,1);break;}}window._rpSave();window.renderReposicion();};
+  window._rpAdd=function(){var st=window._rpSt;if(!st)return;st.items.push({id:_uid(),fecha:'',articulo:'',apto:'',cantidad:1,responsable:'',notas:''});window._rpSave();window.renderReposicion(true);};
+  window._rpDel=function(id){var st=window._rpSt;if(!st)return;for(var i=0;i<st.items.length;i++){if(st.items[i].id===id){st.items.splice(i,1);break;}}window._rpSave();window.renderReposicion(true);};
   window._rpTot=function(){
     var st=window._rpSt;if(!st)return;var u=0;st.items.forEach(function(x){u+=(+x.cantidad||0);});
     var e1=document.getElementById('rp-u');if(e1)e1.textContent=u;
     var e2=document.getElementById('rp-c');if(e2)e2.textContent=st.items.length;
   };
 
-  window.renderReposicion=async function(){
+  window.renderReposicion=async function(_keep){
     var mc=document.getElementById('main-content');if(!mc)return;
     var ed=_ed();
     mc.innerHTML='<div style="padding:20px;color:#666">Cargando…</div>';
     var items;
-    try{items=await window._rpLoad(ed);}catch(e){mc.innerHTML='<div style="padding:20px;color:#b00">Error: '+_esc(e.message)+'</div>';return;}
+    if(_keep && window._rpSt && window._rpSt.ed===ed){ items=window._rpSt.items; } else { try{items=await window._rpLoad(ed);}catch(e){mc.innerHTML='<div style="padding:20px;color:#b00">Error: '+_esc(e.message)+'</div>';return;}
     items.sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
-    window._rpSt={ed:ed,items:items};
+    window._rpSt={ed:ed,items:items}; }
     var h='';
     h+='<div style="padding:16px 18px;max-width:1120px;margin:0 auto">';
     h+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px"><h2 style="margin:0;font-size:20px">📦 Reposición para Aptos</h2>';
