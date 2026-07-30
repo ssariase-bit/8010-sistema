@@ -2482,7 +2482,7 @@ window.renderFlujoSemanal=async function(){
       {id:'valor_domicilio',type:'number',hidden:true,default:0},
       {id:'observaciones',label:'Observaciones',type:'text'},
       {id:'adjunto',label:'📎 Recibo escaneado (imagen o PDF) — para revisión en auditoría',type:'file'},
-    ]); break;
+    ]); (function(){ window._magArrastra=async function(){ try{ var apto=((document.getElementById('gf-apto')||{}).value||'').trim(); if(!apto) return; var r=await sb.from('rack').select('huesped,nombre,apellido1,apellido2,estado,fecha').eq('edificio',EDIFICIO_ACTIVO).eq('apto',apto).lte('fecha',TODAY).neq('estado','Libre').order('fecha',{ascending:false}).limit(1); var row=(r.data||[])[0]; if(!row) return; var nom=row.huesped||[row.nombre,row.apellido1,row.apellido2].filter(Boolean).join(' '); if(!nom) return; var hid=document.getElementById('gf-arrendatario'); if(hid && !((hid.value||'').trim())){ hid.value=nom; if(typeof _nombre3Split==='function') _nombre3Split(hid); } }catch(e){} }; var _t=0,_iv=setInterval(function(){ var el=document.getElementById('gf-apto'); if(el){ clearInterval(_iv); el.addEventListener('change',window._magArrastra); el.addEventListener('blur',window._magArrastra); } else if(_t++>80) clearInterval(_iv); },50); })(); break;
 
     // Listado General de Cargos
     case 'cargos-list': await renderList('listado_cargos','📋 Listado General de Cargos','cargos-form',
@@ -2767,7 +2767,7 @@ window.renderFlujoSemanal=async function(){
       {id:'tiempo_adicional',label:'Minutos adicionales',type:'number',default:'0'},
       {id:'obs_ingreso',label:'Observaciones de ingreso (ej: tráfico pesado)',type:'text'},
       {id:'obs_salida',label:'Observaciones de salida (ej: Turno 12 horas, Autorizado G.O)',type:'text'},
-    ]); break;
+    ]); (function(){ window._horCargoAuto=async function(){ try{ var el=document.getElementById('gf-nombre'); var nom=((el&&el.value)||'').trim(); if(nom.length<3) return; var sel=document.getElementById('gf-cargo'); if(!sel) return; var r=await sb.from('personal').select('cargo').eq('edificio',EDIFICIO_ACTIVO).ilike('nombre',nom).limit(1); var row=(r.data||[])[0]; if(!row||!row.cargo) return; for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===row.cargo || sel.options[i].text===row.cargo){ sel.value=sel.options[i].value; break; } } }catch(e){} }; var _t=0,_iv=setInterval(function(){ var b=document.getElementById('gf-nombre'); if(b){ clearInterval(_iv); ['gf-nombre__n','gf-nombre__a1','gf-nombre__a2'].forEach(function(id){ var e=document.getElementById(id); if(e){ e.addEventListener('blur',window._horCargoAuto); } }); b.addEventListener('change',window._horCargoAuto); } else if(_t++>80) clearInterval(_iv); },50); })(); break;
 
     case 'revision-apto': await renderRevisionApto(); break;
     case 'ocupacion': window._ocupVista='hoy'; await renderOcupacion(); break;
@@ -5529,6 +5529,7 @@ async function renderNovedadesList(filtro='', fechaSel='', soloAbiertas=false) {
                 <div style="display:inline-grid;gap:4px;width:104px">
                   <button class="btn btn-outline btn-xs" onclick="verNovedad('${n.id}')">Ver</button>
                   <button class="btn btn-outline btn-xs" onclick="editarNovedad('${n.id}')">✏️ Editar</button>
+                  ${(n.area==='Actas' && n.estado!=='Resuelto') ? `<button class="btn btn-outline btn-xs" onclick="revisionDesdeNovedad('${n.id}')" style="color:#7C3AED;border-color:#7C3AED" title="Registrar la revision del apto y cerrar el acta">🧹 Registrar revision</button>` : ''}
                   ${n.estado!=='Resuelto' ? `<button class="btn btn-success btn-xs" onclick="cerrarNovedadRapido('${n.id}')">✓ Cerrar</button>` : ''}
                   ${['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol) ? `<button class="btn btn-outline btn-xs" onclick="borrarNovedad('${n.id}')" style="color:#9A4A40;border-color:#E0C0BA">🗑 Borrar</button>` : ''}
                 </div>
@@ -12584,6 +12585,7 @@ async function renderRotulos(){
     +'<button class="btn" style="background:#1D3461;color:#fff" onclick="imprimirRotulo(encodeURIComponent(document.getElementById(\'rot-apto\').value),encodeURIComponent(document.getElementById(\'rot-arr\').value),encodeURIComponent(document.getElementById(\'rot-emp\').value),false,encodeURIComponent(document.getElementById(\'rot-fci\').value),encodeURIComponent(document.getElementById(\'rot-fco\').value))">🖨 Imprimir rótulo</button></div>';
 }
 
+async function revisionDesdeNovedad(id){ try{ var r=await sb.from('novedades').select('id,apto').eq('id',id).single(); if(r.error||!r.data){ if(typeof showToast==='function') showToast('No se encontro la novedad','error'); return; } window._revDesdeNov={ id:r.data.id, apto:r.data.apto||'' }; if(typeof loadView==='function') loadView('revision-apto'); }catch(e){ if(typeof showToast==='function') showToast('Error: '+(e&&e.message||e),'error'); } }
 async function renderRevisionApto(){
   var eb=(typeof EB==='function')?EB():{};
   var aptos=(eb.aptosFull||eb.aptosBase||[]);
@@ -12612,6 +12614,7 @@ async function renderRevisionApto(){
       '<button class="btn btn-success" onclick="guardarRevisionApto()">💾 Guardar revisión</button>'+
     '</div>'+
     '<div id="rv-lista" style="margin-top:14px"></div>';
+  try{ var _dn=window._revDesdeNov; if(_dn){ var _el=document.getElementById('rv-apto'); if(_el&&_dn.apto){ _el.value=_dn.apto; } var _mc=document.getElementById('main-content'); if(_mc){ var _bn=document.createElement('div'); _bn.style.cssText='max-width:720px;margin:0 0 10px;background:#f3ecff;border-left:4px solid #7C3AED;border-radius:6px;padding:8px 12px;font-size:12px;color:#5b21b6'; _bn.textContent='Vinculada al acta de la novedad: al guardar la revision se cierra el acta y se deja el seguimiento.'; _mc.insertBefore(_bn,_mc.firstChild); } } }catch(_e){}
   cargarRevisionesApto();
 }
 async function guardarRevisionApto(){
@@ -12625,6 +12628,7 @@ async function guardarRevisionApto(){
   var row={ edificio:EDIFICIO_ACTIVO, apto:apto, fecha:TODAY, cortesias:_am.join(', '), estado_apto:document.getElementById('rv-estado').value, observaciones:(document.getElementById('rv-obs').value||'').trim(), revisado_por:(document.getElementById('rv-quien').value||'').trim(), user_id:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null };
   var r=await sb.from('revisiones_apto').insert(row);
   if(r.error){ if(typeof showToast==='function') showToast('Error: '+r.error.message,'error'); return; }
+  if(window._revDesdeNov && window._revDesdeNov.id){ try{ var _nid=window._revDesdeNov.id; var _nr=await sb.from('novedades').select('tratamiento,gestionado_por').eq('id',_nid).single(); var _prev=(_nr.data&&_nr.data.tratamiento)||''; var _seg='\n📋 Revision de apartamento realizada — '+(row.estado_apto||'')+(row.cortesias?(' · Cortesias: '+row.cortesias):'')+' · por '+(row.revisado_por||''); await sb.from('novedades').update({ estado:'Resuelto', tratamiento:(_prev+_seg).trim(), gestionado_por:((_nr.data&&_nr.data.gestionado_por)||row.revisado_por||null) }).eq('id',_nid); }catch(_e){} window._revDesdeNov=null; if(typeof showToast==='function') showToast('✓ Revision guardada y acta cerrada','success'); if(typeof cargarRevisionesApto==='function') cargarRevisionesApto(); setTimeout(function(){ if(typeof loadView==='function') loadView('novedades-list'); },900); return; }
   if(typeof showToast==='function') showToast('✓ Revisión guardada para apto '+apto,'success');
   cargarRevisionesApto();
 }
