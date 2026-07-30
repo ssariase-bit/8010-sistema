@@ -5520,7 +5520,7 @@ async function renderNovedadesList(filtro='', fechaSel='', soloAbiertas=false) {
               <td style="white-space:nowrap;color:var(--gris-t);font-size:11px">${fmtHour(n.created_at)}</td>
               <td>${areaApto(n).area}</td>
               <td>${window._aptoConNombre(areaApto(n).apto)}</td>
-              <td style="max-width:280px">${n.descripcion}${(function(){var a=window._accionInicialNov(n.tratamiento); if(!a) return ''; if(String(n.descripcion||'').includes('Acción tomada')) return ''; return `<div style="margin-top:6px;background:#eafaf1;border-left:3px solid #27ae60;border-radius:6px;padding:6px 8px;font-size:11px;line-height:1.5"><strong>✅ Acción tomada:</strong> ${a}</div>`;})()}</td>
+              <td style="max-width:280px">${n.descripcion}${(function(){var a=window._accionInicialNov(n.tratamiento); if(!a) return ''; if(String(n.descripcion||'').includes('Acción tomada')) return ''; return `<div style="margin-top:6px;background:#eafaf1;border-left:3px solid #27ae60;border-radius:6px;padding:6px 8px;font-size:11px;line-height:1.5"><strong>✅ Acción tomada:</strong> ${a}</div>`;})()}${(function(){var _s=String(n.tratamiento||'').split('\n📋 ').slice(1);if(!_s.length)return '';return `<div style="margin-top:6px"><span style="display:inline-block;background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700" title="Tiene ${_s.length} seguimiento(s)">📋 ${_s.length} seguimiento${_s.length>1?'s':''}</span></div>`;})()}</td>
               <td>${badgePrio(n.prioridad)}</td>
               <td>${badgeEst(n.estado)}</td>
               <td>${n.reportado_por?_chipPersona(n.reportado_por):'-'}</td>
