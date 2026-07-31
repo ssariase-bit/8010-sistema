@@ -16804,23 +16804,24 @@ _Sistema ${EB().nombre}_`;
 /* ===================== MÓDULO TESORERÍA / FLUJO DE CAJA (Fase 0: motor de semanas) ===================== */
 window._tesSoc = window._tesSoc || 'LTM3';
 window._tesAno = window._tesAno || Number(TODAY.slice(0,4));
+window._tesTab = window._tesTab || 'semanal';
 window._tesFmt = function(n){ return '$'+Math.round(Number(n)||0).toLocaleString('es-CO'); };
 window._tesSemanaDe = function(dstr){ try{ var d=new Date(dstr+'T00:00:00'); var oneJan=new Date(d.getFullYear(),0,1); var dias=Math.floor((d-oneJan)/86400000); return Math.max(1,Math.min(53,Math.ceil((dias+oneJan.getDay()+1)/7))); }catch(e){ return 1; } };
 window._tesRangoSemana = function(ano,w){ try{ var d=new Date(ano,0,1); var off=(w-1)*7 - d.getDay(); var ini=new Date(ano,0,1+off); var fin=new Date(ini.getTime()+6*86400000); var f=function(x){ return ('0'+x.getDate()).slice(-2)+'/'+('0'+(x.getMonth()+1)).slice(-2); }; return f(ini)+'–'+f(fin); }catch(e){ return ''; } };
 window._tesCfg = async function(){ try{ var r=await sb.from('config').select('valor').eq('id','tesoreria_cfg').single(); return (r.data&&r.data.valor)?JSON.parse(r.data.valor):{saldos:{},cat_egreso:['Nómina','Proveedores','Créditos','Impuestos','Servicios','Otros'],tipo_ingreso:['Recaudo cartera','Alojamiento','Otros ingresos']}; }catch(e){ return {saldos:{},cat_egreso:['Nómina','Proveedores','Créditos','Impuestos','Servicios','Otros'],tipo_ingreso:['Recaudo cartera','Alojamiento','Otros ingresos']}; } };
 window._tesCfgSave = async function(cfg){ try{ await sb.from('config').upsert({id:'tesoreria_cfg',valor:JSON.stringify(cfg),updated_at:new Date().toISOString()}); }catch(e){} };
+window._tesMeses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+window._tesMesDe = function(m){ try{ if(m.fecha_prog) return Number(m.fecha_prog.slice(5,7))-1; }catch(e){} var d=new Date((m.ano||Number(TODAY.slice(0,4))),0,1+(Number(m.semana||1)-1)*7); return d.getMonth(); };
 
 async function renderTesoreria(){
   var mc=document.getElementById('main-content'); if(!mc) return;
   if(!['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol)){ mc.innerHTML='<div class="empty"><div class="empty-icon">🔒</div><p>Módulo restringido a gerencia.</p></div>'; return; }
-  var soc=window._tesSoc, ano=window._tesAno;
+  var soc=window._tesSoc, ano=window._tesAno, tab=window._tesTab;
   var cfg=await window._tesCfg();
   var saldoIni=Number((cfg.saldos&&cfg.saldos[soc])||0);
   var r=await sb.from('tes_movimientos').select('*').eq('sociedad',soc).eq('ano',ano).order('semana',{ascending:true});
   if(r.error){ mc.innerHTML='<div class="page-title">💵 Tesorería — Flujo de Caja</div><div class="card"><p style="color:#b91c1c">No se pudo leer la tabla tes_movimientos: '+(r.error.message||'')+'</p><p style="font-size:12px;color:#666">Verifica que el SQL de creación de tablas se haya ejecutado en Supabase.</p></div>'; return; }
   var movs=r.data||[];
-  var weeks={}; for(var w=1;w<=53;w++) weeks[w]={ing:0,egr:0,items:[]};
-  movs.forEach(function(m){ var w=Number(m.semana)||1; if(!weeks[w])weeks[w]={ing:0,egr:0,items:[]}; if(m.flujo==='ingreso')weeks[w].ing+=Number(m.monto)||0; else weeks[w].egr+=Number(m.monto)||0; weeks[w].items.push(m); });
   var F=window._tesFmt;
   var socOpts=['LTM3','OT','PH'].map(function(s){ return '<option value="'+s+'"'+(s===soc?' selected':'')+'>'+s+'</option>'; }).join('');
   var anos=[]; for(var y=Number(TODAY.slice(0,4))-1;y<=Number(TODAY.slice(0,4))+1;y++) anos.push(y);
@@ -16828,22 +16829,11 @@ async function renderTesoreria(){
   var totIng=movs.reduce(function(a,m){return a+(m.flujo==='ingreso'?(Number(m.monto)||0):0);},0);
   var totEgr=movs.reduce(function(a,m){return a+(m.flujo==='egreso'?(Number(m.monto)||0):0);},0);
   var saldoFinal=saldoIni+totIng-totEgr;
-  var saldo=saldoIni, filas='';
-  for(var w=1;w<=53;w++){ var wk=weeks[w]; if(!wk.items.length && wk.ing===0 && wk.egr===0) continue; var neto=wk.ing-wk.egr; saldo+=neto;
-    var itemsHtml=wk.items.map(function(m){ var esIng=m.flujo==='ingreso'; return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px dashed #eee;font-size:12px">'+
-      '<span style="width:14px">'+(esIng?'🟢':'🔴')+'</span>'+
-      '<span style="flex:1">'+(m.concepto||'—')+(m.categoria?(' <span style="color:#888">· '+m.categoria+'</span>'):'')+(m.tercero?(' <span style="color:#888">· '+m.tercero+'</span>'):'')+'</span>'+
-      '<span style="width:120px;text-align:right;font-weight:600;color:'+(esIng?'#15803d':'#b91c1c')+'">'+(esIng?'+':'−')+F(Math.abs(m.monto))+'</span>'+
-      '<button class="btn btn-outline btn-xs" title="Mover a semana anterior" onclick="tesMoverSemana(\''+m.id+'\',-1)">◀</button>'+
-      '<button class="btn btn-outline btn-xs" title="Mover a semana siguiente" onclick="tesMoverSemana(\''+m.id+'\',1)">▶</button>'+
-      '<button class="btn btn-outline btn-xs" onclick="tesEditar(\''+m.id+'\')">✏️</button>'+
-      '<button class="btn btn-outline btn-xs" style="color:#b91c1c" onclick="tesBorrar(\''+m.id+'\')">🗑</button>'+
-    '</div>'; }).join('');
-    filas += '<tr><td colspan="5" style="background:#f8fafc;padding:8px 10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><strong>Semana '+w+'</strong> <span style="font-size:11px;color:#666">'+window._tesRangoSemana(ano,w)+'</span> <span style="font-size:12px">Ingresos <b style="color:#15803d">'+F(wk.ing)+'</b> · Egresos <b style="color:#b91c1c">'+F(wk.egr)+'</b> · Neto <b>'+F(neto)+'</b> · Saldo <b style="color:'+(saldo<0?'#b91c1c':'#1d4ed8')+'">'+F(saldo)+'</b></div>'+itemsHtml+'</td></tr>';
-  }
-  if(!filas) filas='<tr><td colspan="5" style="padding:20px;text-align:center;color:#888">Sin movimientos para '+soc+' en '+ano+'. Agrega el primero con los botones de arriba.</td></tr>';
-  mc.innerHTML='<div class="page-title">💵 Tesorería — Flujo de Caja</div>'+
-    '<div class="card" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end">'+
+  var venc=movs.filter(function(m){return m.flujo==='ingreso'&&m.fecha_venc&&m.estado!=='ejecutado'&&m.fecha_venc<TODAY;});
+  var vencTot=venc.reduce(function(a,m){return a+(Number(m.monto)||0);},0);
+  var tabs=[['semanal','📅 Flujo semanal'],['mensual','🗓️ Mensual'],['cartera','⚠️ Cartera'+(venc.length?(' ('+venc.length+')'):'')],['proveedores','🏢 Proveedores'],['creditos','🏦 Créditos'],['analisis','📊 Análisis']];
+  var tabbar='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+tabs.map(function(tt){ var on=(tt[0]===tab); return '<button class="btn btn-sm '+(on?'btn-success':'btn-outline')+'" onclick="tesTab(\''+tt[0]+'\')">'+tt[1]+'</button>'; }).join('')+'</div>';
+  var head='<div class="card" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end">'+
       '<div class="form-group" style="margin:0"><label>Sociedad</label><select onchange="window._tesSoc=this.value;renderTesoreria()">'+socOpts+'</select></div>'+
       '<div class="form-group" style="margin:0"><label>Año</label><select onchange="window._tesAno=Number(this.value);renderTesoreria()">'+anoOpts+'</select></div>'+
       '<div class="form-group" style="margin:0"><label>Saldo inicial ('+soc+')</label><input type="number" id="tes-saldo-ini" value="'+saldoIni+'" onchange="tesGuardarSaldoIni(this.value)"></div>'+
@@ -16856,10 +16846,72 @@ async function renderTesoreria(){
       '<div><div style="font-size:11px;color:#666">Ingresos '+ano+'</div><div style="font-size:18px;font-weight:700;color:#15803d">'+F(totIng)+'</div></div>'+
       '<div><div style="font-size:11px;color:#666">Egresos '+ano+'</div><div style="font-size:18px;font-weight:700;color:#b91c1c">'+F(totEgr)+'</div></div>'+
       '<div><div style="font-size:11px;color:#666">Saldo final proyectado</div><div style="font-size:18px;font-weight:700;color:'+(saldoFinal<0?'#b91c1c':'#1d4ed8')+'">'+F(saldoFinal)+'</div></div>'+
-    '</div>'+
-    '<div class="card"><div style="overflow-x:auto"><table class="tabla" style="width:100%"><tbody>'+filas+'</tbody></table></div></div>'+
-    '<div id="tes-form-host"></div>';
+      (vencTot>0?'<div><div style="font-size:11px;color:#666">Cartera vencida</div><div style="font-size:18px;font-weight:700;color:#b91c1c">'+F(vencTot)+'</div></div>':'')+
+    '</div>';
+  var content='';
+  if(tab==='semanal') content=window._tesHtmlSemanal(movs,saldoIni,ano);
+  else if(tab==='mensual') content=window._tesHtmlMensual(movs,saldoIni,ano);
+  else if(tab==='cartera') content=window._tesHtmlCartera(movs);
+  else if(tab==='analisis') content=window._tesHtmlAnalisis(movs,saldoIni,ano);
+  else content='<div class="card"><div id="tes-sub">Cargando…</div></div>';
+  mc.innerHTML='<div class="page-title">💵 Tesorería — Flujo de Caja</div>'+head+tabbar+'<div id="tes-content">'+content+'</div><div id="tes-form-host"></div>';
+  if(tab==='proveedores') window._tesLoadProveedores();
+  if(tab==='creditos') window._tesLoadCreditos();
 }
+function tesTab(t){ window._tesTab=t; renderTesoreria(); }
+
+window._tesHtmlSemanal=function(movs,saldoIni,ano){
+  var F=window._tesFmt; var weeks={}; for(var w=1;w<=53;w++) weeks[w]={ing:0,egr:0,items:[]};
+  movs.forEach(function(m){ var w=Number(m.semana)||1; if(!weeks[w])weeks[w]={ing:0,egr:0,items:[]}; if(m.flujo==='ingreso')weeks[w].ing+=Number(m.monto)||0; else weeks[w].egr+=Number(m.monto)||0; weeks[w].items.push(m); });
+  var saldo=saldoIni, filas='';
+  for(var w=1;w<=53;w++){ var wk=weeks[w]; if(!wk.items.length && wk.ing===0 && wk.egr===0) continue; var neto=wk.ing-wk.egr; saldo+=neto;
+    var itemsHtml=wk.items.map(function(m){ var esIng=m.flujo==='ingreso'; return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px dashed #eee;font-size:12px">'+
+      '<span style="width:14px">'+(esIng?'🟢':'🔴')+'</span>'+
+      '<span style="flex:1">'+(m.concepto||'—')+(m.categoria?(' <span style="color:#888">· '+m.categoria+'</span>'):'')+(m.tercero?(' <span style="color:#888">· '+m.tercero+'</span>'):'')+'</span>'+
+      '<span style="width:120px;text-align:right;font-weight:600;color:'+(esIng?'#15803d':'#b91c1c')+'">'+(esIng?'+':'−')+F(Math.abs(m.monto))+'</span>'+
+      '<button class="btn btn-outline btn-xs" title="Semana anterior" onclick="tesMoverSemana(\''+m.id+'\',-1)">◀</button>'+
+      '<button class="btn btn-outline btn-xs" title="Semana siguiente" onclick="tesMoverSemana(\''+m.id+'\',1)">▶</button>'+
+      '<button class="btn btn-outline btn-xs" onclick="tesEditar(\''+m.id+'\')">✏️</button>'+
+      '<button class="btn btn-outline btn-xs" style="color:#b91c1c" onclick="tesBorrar(\''+m.id+'\')">🗑</button>'+
+    '</div>'; }).join('');
+    filas += '<tr><td colspan="5" style="background:#f8fafc;padding:8px 10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><strong>Semana '+w+'</strong> <span style="font-size:11px;color:#666">'+window._tesRangoSemana(ano,w)+'</span> <span style="font-size:12px">Ing <b style="color:#15803d">'+F(wk.ing)+'</b> · Egr <b style="color:#b91c1c">'+F(wk.egr)+'</b> · Neto <b>'+F(neto)+'</b> · Saldo <b style="color:'+(saldo<0?'#b91c1c':'#1d4ed8')+'">'+F(saldo)+'</b></div>'+itemsHtml+'</td></tr>';
+  }
+  if(!filas) filas='<tr><td style="padding:20px;text-align:center;color:#888">Sin movimientos. Agrega el primero con los botones de arriba.</td></tr>';
+  return '<div class="card"><div style="overflow-x:auto"><table class="tabla" style="width:100%"><tbody>'+filas+'</tbody></table></div></div>';
+};
+window._tesHtmlMensual=function(movs,saldoIni,ano){
+  var F=window._tesFmt; var M={}; for(var i=0;i<12;i++) M[i]={ing:0,egr:0};
+  movs.forEach(function(m){ var mi=window._tesMesDe(m); if(!M[mi])M[mi]={ing:0,egr:0}; if(m.flujo==='ingreso')M[mi].ing+=Number(m.monto)||0; else M[mi].egr+=Number(m.monto)||0; });
+  var saldo=saldoIni, filas='';
+  for(var i=0;i<12;i++){ var neto=M[i].ing-M[i].egr; saldo+=neto;
+    filas+='<tr><td>'+window._tesMeses[i]+' '+ano+'</td><td style="text-align:right;color:#15803d">'+F(M[i].ing)+'</td><td style="text-align:right;color:#b91c1c">'+F(M[i].egr)+'</td><td style="text-align:right;font-weight:600">'+F(neto)+'</td><td style="text-align:right;font-weight:700;color:'+(saldo<0?'#b91c1c':'#1d4ed8')+'">'+F(saldo)+'</td></tr>'; }
+  return '<div class="card"><table class="tabla" style="width:100%"><thead><tr><th>Mes</th><th style="text-align:right">Ingresos</th><th style="text-align:right">Egresos</th><th style="text-align:right">Neto</th><th style="text-align:right">Saldo acumulado</th></tr></thead><tbody>'+filas+'</tbody></table></div>';
+};
+window._tesHtmlCartera=function(movs){
+  var F=window._tesFmt; var ing=movs.filter(function(m){return m.flujo==='ingreso'&&m.fecha_venc;});
+  ing.sort(function(a,b){return (a.fecha_venc||'').localeCompare(b.fecha_venc||'');});
+  if(!ing.length) return '<div class="card"><p style="color:#666">No hay ingresos con fecha de vencimiento registrada. Al crear un ingreso, define su vencimiento para hacer seguimiento de cartera.</p></div>';
+  var filas=ing.map(function(m){ var venc=(m.estado!=='ejecutado'&&m.fecha_venc<TODAY); var dias=Math.round((new Date(m.fecha_venc+'T00:00:00')-new Date(TODAY+'T00:00:00'))/86400000);
+    return '<tr style="'+(venc?'background:#fef2f2':'')+'"><td>'+(m.concepto||'—')+'</td><td>'+(m.tercero||'—')+'</td><td>'+(m.factura_num||'—')+'</td><td style="text-align:right">'+F(m.monto)+'</td><td>'+(m.fecha_venc||'')+'</td><td style="text-align:center">'+(m.estado==='ejecutado'?'<span style="color:#15803d">Recibido</span>':(venc?('<span style="color:#b91c1c;font-weight:700">Vencida '+Math.abs(dias)+'d</span>'):('<span style="color:#a16207">Por vencer '+dias+'d</span>')))+'</td></tr>'; }).join('');
+  var vencTot=ing.filter(function(m){return m.estado!=='ejecutado'&&m.fecha_venc<TODAY;}).reduce(function(a,m){return a+(Number(m.monto)||0);},0);
+  return (vencTot>0?'<div class="card" style="background:#fef2f2;border-left:4px solid #b91c1c;margin-bottom:10px"><strong style="color:#b91c1c">⚠️ Cartera vencida: '+F(vencTot)+'</strong></div>':'')+'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="width:100%"><thead><tr><th>Concepto</th><th>Cliente</th><th>Factura</th><th style="text-align:right">Monto</th><th>Vence</th><th style="text-align:center">Estado</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
+};
+window._tesHtmlAnalisis=function(movs,saldoIni,ano){
+  var F=window._tesFmt; var totIng=0,totEgr=0,egrCat={},ingTipo={};
+  movs.forEach(function(m){ var v=Number(m.monto)||0; if(m.flujo==='ingreso'){ totIng+=v; ingTipo[m.categoria||'Otros']=(ingTipo[m.categoria||'Otros']||0)+v; } else { totEgr+=v; egrCat[m.categoria||'Otros']=(egrCat[m.categoria||'Otros']||0)+v; } });
+  var mkRows=function(o){ var ks=Object.keys(o).sort(function(a,b){return o[b]-o[a];}); if(!ks.length) return '<tr><td colspan="2" style="color:#888">Sin datos</td></tr>'; var tot=ks.reduce(function(a,k){return a+o[k];},0)||1; return ks.map(function(k){ return '<tr><td>'+k+'</td><td style="text-align:right">'+F(o[k])+' <span style="color:#888;font-size:11px">('+Math.round(o[k]/tot*100)+'%)</span></td></tr>'; }).join(''); };
+  var futuros=movs.filter(function(m){return m.flujo==='egreso'&&m.estado!=='ejecutado'&&(m.fecha_prog||'')>=TODAY;}).reduce(function(a,m){return a+(Number(m.monto)||0);},0);
+  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+    '<div class="card"><div class="form-section-title">Egresos por categoría</div><table class="tabla" style="width:100%"><tbody>'+mkRows(egrCat)+'</tbody></table></div>'+
+    '<div class="card"><div class="form-section-title">Ingresos por tipo</div><table class="tabla" style="width:100%"><tbody>'+mkRows(ingTipo)+'</tbody></table></div>'+
+    '<div class="card" style="grid-column:1/3"><div class="form-section-title">Indicadores '+ano+'</div><div style="display:flex;gap:24px;flex-wrap:wrap">'+
+      '<div><div style="font-size:11px;color:#666">Total ingresos</div><div style="font-size:16px;font-weight:700;color:#15803d">'+F(totIng)+'</div></div>'+
+      '<div><div style="font-size:11px;color:#666">Total egresos</div><div style="font-size:16px;font-weight:700;color:#b91c1c">'+F(totEgr)+'</div></div>'+
+      '<div><div style="font-size:11px;color:#666">Resultado neto</div><div style="font-size:16px;font-weight:700">'+F(totIng-totEgr)+'</div></div>'+
+      '<div><div style="font-size:11px;color:#666">Egresos pendientes por ejecutar</div><div style="font-size:16px;font-weight:700;color:#a16207">'+F(futuros)+'</div></div>'+
+    '</div></div></div>';
+};
+
 async function tesGuardarSaldoIni(v){ var cfg=await window._tesCfg(); cfg.saldos=cfg.saldos||{}; cfg.saldos[window._tesSoc]=Number(v)||0; await window._tesCfgSave(cfg); renderTesoreria(); }
 async function tesMoverSemana(id,delta){ try{ var m=(await sb.from('tes_movimientos').select('semana').eq('id',id).single()).data; if(!m) return; var ns=Math.max(1,Math.min(53,(Number(m.semana)||1)+delta)); await sb.from('tes_movimientos').update({semana:ns}).eq('id',id); renderTesoreria(); }catch(e){ if(typeof showToast==='function') showToast('Error al mover: '+(e&&e.message||e),'error'); } }
 async function tesBorrar(id){ if(!confirm('¿Borrar este movimiento?')) return; await sb.from('tes_movimientos').delete().eq('id',id); if(typeof showToast==='function') showToast('Movimiento borrado','success'); renderTesoreria(); }
@@ -16900,6 +16952,61 @@ async function tesGuardar(flujo,id){
     if(typeof showToast==='function') showToast('Movimiento guardado','success');
     document.getElementById('tes-form-host').innerHTML=''; renderTesoreria();
   }catch(e){ if(typeof showToast==='function') showToast('Error: '+(e&&e.message||e),'error'); }
+}
+
+/* ---- Proveedores ---- */
+window._tesLoadProveedores=async function(){
+  var host=document.getElementById('tes-content'); if(!host) return;
+  var r=await sb.from('tes_proveedores').select('*').order('nombre',{ascending:true});
+  if(r.error){ host.innerHTML='<div class="card"><p style="color:#b91c1c">'+r.error.message+'</p></div>'; return; }
+  var rows=(r.data||[]).map(function(p){ return '<tr><td>'+(p.nombre||'')+'</td><td>'+(p.nit||'')+'</td><td>'+(p.condiciones_pago||'')+'</td><td>'+(p.contacto||'')+'</td><td><button class="btn btn-outline btn-xs" style="color:#b91c1c" onclick="tesProvBorrar(\''+p.id+'\')">🗑</button></td></tr>'; }).join('');
+  if(!rows) rows='<tr><td colspan="5" style="color:#888">Sin proveedores. Agrega el primero.</td></tr>';
+  host.innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong>Proveedores</strong><button class="btn btn-success btn-sm" onclick="tesProvForm()">＋ Proveedor</button></div><table class="tabla" style="width:100%"><thead><tr><th>Nombre</th><th>NIT</th><th>Condiciones pago</th><th>Contacto</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div><div id="tes-form-host"></div>';
+};
+function tesProvForm(){ var host=document.getElementById('tes-form-host'); if(!host) return;
+  host.innerHTML='<div class="card" style="margin-top:12px;border:2px solid #1d4ed8"><div class="page-title" style="font-size:16px">Nuevo proveedor</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">'+
+    '<div class="form-group"><label>Nombre</label><input id="pv-nombre"></div><div class="form-group"><label>NIT</label><input id="pv-nit"></div>'+
+    '<div class="form-group"><label>Condiciones de pago</label><input id="pv-cond" placeholder="ej: 30 días"></div><div class="form-group"><label>Contacto</label><input id="pv-contacto"></div>'+
+    '</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn btn-success btn-sm" onclick="tesProvGuardar()">💾 Guardar</button><button class="btn btn-outline btn-sm" onclick="document.getElementById(\'tes-form-host\').innerHTML=\'\'">Cancelar</button></div></div>';
+  host.scrollIntoView({behavior:'smooth',block:'center'}); }
+async function tesProvGuardar(){ var g=function(x){var e=document.getElementById(x);return e?e.value:'';}; var nombre=g('pv-nombre'); if(!nombre){ if(typeof showToast==='function') showToast('El nombre es obligatorio','error'); return; }
+  var res=await sb.from('tes_proveedores').insert({nombre:nombre,nit:g('pv-nit')||null,condiciones_pago:g('pv-cond')||null,contacto:g('pv-contacto')||null,sociedad:window._tesSoc});
+  if(res.error){ if(typeof showToast==='function') showToast('Error: '+res.error.message,'error'); return; } if(typeof showToast==='function') showToast('Proveedor guardado','success'); window._tesLoadProveedores(); }
+async function tesProvBorrar(id){ if(!confirm('¿Borrar proveedor?')) return; await sb.from('tes_proveedores').delete().eq('id',id); window._tesLoadProveedores(); }
+
+/* ---- Créditos + Amortización ---- */
+window._tesLoadCreditos=async function(){
+  var host=document.getElementById('tes-content'); if(!host) return;
+  var r=await sb.from('tes_creditos').select('*').order('created_at',{ascending:true});
+  if(r.error){ host.innerHTML='<div class="card"><p style="color:#b91c1c">'+r.error.message+'</p></div>'; return; }
+  var F=window._tesFmt;
+  var rows=(r.data||[]).map(function(c){ return '<tr><td>'+(c.entidad||'')+'</td><td style="text-align:right">'+F(c.monto_inicial)+'</td><td style="text-align:right">'+(c.tasa||0)+'%</td><td style="text-align:center">'+(c.cuotas||0)+'</td><td style="text-align:right">'+F(c.cuota_valor)+'</td><td>'+(c.fecha_inicio||'')+'</td><td><button class="btn btn-outline btn-xs" title="Generar cuotas como egresos" onclick="tesCredAmort(\''+c.id+'\')">📅 Amortizar</button> <button class="btn btn-outline btn-xs" style="color:#b91c1c" onclick="tesCredBorrar(\''+c.id+'\')">🗑</button></td></tr>'; }).join('');
+  if(!rows) rows='<tr><td colspan="7" style="color:#888">Sin créditos. Agrega el primero.</td></tr>';
+  host.innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong>Créditos / Obligaciones financieras</strong><button class="btn btn-success btn-sm" onclick="tesCredForm()">＋ Crédito</button></div><table class="tabla" style="width:100%"><thead><tr><th>Entidad</th><th style="text-align:right">Monto</th><th style="text-align:right">Tasa/mes</th><th style="text-align:center">Cuotas</th><th style="text-align:right">Cuota</th><th>Inicio</th><th></th></tr></thead><tbody>'+rows+'</tbody></table><p style="font-size:11px;color:#888;margin-top:6px">"Amortizar" genera las cuotas como egresos programados (categoría Créditos) en su semana correspondiente.</p></div><div id="tes-form-host"></div>';
+};
+function tesCredForm(){ var host=document.getElementById('tes-form-host'); if(!host) return;
+  host.innerHTML='<div class="card" style="margin-top:12px;border:2px solid #1d4ed8"><div class="page-title" style="font-size:16px">Nuevo crédito</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">'+
+    '<div class="form-group"><label>Entidad</label><input id="cr-entidad"></div><div class="form-group"><label>Monto inicial</label><input id="cr-monto" type="number"></div>'+
+    '<div class="form-group"><label>Tasa mensual (%)</label><input id="cr-tasa" type="number" step="0.01"></div><div class="form-group"><label>Nº de cuotas</label><input id="cr-cuotas" type="number"></div>'+
+    '<div class="form-group"><label>Cuota (opcional, se calcula si vacío)</label><input id="cr-cuota" type="number"></div><div class="form-group"><label>Fecha primera cuota</label><input id="cr-fecha" type="date" value="'+TODAY+'"></div>'+
+    '</div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn btn-success btn-sm" onclick="tesCredGuardar()">💾 Guardar</button><button class="btn btn-outline btn-sm" onclick="document.getElementById(\'tes-form-host\').innerHTML=\'\'">Cancelar</button></div></div>';
+  host.scrollIntoView({behavior:'smooth',block:'center'}); }
+async function tesCredGuardar(){ var g=function(x){var e=document.getElementById(x);return e?e.value:'';};
+  var P=Number(g('cr-monto'))||0, i=(Number(g('cr-tasa'))||0)/100, n=Number(g('cr-cuotas'))||0; var cuota=Number(g('cr-cuota'))||0;
+  if(!cuota && n>0){ cuota=(i>0)?(P*i/(1-Math.pow(1+i,-n))):(P/n); cuota=Math.round(cuota); }
+  if(!g('cr-entidad')||!P||!n){ if(typeof showToast==='function') showToast('Entidad, monto y cuotas son obligatorios','error'); return; }
+  var res=await sb.from('tes_creditos').insert({entidad:g('cr-entidad'),monto_inicial:P,tasa:Number(g('cr-tasa'))||0,cuotas:n,cuota_valor:cuota,fecha_inicio:g('cr-fecha')||null,saldo:P,sociedad:window._tesSoc});
+  if(res.error){ if(typeof showToast==='function') showToast('Error: '+res.error.message,'error'); return; } if(typeof showToast==='function') showToast('Crédito guardado','success'); window._tesLoadCreditos(); }
+async function tesCredBorrar(id){ if(!confirm('¿Borrar crédito? (no borra las cuotas ya generadas)')) return; await sb.from('tes_creditos').delete().eq('id',id); window._tesLoadCreditos(); }
+async function tesCredAmort(id){
+  var c=(await sb.from('tes_creditos').select('*').eq('id',id).single()).data; if(!c) return;
+  if(!confirm('¿Generar '+c.cuotas+' cuotas de '+window._tesFmt(c.cuota_valor)+' como egresos programados (categoría Créditos)?')) return;
+  var base=new Date((c.fecha_inicio||TODAY)+'T00:00:00'); var recs=[];
+  for(var k=0;k<(c.cuotas||0);k++){ var d=new Date(base.getFullYear(),base.getMonth()+k,base.getDate()); var ds=d.toISOString().slice(0,10);
+    recs.push({sociedad:c.sociedad||window._tesSoc,flujo:'egreso',concepto:'Cuota '+(k+1)+'/'+c.cuotas+' - '+(c.entidad||''),categoria:'Créditos',monto:c.cuota_valor,ano:d.getFullYear(),semana:window._tesSemanaDe(ds),fecha_prog:ds,estado:'programado',tercero:c.entidad||null,credito_id:c.id,edificio:EDIFICIO_ACTIVO}); }
+  var res=await sb.from('tes_movimientos').insert(recs);
+  if(res.error){ if(typeof showToast==='function') showToast('Error: '+res.error.message,'error'); return; }
+  if(typeof showToast==='function') showToast(c.cuotas+' cuotas generadas','success'); window._tesTab='semanal'; renderTesoreria();
 }
 /* ===================== FIN MÓDULO TESORERÍA Fase 0 ===================== */
 
