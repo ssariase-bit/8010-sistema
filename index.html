@@ -1138,6 +1138,7 @@ const NAV_ITEMS = {
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
     { section: 'Financiero / Admin' },
     { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
+    { id: 'tesoreria', icon: '💵', label: 'Tesorería / Flujo de Caja' },
     { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
     { id: 'fact-devengado', icon: '⚖️', label: 'Facturado vs Devengado' },
     { id: 'ventas-ppto', icon: '🎯', label: 'Ventas vs Presupuesto' },
@@ -1291,6 +1292,7 @@ const NAV_ITEMS = {
   asesora: [
     { section: 'Financiero' },
     { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
+    { id: 'tesoreria', icon: '💵', label: 'Tesorería / Flujo de Caja' },
     { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
     { id: 'fact-devengado', icon: '⚖️', label: 'Facturado vs Devengado' },
     { id: 'ventas-ppto', icon: '🎯', label: 'Ventas vs Presupuesto' },
@@ -1460,6 +1462,7 @@ const MENU_COMPLETO = [
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
   { section: 'Financiero / Admin' },
   { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
+    { id: 'tesoreria', icon: '💵', label: 'Tesorería / Flujo de Caja' },
     { id: 'resumen-ventas', icon: '💵', label: 'Resumen de Ventas' },
     { id: 'fact-devengado', icon: '⚖️', label: 'Facturado vs Devengado' },
     ...(EDIFICIO_ACTIVO==='8010' ? [
@@ -2563,6 +2566,7 @@ window.renderFlujoSemanal=async function(){
     ]); break;
     case 'caja-informe':       await renderCajaInforme(); break;
     case 'caja-list':          await renderList('caja','💰 Caja y Movimientos','caja-form',['fecha','tipo','caja','subcaja','concepto','valor','recibo_no','estado_legal'],['Fecha','Tipo','Caja','Subcat.','Concepto','Valor','Factura','Legalización']); break;
+    case 'tesoreria':          await renderTesoreria(); break;
     case 'caja-form':          renderMovimientoCaja(); break;
     case 'visitantes-list':    await renderVisitantesList(); break;
     case 'visitantes-form':    renderGenForm('visitantes','👥 Registrar Visitante',[
@@ -16795,6 +16799,109 @@ ${cerradas.map(linea).join('\n\n') || 'Ninguna cerrada hoy'}
 _Sistema ${EB().nombre}_`;
   compartirInforme('Novedades — ' + fmtDate(TODAY), txt);
 }
+
+
+/* ===================== MÓDULO TESORERÍA / FLUJO DE CAJA (Fase 0: motor de semanas) ===================== */
+window._tesSoc = window._tesSoc || 'LTM3';
+window._tesAno = window._tesAno || Number(TODAY.slice(0,4));
+window._tesFmt = function(n){ return '$'+Math.round(Number(n)||0).toLocaleString('es-CO'); };
+window._tesSemanaDe = function(dstr){ try{ var d=new Date(dstr+'T00:00:00'); var oneJan=new Date(d.getFullYear(),0,1); var dias=Math.floor((d-oneJan)/86400000); return Math.max(1,Math.min(53,Math.ceil((dias+oneJan.getDay()+1)/7))); }catch(e){ return 1; } };
+window._tesRangoSemana = function(ano,w){ try{ var d=new Date(ano,0,1); var off=(w-1)*7 - d.getDay(); var ini=new Date(ano,0,1+off); var fin=new Date(ini.getTime()+6*86400000); var f=function(x){ return ('0'+x.getDate()).slice(-2)+'/'+('0'+(x.getMonth()+1)).slice(-2); }; return f(ini)+'–'+f(fin); }catch(e){ return ''; } };
+window._tesCfg = async function(){ try{ var r=await sb.from('config').select('valor').eq('id','tesoreria_cfg').single(); return (r.data&&r.data.valor)?JSON.parse(r.data.valor):{saldos:{},cat_egreso:['Nómina','Proveedores','Créditos','Impuestos','Servicios','Otros'],tipo_ingreso:['Recaudo cartera','Alojamiento','Otros ingresos']}; }catch(e){ return {saldos:{},cat_egreso:['Nómina','Proveedores','Créditos','Impuestos','Servicios','Otros'],tipo_ingreso:['Recaudo cartera','Alojamiento','Otros ingresos']}; } };
+window._tesCfgSave = async function(cfg){ try{ await sb.from('config').upsert({id:'tesoreria_cfg',valor:JSON.stringify(cfg),updated_at:new Date().toISOString()}); }catch(e){} };
+
+async function renderTesoreria(){
+  var mc=document.getElementById('main-content'); if(!mc) return;
+  if(!['gerente_general','gerencia_operativa','administrador'].includes(currentProfile?.rol)){ mc.innerHTML='<div class="empty"><div class="empty-icon">🔒</div><p>Módulo restringido a gerencia.</p></div>'; return; }
+  var soc=window._tesSoc, ano=window._tesAno;
+  var cfg=await window._tesCfg();
+  var saldoIni=Number((cfg.saldos&&cfg.saldos[soc])||0);
+  var r=await sb.from('tes_movimientos').select('*').eq('sociedad',soc).eq('ano',ano).order('semana',{ascending:true});
+  if(r.error){ mc.innerHTML='<div class="page-title">💵 Tesorería — Flujo de Caja</div><div class="card"><p style="color:#b91c1c">No se pudo leer la tabla tes_movimientos: '+(r.error.message||'')+'</p><p style="font-size:12px;color:#666">Verifica que el SQL de creación de tablas se haya ejecutado en Supabase.</p></div>'; return; }
+  var movs=r.data||[];
+  var weeks={}; for(var w=1;w<=53;w++) weeks[w]={ing:0,egr:0,items:[]};
+  movs.forEach(function(m){ var w=Number(m.semana)||1; if(!weeks[w])weeks[w]={ing:0,egr:0,items:[]}; if(m.flujo==='ingreso')weeks[w].ing+=Number(m.monto)||0; else weeks[w].egr+=Number(m.monto)||0; weeks[w].items.push(m); });
+  var F=window._tesFmt;
+  var socOpts=['LTM3','OT','PH'].map(function(s){ return '<option value="'+s+'"'+(s===soc?' selected':'')+'>'+s+'</option>'; }).join('');
+  var anos=[]; for(var y=Number(TODAY.slice(0,4))-1;y<=Number(TODAY.slice(0,4))+1;y++) anos.push(y);
+  var anoOpts=anos.map(function(y){ return '<option value="'+y+'"'+(y===ano?' selected':'')+'>'+y+'</option>'; }).join('');
+  var totIng=movs.reduce(function(a,m){return a+(m.flujo==='ingreso'?(Number(m.monto)||0):0);},0);
+  var totEgr=movs.reduce(function(a,m){return a+(m.flujo==='egreso'?(Number(m.monto)||0):0);},0);
+  var saldoFinal=saldoIni+totIng-totEgr;
+  var saldo=saldoIni, filas='';
+  for(var w=1;w<=53;w++){ var wk=weeks[w]; if(!wk.items.length && wk.ing===0 && wk.egr===0) continue; var neto=wk.ing-wk.egr; saldo+=neto;
+    var itemsHtml=wk.items.map(function(m){ var esIng=m.flujo==='ingreso'; return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px dashed #eee;font-size:12px">'+
+      '<span style="width:14px">'+(esIng?'🟢':'🔴')+'</span>'+
+      '<span style="flex:1">'+(m.concepto||'—')+(m.categoria?(' <span style="color:#888">· '+m.categoria+'</span>'):'')+(m.tercero?(' <span style="color:#888">· '+m.tercero+'</span>'):'')+'</span>'+
+      '<span style="width:120px;text-align:right;font-weight:600;color:'+(esIng?'#15803d':'#b91c1c')+'">'+(esIng?'+':'−')+F(Math.abs(m.monto))+'</span>'+
+      '<button class="btn btn-outline btn-xs" title="Mover a semana anterior" onclick="tesMoverSemana(\''+m.id+'\',-1)">◀</button>'+
+      '<button class="btn btn-outline btn-xs" title="Mover a semana siguiente" onclick="tesMoverSemana(\''+m.id+'\',1)">▶</button>'+
+      '<button class="btn btn-outline btn-xs" onclick="tesEditar(\''+m.id+'\')">✏️</button>'+
+      '<button class="btn btn-outline btn-xs" style="color:#b91c1c" onclick="tesBorrar(\''+m.id+'\')">🗑</button>'+
+    '</div>'; }).join('');
+    filas += '<tr><td colspan="5" style="background:#f8fafc;padding:8px 10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><strong>Semana '+w+'</strong> <span style="font-size:11px;color:#666">'+window._tesRangoSemana(ano,w)+'</span> <span style="font-size:12px">Ingresos <b style="color:#15803d">'+F(wk.ing)+'</b> · Egresos <b style="color:#b91c1c">'+F(wk.egr)+'</b> · Neto <b>'+F(neto)+'</b> · Saldo <b style="color:'+(saldo<0?'#b91c1c':'#1d4ed8')+'">'+F(saldo)+'</b></div>'+itemsHtml+'</td></tr>';
+  }
+  if(!filas) filas='<tr><td colspan="5" style="padding:20px;text-align:center;color:#888">Sin movimientos para '+soc+' en '+ano+'. Agrega el primero con los botones de arriba.</td></tr>';
+  mc.innerHTML='<div class="page-title">💵 Tesorería — Flujo de Caja</div>'+
+    '<div class="card" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end">'+
+      '<div class="form-group" style="margin:0"><label>Sociedad</label><select onchange="window._tesSoc=this.value;renderTesoreria()">'+socOpts+'</select></div>'+
+      '<div class="form-group" style="margin:0"><label>Año</label><select onchange="window._tesAno=Number(this.value);renderTesoreria()">'+anoOpts+'</select></div>'+
+      '<div class="form-group" style="margin:0"><label>Saldo inicial ('+soc+')</label><input type="number" id="tes-saldo-ini" value="'+saldoIni+'" onchange="tesGuardarSaldoIni(this.value)"></div>'+
+      '<div style="flex:1"></div>'+
+      '<button class="btn btn-success btn-sm" onclick="tesNuevo(\'ingreso\')">＋ Ingreso</button>'+
+      '<button class="btn btn-sm" style="background:#b91c1c;color:#fff" onclick="tesNuevo(\'egreso\')">＋ Egreso</button>'+
+    '</div></div>'+
+    '<div class="card" style="margin-bottom:12px;display:flex;gap:18px;flex-wrap:wrap">'+
+      '<div><div style="font-size:11px;color:#666">Saldo inicial</div><div style="font-size:18px;font-weight:700">'+F(saldoIni)+'</div></div>'+
+      '<div><div style="font-size:11px;color:#666">Ingresos '+ano+'</div><div style="font-size:18px;font-weight:700;color:#15803d">'+F(totIng)+'</div></div>'+
+      '<div><div style="font-size:11px;color:#666">Egresos '+ano+'</div><div style="font-size:18px;font-weight:700;color:#b91c1c">'+F(totEgr)+'</div></div>'+
+      '<div><div style="font-size:11px;color:#666">Saldo final proyectado</div><div style="font-size:18px;font-weight:700;color:'+(saldoFinal<0?'#b91c1c':'#1d4ed8')+'">'+F(saldoFinal)+'</div></div>'+
+    '</div>'+
+    '<div class="card"><div style="overflow-x:auto"><table class="tabla" style="width:100%"><tbody>'+filas+'</tbody></table></div></div>'+
+    '<div id="tes-form-host"></div>';
+}
+async function tesGuardarSaldoIni(v){ var cfg=await window._tesCfg(); cfg.saldos=cfg.saldos||{}; cfg.saldos[window._tesSoc]=Number(v)||0; await window._tesCfgSave(cfg); renderTesoreria(); }
+async function tesMoverSemana(id,delta){ try{ var m=(await sb.from('tes_movimientos').select('semana').eq('id',id).single()).data; if(!m) return; var ns=Math.max(1,Math.min(53,(Number(m.semana)||1)+delta)); await sb.from('tes_movimientos').update({semana:ns}).eq('id',id); renderTesoreria(); }catch(e){ if(typeof showToast==='function') showToast('Error al mover: '+(e&&e.message||e),'error'); } }
+async function tesBorrar(id){ if(!confirm('¿Borrar este movimiento?')) return; await sb.from('tes_movimientos').delete().eq('id',id); if(typeof showToast==='function') showToast('Movimiento borrado','success'); renderTesoreria(); }
+async function tesEditar(id){ var m=(await sb.from('tes_movimientos').select('*').eq('id',id).single()).data; if(m) tesFormHTML(m.flujo,m); }
+function tesNuevo(flujo){ tesFormHTML(flujo,null); }
+async function tesFormHTML(flujo,m){
+  var host=document.getElementById('tes-form-host'); if(!host) return;
+  var cfg=await window._tesCfg();
+  var cats=(flujo==='egreso'?(cfg.cat_egreso||[]):(cfg.tipo_ingreso||[]));
+  var catOpts=cats.map(function(c){ return '<option'+(m&&m.categoria===c?' selected':'')+'>'+c+'</option>'; }).join('');
+  var esIng=flujo==='ingreso';
+  var fechaDef=(m&&m.fecha_prog)||TODAY;
+  host.innerHTML='<div class="card" style="margin-top:12px;border:2px solid '+(esIng?'#15803d':'#b91c1c')+'"><div class="page-title" style="font-size:16px">'+(m?'Editar ':'Nuevo ')+(esIng?'ingreso':'egreso')+' · '+window._tesSoc+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">'+
+    '<div class="form-group"><label>Concepto</label><input id="tf-concepto" value="'+((m&&m.concepto)||'').replace(/"/g,'&quot;')+'"></div>'+
+    '<div class="form-group"><label>'+(esIng?'Tipo de ingreso':'Categoría')+'</label><select id="tf-categoria">'+catOpts+'</select></div>'+
+    '<div class="form-group"><label>Monto</label><input id="tf-monto" type="number" value="'+((m&&m.monto)||'')+'"></div>'+
+    '<div class="form-group"><label>'+(esIng?'Cliente':'Proveedor/Tercero')+'</label><input id="tf-tercero" value="'+((m&&m.tercero)||'').replace(/"/g,'&quot;')+'"></div>'+
+    '<div class="form-group"><label>Fecha programada</label><input id="tf-fecha" type="date" value="'+fechaDef+'" onchange="var s=window._tesSemanaDe(this.value);var e=document.getElementById(\'tf-semana\');if(e)e.value=s"></div>'+
+    '<div class="form-group"><label>Semana</label><input id="tf-semana" type="number" min="1" max="53" value="'+((m&&m.semana)||window._tesSemanaDe(fechaDef))+'"></div>'+
+    (esIng?'<div class="form-group"><label>Nº factura</label><input id="tf-factura" value="'+((m&&m.factura_num)||'')+'"></div><div class="form-group"><label>Vencimiento (cartera)</label><input id="tf-venc" type="date" value="'+((m&&m.fecha_venc)||'')+'"></div>':'')+
+    '<div class="form-group"><label>Estado</label><select id="tf-estado"><option value="programado"'+(m&&m.estado==='programado'?' selected':'')+'>'+(esIng?'Esperado':'Programado')+'</option><option value="ejecutado"'+(m&&m.estado==='ejecutado'?' selected':'')+'>'+(esIng?'Recibido':'Ejecutado')+'</option></select></div>'+
+    '</div>'+
+    '<div style="margin-top:10px;display:flex;gap:8px"><button class="btn btn-success btn-sm" onclick="tesGuardar(\''+flujo+'\','+(m?('\''+m.id+'\''):'null')+')">💾 Guardar</button><button class="btn btn-outline btn-sm" onclick="document.getElementById(\'tes-form-host\').innerHTML=\'\'">Cancelar</button></div></div>';
+  host.scrollIntoView({behavior:'smooth',block:'center'});
+}
+async function tesGuardar(flujo,id){
+  try{
+    var g=function(x){ var e=document.getElementById(x); return e?e.value:''; };
+    var rec={ sociedad:window._tesSoc, flujo:flujo, concepto:g('tf-concepto'), categoria:g('tf-categoria'), monto:Number(g('tf-monto'))||0,
+      ano:window._tesAno, semana:Number(g('tf-semana'))||1, fecha_prog:g('tf-fecha')||null, estado:g('tf-estado'),
+      tercero:g('tf-tercero')||null, factura_num:(flujo==='ingreso'?(g('tf-factura')||null):null), fecha_venc:(flujo==='ingreso'?(g('tf-venc')||null):null),
+      edificio:EDIFICIO_ACTIVO };
+    if(!rec.concepto || !rec.monto){ if(typeof showToast==='function') showToast('Concepto y monto son obligatorios','error'); return; }
+    try{ rec.user_id=currentUser.id; }catch(e){}
+    var res = id ? await sb.from('tes_movimientos').update(rec).eq('id',id) : await sb.from('tes_movimientos').insert(rec);
+    if(res.error){ if(typeof showToast==='function') showToast('Error al guardar: '+res.error.message,'error'); return; }
+    if(typeof showToast==='function') showToast('Movimiento guardado','success');
+    document.getElementById('tes-form-host').innerHTML=''; renderTesoreria();
+  }catch(e){ if(typeof showToast==='function') showToast('Error: '+(e&&e.message||e),'error'); }
+}
+/* ===================== FIN MÓDULO TESORERÍA Fase 0 ===================== */
 
 function abrirInformeCKO() {
   const apto = document.getElementById('modal-apto-num').textContent;
