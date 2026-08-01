@@ -6367,7 +6367,7 @@ function renderNuevaReserva() {
             <option value="126">Apartamento 126 m² — 2 habitaciones, 01 King + 02 Twin</option>
             <option value="132">Apartamento 132 m² — 2 habitaciones, 01 King + 02 Twin</option>
           </select>
-          <div style="font-size:11px;color:#7F7F7F;margin-top:4px">Déjalo en automático salvo que necesites forzar la descripción.</div>
+          <div style="font-size:11px;color:#7F7F7F;margin-top:4px">Déjalo en automático salvo que necesites forzar la descripción.</div><div class="form-group" style="margin-top:6px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#C2410C"><input type="checkbox" id="res-completo-a" style="width:18px;height:18px"> Reservar como APTO COMPLETO — bloquear también su habitación A (solo aptos con hab. A, ej. 1002 → 1002A)</label></div>
         </div></div>` : ``}
         <div class="form-row col3">
           <div class="form-group">
@@ -6797,6 +6797,7 @@ async function guardarReserva() {
 
   // La reserva ya quedó guardada en el rack → liberar el botón YA (evita el spinner colgado)
   _resetBtn();
+  try{ var _cA=document.getElementById('res-completo-a'); if(_cA && _cA.checked && typeof APTO_A_MAP!=='undefined' && APTO_A_MAP[apto]){ await aplicarCompleto(apto, ci, ci, co, nombre, true); if(typeof showToast==='function') showToast('🔒 Habitación '+APTO_A_MAP[apto]+' bloqueada (apto completo)','success'); } }catch(_eA){}
   showToast(`✅ Reserva registrada — ${nombre} en ${_kubikLabel(apto)} (${noches} noches)`, 'success');
 
   // Guardar también en contratos si tiene empresa (segundo plano: no bloquea ni cuelga la UI)
