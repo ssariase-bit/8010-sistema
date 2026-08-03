@@ -3495,10 +3495,12 @@ async function renderRack() {
   const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const dayNames = ['D','L','M','Mi','J','V','S'];
 
-  const { data: rawRack, error: rackErr } = await sb.from('rack').select('*')
-    .gte('fecha', monthStart).lte('fecha', monthEnd)
-    .or(`edificio.eq.${EDIFICIO_ACTIVO},edificio.is.null`) // evita mezclar aptos con el mismo número entre 8010 y Kubik
-    .order('estado', { ascending: true }); // Libre < Ocupado → Ocupado gana en el map
+  // BUG día 31 (Sol Sebastián): esta consulta NO paginaba y topaba en 1.000 filas de Supabase.
+  // En 8010 un mes de 31 días tiene ~1.022 filas de rack, así que se truncaban ~22 filas y los
+  // aptos "Ocupado/Sale de viaje" (que ordenaban al final) caían y se pintaban Libres. Se pagina
+  // con _rackFetchRango (filtra por edificio activo; verificado: 0 filas con edificio nulo).
+  // El _PRIO de más abajo resuelve los duplicados, así que no hace falta .order('estado').
+  const { data: rawRack, error: rackErr } = await window._rackFetchRango(monthStart, monthEnd, '*');
   if (rackErr) { document.getElementById('main-content').innerHTML = `<div class="empty"><div class="empty-icon">❌</div><p>Error cargando rack: ${rackErr.message}</p></div>`; return; }
   let allRack = rawRack || [];
 
