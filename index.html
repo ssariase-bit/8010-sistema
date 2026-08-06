@@ -6748,6 +6748,15 @@ async function guardarReserva() {
     if(_t){ _t.style.border='2px solid #9A4A40'; _t.focus(); }
     return;
   }
+  // Bloqueo duro (no se puede omitir con confirm): una TRM menor a 100 nunca es real —
+  // suele ser el dígito "1" digitado por error, y hace que el rack guarde el valor en
+  // dólares como si fuera pesos (venta se ve como "$350" en vez de "$1.377.500").
+  if (_esUSDr && _trmR > 0 && _trmR < 100) {
+    showToast('La TRM digitada ('+_trmR+') no es válida — revisa el dato, debe estar cerca de la tasa real del dólar.','error');
+    const _t = document.getElementById('res-trm');
+    if(_t){ _t.style.border='2px solid #9A4A40'; _t.focus(); }
+    return;
+  }
   if (_esUSDr && _trmR > 0 && (_trmR < 1000 || _trmR > 10000)) {
     if(!confirm('La TRM digitada es '+_trmR.toLocaleString()+', un valor fuera de lo normal (suele estar entre 3.000 y 5.000).\n\n¿Es correcta?')) {
       const _t = document.getElementById('res-trm'); if(_t){ _t.focus(); }
@@ -6819,6 +6828,11 @@ async function guardarReserva() {
     checkin: ci, checkout: co,
     canal, iva: document.getElementById('res-iva')?.value || 'incluido', empresa: document.getElementById('res-empresa').value.trim(), pagador: document.getElementById('res-pagador')?.value || 'Huésped / Arrendatario',
     moneda: document.getElementById('res-moneda')?.value || 'COP',
+    // Sol Santiago 6-ago-2026: la tabla reservas nunca guardaba trm/tarifa_usd (no estaban
+    // en este objeto), así que el candado de TRM validaba el dato pero se perdía antes de
+    // llegar a Reservas. Se fija tomando los mismos _trmR/tarifa ya validados arriba.
+    trm: _esUSDr ? (_trmR || null) : null,
+    tarifa_usd: _esUSDr ? (tarifa || null) : null,
     tipoAptoManual: document.getElementById('res-tipo-manual')?.value || '',
     config: document.getElementById('res-config')?.value || 'completo',
     tipoTarifa: document.getElementById('res-tipotarifa')?.value || 'TxN',
@@ -8766,7 +8780,6 @@ window._regRender = function(){
     cuerpo = '<div id="reg-print" class="ltm3p"><div class="ltm3-head"><img src="'+window._REG_LOGO+'" class="ltm3-logo"><div class="ltm3-t">REGISTRO LTM3</div>'
       + '<div class="ltm3-room"><b>HABITACIÓN</b> / ROOM<br>'+_inH('rg-hab',apto)+'</div></div>'
       + '<div class="ltm3-fecha">Fecha Llegada: '+_inH('rg-ci',ci)+' &nbsp; Fecha Salida (CKO): '+_inH('rg-co',co)+' &nbsp; Noches: '+_inH('rg-noches',noches)+'</div>'
-      + '<div class="ltm3-fecha">Tarifa: '+_inH('rg-tarifa',tarifa)+' &nbsp; Valor en letras: '+_inH('rg-tarifa-letras',tletras)+'</div>'
       + '<div class="reg-g2">'
         + lc('Nombre:','First Name:',_in('rg-l-nom',nombre))
         + lc('Apellidos:','Last Name:',_in('rg-l-ape',ape))
