@@ -6798,7 +6798,28 @@ async function guardarReserva() {
   }catch(_e){}
   // Insertar — primero borrar días que ya existan para ese apto en ese rango (SOLO edificio activo)
   await sb.from('rack').delete().in('apto', _aptosW2).gte('fecha', ci).lte('fecha', co).eq('edificio', EDIFICIO_ACTIVO);
-  if(window._reservaEditOld && window._reservaEditOld.apto && window._reservaEditOld.checkin && window._reservaEditOld.checkout){ var _ro=window._reservaEditOld; try{ await sb.from('rack').delete().eq('apto',_ro.apto).gte('fecha',_ro.checkin).lte('fecha',_ro.checkout).eq('edificio',EDIFICIO_ACTIVO); }catch(e){} window._reservaEditOld=null; }
+  if(window._reservaEditOld && window._reservaEditOld.apto && window._reservaEditOld.checkin && window._reservaEditOld.checkout){
+    var _ro=window._reservaEditOld;
+    try{
+      await sb.from('rack').delete().eq('apto',_ro.apto).gte('fecha',_ro.checkin).lte('fecha',_ro.checkout).eq('edificio',EDIFICIO_ACTIVO);
+      // Sol Sebastian 6-ago-2026 (apto 301/Paola): al mover una reserva a otro apto (o acortarla),
+      // las fechas que quedan libres en el apto viejo se borraban del rack sin dejar nada en su lugar
+      // — quedaba un hueco sin fila, y el rack seguía mostrando el estado viejo (CKO) porque nunca
+      // se refrescaba a "Libre". Ahora se rellenan explícitamente como Libre.
+      var _libreRows = [];
+      var _dLoop = new Date(_ro.checkin);
+      var _dFin = new Date(_ro.checkout);
+      while (_dLoop <= _dFin) {
+        var _fLoop = _dLoop.toISOString().split('T')[0];
+        var _mismoApto = (_ro.apto === apto) && _aptosW2.indexOf(_ro.apto) >= 0;
+        var _dentroRangoNuevo = (_fLoop >= ci && _fLoop <= co);
+        if (!(_mismoApto && _dentroRangoNuevo)) { _libreRows.push({ fecha:_fLoop, apto:_ro.apto, estado:'Libre', edificio:EDIFICIO_ACTIVO, updated_by:currentUser.id }); }
+        _dLoop.setDate(_dLoop.getDate()+1);
+      }
+      if (_libreRows.length) { await sb.from('rack').insert(_libreRows); }
+    }catch(e){}
+    window._reservaEditOld=null;
+  }
   const { error } = await sb.from('rack').insert(rows);
 
   if (error) {
