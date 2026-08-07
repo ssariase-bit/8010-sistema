@@ -1533,8 +1533,18 @@ window._enLista = function(base, klExtra){
 window._puedeConfidencial = function(){ return window._enLista(window._WL_CONFID_8010, window._WL_CONFID_KL_EXTRA); };
 window._puedeExtrasTodos = function(){ return window._enLista(window._WL_EXTRAS_8010, window._WL_EXTRAS_KL_EXTRA); };
 window._puedeSistema = function(){ return (currentProfile&&currentProfile.rol)==='gerente_general'; };
+// Sol. Sebastián Martínez (23-jul-2026, 8010): módulos de Compras/Financiero que solo debe ver
+// el equipo de compras/financiero de 8010, no toda la operación. NO se restringe en Kubik.
+window._WL_COMPRAS_FIN_8010 = ['adriana.bernal@8010urbanliving.com','compras@8010urbanliving.com','cristina.cervino@8010urbanliving.com','fabio.malaver@8010urbanliving.com','julian@elfinanciero.co','maria.tosta@8010urbanliving.com','natalia.munoz@8010urbanliving.com','info@elfinanciero.co'];
+window._puedeComprasFin8010 = function(){
+  if((typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.rol)==='gerente_general') return true;
+  if(typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO!=='8010') return true;
+  var em=window._miEmail(); if(!em) return false;
+  return window._WL_COMPRAS_FIN_8010.map(function(x){return x.toLowerCase();}).indexOf(em)>-1;
+};
 // Ítems restringidos por grupo
 window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','financiero-kl','nomina','indicadores','ventas-linea','personal-list'];
+window._ITEMS_COMPRAS_FIN_8010 = ['inventario-list','compras-orden-form','cartera-list','por-pagar-list','proveedores-list','flujo-caja-list','flujo-semanal-list'];
 window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma'];
 // Módulos construidos sobre el presupuesto 2026 y las entidades 80-10 / LTM3 / PH (solo 8010): no se muestran en Kubik
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
@@ -1547,6 +1557,7 @@ window._itemPermitido = function(it){
   if(window._ITEMS_SOLO_8010.indexOf(it.id)>-1 && (typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')) return false;
   if(window._ITEMS_SOLO_KUBIK.indexOf(it.id)>-1 && (typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO!=='kubik')) return false;
   if(window._ITEMS_CONFID.indexOf(it.id)>-1 && !window._puedeConfidencial()) return false;
+  if(window._ITEMS_COMPRAS_FIN_8010.indexOf(it.id)>-1 && !window._puedeComprasFin8010()) return false;
   if(window._ITEMS_SISTEMA.indexOf(it.id)>-1 && !window._puedeSistema()) return false;
   return true;
 };
