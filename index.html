@@ -5474,11 +5474,17 @@ window._esActaNov = function(n){
 // se perdía la pestaña y volvía a Novedades. La causa: el selector de fecha y el botón
 // "Solo abiertas" reescribían el parámetro `filtro`. Ahora la pestaña (''|'actas'|'todas')
 // viaja aparte del filtro de estado (soloAbiertas) y de la fecha, y todos se conservan entre sí.
-async function renderNovedadesList(filtro='', fechaSel='', soloAbiertas=false) {
+async function renderNovedadesList(filtro, fechaSel, soloAbiertas) {
+  // Sol. Santiago: si se llama sin argumentos (p.ej. al recargar la vista tras marcar
+  // "Revisado"), conservar la pestaña/fecha/filtro activos en vez de resetear a Novedades corrientes.
+  if (filtro === undefined) filtro = window._novListFiltro || '';
+  if (fechaSel === undefined) fechaSel = window._novListFecha || '';
+  if (soloAbiertas === undefined) soloAbiertas = window._novListAbiertas || false;
   // Compatibilidad: llamadas antiguas usaban filtro='abiertas'.
   if (filtro === 'abiertas') { soloAbiertas = true; filtro = ''; }
   soloAbiertas = !!soloAbiertas;
   window._novFecha = fechaSel || '';
+  window._novListFiltro = filtro; window._novListFecha = fechaSel; window._novListAbiertas = soloAbiertas;
   const q = sb.from('novedades').select('*').order('created_at', { ascending: false }).limit(200);
   if (soloAbiertas) q.in('estado', ['Abierto','En proceso','Escalado']);
   if (fechaSel) q.eq('fecha', fechaSel);
