@@ -1163,6 +1163,7 @@ const NAV_ITEMS = {
     { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
     { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
     { id: 'reembolsos-lote', icon: '➕', label: 'Registrar Recibos' },
+    { id: 'anticipos-list', icon: '💵', label: 'Anticipos' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
     { id: 'cargos-form', icon: '➕', label: 'Registrar Cargo' },
@@ -1276,6 +1277,7 @@ const NAV_ITEMS = {
     { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
     { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
     { id: 'reembolsos-lote', icon: '➕', label: 'Registrar Recibos' },
+    { id: 'anticipos-list', icon: '💵', label: 'Anticipos' },
     { id: 'magnifique-list', icon: '🍽️', label: 'Recibos Magnifique' },
     { id: 'cargos-list', icon: '📋', label: 'Listado de Cargos' },
     { section: 'Compras' },
@@ -1487,6 +1489,7 @@ const MENU_COMPLETO = [
   { id: 'reembolsos-list', icon: '💸', label: 'Reembolsos' },
   { id: 'reembolsos-lote', icon: '➕', label: 'Registrar Recibos' },
   { id: 'reembolsos-informe', icon: '🧾', label: 'Informe de Reembolsos' },
+  { id: 'anticipos-list', icon: '💵', label: 'Anticipos' },
   { id: 'magnifique-list', icon: '🍽️', label: EDIFICIO_ACTIVO==='kubik'?'Recibos Bagatelle':'Recibos Magnifique' },
   { id: 'carta-bagatelle-list', icon: '🥐', label: 'Carta Bagatelle' },
   { id: 'cartera-list', icon: '💰', label: 'Cartera (por cobrar)' },
@@ -2808,6 +2811,8 @@ window.renderFlujoSemanal=async function(){
     case 'reembolsos-informe': await renderReembolsoInforme(); break;
     case 'reembolsos-list': await renderReembolsosList(); break;
     case 'reembolsos-lote': await renderReembolsoLote(); break;
+    case 'anticipos-list': await renderAnticiposList(); break;
+    case 'anticipos-form': renderAnticipoForm(); break;
     case 'reembolsos-form': renderGenForm('reembolsos','💸 Registrar Reembolso',[
       {id:'fecha',label:'Fecha de creado (automática)',type:'date',default:TODAY,locked:true},
       {id:'fecha_factura',label:'Fecha del recibo',type:'date'},
@@ -12165,6 +12170,10 @@ async function renderReembolsosList(){
   while(true){ var r=await sb.from('reembolsos').select('*').order('consecutivo',{ascending:false}).range(f,f+999);
     if(r.error){ document.getElementById('main-content').innerHTML='<div class="card">Error: '+esc(r.error.message)+'</div>'; return; }
     d=d.concat(r.data||[]); if(!r.data||r.data.length<1000) break; f+=1000; }
+  // Los recibos de legalización de un Anticipo viven en esta misma tabla (anticipo_id) pero
+  // se gestionan y se muestran desde el módulo Anticipos, no aquí (Sol. Sebastián + Santiago,
+  // 07-ago-2026). Se excluyen para no mezclar los dos flujos en la bandeja general.
+  d=d.filter(function(x){ return !x.anticipo_id; });
   var _APROB=['Aprobado','Pagado','Reembolso recibido completo','Reembolso recibido parcial'];
   // agrupar
   var g={}, orden=[];
@@ -12571,6 +12580,282 @@ async function correoLote(consec){
     showToast('✅ Reembolso #'+consec+' enviado','success');
   }catch(e){ showToast('Error: '+(e&&e.message||e),'error'); }
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// ═══ ANTICIPOS Y LEGALIZACIÓN (Sol. Sebastián 23-jul-2026 + Sol. Santiago 07-ago-2026) ═══
+// Formato: se entrega un anticipo en efectivo a una persona → esa persona legaliza con
+// recibos (Fecha/Ciudad/Proveedor/Concepto + base/IVA) → si sobra efectivo, se REINTEGRA
+// a la caja (movimiento tipo 'Reintegro', igual al que ya usa el cierre de lotes de
+// Reembolsos); si el gasto superó el anticipo, el faltante entra a Caja como egreso
+// 'Pendiente de legalizar' y sigue el flujo normal de Reembolsos.
+// Los recibos de legalización viven en la tabla reembolsos (columna anticipo_id) para
+// reutilizar el motor ya construido (soporte, adjuntos); el listado general de Reembolsos
+// los excluye (ver filtro agregado en renderReembolsosList).
+// Requiere: tabla anticipos + columnas anticipo_id/ciudad/base/iva en reembolsos (SQL aparte;
+// si faltan, cada acción avisa por toast en vez de romperse, mismo criterio del resto del SO).
+// ════════════════════════════════════════════════════════════════════════
+var _ANT_FISCAL_MAP={'LTM3':'LTM3','OT':'80-10','PH':'80-10','Compras':'8i8','Administradores':'8i8'};
+function _anticipoFiscal(cajaId){
+  var k=_ANT_FISCAL_MAP[cajaId]||null;
+  return (k && typeof FISCAL!=='undefined' && FISCAL[k]) ? FISCAL[k] : null;
+}
+async function renderAnticiposList(){
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var fmt=function(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); };
+  var fF=function(f){ if(!f) return '—'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  document.getElementById('main-content').innerHTML='<div class="page-title">💵 Anticipos</div><div class="card">Cargando…</div>';
+  var r=await sb.from('anticipos').select('*').eq('edificio',EDIFICIO_ACTIVO).order('consecutivo',{ascending:false});
+  if(r.error){
+    var msg=/(anticipos|could not find|does not exist|schema cache|relation)/i.test(r.error.message||'') ?
+      'Falta crear la tabla "anticipos" en la base de datos para usar este módulo (avísale a Santiago).' :
+      ('Error: '+esc(r.error.message));
+    document.getElementById('main-content').innerHTML='<div class="page-title">💵 Anticipos</div><div class="card">'+msg+'</div>';
+    return;
+  }
+  var rows=r.data||[];
+  var puede=(typeof window._cmpEsCompras==='function') && window._cmpEsCompras();
+  var abiertos=rows.filter(function(x){ return x.estado==='Abierto'; });
+  var totAbierto=abiertos.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
+  var html=rows.map(function(x){
+    var ref='ANT-'+String(x.consecutivo).padStart(4,'0');
+    var esAbierto=x.estado==='Abierto';
+    var col=esAbierto?{b:'#FEF3C7',t:'#92400E'}:{b:'#D1FAE5',t:'#065F46'};
+    var acc=esAbierto
+      ? '<button onclick="window._anticipoAbrir(\''+x.id+'\')" class="btn btn-sm" style="background:#1A5C2E;color:#fff;border:none;padding:4px 10px;font-size:11px">📝 Legalizar</button>'
+      : '<button onclick="window._anticipoAbrir(\''+x.id+'\')" class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:11px">👁 Ver</button>';
+    return '<tr style="font-size:13px">'
+      +'<td style="font-weight:800;color:#1F3864;white-space:nowrap">'+ref+'</td>'
+      +'<td>'+esc(fF(x.fecha))+'</td>'
+      +'<td>'+esc(x.persona||'—')+'</td>'
+      +'<td>'+esc(x.caja||'—')+'</td>'
+      +'<td style="text-align:right;white-space:nowrap;font-weight:700">'+fmt(x.valor)+'</td>'
+      +'<td style="text-align:right;white-space:nowrap">'+(x.estado==='Legalizado'?fmt(x.total_gastado):'—')+'</td>'
+      +'<td style="text-align:center"><span style="background:'+col.b+';color:'+col.t+';font-weight:700;font-size:11px;padding:2px 10px;border-radius:10px">'+esc(x.estado||'')+'</span></td>'
+      +'<td style="text-align:right;white-space:nowrap">'+acc+'</td></tr>';
+  }).join('');
+  document.getElementById('main-content').innerHTML=
+    '<div class="page-title">💵 Anticipos</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Plata entregada por adelantado a una persona para gastar y legalizar después con recibos. Si sobra efectivo, se reintegra a la caja; si faltó, se registra como reembolso pendiente.</div>'
+    +'<div class="card"><div class="card-header" style="flex-wrap:wrap;gap:8px">'
+    +'<div class="card-title">'+rows.length+' anticipo(s) <span style="font-weight:400;color:#888;font-size:12px">· '+abiertos.length+' abierto(s) · '+fmt(totAbierto)+' sin legalizar</span></div>'
+    +(puede?'<button class="btn btn-sm" style="background:#1A5C2E;color:#fff" onclick="loadView(\'anticipos-form\')">➕ Nuevo anticipo</button>':'')
+    +'</div>'
+    +'<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Ref.</th><th>Fecha</th><th>Persona</th><th>Caja</th><th style="text-align:right">Anticipo</th><th style="text-align:right">Gastado</th><th style="text-align:center">Estado</th><th></th></tr></thead>'
+    +'<tbody>'+(html||'<tr><td colspan="8" style="text-align:center;color:#999;padding:20px">Sin anticipos registrados</td></tr>')+'</tbody></table></div></div>';
+}
+function renderAnticipoForm(){
+  if(!(typeof window._cmpEsCompras==='function' && window._cmpEsCompras())){ showToast('Registrar un anticipo requiere rol de compras, administración o gerencia','error'); loadView('anticipos-list'); return; }
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var q=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'';
+  var _cm=(EB().cajasMenores)||[];
+  var _cajaOpts=_cm.map(function(c){return '<option value="'+String(c.id).replace(/"/g,'')+'">'+String(c.nombre||c.id).replace(/</g,'&lt;')+'</option>';}).join('');
+  document.getElementById('main-content').innerHTML=
+    '<div class="page-title">💵 Nuevo anticipo</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Registra la entrega de efectivo. La persona legaliza después con recibos desde el listado de Anticipos.</div>'
+    +'<div class="card"><div class="form-row col3">'
+      +'<div class="form-group"><label>Persona que recibe *</label><input id="an-persona" placeholder="Nombre completo"></div>'
+      +'<div class="form-group"><label>Cédula</label><input id="an-cedula"></div>'
+      +'<div class="form-group"><label>Caja (origen) *</label><select id="an-caja">'+_cajaOpts+'</select></div>'
+    +'</div><div class="form-row col3">'
+      +'<div class="form-group"><label>Valor entregado *</label><input type="number" id="an-valor" value="0"></div>'
+      +'<div class="form-group"><label>Fecha</label><input type="date" id="an-fecha" value="'+esc(String(TODAY).slice(0,10))+'"></div>'
+      +'<div class="form-group"><label>Entrega</label><input id="an-entregado" value="'+esc(q)+'"></div>'
+    +'</div><div class="form-row">'
+      +'<div class="form-group" style="width:100%"><label>Concepto / motivo</label><input id="an-concepto" style="width:100%" placeholder="Ej: viáticos, compra de insumos…"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="window._anticipoGuardar(this)">💾 Guardar anticipo</button>'
+    +'<button class="btn btn-outline" onclick="loadView(\'anticipos-list\')">Cancelar</button></div></div>';
+}
+window._anticipoGuardar=async function(btn){
+  var persona=document.getElementById('an-persona').value.trim();
+  var caja=document.getElementById('an-caja').value;
+  var valor=Number(document.getElementById('an-valor').value)||0;
+  if(!persona){ showToast('Falta la persona que recibe el anticipo','error'); return; }
+  if(!valor){ showToast('Falta el valor entregado','error'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+  var mx=await sb.from('anticipos').select('consecutivo').eq('edificio',EDIFICIO_ACTIVO).order('consecutivo',{ascending:false}).limit(1);
+  var consec=((mx.data&&mx.data[0]&&Number(mx.data[0].consecutivo))||0)+1;
+  var row={ edificio:EDIFICIO_ACTIVO, consecutivo:consec, persona:persona, cedula:(document.getElementById('an-cedula').value.trim()||null), caja:caja, valor:valor, fecha:document.getElementById('an-fecha').value||TODAY, concepto:(document.getElementById('an-concepto').value.trim()||null), entregado_por:(document.getElementById('an-entregado').value.trim()||null), estado:'Abierto', user_id:currentUser.id };
+  var resp=await sb.from('anticipos').insert(row);
+  if(btn){ btn.disabled=false; btn.textContent='💾 Guardar anticipo'; }
+  if(resp.error){
+    var m=/(anticipos|could not find|does not exist|schema cache|relation)/i.test(resp.error.message||'') ? 'Falta crear la tabla "anticipos" en la base de datos.' : ('Error: '+resp.error.message);
+    showToast(m,'error'); return;
+  }
+  showToast('✅ Anticipo ANT-'+String(consec).padStart(4,'0')+' registrado por '+('$ '+Math.round(valor).toLocaleString('es-CO')),'success');
+  if(typeof loadView==='function') loadView('anticipos-list');
+};
+window._anticipoAbrir=async function(id){
+  var r=await sb.from('anticipos').select('*').eq('id',id).single();
+  if(r.error||!r.data){ showToast('No se encontró el anticipo','error'); return; }
+  renderAnticipoLegalizar(r.data);
+};
+async function renderAnticipoLegalizar(ant){
+  window._antActual=ant;
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var fmt=function(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); };
+  var fF=function(f){ if(!f) return '—'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  var ref='ANT-'+String(ant.consecutivo).padStart(4,'0');
+  var g=await sb.from('reembolsos').select('*').eq('anticipo_id',ant.id).order('fecha_factura',{ascending:true});
+  var gastos=g.data||[];
+  var totGastado=gastos.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
+  window._antGuardadoTotal=totGastado;
+  var cerrado=ant.estado==='Legalizado';
+  var puede=(typeof window._cmpEsCompras==='function') && window._cmpEsCompras();
+  var filas=gastos.map(function(x,i){ return '<tr style="font-size:12px"><td>'+(i+1)+'</td><td>'+esc(fF(x.fecha_factura))+'</td><td>'+esc(x.ciudad||'—')+'</td><td>'+esc(x.empresa||'—')+'</td><td>'+esc(x.descripcion||'')+'</td><td style="text-align:right">'+fmt(x.base)+'</td><td style="text-align:right">'+fmt(x.iva)+'</td><td style="text-align:right;font-weight:700">'+fmt(x.valor)+'</td><td style="text-align:center">'+(x.adjunto?'<a href="'+esc(x.adjunto)+'" target="_blank">📎</a>':'<span style="color:#c00">⚠️</span>')+'</td>'+(!cerrado&&puede?('<td><button class="btn btn-outline btn-sm" style="padding:2px 6px;font-size:10px" onclick="window._anticipoBorrarGasto(\''+x.id+'\')">🗑️</button></td>'):'<td></td>')+'</tr>'; }).join('');
+  var diferencia=ant.valor-totGastado;
+  document.getElementById('main-content').innerHTML=
+    '<div class="page-title">💵 Legalización '+ref+'</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px"><a href="#" onclick="loadView(\'anticipos-list\');return false" style="color:#1F3864">← Volver a Anticipos</a></div>'
+    +'<div class="card" style="margin-bottom:14px"><div class="form-row col3" style="font-size:13px">'
+      +'<div><b>Persona:</b> '+esc(ant.persona||'—')+(ant.cedula?(' · CC '+esc(ant.cedula)):'')+'</div>'
+      +'<div><b>Caja:</b> '+esc(ant.caja||'—')+'</div>'
+      +'<div><b>Fecha entrega:</b> '+esc(fF(ant.fecha))+'</div>'
+    +'</div><div class="form-row col3" style="font-size:13px;margin-top:6px">'
+      +'<div><b>Valor anticipo:</b> '+fmt(ant.valor)+'</div>'
+      +'<div><b>Concepto:</b> '+esc(ant.concepto||'—')+'</div>'
+      +'<div><b>Estado:</b> '+esc(ant.estado||'')+'</div>'
+    +'</div></div>'
+    +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px"><div style="font-weight:700;color:var(--azul)">Recibos de legalización ('+gastos.length+')</div>'
+    +(!cerrado?'<button class="btn btn-outline btn-sm" onclick="window._anticipoAddRow()">+ Añadir recibo</button>':'')+'</div>'
+    +'<div style="overflow-x:auto"><table class="tabla" id="an-tabla"><thead><tr><th>#</th><th>Fecha</th><th>Ciudad</th><th>Proveedor</th><th>Concepto</th><th style="text-align:right">Base</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th><th>📎</th><th></th></tr></thead>'
+    +'<tbody id="an-guardados">'+filas+'</tbody>'
+    +(!cerrado?'<tbody id="an-rows"></tbody>':'')
+    +'<tfoot><tr style="background:var(--azul-c);font-weight:800"><td colspan="7" style="text-align:right">TOTAL GASTADO'+(!cerrado?' (guardado + nuevo)':'')+'</td><td style="text-align:right" id="an-total">'+fmt(totGastado)+'</td><td colspan="2"></td></tr></tfoot>'
+    +'</table></div>'
+    +(!cerrado?'<div style="margin-top:10px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="window._anticipoGuardarGastos(this)">💾 Guardar recibos nuevos</button></div>':'')
+    +'</div>'
+    +(cerrado
+      ? ('<div class="card" style="border-left:4px solid '+(diferencia>=0?'#15803d':'#B91C1C')+'"><div style="font-weight:800;margin-bottom:8px">Legalización cerrada — '+esc(fF(ant.legalizado_at))+'</div>'
+        +'<div style="font-size:13px">Total gastado: '+fmt(totGastado)+' · Valor anticipo: '+fmt(ant.valor)+'</div>'
+        +'<div style="font-size:14px;font-weight:800;margin-top:6px;color:'+(diferencia>=0?'#15803d':'#B91C1C')+'">'+(diferencia>=0?('Efectivo reintegrado a caja: '+fmt(diferencia)):('Reembolso pendiente a la persona: '+fmt(-diferencia)))+'</div>'
+        +'<div style="margin-top:10px"><button class="btn btn-outline btn-sm" onclick="window._anticipoImprimir(\''+ant.id+'\')">🖨️ Ver / imprimir comprobante</button></div></div>')
+      : ('<div class="card"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Cerrar legalización</div>'
+        +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Al cerrar, se compara el total gastado contra el valor del anticipo ('+fmt(ant.valor)+'). Si sobró efectivo, se crea automáticamente el movimiento de <b>Reintegro</b> en Caja; si faltó, queda registrado como reembolso pendiente. Guarda primero los recibos nuevos.</div>'
+        +'<button class="btn" style="background:#B45309;color:#fff" onclick="window._anticipoCerrarLegalizacion(\''+ant.id+'\')">🔒 Cerrar legalización</button></div>'));
+  window._antRows=0; if(!cerrado) window._anticipoAddRow();
+}
+window._anticipoAddRow=function(){
+  var tb=document.getElementById('an-rows'); if(!tb) return;
+  var tr=document.createElement('tr'); tr.className='an-row'; tr.style.fontSize='12px';
+  tr.innerHTML='<td></td>'
+    +'<td><input type="date" class="an-fec" style="font-size:12px;width:120px"></td>'
+    +'<td><input class="an-ciu" style="width:90px;font-size:12px" placeholder="Ciudad"></td>'
+    +'<td><input class="an-prov" style="width:110px;font-size:12px" placeholder="Proveedor"></td>'
+    +'<td><input class="an-desc" style="width:100%;min-width:140px;font-size:12px" placeholder="Concepto"></td>'
+    +'<td><input type="number" class="an-base" style="width:90px;font-size:12px;text-align:right" value="0" oninput="window._anticipoRecalc(this)"></td>'
+    +'<td><input type="number" class="an-iva" style="width:80px;font-size:12px;text-align:right" value="0" oninput="window._anticipoRecalc(this)"></td>'
+    +'<td class="an-tot" style="text-align:right;font-weight:700">$ 0</td>'
+    +'<td><input type="file" class="an-file" accept="image/*,application/pdf,.pdf" style="font-size:11px;width:100px"></td>'
+    +'<td><button class="btn btn-outline btn-sm" onclick="this.closest(\'tr\').remove();window._anticipoTotal()" title="Quitar">🗑️</button></td>';
+  tb.appendChild(tr);
+};
+window._anticipoRecalc=function(inp){
+  var tr=inp.closest('tr'); var base=Number(tr.querySelector('.an-base').value)||0; var iva=Number(tr.querySelector('.an-iva').value)||0;
+  tr.querySelector('.an-tot').textContent='$ '+Math.round(base+iva).toLocaleString('es-CO');
+  window._anticipoTotal();
+};
+window._anticipoTotal=function(){
+  var t=Number(window._antGuardadoTotal)||0;
+  document.querySelectorAll('#an-rows .an-row').forEach(function(tr){ t+=(Number(tr.querySelector('.an-base').value)||0)+(Number(tr.querySelector('.an-iva').value)||0); });
+  var el=document.getElementById('an-total'); if(el) el.textContent='$ '+Math.round(t).toLocaleString('es-CO');
+};
+window._anticipoGuardarGastos=async function(btn){
+  var ant=window._antActual; if(!ant) return;
+  var filas=[].slice.call(document.querySelectorAll('#an-rows .an-row'));
+  var recibos=[];
+  for(var i=0;i<filas.length;i++){ var tr=filas[i];
+    var base=Number(tr.querySelector('.an-base').value)||0; var iva=Number(tr.querySelector('.an-iva').value)||0;
+    var desc=tr.querySelector('.an-desc').value.trim(); var prov=tr.querySelector('.an-prov').value.trim();
+    if(!(base||iva||desc)) continue;
+    var _adjU=null; var _fi=tr.querySelector('.an-file');
+    if(_fi && _fi.files && _fi.files[0]){
+      if(btn) btn.textContent='Subiendo recibos…';
+      try{ var _f=_fi.files[0]; var _p='reembolsos/'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'_'+String(_f.name||'recibo').replace(/[^a-zA-Z0-9._-]/g,'_'); var _up=await sb.storage.from('adjuntos').upload(_p,_f,{cacheControl:'3600',upsert:false,contentType:_f.type||undefined}); if(!_up.error) _adjU=sb.storage.from('adjuntos').getPublicUrl(_p).data.publicUrl; }catch(e){}
+    }
+    recibos.push({ anticipo_id:ant.id, fecha_factura:(tr.querySelector('.an-fec').value||null), ciudad:(tr.querySelector('.an-ciu').value.trim()||null), empresa:(prov||null), descripcion:(desc||'(sin descripción)'), base:base, iva:iva, valor:(base+iva), adjunto:_adjU, caja:ant.caja, edificio:ant.edificio, entregado_por:ant.persona, estado:'Pendiente', user_id:currentUser.id });
+  }
+  if(!recibos.length){ showToast('Añade al menos un recibo','error'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+  var resp=await sb.from('reembolsos').insert(recibos);
+  if(resp.error && /(ciudad|anticipo_id|base|could not find|does not exist|schema cache|column)/i.test(resp.error.message||'')){
+    if(btn){ btn.disabled=false; btn.textContent='💾 Guardar recibos nuevos'; }
+    showToast('Faltan columnas en "reembolsos" (anticipo_id/ciudad/base/iva) para guardar la legalización. Avísale a Santiago.','error'); return;
+  }
+  if(btn){ btn.disabled=false; btn.textContent='💾 Guardar recibos nuevos'; }
+  if(resp.error){ showToast('Error al guardar: '+resp.error.message,'error'); return; }
+  showToast('✅ '+recibos.length+' recibo(s) guardados','success');
+  window._anticipoAbrir(ant.id);
+};
+window._anticipoBorrarGasto=async function(id){
+  if(!(typeof window._cmpEsCompras==='function' && window._cmpEsCompras())){ showToast('Quitar un recibo requiere rol de compras, administración o gerencia','error'); return; }
+  if(!confirm('¿Quitar este recibo de la legalización?')) return;
+  var r=await sb.from('reembolsos').delete().eq('id',id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('Recibo eliminado','success');
+  if(window._antActual) window._anticipoAbrir(window._antActual.id);
+};
+window._anticipoCerrarLegalizacion=async function(id){
+  var r=await sb.from('anticipos').select('*').eq('id',id).single();
+  if(r.error||!r.data){ showToast('No se encontró el anticipo','error'); return; }
+  var ant=r.data;
+  if(ant.estado==='Legalizado'){ showToast('Este anticipo ya fue legalizado','info'); return; }
+  var g=await sb.from('reembolsos').select('valor').eq('anticipo_id',id);
+  var gastos=g.data||[];
+  if(!gastos.length){ showToast('No hay recibos guardados. Guarda al menos uno antes de cerrar.','error'); return; }
+  var totGastado=gastos.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
+  var diferencia=Number(ant.valor)-totGastado;
+  var ref='ANT-'+String(ant.consecutivo).padStart(4,'0');
+  if(!confirm('CERRAR LEGALIZACIÓN '+ref+'\n\nAnticipo: $ '+Math.round(ant.valor).toLocaleString('es-CO')+'\nGastado: $ '+Math.round(totGastado).toLocaleString('es-CO')+'\n'+(diferencia>=0?('Se reintegrará a caja: $ '+Math.round(diferencia).toLocaleString('es-CO')):('Quedará como reembolso pendiente: $ '+Math.round(-diferencia).toLocaleString('es-CO')))+'\n\n¿Confirmar? Esta acción no se puede deshacer.')) return;
+  var upd=await sb.from('anticipos').update({ estado:'Legalizado', total_gastado:totGastado, diferencia:diferencia, legalizado_at:new Date().toISOString() }).eq('id',id);
+  if(upd.error){ showToast('Error al cerrar: '+upd.error.message,'error'); return; }
+  try{
+    if(diferencia>0){
+      await sb.from('caja').insert({ fecha:TODAY, tipo:'Reintegro', caja:ant.caja, concepto:'Reintegro anticipo '+ref+' ('+(ant.persona||'')+')', valor:diferencia, recibo_no:ref, estado_legal:null, entregado_por:ant.persona, edificio:ant.edificio, user_id:currentUser.id });
+    } else if(diferencia<0){
+      await sb.from('caja').insert({ fecha:TODAY, tipo:'Egreso', caja:ant.caja, concepto:'Reembolso adicional anticipo '+ref+' ('+(ant.persona||'')+') — el gasto superó el anticipo', valor:-diferencia, recibo_no:ref, estado_legal:'Pendiente de legalizar', entregado_por:ant.persona, edificio:ant.edificio, user_id:currentUser.id });
+    }
+  }catch(e){ showToast('Legalización cerrada, pero no se pudo crear el movimiento de Caja automático. Créalo manualmente.','info'); }
+  showToast('🔒 Legalización '+ref+' cerrada','success');
+  window._anticipoAbrir(id);
+};
+function _anticipoComprobanteHTML(ant, gastos){
+  var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var fmt=function(n){ return '$ '+Math.round(Number(n)||0).toLocaleString('es-CO'); };
+  var fF=function(f){ if(!f) return '—'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  var fis=_anticipoFiscal(ant.caja);
+  var ref='ANT-'+String(ant.consecutivo).padStart(4,'0');
+  var totGastado=gastos.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
+  var diferencia=Number(ant.valor)-totGastado;
+  var filas=gastos.map(function(x,i){ return '<tr><td style="border:1px solid #ccc;padding:5px;text-align:center">'+(i+1)+'</td><td style="border:1px solid #ccc;padding:5px">'+esc(fF(x.fecha_factura))+'</td><td style="border:1px solid #ccc;padding:5px">'+esc(x.ciudad||'')+'</td><td style="border:1px solid #ccc;padding:5px">'+esc(x.empresa||'')+'</td><td style="border:1px solid #ccc;padding:5px">'+esc(x.descripcion||'')+'</td><td style="border:1px solid #ccc;padding:5px;text-align:right">'+fmt(x.base)+'</td><td style="border:1px solid #ccc;padding:5px;text-align:right">'+fmt(x.iva)+'</td><td style="border:1px solid #ccc;padding:5px;text-align:right">'+fmt(x.valor)+'</td></tr>'; }).join('');
+  return '<div style="font-family:Arial,Helvetica,sans-serif;max-width:720px;margin:0 auto;color:#111;border:2px solid #1F3864;border-radius:8px;padding:20px">'
+    +'<div style="text-align:center;font-size:15px;font-weight:800;color:#1F3864;border-bottom:2px solid #1F3864;padding-bottom:8px">'+(fis?esc(fis.razon)+' — NIT '+esc(fis.nit):'')+'<br>REEMBOLSO / LEGALIZACIÓN DE ANTICIPO</div>'
+    +'<div style="text-align:center;margin:10px 0;font-size:13px;font-weight:800;color:#1F3864;background:#eef3fb;border:1px solid #1F3864;border-radius:6px;padding:6px">'+ref+'</div>'
+    +'<table style="width:100%;font-size:13px;margin-bottom:8px"><tr><td style="width:50%"><b>Nombre:</b> '+esc(ant.persona||'')+'</td><td><b>Cédula:</b> '+esc(ant.cedula||'—')+'</td></tr><tr><td><b>Fecha entrega anticipo:</b> '+esc(fF(ant.fecha))+'</td><td><b>Caja:</b> '+esc(ant.caja||'')+'</td></tr></table>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:11.5px"><thead><tr style="background:#1F3864;color:#fff"><th style="border:1px solid #ccc;padding:5px">#</th><th style="border:1px solid #ccc;padding:5px">Fecha</th><th style="border:1px solid #ccc;padding:5px">Ciudad</th><th style="border:1px solid #ccc;padding:5px">Proveedor</th><th style="border:1px solid #ccc;padding:5px">Concepto</th><th style="border:1px solid #ccc;padding:5px">Base</th><th style="border:1px solid #ccc;padding:5px">IVA</th><th style="border:1px solid #ccc;padding:5px">Total</th></tr></thead><tbody>'+filas+'</tbody>'
+    +'<tfoot><tr style="font-weight:800;background:#eef3fb"><td colspan="7" style="border:1px solid #ccc;padding:5px;text-align:right">TOTAL GASTOS</td><td style="border:1px solid #ccc;padding:5px;text-align:right">'+fmt(totGastado)+'</td></tr></tfoot></table>'
+    +'<table style="width:100%;font-size:13px;margin-top:10px"><tr><td style="padding:4px 0"><b>VALOR ANTICIPO</b></td><td style="text-align:right">'+fmt(ant.valor)+'</td></tr>'
+    +(diferencia>=0?('<tr><td style="padding:4px 0"><b>EFECTIVO REINTEGRADO</b></td><td style="text-align:right;color:#15803d;font-weight:800">'+fmt(diferencia)+'</td></tr>'):('<tr><td style="padding:4px 0"><b>LEGALIZACIÓN PENDIENTE (reembolso a favor)</b></td><td style="text-align:right;color:#B91C1C;font-weight:800">'+fmt(-diferencia)+'</td></tr>'))
+    +(ant.concepto?('<tr><td style="padding:4px 0"><b>Observaciones</b></td><td style="text-align:right">'+esc(ant.concepto)+'</td></tr>'):'')
+    +'</table>'
+    +'<div style="display:flex;justify-content:space-between;margin-top:40px;font-size:12px;text-align:center">'
+    +'<div style="width:45%;border-top:1px solid #333;padding-top:6px">Entrega ('+esc(ant.persona||'')+')</div>'
+    +'<div style="width:45%;border-top:1px solid #333;padding-top:6px">Recibe / Aprueba</div>'
+    +'</div>'
+    +'</div>';
+}
+window._anticipoImprimir=async function(id){
+  var r=await sb.from('anticipos').select('*').eq('id',id).single();
+  if(r.error||!r.data){ showToast('No se encontró el anticipo','error'); return; }
+  var ant=r.data;
+  var g=await sb.from('reembolsos').select('*').eq('anticipo_id',id).order('fecha_factura',{ascending:true});
+  var gastos=g.data||[];
+  var comp=_anticipoComprobanteHTML(ant, gastos);
+  var html='<!doctype html><html lang="es"><head><meta charset="utf-8"><title>'+('ANT-'+String(ant.consecutivo).padStart(4,'0'))+'</title><style>@media print{.no-print{display:none !important}}</style></head><body style="background:#f4f5f7;margin:0;padding:20px">'
+    +'<div class="no-print" style="max-width:760px;margin:0 auto 12px;display:flex;gap:8px;justify-content:flex-end"><button onclick="window.print()" style="background:#1F3864;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:700">🖨️ Imprimir / PDF</button></div>'
+    +comp+'</body></html>';
+  var w=window.open('','_blank'); if(!w){ showToast('Permite ventanas emergentes','error'); return; } w.document.write(html); w.document.close();
+};
 
 // ════════ RÓTULO DE CARPETA (imprimible, sin correo/WSP) — solicitud Sebastián ════════
 async function imprimirRotuloCarpeta(id){
