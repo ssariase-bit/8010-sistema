@@ -8982,9 +8982,9 @@ window.verReciboMagnifique = async function(id){
   ov.innerHTML=cab+visor+'<div style="margin-top:12px;display:flex;gap:10px"><a href="'+url+'" target="_blank" rel="noopener" style="background:#EEF2FF;color:#1D3461;font-weight:600;font-size:12px;padding:6px 14px;border-radius:8px;text-decoration:none">📎 Abrir / descargar</a><button onclick="this.parentNode.parentNode.remove()" style="background:#fff;color:#333;border:none;font-size:12px;padding:6px 14px;border-radius:8px;cursor:pointer">✖ Cerrar</button></div>';
   document.body.appendChild(ov);
 };
-window.cambiarEstadoSolicitud = async function(id,estado){ if(estado==='Hecho'){ return window.responderSolicitud(id); } await sb.from('solicitudes').update({estado:estado}).eq('id',id); if(typeof showToast==='function') showToast('Estado: '+estado,'success'); if(typeof renderSolicitudes==='function') renderSolicitudes(); };
+window.cambiarEstadoSolicitud = async function(id,estado){ if(estado==='Hecho'){ return window.responderSolicitud(id); } await sb.from('solicitudes').update({estado:estado}).eq('id',id); if(typeof showToast==='function') showToast('Estado: '+estado,'success'); if(typeof loadView==='function') loadView('solicitudes'); else if(typeof renderSolicitudes==='function') renderSolicitudes(); };
 window.responderSolicitud = async function(id){
-  var t=prompt('¿Qué se hizo? (obligatorio — se guarda como respuesta y se avisa a Gerencia)'); if(t===null || !String(t).trim()){ if(typeof renderSolicitudes==='function') renderSolicitudes(); return; }
+  var t=prompt('¿Qué se hizo? (obligatorio — se guarda como respuesta y se avisa a Gerencia)'); if(t===null || !String(t).trim()){ if(typeof loadView==='function') loadView('solicitudes'); else if(typeof renderSolicitudes==='function') renderSolicitudes(); return; }
   var sres=await sb.from('solicitudes').select('solicitante,descripcion,prioridad,edificio').eq('id',id).single();
   await sb.from('solicitudes').update({respuesta:t, estado:'Hecho', resuelto_at:new Date().toISOString()}).eq('id',id);
   if(typeof showToast==='function') showToast('Respuesta guardada — copia enviada a Gerencia','success');
@@ -8994,9 +8994,9 @@ window.responderSolicitud = async function(id){
     var _ger=(EDIFICIO_ACTIVO==='kubik')?'sariase@8i8op.com':'santiago.arias@8010urbanliving.com'; var _dest=[_ger]; var _re=(typeof _dirEmail==='function')?_dirEmail(s.solicitante):null; if(_re && _dest.indexOf(_re)<0) _dest.push(_re);
     if(typeof _comEnviarCorreo==='function'){ _dest.forEach(function(to){ _comEnviarCorreo(to, 'Solicitud resuelta — '+((typeof EB==='function'&&EB().nombre)||''), _h); }); }
   }catch(e){}
-  renderSolicitudes();
+  if(typeof loadView==='function') loadView('solicitudes'); else renderSolicitudes();
 };
-window.eliminarSolicitud = async function(id){ if(!confirm('¿Eliminar esta solicitud?')) return; await sb.from('solicitudes').delete().eq('id',id); if(typeof showToast==='function') showToast('Eliminada','success'); renderSolicitudes(); };
+window.eliminarSolicitud = async function(id){ if(!confirm('¿Eliminar esta solicitud?')) return; await sb.from('solicitudes').delete().eq('id',id); if(typeof showToast==='function') showToast('Eliminada','success'); if(typeof loadView==='function') loadView('solicitudes'); else renderSolicitudes(); };
 window.renderSolicitudes = async function(filtro){
   filtro=(filtro===undefined?(window._solFiltro||''):filtro); window._solFiltro=filtro;
   var _cols='id,created_at,edificio,solicitante,dirigido_a,descripcion,prioridad,estado,tiene_imagen,adjuntos,respuesta,resuelto_at,comentario_gerencia,revisado_por,revisado_at';
