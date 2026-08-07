@@ -2313,8 +2313,8 @@ window.renderFlujoSemanal=async function(){
   window._sjSave=function(){clearTimeout(window._sjT);window._sjT=setTimeout(function(){try{var st=window._sjSt;sb.from('config').upsert({id:window._sjKey(st.ed),valor:JSON.stringify({items:st.items}),updated_at:new Date().toISOString()});}catch(e){}},500);};
   window._sjFind=function(id){var st=window._sjSt;if(!st)return null;for(var i=0;i<st.items.length;i++)if(st.items[i].id===id)return st.items[i];return null;};
   window._sjSet=function(id,campo,val){var it=window._sjFind(id);if(!it)return;it[campo]=val;window._sjSave();if(campo==='valor'||campo==='estado')window._sjTot();};
-  window._sjAdd=function(){var st=window._sjSt;if(!st)return;st.items.push({id:_uid(),fecha:'',cliente:'',desde:'',hasta:'',valor:0,estado:'Tentativa',obs:''});window._sjSave();window.renderSalaJuntas();};
-  window._sjDel=function(id){var st=window._sjSt;if(!st)return;for(var i=0;i<st.items.length;i++){if(st.items[i].id===id){st.items.splice(i,1);break;}}window._sjSave();window.renderSalaJuntas();};
+  window._sjAdd=function(){var st=window._sjSt;if(!st)return;st.items.push({id:_uid(),fecha:'',cliente:'',desde:'',hasta:'',valor:0,estado:'Tentativa',obs:''});window._sjSave();window._sjRenderOnly();};
+  window._sjDel=function(id){var st=window._sjSt;if(!st)return;for(var i=0;i<st.items.length;i++){if(st.items[i].id===id){st.items.splice(i,1);break;}}window._sjSave();window._sjRenderOnly();};
   window._sjTot=function(){
     var st=window._sjSt;if(!st)return;var tot=0,conf=0,cnt=0;
     st.items.forEach(function(x){var v=+x.valor||0;if(x.estado!=='Cancelada'){tot+=v;cnt++;}if(x.estado==='Confirmada'||x.estado==='Realizada')conf+=v;});
@@ -2331,6 +2331,18 @@ window.renderFlujoSemanal=async function(){
     try{items=await window._sjLoad(ed);}catch(e){mc.innerHTML='<div style="padding:20px;color:#b00">Error: '+_esc(e.message)+'</div>';return;}
     items.sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
     window._sjSt={ed:ed,items:items};
+    window._sjRenderOnly();
+  };
+  // Sol. Ricardo Vallejo (Kubik, 27-jul-2026): "Nueva reserva" no dejaba ingresar reservas.
+  // Causa: _sjAdd() agregaba la fila en memoria y programaba el guardado con 500ms de demora
+  // (_sjSave), pero llamaba de inmediato a renderSalaJuntas(), que volvia a LEER de la base de
+  // datos antes de que el guardado se hubiera completado -- esa lectura traia la lista vieja
+  // (sin la fila nueva) y la sobreescribia, borrando la reserva recien agregada. Fix: separar el
+  // redibujado (usa el estado ya en memoria, sin leer la base) de la carga inicial (que si lee).
+  window._sjRenderOnly=function(){
+    var mc=document.getElementById('main-content');if(!mc)return;
+    var st=window._sjSt;if(!st)return;
+    var ed=st.ed, items=st.items;
     var estOpt=function(sel){return ESTADOS.map(function(e){return '<option'+(e===sel?' selected':'')+'>'+e+'</option>';}).join('');};
     var color={Tentativa:'#92400e',Confirmada:'#065f46',Realizada:'#1e40af',Cancelada:'#991b1b'};
     var h='';
