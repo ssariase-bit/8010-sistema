@@ -4514,7 +4514,13 @@ async function saveApto() {
     for (let i = 0; i < 400; i++) {
       // Estadías: patrón CKI → Ocupado → CKO. Bloqueos/Mantenimiento/etc: el mismo estado en todo el rango.
       const est = ocupacional ? (f === updates.checkin ? 'Check-in hoy' : (f === updates.checkout ? 'Check-out hoy' : 'Ocupado')) : updates.estado;
-      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: updates.tarifa, tarifa_usd: updates.tarifa_usd, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, acompanantes: updates.acompanantes, huespedes_extra: updates.huespedes_extra, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+      // Sol. Sebastián/Santiago 07-ago-2026 (caso Irene Cuevas, apto 802): el día de Check-out NO debe
+      // llevar tarifa — igual que en el flujo de "Nueva reserva" — porque _esVentaAloja() lo cuenta como
+      // una noche vendida más, inflando las ventas del mes en una noche extra por cada estadía corregida
+      // con "Aplicar a toda la estadía". Se detectaron 97 filas afectadas (8010 + Kubik) por este mismo patrón.
+      const _tarifaDia = (est === 'Check-out hoy') ? null : updates.tarifa;
+      const _tarifaUsdDia = (est === 'Check-out hoy') ? null : updates.tarifa_usd;
+      rows.push({ fecha: f, apto: aNum, estado: est, huesped: updates.huesped || null, nombre: updates.nombre, apellido1: updates.apellido1, apellido2: updates.apellido2, tipo: updates.tipo, canal: updates.canal, checkin: updates.checkin, checkout: updates.checkout, tarifa: _tarifaDia, tarifa_usd: _tarifaUsdDia, moneda: updates.moneda, observaciones: updates.observaciones, iva: updates.iva, tratamiento: updates.tratamiento, empresa: updates.empresa, acompanantes: updates.acompanantes, huespedes_extra: updates.huespedes_extra, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
       if (f === updates.checkout) break;
       f = addDay(f);
     }
