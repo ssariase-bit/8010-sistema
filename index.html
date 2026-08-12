@@ -2927,7 +2927,7 @@ window._rkRelevoAj = function(rackRows){
 // getRec(apto) devuelve el registro de rack de ese apto para el día evaluado (o undefined).
 // relevoMap (opcional): { 'apto|fecha': {tarifaSale,tarifaEntra,...} }. Si viene, en los días de
 // relevo se cuentan AMBAS tarifas (reemplaza la tarifa única de la fila del rack).
-function calcKpisDia(registrosHoy, relevoMap){
+function calcKpisDia(registrosHoy, relevoMap, compSet){
   // Resolver duplicados (mismo apto/fecha) con criterio único: estado más relevante; en empate, el más reciente
   const PRIO = { 'Check-in hoy':6,'Check-out hoy':6,'Ocupado':5,'Completo':5,'Limpieza':3,'Mantenimiento':3,'Bloqueado':2,'No Show':4,'Libre':1,'Sale de viaje':5 };
   const byApto = {};
@@ -2952,7 +2952,9 @@ function calcKpisDia(registrosHoy, relevoMap){
       const incluida = (r?.observaciones||'').includes('Apto completo'); // A de apto completo: fuera de inventario
       if (FUERA.includes(e) || incluida) return;
       disp++;
-      if (OCU.includes(e)){
+      // Sol. Santiago (12-ago-2026): Complementary no debe sumar al % de ocupación.
+      const esComp = window._esCompRack ? window._esCompRack(r, compSet) : false;
+      if (OCU.includes(e) && !esComp){
         ocu++;
         const _rkRel = (relevoMap && r) ? relevoMap[a+'|'+r.fecha] : null;
         if (_rkRel){ // relevo: reemplaza la tarifa única de la fila por las DOS del par (no dobla)
@@ -2960,7 +2962,7 @@ function calcKpisDia(registrosHoy, relevoMap){
           if (Number(_rkRel.tarifaEntra)>0) tar.push(Number(_rkRel.tarifaEntra));
         } else if (r && r.tarifa && Number(r.tarifa)>0) tar.push(Number(r.tarifa));
       }
-      if (EN_CASA.includes(e)) enCasa++;
+      if (EN_CASA.includes(e) && !esComp) enCasa++;
     });
     return {ocu, disp, tar, enCasa};
   };
@@ -3067,10 +3069,12 @@ async function renderIndicadores(){
   const nVend = vendibles.length || 1;
   const OCU = ['Ocupado','Check-in hoy','Completo','Sale de viaje'];
   main.innerHTML = '<div class="page-title">📊 Indicadores de Ocupación y Ventas</div><p style="color:var(--gris-t)">Cargando datos del rack…</p>';
-  const [curR, prevR] = await Promise.all([
-    _rackRango('estado,tarifa,fecha,apto', yr+'-01-01', yr+'-12-31'),
-    _rackRango('estado,tarifa,fecha,apto', (yr-1)+'-01-01', (yr-1)+'-12-31')
+  const [curR, prevR, _compSetInd] = await Promise.all([
+    _rackRango('estado,tarifa,fecha,apto,reserva_id', yr+'-01-01', yr+'-12-31'),
+    _rackRango('estado,tarifa,fecha,apto,reserva_id', (yr-1)+'-01-01', (yr-1)+'-12-31'),
+    window._fetchCompReservaIds()
   ]);
+  const compSetInd = _compSetInd || new Set();
   const _vendSet = new Set(vendibles);
   function agg(rows){
     const m = Array.from({length:12}, ()=>({noches:0,nTar:0,ventas:0}));
@@ -3081,7 +3085,8 @@ async function renderIndicadores(){
       if(isNaN(mi)||mi<0||mi>11) return;
       const t=Number(r.tarifa)||0;
       const cobrado = window._esVentaAloja(r);       // regla canónica de venta de alojamiento
-      const fisica = OCU.indexOf(r.estado)>-1;                 // ocupacion fisica (incluye cortesias)
+      // Sol. Santiago (12-ago-2026): Complementary ya NO cuenta en la ocupación física.
+      const fisica = OCU.indexOf(r.estado)>-1 && !window._esCompRack(r,compSetInd);
       if(cobrado||fisica) m[mi].noches++;
       if(cobrado){ m[mi].nTar++; m[mi].ventas+=t; }
     });
@@ -3177,13 +3182,14 @@ async function renderDashboard() {
   // consulta y un mes de 8010 supera ese tope (31 días × 33 unidades = 1.023 filas),
   // por lo que la consulta sin paginar descartaba en silencio las últimas filas y
   // subestimaba la venta del mes (julio 2026: $10.288.306 menos de lo real).
-  const [rHoy, rMes, novRes, mantRes, turnosHoy, turnosUlt] = await Promise.all([
+  const [rHoy, rMes, novRes, mantRes, turnosHoy, turnosUlt, _compSetDash] = await Promise.all([
     sb.from('rack').select('*').eq('fecha', TODAY).eq('edificio', EDIFICIO_ACTIVO).order('estado', { ascending: true }),
-    window._rackFetchRango(monthStart, monthEnd, 'id,apto,estado,tarifa,huesped,nombre,fecha,checkin,checkout'),
+    window._rackFetchRango(monthStart, monthEnd, 'id,apto,estado,tarifa,huesped,nombre,fecha,checkin,checkout,reserva_id'),
     sb.from('novedades').select('*').in('estado',['Abierto','En proceso','Escalado']).order('created_at',{ascending:false}),
     sb.from('mantenimiento').select('*').in('estado',['Pendiente','En proceso']).gte('fecha', new Date(Date.now()-90*24*60*60*1000).toISOString().split('T')[0]).order('created_at',{ascending:false}),
     sb.from('turnos').select('*').eq('fecha', TODAY).order('created_at',{ascending:false}),
     sb.from('turnos').select('*').order('created_at',{ascending:false}).limit(3),
+    window._fetchCompReservaIds(),
   ]);
 
   const aptosHoy   = rHoy.data || [];
@@ -3192,9 +3198,10 @@ async function renderDashboard() {
   const ots        = mantRes.data || [];
   const turnosDeHoy = turnosHoy.data || [];
   const ultTurnos  = turnosUlt.data || [];
+  const compSetDash = _compSetDash || new Set();
 
   // ── KPIs DE HOY (cálculo unificado con el Rack) ──────────
-  const _k = calcKpisDia(aptosHoy, (typeof window._rkBuildRelevoMap==='function'?window._rkBuildRelevoMap((rackMesAll||[]).filter(function(r){return r.edificio===EDIFICIO_ACTIVO;})):null));
+  const _k = calcKpisDia(aptosHoy, (typeof window._rkBuildRelevoMap==='function'?window._rkBuildRelevoMap((rackMesAll||[]).filter(function(r){return r.edificio===EDIFICIO_ACTIVO;})):null), compSetDash);
   const TOTAL_APTOS = EB().aptosBase.length; // 21 aptos base (los A son habitaciones secundarias adicionales)
   const ocupados  = _k.b21.enCasa; // en casa (sin CKI/CKO, que tienen su propio KPI)
   const checkins  = _k.cki;
@@ -3215,7 +3222,7 @@ async function renderDashboard() {
   const _baseSet = new Set(EB().aptosBase);
   const _fueraBaseN = rackMesAll.filter(r=>_baseSet.has(r.apto) && FUERA_MES.includes(r.estado)).length;
   const dispMes = Math.max(1, TOTAL_APTOS*daysInMonth - _fueraBaseN); // noches disponibles reales del mes (aptos x dias - fuera de servicio)
-  const ocuMesN = rackMesAll.filter(r=>_baseSet.has(r.apto) && OCU_MES.includes(r.estado)).length;
+  const ocuMesN = rackMesAll.filter(r=>_baseSet.has(r.apto) && OCU_MES.includes(r.estado) && !window._esCompRack(r,compSetDash)).length;
   const conTarifaMes = rackMesAll.filter(r=>window._esVentaAloja(r));
   const _vmRel = window._rkRelevoAj(rackMesAll);   // relevos desde RACK -> coincide con Rack/Informe/Export
   const ventasMes = conTarifaMes.reduce((s,r)=>s+Number(r.tarifa),0) + _vmRel.aj;
@@ -3226,7 +3233,7 @@ async function renderDashboard() {
   const _fullSet = new Set(EB().aptosFull);
   const _fueraHabN = rackMesAll.filter(r=>_fullSet.has(r.apto) && FUERA_MES.includes(r.estado)).length;
   const dispMesHab = Math.max(1, EB().aptosFull.length*daysInMonth - _fueraHabN);
-  const ocuMesHabN = rackMesAll.filter(r=>_fullSet.has(r.apto) && OCU_MES.includes(r.estado)).length;
+  const ocuMesHabN = rackMesAll.filter(r=>_fullSet.has(r.apto) && OCU_MES.includes(r.estado) && !window._esCompRack(r,compSetDash)).length;
   const ocuMesHabPct = dispMesHab>0 ? Math.round(ocuMesHabN/dispMesHab*100) : 0;
 
   // ── VENTAS DEL MES POR CATEGORÍA (neto, sin impuestos) ────
@@ -4401,6 +4408,20 @@ window._esVentaAloja = function(r){
   if(esParSec) return false;
   return true;
 };
+// ── EXCLUSIÓN DE COMPLEMENTARY (CORTESÍA) EN OCUPACIÓN FÍSICA ──────────────
+// Sol. Santiago (12-ago-2026): "todas las Complementary que no sumen % de ocupación ni
+// suma de ingresos". _esVentaAloja() ya excluye Complementary de ingresos (tarifa=null en
+// la reserva). Esta función complementa: identifica si una fila del rack corresponde a una
+// reserva Complementary (tipo_tarifa='COMP') vía el reserva_id que el trigger ya mantiene
+// en la celda, para excluirla también del % de ocupación física (no solo de ingresos).
+window._fetchCompReservaIds = async function(){
+  try{
+    var r = await sb.from('reservas').select('id').eq('tipo_tarifa','COMP');
+    if(r.error) return new Set();
+    return new Set((r.data||[]).map(function(x){return x.id;}));
+  }catch(e){ return new Set(); }
+};
+window._esCompRack = function(r, compSet){ return !!(compSet && r && r.reserva_id && compSet.has(r.reserva_id)); };
 function _toggleTRM(){ var s=document.getElementById('m-moneda'); var w=document.getElementById('m-trm-wrap'); if(w) w.style.display=(s&&s.value==='USD')?'':'none'; }
 // Observacion automatica de hora al salir/volver de viaje (rellena el campo; editable antes de guardar)
 function _autoObsViaje(nuevo){
@@ -13303,22 +13324,24 @@ async function renderInformeEjecutivo(){
   const dim = new Date(y, now.getMonth()+1, 0).getDate();
   const mEnd = y+'-'+mo+'-'+String(dim).padStart(2,'0');
   document.getElementById('main-content').innerHTML = '<div class="page-title">📈 Informe Ejecutivo</div><div class="card"><p style="color:#888">Cargando datos…</p></div>';
-  const [rHoy, rMes, novR, mantR, salR, solR, conR, rvR] = await Promise.all([
+  const [rHoy, rMes, novR, mantR, salR, solR, conR, rvR, _compSetEj] = await Promise.all([
     sb.from('rack').select('*').eq('fecha',TODAY).eq('edificio',ed),
-    window._rackFetchRango(mStart, mEnd, 'id,apto,estado,tarifa,nombre,fecha,checkin,checkout'),   // paginado: un mes supera las 1.000 filas de Supabase
+    window._rackFetchRango(mStart, mEnd, 'id,apto,estado,tarifa,nombre,fecha,checkin,checkout,reserva_id'),   // paginado: un mes supera las 1.000 filas de Supabase
     sb.from('novedades').select('descripcion,apto,estado,area,created_at').in('estado',['Abierto','En proceso','Escalado']),
     sb.from('mantenimiento').select('descripcion,apto,estado,fecha').in('estado',['Pendiente','En proceso']),
     sb.from('saldos_aptos').select('apto,arrendatario,saldo_total,fecha').eq('edificio',ed),
     sb.from('solicitudes').select('descripcion,prioridad,solicitante').eq('edificio',ed).eq('estado','Pendiente'),
     sb.from('contratos').select('apto,arrendatario,fecha_vencimiento,otro_si_vigencia,tipo'),
-    sb.from('reservas').select('id,apto,nombre,checkin,checkout,tarifa').eq('edificio',ed).lte('checkin',mEnd).gte('checkout',mStart)
+    sb.from('reservas').select('id,apto,nombre,checkin,checkout,tarifa').eq('edificio',ed).lte('checkin',mEnd).gte('checkout',mStart),
+    window._fetchCompReservaIds()
   ]);
+  const compSetEj = _compSetEj || new Set();
   const _ejecRelevo = window._rkBuildRelevoMap(rMes.data || []);   /* relevos desde RACK, no reservas */
-  const k = (typeof calcKpisDia==='function') ? calcKpisDia(rHoy.data||[], _ejecRelevo) : {b21:{ocu:0,disp:1},cki:0,cko:0,ing:0,adr:0,pct21:0};
+  const k = (typeof calcKpisDia==='function') ? calcKpisDia(rHoy.data||[], _ejecRelevo, compSetEj) : {b21:{ocu:0,disp:1},cki:0,cko:0,ing:0,adr:0,pct21:0};
   const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
   const baseSet = new Set(EB().aptosBase);
   const rmes = rMes.data||[];
-  const ocuMesN = rmes.filter(r=>baseSet.has(r.apto)&&OCU.includes(r.estado)).length;
+  const ocuMesN = rmes.filter(r=>baseSet.has(r.apto)&&OCU.includes(r.estado)&&!window._esCompRack(r,compSetEj)).length;
   const dispMes = Math.max(1, EB().aptosBase.length*dim);
   const ocuMesPct = Math.round(ocuMesN/dispMes*100);
   const ventasMes_base = rmes.filter(r=>window._esVentaAloja(r)).reduce((s,r)=>s+Number(r.tarifa),0);
@@ -14116,11 +14139,13 @@ async function renderIngresos(){
   const esMesActual = TODAY.slice(0,7) === mesSel;
   const corte = esMesActual ? Number(TODAY.slice(8,10)) : dim;
   const _mesesN = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  const [rkR, csR, evR] = await Promise.all([
-    _rackRango('fecha,apto,estado,tarifa,canal,tipo,updated_at', ini, fin),
+  const [rkR, csR, evR, _compSetIng] = await Promise.all([
+    _rackRango('fecha,apto,estado,tarifa,canal,tipo,updated_at,reserva_id', ini, fin),
     sb.from('consumos').select('fecha,apto,huesped,valor,pago').gte('fecha',ini).lte('fecha',fin),
-    sb.from('eventos').select('total,estado,fecha_inicio').eq('edificio',EDIFICIO_ACTIVO).gte('fecha_inicio',ini).lte('fecha_inicio',fin)
+    sb.from('eventos').select('total,estado,fecha_inicio').eq('edificio',EDIFICIO_ACTIVO).gte('fecha_inicio',ini).lte('fecha_inicio',fin),
+    window._fetchCompReservaIds()
   ]);
+  const compSetIng = _compSetIng || new Set();
   const rk = rkR.data || [], cs = csR.data || [];
   const _evRows = (evR.data || []).filter(e=>Number(e.total)>0);
   const totEventos = _evRows.reduce((s,e)=>s+(Number(e.total)||0), 0);
@@ -14138,6 +14163,7 @@ async function renderIngresos(){
   Object.values(map).forEach(r => {
     const e = r.estado;
     if(!window._OCU_VENTA.has(e)) return;   // incluye día de check-out y "Check-out realizado"; excluye No Show/Libre/Bloqueado/Mant.
+    if(window._esCompRack(r,compSetIng)) return;   // Sol. Santiago (12-ago-2026): Complementary no suma ocupación ni ingresos
     const d = Number(r.fecha.slice(8,10));
     const esVenta = window._esVentaAloja(r);   // regla canónica (maneja combos Two/Family)
     const t = esVenta ? (Number(r.tarifa)||0) : 0;
