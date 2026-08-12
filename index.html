@@ -2792,7 +2792,11 @@ window.renderFlujoSemanal=async function(){
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del empleado',type:'nombre3',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:_CARGOS()},
-      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:00 PM (Mantenimiento)','7:00 AM - 3:00 PM','6:00 AM - 1:55 PM (Áreas Públicas)','7:00 AM - 4:30 PM (Chef)','7:10 AM - 4:58 PM (Capitán Meseros)','7:30 AM - 3:25 PM (Camareras)','8:00 AM - 3:00 PM (Camareras)','8:00 AM - 3:30 PM (Camareras)','7:00 AM - 4:00 PM','7:30 AM - 4:30 PM (Administrador · Turno 6)','8:00 AM - 5:00 PM','8:00 AM - 5:20 PM (Mantenimiento)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
+      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:00 PM (Mantenimiento · Lun-Sáb)','7:00 AM - 3:00 PM','7:00 AM - 3:00 PM (Áreas Públicas · Lun-Sáb)','7:30 AM - 4:54 PM (Chef)','7:00 AM - 4:24 PM (Capitán Meseros)','7:30 AM - 3:30 PM (Camareras · Lun-Sáb)','8:00 AM - 3:30 PM (Camareras · Domingo/Festivo)','7:00 AM - 4:00 PM','7:30 AM - 4:30 PM (Administrador · Turno 6)','8:00 AM - 5:00 PM','8:00 AM - 5:24 PM (Mantenimiento · Lun-Vie)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
+      // Sol. Sebastián 27-jul-2026 (c82f91fb): horarios actualizados por cargo — Capitán de Meseros
+      // 7:00-4:24PM, Chef 7:30-4:54PM, Áreas Públicas 7:00-3:00PM (Lun-Sáb), Mantenimiento 8:00-5:24PM
+      // (Lun-Vie) + 7:00-3:00PM (Lun-Sáb), Camareras 7:30-3:30PM (Lun-Sáb) + 8:00-3:30PM (Domingo/Festivo).
+      // Se quitó la opción "8:00 AM - 3:00 PM (Camareras)" por no corresponder a ningún turno vigente.
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
@@ -11095,6 +11099,10 @@ async function renderList(tabla, titulo, formView, cols, headers) {
       // Previsualización del recibo escaneado de Magnifique/Bagatelle para revisión en auditoría.
       var _btnRec = r.adjunto ? `<button onclick="verReciboMagnifique('${r.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:#1D3461;border-color:#1D3461">👁️ Ver recibo</button> ` : '';
       acciones = `<td style="white-space:nowrap">${_btnRec}${_btnsEdit(tabla, r.id)}</td>`;
+    } else if (esCaja) {
+      // Sol. Leguizamón (Compras): ver el PDF/imagen del recibo escaneado adjunto al movimiento de caja.
+      var _btnRecCaja = r.adjunto ? `<button onclick="window.open('${String(r.adjunto).replace(/'/g,"\\'")}','_blank')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:#1D3461;border-color:#1D3461">👁️ Ver recibo</button> ` : '';
+      acciones = `<td style="white-space:nowrap">${_btnRecCaja}${_btnsEdit(tabla, r.id)}</td>`;
     } else {
       acciones = `<td style="white-space:nowrap">${_btnsEdit(tabla, r.id)}</td>`;
     }
@@ -11971,18 +11979,38 @@ window._confirmarAprobarLote = async function(consec){
   }
   if(!okAll){ if(typeof showToast==='function') showToast('Error al aprobar lote: '+errMsg,'error'); if(btn){ btn.disabled=false; btn.textContent='✅ Aprobar y firmar lote'; } return; }
   var o=document.getElementById('lote-ap-ov'); if(o) o.remove();
-  // Fase 3: repone la caja — marca los gastos como Reembolsado y genera el Reintegro
+  // Sol. Sebastián (6de0965c): al aprobar el lote SOLO se marcan los gastos como Reembolsado.
+  // El Reintegro a caja YA NO se genera automáticamente aquí — el dinero todavía no ha entrado
+  // físicamente a la caja en este momento, solo queda aprobado el reembolso. El movimiento de
+  // Reintegro se crea después, cuando alguien confirma que el dinero ya llegó (ver
+  // window._confirmarReintegroLote, botón "💰 Confirmar reintegro recibido" en la lista de lotes).
   try{
-    var cajaId=(rows[0]&&rows[0].caja)||null;
-    var totalLote=rows.reduce(function(s,r){ return s+(Number(r.valor)||0); },0);
     await sb.from('caja').update({ estado_legal:'Reembolsado' }).eq('lote_consec', consec).eq('estado_legal','En lote');
-    if(cajaId && totalLote>0){
-      await sb.from('caja').insert({ fecha:(typeof TODAY!=='undefined'?TODAY:new Date().toISOString().slice(0,10)), tipo:'Reintegro', caja:cajaId, concepto:'Reintegro por reembolso lote R-'+consec, valor:totalLote, recibo_no:'R-'+consec, estado_legal:null, entregado_por:quien, user_id:currentUser.id });
-    }
   }catch(e){}
-  if(typeof showToast==='function') showToast('✅ Lote R-'+consec+' aprobado ('+rows.length+' recibos) — caja repuesta','success');
+  if(typeof showToast==='function') showToast('✅ Lote R-'+consec+' aprobado ('+rows.length+' recibos) — pendiente confirmar el reintegro cuando llegue el dinero','success');
   // Abre el documento firmado listo para PDF / reenvío
   _imprimirLoteFirmado(consec, rows, window._getFirma(), quien, cuando);
+  if(typeof loadView==='function') loadView('reembolsos-list');
+};
+// Sol. Sebastián (6de0965c): confirmar que el dinero del reembolso YA llegó a la caja.
+// Solo entonces se crea el movimiento "Reintegro" — antes de esto la caja no debe mostrarlo,
+// para no inflar el saldo con dinero que todavía no se ha recibido.
+window._confirmarReintegroLote=async function(consec){
+  if(!window._puedeAprobarReemb()){ if(typeof showToast==='function') showToast('Solo Gerencia General (Santiago) puede confirmar el reintegro','error'); return; }
+  var r=await sb.from('reembolsos').select('*').eq('edificio',EDIFICIO_ACTIVO).eq('consecutivo', consec);
+  var rows=(r.data||[]);
+  if(!rows.length){ if(typeof showToast==='function') showToast('No se encontró el lote','error'); return; }
+  if(rows[0] && rows[0].reintegro_confirmado_at){ if(typeof showToast==='function') showToast('Este lote ya tiene el reintegro confirmado','info'); return; }
+  if(!confirm('¿Confirmas que el dinero del lote R-'+consec+' ya entró físicamente a la caja? Esto crea el movimiento de Reintegro.')) return;
+  var cajaId=(rows[0]&&rows[0].caja)||null;
+  var totalLote=rows.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
+  var quien=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||(typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||'Gerencia';
+  if(cajaId && totalLote>0){
+    var ins=await sb.from('caja').insert({ fecha:(typeof TODAY!=='undefined'?TODAY:new Date().toISOString().slice(0,10)), tipo:'Reintegro', caja:cajaId, concepto:'Reintegro por reembolso lote R-'+consec, valor:totalLote, recibo_no:'R-'+consec, estado_legal:null, entregado_por:quien, user_id:currentUser.id });
+    if(ins.error){ if(typeof showToast==='function') showToast('Error al crear el reintegro: '+ins.error.message,'error'); return; }
+  }
+  await sb.from('reembolsos').update({ reintegro_confirmado_at:new Date().toISOString() }).eq('edificio',EDIFICIO_ACTIVO).eq('consecutivo', consec);
+  if(typeof showToast==='function') showToast('✅ Reintegro del lote R-'+consec+' confirmado — caja repuesta','success');
   if(typeof loadView==='function') loadView('reembolsos-list');
 };
 function _imprimirLoteFirmado(consec, rows, firma, quien, cuando){
@@ -12119,6 +12147,8 @@ window.renderMovimientoCaja = function(){
       +'<div class="form-group"><label>Responsable (registra / entrega)</label><input id="mc-responsable" value="'+_esc((currentProfile&&currentProfile.nombre)||'')+'"></div>'
       +'<div class="form-group"><label>Observaciones</label><input id="mc-obs"></div>'
     +'</div>'
+    // Sol. Leguizamón (Compras): permitir adjuntar el PDF/imagen con el scan de los recibos de caja menor (un solo archivo).
+    +'<div class="form-group"><label>📎 Recibos escaneados (imagen o PDF)</label><input type="file" id="mc-adjunto" accept="application/pdf,image/*"></div>'
     +'<div style="display:flex;gap:8px;margin-top:6px"><button class="btn" style="background:#1A5C2E;color:#fff" onclick="guardarMovCaja(this)">💾 Guardar movimiento</button> <button class="btn btn-outline" onclick="loadView(\'caja-list\')">Ver movimientos</button></div>'
     +'</div>';
   _mcSubcats(); _mcProvToggle();
@@ -12151,10 +12181,23 @@ window.guardarMovCaja=async function(btn){
   var tipo=document.getElementById('mc-tipo').value;
   var esEgreso=/Egreso/i.test(tipo);
   if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+  // Sol. Leguizamón (Compras): subir el PDF/imagen con el scan de los recibos de caja menor.
+  var _adjUrl=null;
+  try{
+    var _fi=document.getElementById('mc-adjunto');
+    var _f=(_fi&&_fi.files)?_fi.files[0]:null;
+    if(_f){
+      var _p='caja/'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'_'+String(_f.name||'recibo').replace(/[^a-zA-Z0-9._-]/g,'_');
+      var _up=await sb.storage.from('adjuntos').upload(_p,_f,{cacheControl:'3600',upsert:false,contentType:_f.type||undefined});
+      if(!_up.error) _adjUrl=sb.storage.from('adjuntos').getPublicUrl(_p).data.publicUrl;
+      else if(typeof showToast==='function') showToast('No se pudo subir el adjunto: '+_up.error.message,'error');
+    }
+  }catch(e){}
   var base={ fecha:document.getElementById('mc-fecha').value||TODAY, tipo:tipo, concepto:concepto, valor:val,
     recibo_no:(document.getElementById('mc-factura').value||'').trim()||null,
     entregado_por:(document.getElementById('mc-responsable').value||'').trim()||null,
     observaciones:(document.getElementById('mc-obs').value||'').trim()||null,
+    adjunto:_adjUrl,
     user_id:currentUser.id };
   // Sol Sebastián: los provisionales salen de la caja (por eso van como Egreso) pero NO son un gasto
   // a legalizar, así que se marcan aparte y no los barre el reembolso por lotes.
@@ -12259,6 +12302,11 @@ async function renderReembolsosList(){
       // corregir los DATOS del encabezado (empresa mal digitada, etc.), nunca los valores.
       if(puedeLote) acc+='<button onclick="event.stopPropagation();_loteEditarDatos('+G.consec+')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px" title="Corregir empresa u observaciones del encabezado. Los recibos y valores no se tocan.">✏️ Editar datos</button> ';
       if(puedeAprob && pend) acc+='<button onclick="event.stopPropagation();aprobarLoteReembolso(\''+G.consec+'\')" class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#15803d;color:#fff;border:none">✅✍️ Aprobar</button> ';
+      // Sol. Sebastián (6de0965c): una vez aprobado el lote, el Reintegro a caja queda pendiente
+      // hasta que se confirme que el dinero ya llegó — evita inflar la caja con dinero no recibido.
+      if(pend===0 && puedeAprob){ acc += h.reintegro_confirmado_at
+        ? '<span style="background:#D1FAE5;color:#065F46;font-weight:700;font-size:11px;padding:3px 10px;border-radius:10px;margin-right:4px" title="Reintegro confirmado">💰 Reintegro recibido '+esc(fF(h.reintegro_confirmado_at))+'</span> '
+        : '<button onclick="event.stopPropagation();window._confirmarReintegroLote('+G.consec+')" class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#B45309;color:#fff;border:none" title="Márcalo cuando el dinero del reembolso ya haya entrado físicamente a la caja">💰 Confirmar reintegro recibido</button> '; }
       acc+='<button onclick="event.stopPropagation();comprobanteLote('+G.consec+')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px">👁 Ver</button> ';
       acc+='<button onclick="event.stopPropagation();correoLote('+G.consec+')" class="btn btn-outline btn-sm" style="padding:3px 8px;font-size:11px;color:#1D3461;border-color:#1D3461">✉️</button>';
     } else {
@@ -16103,7 +16151,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
       <div class="form-row col3">
         <div class="form-group"><label>No. Factura</label><input type="text" id="cki-fv" placeholder="FV UL0000"></div>
         <div class="form-group"><label>Forma de pago</label>
-          <select id="cki-pago"><option>Efectivo</option><option>Tarjeta crédito</option><option>Tarjeta débito</option><option>Transferencia</option><option>Cortesía</option><option>No paga al CKI</option><option>CxC Full</option><option>CxC Alojamiento</option></select>
+          <select id="cki-pago"><option>Efectivo</option><option>Tarjeta crédito</option><option>Tarjeta débito</option><option>Transferencia</option><option>Prepagada</option><option>Cortesía</option><option>No paga al CKI</option><option>CxC Full</option><option>CxC Alojamiento</option></select>
         </div>
         <div class="form-group"><label>Equipaje</label>
           <select id="cki-equipaje"><option>Declina acompañamiento</option><option>Acepta acompañamiento</option></select>
@@ -16291,7 +16339,8 @@ function generarMsgCKI() {
   const [yf,mf,df] = ff ? ff.split('-') : ['-','-','-'];
   const fechasAloj = fi && ff ? `${di}/${mi}/${yi} - ${df}/${mf}/${yf}` : fi ? `desde ${di}/${mi}/${yi}` : '';
 
-  const condTxt = { 'No paga al CKI':'no realiza pago al CKI (pendiente)', 'CxC Full':'queda como CxC Full (cuenta por cobrar total)', 'CxC Alojamiento':'el alojamiento queda como CxC' };
+  // Sol. Sebastián (be06fda8): opción "Prepagada" para reservas ya pagadas antes del CKI (ej. OTA prepago) — no se cobra en caja.
+  const condTxt = { 'No paga al CKI':'no realiza pago al CKI (pendiente)', 'CxC Full':'queda como CxC Full (cuenta por cobrar total)', 'CxC Alojamiento':'el alojamiento queda como CxC', 'Prepagada':'ya se encuentra prepagada (pago recibido antes del CKI, no se cobra en caja)' };
   const cond = condTxt[pago];
   const pagoSeg = cond
     ? (fv ? ` se genera ${fv}, ${cond}` : `, ${cond}`)
@@ -16353,6 +16402,9 @@ R/${quien}`;
         showToast(`📅 Rack actualizado: Apto ${apto}, ${rows.length} día(s) de estadía`, 'success');
         // Dejar el rack posicionado en el mes del check-in y refrescar si está abierto (que el cambio se vea)
         try { const _d=new Date(fi+'T00:00:00'); window._rackMes=_d.getMonth(); window._rackYear=_d.getFullYear(); if(window._currentView==='rack' && typeof renderRack==='function') renderRack(); } catch(_){}
+        // Sol. Juan Martinez (ba32fc51): refrescar también el Dashboard si está abierto, sin esperar
+        // el auto-refresh de 15 min — igual que ya se hace con el Rack.
+        try { if (window._currentView === 'dashboard' && typeof loadView === 'function') loadView('dashboard'); } catch(_){}
       }
       // Fase 3: si la estadía está ligada a una reserva (fuente única), deja constancia del check-in en la reserva.
       // Solo vía el reserva_id que el trigger ya mantiene en la celda — sin adivinar rangos. Solo si cki_at está vacío.
@@ -16691,7 +16743,7 @@ R/${quien}`;
     </div>`;
   document.body.appendChild(modal);
   // Actualizar el rack automáticamente (el apto queda SUCIO / días futuros liberados) sin esperar clic
-  _ckoAplicarRack(apto).then(function(lib){ showToast('📅 Rack actualizado: Apto '+apto+' marcado "Check-out realizado" (salida)'+(lib?' · '+lib+' día(s) liberados':''),'success'); if(window._currentView==='rack') renderRack(); if(window._currentView==='estado-huespedes') renderEstadoHuespedes(); else if(window._currentView==='ocupacion') renderOcupacion(); }).catch(function(){});
+  _ckoAplicarRack(apto).then(function(lib){ showToast('📅 Rack actualizado: Apto '+apto+' marcado "Check-out realizado" (salida)'+(lib?' · '+lib+' día(s) liberados':''),'success'); if(window._currentView==='rack') renderRack(); if(window._currentView==='estado-huespedes') renderEstadoHuespedes(); else if(window._currentView==='ocupacion') renderOcupacion(); /* Sol. Juan Martinez (ba32fc51): refrescar también el Dashboard si está abierto */ if(window._currentView==='dashboard' && typeof loadView==='function') loadView('dashboard'); }).catch(function(){});
 }
 
 // ═══════════════════════════════════════════════════════════
