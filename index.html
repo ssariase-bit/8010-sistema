@@ -909,9 +909,11 @@ const EDIFICIOS = {
     facturarA: ['LTM3 SAS','8010 SAS','Particular','Otra'],
     // Restaurante del edificio (impuesto YA incluido en el precio -> se extrae). Magnifique factura impoconsumo 8%.
     restaurante: { nombre:'Magnifique', impuesto:'Impoconsumo', tasa:0.08, servicio:0, domicilio:0.15 },
-    // Camareras + combinaciones de apoyo (Jaqueline apoya a la que necesite)
-    camareras: ['Guillermina Sanabria','Leonor Moreno','Maria Duran','Martha Oyola','Jaqueline Bautista',
-                'Guillermina Sanabria + Jaqueline','Leonor Moreno + Jaqueline','Maria Duran + Jaqueline','Martha Oyola + Jaqueline'],
+    // Camareras. Sol. Andrés Parga (3ec724c2/ef9a8660, 07-ago-2026): sale Maria Duran, entra
+    // Rosangela Rojas como su reemplazo. Sol. Sebastián (adf1d718, 08-ago-2026): se quitan las
+    // combinaciones "+ Jaqueline" — aunque Jaqueline apoya a otras camareras, ese apoyo no se
+    // registra como combinación en este módulo (se sigue registrando su propio tiempo aparte).
+    camareras: ['Guillermina Sanabria','Leonor Moreno','Rosangela Rojas','Martha Oyola','Jaqueline Bautista'],
     jornadas: { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Gerente General':540, 'Gerente Operativo':540, 'Gerente de Eventos':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 },
     indicadoresMes: {'2026-01':{noches:374,disp:651,adr:796301,ocu:0.5745},'2026-02':{noches:507,disp:588,adr:729055,ocu:0.8622},'2026-03':{noches:491,disp:651,adr:752681,ocu:0.7542},'2026-04':{noches:397,disp:630,adr:733852,ocu:0.6302},'2026-05':{noches:612,disp:651,adr:716838,ocu:0.9401},'2026-06':{noches:434,disp:630,adr:708910,ocu:0.6889},'2026-07':{noches:380,disp:651,adr:636366,ocu:0.5837},'2026-08':{noches:290,disp:651,adr:619572,ocu:0.4455},'2026-09':{noches:210,disp:630,adr:570174,ocu:0.3333},'2026-10':{noches:217,disp:651,adr:551781,ocu:0.3333},'2026-11':{noches:213,disp:630,adr:572487,ocu:0.3381},'2026-12':{noches:78,disp:651,adr:686969,ocu:0.1198}}
   },
@@ -1263,7 +1265,7 @@ const NAV_ITEMS = {
     { id: 'desayunos-list', icon: '☕', label: 'Desayunos incluidos' },
     { id: 'capsulas-form', icon: '🧴', label: 'Cápsulas Cortesía' },
     { id: 'prestamos-form', icon: '📦', label: 'Nuevo Préstamo' },
-    { id: 'prestamos-list', icon: '💻', label: 'Préstamos' },
+    { id: 'prestamos-list', icon: '💻', label: 'Préstamos Tecnológicos' },
     { section: 'Consultar' },
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'novedades-list', icon: '📋', label: 'Novedades / Seguimientos' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
@@ -2669,8 +2671,8 @@ window.renderFlujoSemanal=async function(){
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'prestamos-elem': await renderPrestamosElementos(); break;
-    case 'prestamos-list':     await renderList('prestamos_tec','📦 Préstamos','prestamos-form',['fecha_prestamo','apto','arrendatario','articulo','cantidad','estado','fecha_devolucion'],['Fecha','Apto','Arrendatario','Artículo','Cant.','Estado','Devolución']); break;
-    case 'prestamos-form':     renderGenForm('prestamos_tec','📦 Registrar Préstamo',[
+    case 'prestamos-list':     await renderList('prestamos_tec','💻 Préstamos Tecnológicos','prestamos-form',['fecha_prestamo','apto','arrendatario','articulo','cantidad','estado','fecha_devolucion'],['Fecha','Apto','Arrendatario','Artículo','Cant.','Estado','Devolución']); break;
+    case 'prestamos-form':     renderGenForm('prestamos_tec','💻 Registrar Préstamo Tecnológico',[
       {id:'fecha_prestamo',label:'Fecha préstamo',type:'date',default:TODAY,req:true},
       {id:'apto',label:'Apartamento',type:'text',req:true},
       {id:'arrendatario',label:'Arrendatario',type:'nombre3',req:true},
@@ -2792,11 +2794,12 @@ window.renderFlujoSemanal=async function(){
       {id:'fecha',label:'Fecha',type:'date',default:TODAY,req:true},
       {id:'nombre',label:'Nombre del empleado',type:'nombre3',req:true},
       {id:'cargo',label:'Cargo',type:'select',opts:_CARGOS()},
-      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:00 PM (Mantenimiento · Lun-Sáb)','7:00 AM - 3:00 PM','7:00 AM - 3:00 PM (Áreas Públicas · Lun-Sáb)','7:30 AM - 4:54 PM (Chef)','7:00 AM - 4:24 PM (Capitán Meseros)','7:30 AM - 3:30 PM (Camareras · Lun-Sáb)','8:00 AM - 3:30 PM (Camareras · Domingo/Festivo)','7:00 AM - 4:00 PM','7:30 AM - 4:30 PM (Administrador · Turno 6)','8:00 AM - 5:00 PM','8:00 AM - 5:24 PM (Mantenimiento · Lun-Vie)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
+      {id:'horario',label:'Horario asignado',type:'select',default:'8:00 AM - 5:00 PM',opts:['6:00 AM - 2:00 PM','6:00 AM - 3:00 PM','7:00 AM - 3:00 PM (Mantenimiento · Lun-Sáb)','7:00 AM - 3:00 PM','7:00 AM - 3:00 PM (Áreas Públicas · Lun-Sáb)','7:30 AM - 4:54 PM (Chef)','7:00 AM - 4:24 PM (Capitán Meseros)','7:30 AM - 3:30 PM (Camareras · Lun-Sáb)','8:00 AM - 3:30 PM (Camareras · Domingo/Festivo)','7:00 AM - 4:00 PM','7:30 AM - 4:30 PM (Administrador · Turno 6)','8:00 AM - 5:00 PM','8:00 AM - 5:25 PM (Mantenimiento · Lun-Vie)','9:00 AM - 6:00 PM','10:00 AM - 7:00 PM','11:00 AM - 8:00 PM','1:00 PM - 9:00 PM','2:00 PM - 10:00 PM','3:00 PM - 11:00 PM','6:00 AM - 6:00 PM (12h)','6:00 PM - 6:00 AM (12h)','7:00 AM - 7:00 PM (12h)','7:00 PM - 7:00 AM (12h)','1:00 PM - 10:00 PM (Administrador)','9:30 PM - 6:30 AM','10:00 PM - 6:00 AM']},
       // Sol. Sebastián 27-jul-2026 (c82f91fb): horarios actualizados por cargo — Capitán de Meseros
       // 7:00-4:24PM, Chef 7:30-4:54PM, Áreas Públicas 7:00-3:00PM (Lun-Sáb), Mantenimiento 8:00-5:24PM
       // (Lun-Vie) + 7:00-3:00PM (Lun-Sáb), Camareras 7:30-3:30PM (Lun-Sáb) + 8:00-3:30PM (Domingo/Festivo).
       // Se quitó la opción "8:00 AM - 3:00 PM (Camareras)" por no corresponder a ningún turno vigente.
+      // Corrección Sol. Andrés Parga 11-ago-2026 (c18e2b7e): Mantenimiento Lun-Vie termina 5:25 PM, no 5:24 PM.
       {id:'jornada_base',label:'Jornada base en min (9h=540, 8h50=530)',type:'number',default:'540',hidden:true},
       {id:'marcacion_ingreso',label:'Marcación ingreso',type:'time',req:true},
       {id:'marcacion_salida',label:'Marcación salida',type:'time'},
@@ -6580,6 +6583,7 @@ function renderNuevaReserva() {
               <option>Transferencia</option>
               <option>Tarjeta crédito</option>
               <option>Tarjeta débito</option>
+              <option>Virtual Card</option>
               <option>Por facturar</option>
             </select>
           </div>
@@ -16360,6 +16364,26 @@ function generarMsgCKI() {
   const cortesias = _am.length ? (', se deja en el apartamento: '+_am.join(', ')) : '';
 
   if (!huesped) { showToast('Ingresa el nombre del huésped', 'error'); return; }
+  // ─── CANDADO USD en CKI (Sol. Santiago 12-ago-2026, hallazgo 92290227/2c42959f) ───
+  // Mismo candado que ya existe en guardarReserva() y saveApto(): si la tarifa del CKI está
+  // en USD, la TRM es obligatoria. Sin este candado, un CKI en USD sin TRM guardaba el valor
+  // en dólares directo en rack.tarifa (campo de pesos) — la venta quedaba subvalorada (ej. una
+  // tarifa de USD 230 se registraba como $230 COP en vez de ≈ $950.000 COP).
+  if (moneda === 'USD') {
+    const _trmChk = Number(document.getElementById('cki-trm')?.value) || 0;
+    if (!(_trmChk > 0)) {
+      showToast('El CKI está en USD y falta la TRM de referencia. Sin TRM no se puede convertir a pesos y la venta no contaría.', 'error');
+      const _t = document.getElementById('cki-trm');
+      if (_t) { _t.style.border = '2px solid #9A4A40'; _t.focus(); }
+      return;
+    }
+    if (_trmChk < 100) {
+      showToast('La TRM digitada (' + _trmChk + ') no es válida — revisa el dato.', 'error');
+      const _t = document.getElementById('cki-trm');
+      if (_t) { _t.style.border = '2px solid #9A4A40'; _t.focus(); }
+      return;
+    }
+  }
 
   const [yi,mi,di] = fi.split('-');
   const [yf,mf,df] = ff ? ff.split('-') : ['-','-','-'];
