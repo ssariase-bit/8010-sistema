@@ -3799,7 +3799,10 @@ async function renderRack() {
   clearTimeout(window._rackTimer);
   window._rackTimer = setTimeout(() => {
     if (window._currentView === 'rack') renderRack();
-  }, 900000); // 15 minutos
+  }, 60000); // 60s — Sol. Santiago (13-ago-2026): decia 900000 (15 min) pero el comentario original
+             // decia "cada 60s"; eso dejaba el Rack visualmente desactualizado hasta 15 min despues
+             // de un borrado/movimiento hecho desde otra pantalla u otra sesion (solicitudes a4b0555c,
+             // 36784db2, 272c05ba).
 
   const rol = currentProfile?.rol;
   const canEdit = ['gerente_general','gerencia_operativa','administrador','recepcion','asesora'].includes(rol);
@@ -4538,7 +4541,16 @@ async function doCambiarApto(origen,destino,huesped,ci,co){
     var ins=await sb.from('rack').insert(copies);
     if(ins.error){ showToast('Error al mover: '+ins.error.message,'error'); return; }
     await sb.from('rack').delete().eq('edificio',EDIFICIO_ACTIVO).eq('apto',origen).gte('fecha',ci).lte('fecha',co);
-    try{ await sb.from('reservas').update({apto:destino}).eq('edificio',EDIFICIO_ACTIVO).eq('apto',origen).eq('checkin',ci).eq('checkout',co); }catch(_e){}
+    try{
+      var _updRv = await sb.from('reservas').update({apto:destino}).eq('edificio',EDIFICIO_ACTIVO).eq('apto',origen).eq('checkin',ci).eq('checkout',co).select();
+      if (!_updRv.error && (!_updRv.data || !_updRv.data.length)) {
+        // Sol. Santiago (13-ago-2026): si no encuentra fila exacta en `reservas`, esa tabla se queda con
+        // el apto viejo aunque el rack ya se movio — generaba fantasmas en Rotulos y otros reportes que
+        // leen `reservas` (solicitud 9b803326). Avisar en vez de fallar en silencio.
+        console.warn('doCambiarApto: no se encontro fila en reservas para actualizar apto ('+origen+'->'+destino+', '+ci+' a '+co+')');
+        showToast('Aviso: se movio el rack pero no se encontro la reserva exacta en el modulo Reservas para actualizar su apto — revisala manualmente','error');
+      }
+    }catch(_e){}
     showToast('\u2713 '+huesped+' movido del apto '+origen+' al '+destino,'success');
     if(typeof closeModal==='function') closeModal('modal-apto');
     if(typeof loadView==='function') loadView('rack');
