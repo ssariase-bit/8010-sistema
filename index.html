@@ -1478,6 +1478,7 @@ const MENU_COMPLETO = [
       { id: 'financiero-kl', icon: '💰', label: 'Financiero KL' },
     ] : []),
   { id: 'indicadores', icon: '📊', label: 'Indicadores Ocup./Ventas' },
+  { id: 'detalle-ventas', icon: '📈', label: 'Detalle de Ventas' },
   { id: 'ventas-linea', icon: '💵', label: 'Ventas por Línea (mes a mes)' },
   { id: 'inventario-list', icon: '📦', label: 'Inventario' },
   { id: 'compras-ordenes', icon: '🧾', label: 'Órdenes de Compra' },
@@ -2819,6 +2820,7 @@ window.renderFlujoSemanal=async function(){
     case 'finanzas': await renderFinanzas(); break;
     case 'financiero-kl': await renderFinanzasKL(); break;
     case 'indicadores': await renderIndicadores(); break;
+    case 'detalle-ventas': await renderDetalleVentas(); break;
     case 'ventas-linea': await renderVentasLinea(); break;
     case 'nomina': await (EDIFICIO_ACTIVO==='kubik' ? renderNomina() : renderNomina8010()); break;
     case 'semana-info': window._ocupVista='semana'; await renderOcupacion(); break;
@@ -3245,6 +3247,193 @@ window._indExportarCSV = function(mi){
   const mesNom = d.mesLabel.replace(/\s+/g,'_');
   a.href = url;
   a.download = 'Detalle_Ventas_'+edifNom+'_'+mesNom+'.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if(typeof showToast==='function') showToast('Descarga lista: '+a.download,'success');
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// Sol. Santiago (13-ago-2026): "Detalle de Ventas" — reporte nuevo para revisar
+// mes a mes (o el año completo) el detalle por estadía, con filtros de mes/canal/
+// apto/huésped, orden por columna y exportar a Excel. Diseño aprobado por Santiago
+// a partir de un mockup. Misma regla canónica de venta (_esVentaAloja) y exclusión
+// de Complementary que Dashboard/Informe Ejecutivo/Indicadores — respeta el
+// edificio activo (sb.from() ya filtra por edificio automáticamente).
+// ══════════════════════════════════════════════════════════════════════════
+const _DV_MESN = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+async function renderDetalleVentas(){
+  const main = document.getElementById('main-content');
+  const yr = window._dvYear || new Date().getFullYear();
+  const eb = (typeof EB==='function')?EB():{};
+  const vendibles = (eb.aptosBase||[]).filter(a => ((eb.noEntregados||[]).indexOf(a)<0));
+  const vendSet = new Set(vendibles);
+  main.innerHTML = '<div class="page-title">📈 Detalle de Ventas</div><p style="color:var(--gris-t)">Cargando datos del rack…</p>';
+
+  const [rowsR, compSet] = await Promise.all([
+    _rackRango('estado,tarifa,fecha,apto,reserva_id,huesped,canal', yr+'-01-01', yr+'-12-31'),
+    window._fetchCompReservaIds()
+  ]);
+  const rowsRaw = (rowsR.data||[]).filter(function(r){
+    return vendSet.has(r.apto) && window._esVentaAloja(r) && !window._esCompRack(r, compSet);
+  });
+
+  // Agrupa por mes+apto+huésped+canal (una "estadía" por línea, igual que en Indicadores)
+  const g = {};
+  rowsRaw.forEach(function(r){
+    const mi = parseInt(String(r.fecha).slice(5,7),10)-1;
+    if(isNaN(mi)||mi<0||mi>11) return;
+    const k = mi+'|'+r.apto+'|'+(r.huesped||'—')+'|'+(r.canal||'—');
+    if(!g[k]) g[k] = { mi:mi, mesLbl:_DV_MESN[mi], apto:r.apto, huesped:r.huesped||'Sin nombre', canal:r.canal||'—', noches:0, total:0 };
+    g[k].noches++; g[k].total += Number(r.tarifa)||0;
+  });
+  window._dvData = Object.values(g);
+  window._dvEbNombre = eb.nombre || 'SO';
+
+  // Estado de filtros/orden (se reinicia en cada carga del año)
+  const mesesPresentes = [...new Set(window._dvData.map(function(x){ return x.mi; }))].sort(function(a,b){return a-b;});
+  window._dvMesesActivos = new Set(mesesPresentes);
+  window._dvFiltros = { canal:'', apto:'', busca:'' };
+  window._dvSortKey = 'total';
+  window._dvSortDir = -1;
+
+  const canales = [...new Set(window._dvData.map(function(x){ return x.canal; }))].sort();
+  const aptos = [...new Set(window._dvData.map(function(x){ return x.apto; }))].sort();
+
+  const chips = mesesPresentes.map(function(mi){
+    return '<button class="dv-mesbtn dv-on" id="dv-mes-'+mi+'" onclick="window._dvToggleMes('+mi+')" '
+      + 'style="padding:6px 12px;border-radius:20px;border:1px solid var(--gris-b);background:var(--azul-m);border-color:var(--azul-m);color:#fff;font-size:12px;font-weight:600;cursor:pointer">'
+      + _DV_MESN[mi] + '</button>';
+  }).join('');
+
+  const optCanal = '<option value="">Todos</option>' + canales.map(function(c){ return '<option value="'+c.replace(/"/g,'&quot;')+'">'+c+'</option>'; }).join('');
+  const optApto = '<option value="">Todos</option>' + aptos.map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('');
+
+  main.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    +'<div class="page-title" style="margin-bottom:0">📈 Detalle de Ventas — '+(eb.nombre||'')+'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center"><label style="font-size:12px;color:var(--gris-t)">Año</label>'
+    +'<select onchange="window._dvYear=parseInt(this.value);renderDetalleVentas()" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:8px">'
+    +[yr+1,yr,yr-1,yr-2].filter(function(v,ix,ar){return ar.indexOf(v)===ix;}).map(function(y){return '<option value="'+y+'"'+(y===yr?' selected':'')+'>'+y+'</option>';}).join('')
+    +'</select></div></div>'
+    +'<div class="card" style="margin-bottom:14px"><div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end">'
+    +'<div><label style="font-size:10.5px;color:var(--gris-t);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">Meses</label><div style="display:flex;gap:6px;flex-wrap:wrap">'+chips+'</div></div>'
+    +'<div><label style="font-size:10.5px;color:var(--gris-t);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">Canal</label><select onchange="window._dvFiltros.canal=this.value;window._dvRedraw()" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:8px">'+optCanal+'</select></div>'
+    +'<div><label style="font-size:10.5px;color:var(--gris-t);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">Apto</label><select onchange="window._dvFiltros.apto=this.value;window._dvRedraw()" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:8px">'+optApto+'</select></div>'
+    +'<div><label style="font-size:10.5px;color:var(--gris-t);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">Buscar huésped</label><input type="text" oninput="window._dvFiltros.busca=this.value;window._dvRedraw()" placeholder="Nombre..." style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:8px"></div>'
+    +'<div style="flex:1"></div>'
+    +'<button onclick="renderDetalleVentas()" style="background:#fff;border:1px solid var(--gris-b);color:#555;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer">↺ Limpiar</button>'
+    +'<button onclick="window._dvExportarCSV()" style="background:#1A7D3C;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer">⬇️ Exportar a Excel</button>'
+    +'</div></div>'
+    +'<div class="kpi-grid" style="margin-bottom:14px">'
+    +'<div class="kpi k-azul"><div class="kpi-lbl">Estadías</div><div class="kpi-val" id="dv-k-estadias">—</div></div>'
+    +'<div class="kpi k-verde"><div class="kpi-lbl">Noches vendidas</div><div class="kpi-val" id="dv-k-noches">—</div></div>'
+    +'<div class="kpi k-naran"><div class="kpi-lbl">Ventas</div><div class="kpi-val" id="dv-k-ventas">—</div></div>'
+    +'<div class="kpi k-azul"><div class="kpi-lbl">ADR (tarifa prom.)</div><div class="kpi-val" id="dv-k-adr">—</div></div>'
+    +'</div>'
+    +'<div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +'<span>Detalle por estadía</span><span id="dv-count" style="font-size:11.5px;color:var(--gris-t);font-weight:500"></span></div>'
+    +'<div style="overflow:auto;max-height:520px"><table class="tabla"><thead><tr>'
+    +['mesLbl:Mes','apto:Apto','huesped:Huésped','canal:Canal','noches:Noches','total:Total'].map(function(c){
+      var kv=c.split(':'); var isNum=(kv[0]==='noches'||kv[0]==='total');
+      return '<th onclick="window._dvSort(\''+kv[0]+'\')" style="cursor:pointer;user-select:none;'+(isNum?'text-align:right':'text-align:left')+'">'+kv[1]+' <span id="dv-arrow-'+kv[0]+'" style="opacity:.55;font-size:9px"></span></th>';
+    }).join('')
+    +'</tr></thead><tbody id="dv-tbody"></tbody>'
+    +'<tfoot><tr style="background:#211D1E;color:#fff;font-weight:700">'
+    +'<td colspan="4" style="text-align:left">TOTAL</td><td id="dv-f-noches" style="text-align:right">—</td><td id="dv-f-total" style="text-align:right">—</td>'
+    +'</tr></tfoot></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:8px">Fuente: rack — regla canónica _esVentaAloja (igual que Dashboard, Informe Ejecutivo e Indicadores). Excluye Complementary. Clic en un encabezado para ordenar. Exportar respeta los filtros activos.</p>'
+    +'</div>';
+
+  window._dvRedraw();
+}
+
+window._dvToggleMes = function(mi){
+  var btn = document.getElementById('dv-mes-'+mi);
+  if(window._dvMesesActivos.has(mi)){
+    window._dvMesesActivos.delete(mi);
+    if(btn){ btn.style.background='#fff'; btn.style.borderColor='var(--gris-b)'; btn.style.color='#555'; }
+  } else {
+    window._dvMesesActivos.add(mi);
+    if(btn){ btn.style.background='var(--azul-m)'; btn.style.borderColor='var(--azul-m)'; btn.style.color='#fff'; }
+  }
+  window._dvRedraw();
+};
+
+window._dvSort = function(key){
+  if(window._dvSortKey===key){ window._dvSortDir *= -1; }
+  else { window._dvSortKey=key; window._dvSortDir = (key==='huesped'||key==='canal'||key==='apto'||key==='mesLbl') ? 1 : -1; }
+  window._dvRedraw();
+};
+
+window._dvFiltrar = function(){
+  const f = window._dvFiltros || {};
+  const busca = (f.busca||'').trim().toLowerCase();
+  return (window._dvData||[]).filter(function(r){
+    return window._dvMesesActivos.has(r.mi)
+      && (!f.canal || r.canal===f.canal)
+      && (!f.apto || r.apto===f.apto)
+      && (!busca || r.huesped.toLowerCase().indexOf(busca)>-1);
+  });
+};
+
+window._dvRedraw = function(){
+  ['mesLbl','apto','huesped','canal','noches','total'].forEach(function(k){
+    var el = document.getElementById('dv-arrow-'+k);
+    if(el) el.textContent = (k===window._dvSortKey) ? (window._dvSortDir===1?'▲':'▼') : '';
+  });
+
+  var rows = window._dvFiltrar();
+  rows.sort(function(a,b){
+    var va=a[window._dvSortKey], vb=b[window._dvSortKey];
+    if(typeof va==='number') return (va-vb)*window._dvSortDir;
+    return String(va).localeCompare(String(vb))*window._dvSortDir;
+  });
+  window._dvFiltered = rows;
+
+  var tbody = document.getElementById('dv-tbody');
+  if(tbody){
+    tbody.innerHTML = rows.length ? rows.map(function(r,ix){
+      return '<tr style="'+(ix%2===1?'background:var(--fila-alt,#F5F7FA)':'')+'">'
+        +'<td>'+r.mesLbl+'</td><td>'+r.apto+'</td><td>'+r.huesped+'</td><td>'+r.canal+'</td>'
+        +'<td style="text-align:right">'+r.noches+'</td><td style="text-align:right">$'+fmtNum(r.total)+'</td></tr>';
+    }).join('') : '<tr><td colspan="6" style="text-align:center;padding:24px;color:#999">Sin resultados para estos filtros</td></tr>';
+  }
+
+  var noches = rows.reduce(function(s,r){ return s+r.noches; }, 0);
+  var total = rows.reduce(function(s,r){ return s+r.total; }, 0);
+  var adr = noches ? total/noches : 0;
+  var setTxt = function(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; };
+  setTxt('dv-k-estadias', rows.length);
+  setTxt('dv-k-noches', noches);
+  setTxt('dv-k-ventas', '$'+fmtNum(total));
+  setTxt('dv-k-adr', '$'+fmtNum(adr));
+  setTxt('dv-f-noches', noches);
+  setTxt('dv-f-total', '$'+fmtNum(total));
+  setTxt('dv-count', rows.length+' de '+(window._dvData||[]).length+' registros');
+};
+
+window._dvExportarCSV = function(){
+  const rows = window._dvFiltered || [];
+  const out = [['Mes','Apto','Huésped','Canal','Noches','Total']];
+  rows.forEach(function(r){ out.push([r.mesLbl, r.apto, r.huesped, r.canal, r.noches, Math.round(r.total)]); });
+  const noches = rows.reduce(function(s,r){ return s+r.noches; }, 0);
+  const total = rows.reduce(function(s,r){ return s+r.total; }, 0);
+  out.push(['','','TOTAL','', noches, Math.round(total)]);
+  const csv = out.map(function(r){
+    return r.map(function(v){
+      const s = String(v==null?'':v);
+      return /[",;\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+    }).join(';');
+  }).join('\r\n');
+  const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const edifNom = (window._dvEbNombre||'SO').replace(/[^a-zA-Z0-9]+/g,'_');
+  const yr = window._dvYear || new Date().getFullYear();
+  a.href = url;
+  a.download = 'Detalle_Ventas_'+edifNom+'_'+yr+'.csv';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
