@@ -919,7 +919,7 @@ const EDIFICIOS = {
     // _canonNom()/_matchCam() ya normalizan por tokens (ver mas abajo), asi que registros historicos con
     // el nombre corto siguen agrupando correctamente contra el nombre completo.
     camareras: ['GUILLERMINA SANABRIA','LEONOR MORENO','ROSANGELA ROJAS','MARTHA CECILIA OYOLA DUCUARA','MARÍA JAQUELINE BAUTISTA'],
-    jornadas: { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Gerente General':540, 'Gerente Operativo':540, 'Gerente de Eventos':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 },
+    jornadas: { 'ADMINISTRADOR':540, 'RECEPCIONISTA':540, 'GERENTE':540, 'GERENTE GENERAL':540, 'GERENTE OPERATIVO':540, 'GERENTE DE EVENTOS':540, 'MANTENIMIENTO':540, 'MENSAJERO':540, 'CHEF':570, 'CAMARERA':530, 'ÁREAS PÚBLICAS':500, 'CAPITÁN DE MESEROS':588, 'OTRO':540 },
     indicadoresMes: {'2026-01':{noches:374,disp:651,adr:796301,ocu:0.5745},'2026-02':{noches:507,disp:588,adr:729055,ocu:0.8622},'2026-03':{noches:491,disp:651,adr:752681,ocu:0.7542},'2026-04':{noches:397,disp:630,adr:733852,ocu:0.6302},'2026-05':{noches:612,disp:651,adr:716838,ocu:0.9401},'2026-06':{noches:434,disp:630,adr:708910,ocu:0.6889},'2026-07':{noches:380,disp:651,adr:636366,ocu:0.5837},'2026-08':{noches:290,disp:651,adr:619572,ocu:0.4455},'2026-09':{noches:210,disp:630,adr:570174,ocu:0.3333},'2026-10':{noches:217,disp:651,adr:551781,ocu:0.3333},'2026-11':{noches:213,disp:630,adr:572487,ocu:0.3381},'2026-12':{noches:78,disp:651,adr:686969,ocu:0.1198}}
   },
   'kubik': {
@@ -945,7 +945,7 @@ const EDIFICIOS = {
     restaurante: { nombre:'Bagatelle', impuesto:'IVA', tasa:0.19, servicio:0.10, domicilio:0.15 },
     wifi: { red:'HUESPEDES_KL', clave:'Kubik8i8' },
     camareras: ['YOLIMAR MANZANILLO','LUZ DARY RODRÍGUEZ','ÁNGELA DÍAZ'],
-    jornadas: { 'Administrador':540, 'Camarera':500, 'Mantenimiento':540, 'Otro':540 },
+    jornadas: { 'ADMINISTRADOR':540, 'CAMARERA':500, 'MANTENIMIENTO':540, 'OTRO':540 },
     indicadoresMes: {}
   }
 };
@@ -6673,8 +6673,8 @@ function _CARGOS(){
   // 8010 (aclaración de Sebastián): no se registra ingreso de Recepcionista, Mensajero, "Otro" ni de
   // los gerentes. Sí de Capitán de Meseros (Miguel Moreno) — en la solicitud anterior escribió
   // "mesero" queriendo decir "mensajero".
-  if(EDIFICIO_ACTIVO==='8010') return ['Administrador','Camarera','Áreas Públicas','Mantenimiento','Chef','Capitán de Meseros'];
-  return ['Recepcionista','Camarera','Áreas Públicas','Mantenimiento','Administrador','Gerente','Mensajero','Chef','Capitán de Meseros','Otro'];
+  if(EDIFICIO_ACTIVO==='8010') return ['ADMINISTRADOR','CAMARERA','ÁREAS PÚBLICAS','MANTENIMIENTO','CHEF','CAPITÁN DE MESEROS'];
+  return ['RECEPCIONISTA','CAMARERA','ÁREAS PÚBLICAS','MANTENIMIENTO','ADMINISTRADOR','GERENTE','MENSAJERO','CHEF','CAPITÁN DE MESEROS','OTRO'];
 }
 // Sol Sebastián: cada persona tiene SU color, siempre el mismo, para reconocer de un vistazo de quién
 // es cada registro. Se deriva del nombre (hash estable), así funciona con cualquier persona nueva sin
@@ -11964,9 +11964,9 @@ async function tablaControlPersonal(fechaSel) {
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const dias=['DOMINGO','LUNES','MARTES','MIÉRCOLES','JUEVES','VIERNES','SÁBADO'];
   const [yy,mm,dd]=fecha.split('-').map(Number); const diaSem=dias[new Date(yy,mm-1,dd).getDay()];
-  const ordenCargo = c => ({'Administrador':1,'Camarera':2,'Áreas Públicas':3,'Mantenimiento':4,'Chef':5,'Capitán de Meseros':6,'Recepcionista':7}[c]||9);
+  const ordenCargo = c => ({'ADMINISTRADOR':1,'CAMARERA':2,'ÁREAS PÚBLICAS':3,'MANTENIMIENTO':4,'CHEF':5,'CAPITÁN DE MESEROS':6,'RECEPCIONISTA':7}[c]||9);
   const porCargo = {};
-  dia.forEach(r => { const c=(r.cargo||'Otro'); (porCargo[c]=porCargo[c]||[]).push(r); });
+  dia.forEach(r => { const c=(r.cargo||'OTRO'); (porCargo[c]=porCargo[c]||[]).push(r); });
   const rojo = v => v ? `<b style="color:#C00000">${v}</b>` : '';
   let cuerpo='';
   Object.keys(porCargo).sort((a,b)=>ordenCargo(a)-ordenCargo(b)).forEach(cargo=>{
