@@ -3036,7 +3036,7 @@ async function renderVentasLinea(){
   try{
     [rk,ev,mg,co,de,tr] = await Promise.all([
       _rackRango('estado,tarifa,fecha', desde, hasta),
-      sb.from('eventos').select('val_sala,val_alimentacion,val_consumos,fecha_inicio,estado').gte('fecha_inicio',desde).lte('fecha_inicio',hasta+'T23:59:59'),
+      sb.from('eventos').select('val_sala,val_alimentacion,val_consumos,fecha_inicio,estado').eq('edificio',EDIFICIO_ACTIVO).gte('fecha_inicio',desde).lte('fecha_inicio',hasta+'T23:59:59'),
       sb.from('recibos_magnifique').select('total,valor_recibo,fecha').gte('fecha',desde).lte('fecha',hasta),
       sb.from('consumos').select('valor,fecha').gte('fecha',desde).lte('fecha',hasta),
       sb.from('desayunos').select('valor,fecha').gte('fecha',desde).lte('fecha',hasta),
@@ -6662,7 +6662,7 @@ async function renderDashServicios() {
 const _KUBIK_UNID = { '01':{n:'Grand Residence',m2:100}, '02':{n:'Smart',m2:29}, '03':{n:'One Residence',m2:56}, '04':{n:'Suit Home',m2:42}, '04A':{n:'Deluxe',m2:37}, 'PH1':{n:'Pent House Mountain View'}, 'PH2':{n:'Pent House Park View'} };
 const _KUBIK_COMBOS = { 'FR':{n:'Famili Residence',m2:130,suf:['01','02']}, 'TR':{n:'Two Residence',m2:85,suf:['02','03']}, 'SD':{n:'Suite Deluxe',m2:79,suf:['04','04A']} };
 window._aptosFisicosDe = function(apto){ apto=String(apto==null?'':apto).trim(); if(apto==='AH') return ['PH1','PH2']; var _m=/^(FR|TR|SD)(\d+)$/.exec(apto); if(_m){ var _s={FR:['01','02'],TR:['02','03'],SD:['04','04A']}[_m[1]]; return _s.map(function(x){return _m[2]+x;}); } return [apto]; };
-window._facNitLookup = async function(){ try{ var el=document.getElementById('fac-cli-nit'); if(!el) return; var nit=String(el.value||'').replace(/[.\s-]/g,'').trim(); if(nit.length<4) return; var q=await sb.from('facturas').select('cliente,cliente_nit,cliente_dir,email,telefono,created_at').order('created_at',{ascending:false}).limit(400); var rows=(q.data||[]).filter(function(r){ return String(r.cliente_nit||'').replace(/[.\s-]/g,'')===nit; }); if(!rows.length) return; var r=rows[0]; var setIf=function(id,v){ var e=document.getElementById(id); if(e && !String(e.value||'').trim() && v){ e.value=v; } }; setIf('fac-cli-nombre', r.cliente); setIf('fac-cli-dir', r.cliente_dir); setIf('fac-cli-email', r.email); setIf('fac-cli-tel', r.telefono); if(typeof showToast==='function') showToast('Datos traídos del NIT '+nit+(r.cliente?(' · '+r.cliente):''),'success'); }catch(_e){} };
+window._facNitLookup = async function(){ try{ var el=document.getElementById('fac-cli-nit'); if(!el) return; var nit=String(el.value||'').replace(/[.\s-]/g,'').trim(); if(nit.length<4) return; var q=await sb.from('facturas').select('cliente,cliente_nit,cliente_dir,email,telefono,created_at').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(400); var rows=(q.data||[]).filter(function(r){ return String(r.cliente_nit||'').replace(/[.\s-]/g,'')===nit; }); if(!rows.length) return; var r=rows[0]; var setIf=function(id,v){ var e=document.getElementById(id); if(e && !String(e.value||'').trim() && v){ e.value=v; } }; setIf('fac-cli-nombre', r.cliente); setIf('fac-cli-dir', r.cliente_dir); setIf('fac-cli-email', r.email); setIf('fac-cli-tel', r.telefono); if(typeof showToast==='function') showToast('Datos traídos del NIT '+nit+(r.cliente?(' · '+r.cliente):''),'success'); }catch(_e){} };
 function _kubikUnidad(apto){ apto=String(apto||'').trim(); if(_KUBIK_UNID[apto]) return Object.assign({suf:apto},_KUBIK_UNID[apto]); var m=/^(\d)(\d{2}A?)$/.exec(apto); if(!m) return null; var b=_KUBIK_UNID[m[2]]; if(!b) return null; return {n:b.n,m2:b.m2,piso:m[1],suf:m[2]}; }
 // Nombre comercial para mostrar junto al código (ej: "201 · Grand Residence")
 function _kubikLabel(apto){ if((((EB&&EB().nombre)||'').indexOf('8010')>-1)) return apto; if(String(apto||'')==='AH') return 'Air House (PH1+PH2)'; var c=/^(FR|TR|SD)(\d+)$/.exec(String(apto||'')); if(c){ var cc=_KUBIK_COMBOS[c[1]]; return cc?(cc.n+' '+c[2]+' ('+cc.suf.map(function(s){return c[2]+s;}).join('+')+')'):apto; } var u=_kubikUnidad(apto); return u?(apto+' · '+u.n):apto; }
@@ -15854,7 +15854,7 @@ async function renderNomina(){
   if(!ok){ document.getElementById('main-content').innerHTML = '<div class="page-title">💼 Nómina 8i8</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Esta vista está disponible solo para gerencia.</p></div>'; return; }
   const per = window._nomPeriodo || (TODAY.slice(0,8) + (Number(TODAY.slice(8,10))<=15?'15':'30'));
   window._nomPeriodo = per;
-  const { data } = await sb.from('nomina').select('*').eq('periodo', per).order('nombre');
+  const { data } = await sb.from('nomina').select('*').eq('periodo', per).eq('edificio', EDIFICIO_ACTIVO).order('nombre');
   const rows = data||[];
   const f$ = n=>'$'+Math.round(Number(n)||0).toLocaleString('es-CO');
   const calc = r => { const sp = Math.round((Number(r.sueldo_base)||0)*(Number(r.dias)||0)/30); const dev = sp + (Number(r.aux_transporte)||0) + (Number(r.valor_extras)||0); return { sp, dev, neto: dev - (Number(r.deducciones)||0) }; };
@@ -15912,7 +15912,7 @@ async function cargarNominaBase(){
 }
 async function copiarNominaAnterior(){
   const per = window._nomPeriodo;
-  const { data } = await sb.from('nomina').select('*').lt('periodo', per).order('periodo',{ascending:false}).limit(60);
+  const { data } = await sb.from('nomina').select('*').lt('periodo', per).eq('edificio', EDIFICIO_ACTIVO).order('periodo',{ascending:false}).limit(60);
   if(!data||!data.length){ showToast('No hay períodos anteriores — usa la plantilla base','error'); return; }
   const ant = data[0].periodo;
   const rows = data.filter(r=>r.periodo===ant).map(r=>({ periodo:per, tipo_doc:r.tipo_doc, documento:r.documento, nombre:r.nombre, cargo:r.cargo, sueldo_base:r.sueldo_base, aux_transporte:r.aux_transporte, dias:15, valor_extras:0, deducciones:0, edificio:'kubik', user_id:currentUser.id }));
@@ -15927,7 +15927,7 @@ async function addEmpleadoNomina(){
   if(error) showToast('Error: '+error.message,'error'); else renderNomina();
 }
 function compartirNomina(){
-  sb.from('nomina').select('*').eq('periodo', window._nomPeriodo).order('nombre').then(({data})=>{
+  sb.from('nomina').select('*').eq('periodo', window._nomPeriodo).eq('edificio', EDIFICIO_ACTIVO).order('nombre').then(({data})=>{
     const rows=data||[]; const f$=n=>'$'+Math.round(Number(n)||0).toLocaleString('es-CO');
     let tot=0;
     const lineas = rows.map(r=>{ const sp=Math.round((Number(r.sueldo_base)||0)*(Number(r.dias)||0)/30); const neto=sp+(Number(r.aux_transporte)||0)+(Number(r.valor_extras)||0)-(Number(r.deducciones)||0); tot+=neto; return `▪ ${r.nombre} (${r.cargo||'-'}) · ${r.dias} días · Neto: ${f$(neto)}`; });
@@ -17782,7 +17782,7 @@ async function tesGuardar(flujo,id){
 /* ---- Proveedores ---- */
 window._tesLoadProveedores=async function(){
   var host=document.getElementById('tes-content'); if(!host) return;
-  var r=await sb.from('tes_proveedores').select('*').order('nombre',{ascending:true});
+  var r=await sb.from('tes_proveedores').select('*').eq('sociedad',window._tesSoc).order('nombre',{ascending:true});
   if(r.error){ host.innerHTML='<div class="card"><p style="color:#b91c1c">'+r.error.message+'</p></div>'; return; }
   var rows=(r.data||[]).map(function(p){ return '<tr><td>'+(p.nombre||'')+'</td><td>'+(p.nit||'')+'</td><td>'+(p.condiciones_pago||'')+'</td><td>'+(p.contacto||'')+'</td><td><button class="btn btn-outline btn-xs" style="color:#b91c1c" onclick="tesProvBorrar(\''+p.id+'\')">🗑</button></td></tr>'; }).join('');
   if(!rows) rows='<tr><td colspan="5" style="color:#888">Sin proveedores. Agrega el primero.</td></tr>';
@@ -17802,7 +17802,7 @@ async function tesProvBorrar(id){ if(!confirm('¿Borrar proveedor?')) return; aw
 /* ---- Créditos + Amortización ---- */
 window._tesLoadCreditos=async function(){
   var host=document.getElementById('tes-content'); if(!host) return;
-  var r=await sb.from('tes_creditos').select('*').order('created_at',{ascending:true});
+  var r=await sb.from('tes_creditos').select('*').eq('sociedad',window._tesSoc).order('created_at',{ascending:true});
   if(r.error){ host.innerHTML='<div class="card"><p style="color:#b91c1c">'+r.error.message+'</p></div>'; return; }
   var F=window._tesFmt;
   var rows=(r.data||[]).map(function(c){ return '<tr><td>'+(c.entidad||'')+'</td><td style="text-align:right">'+F(c.monto_inicial)+'</td><td style="text-align:right">'+(c.tasa||0)+'%</td><td style="text-align:center">'+(c.cuotas||0)+'</td><td style="text-align:right">'+F(c.cuota_valor)+'</td><td>'+(c.fecha_inicio||'')+'</td><td><button class="btn btn-outline btn-xs" title="Generar cuotas como egresos" onclick="tesCredAmort(\''+c.id+'\')">📅 Amortizar</button> <button class="btn btn-outline btn-xs" style="color:#b91c1c" onclick="tesCredBorrar(\''+c.id+'\')">🗑</button></td></tr>'; }).join('');
@@ -18523,6 +18523,23 @@ async function _pregEnviarPublico(token, ed){
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 })();
+
+// ── Normalización a MAYÚSCULAS en campos identificadores (Sol. Santiago 13-ago-2026) ──
+// Motivo: nombres/documentos escritos con distinta capitalización no se reconocían como
+// la misma persona (por eso existen _canonNom/_matchCam más arriba, para "arreglar" el
+// síntoma). Esto ataca la causa: al salir de cualquier <input type="text"> (nombres,
+// apellidos, documento, apto, placa, empresa, ciudad, nacionalidad, etc.) el valor se
+// pasa a mayúscula automáticamente. NO toca <textarea> (observaciones/notas de texto
+// libre) ni inputs type="email"/"password"/"tel"/"date"/"number"/etc. — esos quedan tal
+// cual el usuario los escriba. Para excluir un campo puntual, agregar data-no-upper.
+document.addEventListener('blur', function(e){
+  var el = e.target;
+  if(!el || el.tagName !== 'INPUT' || el.type !== 'text' || el.hasAttribute('data-no-upper')) return;
+  var v = el.value;
+  if(!v) return;
+  var uv = v.toUpperCase();
+  if(uv !== v){ el.value = uv; try{ el.dispatchEvent(new Event('input',{bubbles:true})); }catch(_){} }
+}, true);
 
 // ═══════════════════════════════════════════════════════════
 // AUTO-LOGIN si hay sesión activa
