@@ -913,7 +913,12 @@ const EDIFICIOS = {
     // Rosangela Rojas como su reemplazo. Sol. Sebastián (adf1d718, 08-ago-2026): se quitan las
     // combinaciones "+ Jaqueline" — aunque Jaqueline apoya a otras camareras, ese apoyo no se
     // registra como combinación en este módulo (se sigue registrando su propio tiempo aparte).
-    camareras: ['Guillermina Sanabria','Leonor Moreno','Rosangela Rojas','Martha Oyola','Jaqueline Bautista'],
+    // Sol. Santiago (13-ago-2026): 'Martha Oyola' y 'Jaqueline Bautista' eran nombres cortos que no
+    // coincidian con el nombre completo en la tabla personal ('Martha Cecilia Oyola Ducuara', 'Maria
+    // Jaqueline Bautista') -- mismo patron que el caso Juan Martinez. Se unifican aqui; es seguro porque
+    // _canonNom()/_matchCam() ya normalizan por tokens (ver mas abajo), asi que registros historicos con
+    // el nombre corto siguen agrupando correctamente contra el nombre completo.
+    camareras: ['Guillermina Sanabria','Leonor Moreno','Rosangela Rojas','Martha Cecilia Oyola Ducuara','María Jaqueline Bautista'],
     jornadas: { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Gerente General':540, 'Gerente Operativo':540, 'Gerente de Eventos':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 },
     indicadoresMes: {'2026-01':{noches:374,disp:651,adr:796301,ocu:0.5745},'2026-02':{noches:507,disp:588,adr:729055,ocu:0.8622},'2026-03':{noches:491,disp:651,adr:752681,ocu:0.7542},'2026-04':{noches:397,disp:630,adr:733852,ocu:0.6302},'2026-05':{noches:612,disp:651,adr:716838,ocu:0.9401},'2026-06':{noches:434,disp:630,adr:708910,ocu:0.6889},'2026-07':{noches:380,disp:651,adr:636366,ocu:0.5837},'2026-08':{noches:290,disp:651,adr:619572,ocu:0.4455},'2026-09':{noches:210,disp:630,adr:570174,ocu:0.3333},'2026-10':{noches:217,disp:651,adr:551781,ocu:0.3333},'2026-11':{noches:213,disp:630,adr:572487,ocu:0.3381},'2026-12':{noches:78,disp:651,adr:686969,ocu:0.1198}}
   },
