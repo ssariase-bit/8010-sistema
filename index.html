@@ -7924,6 +7924,27 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
       }catch(e){}
     });
   }
+  // Sol. Sebastián (13-ago-2026): al registrar un recibo Magnifique quedaba solo en su propio modulo
+  // y no se reflejaba en el Listado de Cargos -- el campo Magnifique ahi era 100% manual. Ahora, al
+  // elegir apto (y la fecha ya puesta), se trae automaticamente la suma de recibos Magnifique de ese
+  // apto en esa fecha y se precarga el campo (editable por si hay que ajustar) — solicitud f9736c37.
+  if (tabla === 'listado_cargos' && EDIFICIO_ACTIVO !== 'kubik') {
+    var _apMag = document.getElementById('gf-apto');
+    if (_apMag) _apMag.addEventListener('change', async function(){
+      var ap = String(_apMag.value||'').trim(); if(!ap) return;
+      var _magEl = document.getElementById('gf-magnifique'); if(!_magEl) return;
+      var _fEl = document.getElementById('gf-fecha'); var _f = (_fEl && _fEl.value) || TODAY;
+      try{
+        var _mq = await sb.from('recibos_magnifique').select('total,apto,fecha').eq('edificio',EDIFICIO_ACTIVO).eq('apto',ap).eq('fecha',_f);
+        var _sum = (_mq.data||[]).reduce(function(s,x){ return s+(Number(x.total)||0); },0);
+        if(_sum>0){
+          _magEl.value = _sum;
+          try{ _magEl.dispatchEvent(new Event('input')); }catch(e){}
+          showToast('Magnifique cargado desde recibos del apto '+ap+' ('+_f+'): $'+_sum.toLocaleString('es-CO'),'success');
+        }
+      }catch(e){}
+    });
+  }
 }
 
 async function submitGenForm(tabla, ids, reqs) {
@@ -7968,7 +7989,11 @@ async function submitGenForm(tabla, ids, reqs) {
           const _path = tabla + '/' + Date.now() + '_' + String(_f.name||'archivo').replace(/[^a-zA-Z0-9._-]/g,'_');
           const _up = await sb.storage.from('adjuntos').upload(_path, _f, { cacheControl:'3600', upsert:false, contentType:_f.type||undefined });
           if (!_up.error) obj[id] = sb.storage.from('adjuntos').getPublicUrl(_path).data.publicUrl;
-        } catch(_e){}
+          // Sol. Sebastián (13-ago-2026, recibos Magnifique): si el archivo adjunto fallaba al subir
+          // (permiso de storage, tamaño, tipo), el registro se guardaba igual pero SIN el adjunto y sin
+          // ningun aviso -- parecia que "no se reflejaba en ningun lado" cuando en realidad nunca se subio.
+          else showToast('⚠️ El registro se guardó, pero el archivo adjunto NO se subió: ' + (_up.error.message||'error desconocido'), 'error');
+        } catch(_e){ showToast('⚠️ El registro se guardó, pero el archivo adjunto NO se subió (' + (_e&&_e.message?_e.message:_e) + ')', 'error'); }
       } else if (window._genEditData && window._genEditData[id] != null) {
         obj[id] = window._genEditData[id];
       }
