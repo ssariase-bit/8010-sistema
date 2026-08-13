@@ -918,7 +918,7 @@ const EDIFICIOS = {
     // Jaqueline Bautista') -- mismo patron que el caso Juan Martinez. Se unifican aqui; es seguro porque
     // _canonNom()/_matchCam() ya normalizan por tokens (ver mas abajo), asi que registros historicos con
     // el nombre corto siguen agrupando correctamente contra el nombre completo.
-    camareras: ['Guillermina Sanabria','Leonor Moreno','Rosangela Rojas','Martha Cecilia Oyola Ducuara','María Jaqueline Bautista'],
+    camareras: ['GUILLERMINA SANABRIA','LEONOR MORENO','ROSANGELA ROJAS','MARTHA CECILIA OYOLA DUCUARA','MARÍA JAQUELINE BAUTISTA'],
     jornadas: { 'Administrador':540, 'Recepcionista':540, 'Gerente':540, 'Gerente General':540, 'Gerente Operativo':540, 'Gerente de Eventos':540, 'Mantenimiento':540, 'Mensajero':540, 'Chef':570, 'Camarera':530, 'Áreas Públicas':500, 'Capitán de Meseros':588, 'Otro':540 },
     indicadoresMes: {'2026-01':{noches:374,disp:651,adr:796301,ocu:0.5745},'2026-02':{noches:507,disp:588,adr:729055,ocu:0.8622},'2026-03':{noches:491,disp:651,adr:752681,ocu:0.7542},'2026-04':{noches:397,disp:630,adr:733852,ocu:0.6302},'2026-05':{noches:612,disp:651,adr:716838,ocu:0.9401},'2026-06':{noches:434,disp:630,adr:708910,ocu:0.6889},'2026-07':{noches:380,disp:651,adr:636366,ocu:0.5837},'2026-08':{noches:290,disp:651,adr:619572,ocu:0.4455},'2026-09':{noches:210,disp:630,adr:570174,ocu:0.3333},'2026-10':{noches:217,disp:651,adr:551781,ocu:0.3333},'2026-11':{noches:213,disp:630,adr:572487,ocu:0.3381},'2026-12':{noches:78,disp:651,adr:686969,ocu:0.1198}}
   },
@@ -944,7 +944,7 @@ const EDIFICIOS = {
     // Restaurante del edificio (impuesto YA incluido en el precio -> se extrae). Bagatelle factura IVA 19% + servicio 10%.
     restaurante: { nombre:'Bagatelle', impuesto:'IVA', tasa:0.19, servicio:0.10, domicilio:0.15 },
     wifi: { red:'HUESPEDES_KL', clave:'Kubik8i8' },
-    camareras: ['Yolimar Manzanillo','Luz Dary Rodríguez','Ángela Díaz'],
+    camareras: ['YOLIMAR MANZANILLO','LUZ DARY RODRÍGUEZ','ÁNGELA DÍAZ'],
     jornadas: { 'Administrador':540, 'Camarera':500, 'Mantenimiento':540, 'Otro':540 },
     indicadoresMes: {}
   }
@@ -2563,7 +2563,7 @@ window.renderFlujoSemanal=async function(){
            {id:'arrendatario',label:'Arrendatario (a)',type:'nombre3',default:''},
            {id:'fv',label:'FV',type:'text',default:''},
            {id:'valor',label:'Valor ($)',type:'money',default:''},
-           {id:'administrador_entrega',label:'Administrador que entrega',type:'select',opts:[{v:'',l:'— Seleccionar —'},'Juan Fernando Martínez','Andrés Parga','Sebastián Martínez','Fabio Malaver']},
+           {id:'administrador_entrega',label:'Administrador que entrega',type:'select',opts:[{v:'',l:'— Seleccionar —'},'JUAN FERNANDO MARTÍNEZ','ANDRÉS PARGA','SEBASTIÁN MARTÍNEZ','FABIO MALAVER']},
            {id:'fecha_entrega',label:'Fecha de entrega',type:'date',default:''}]
         : []),
       ...(EDIFICIO_ACTIVO==='kubik'
@@ -9480,7 +9480,7 @@ window._comTargetOptions = async function(){
 // Sol Santiago: personas que NO deben salir como destinatarios de comunicados.
 // Conservan su acceso al sistema (si lo tienen); solo no se les dirigen comunicados.
 // Lista definida por Gerencia (17-jul-2026) — personal operativo que no gestiona el SO.
-window._NO_DESTINATARIOS = ['Ángela Díaz','Angie Viviana Obando','Guillermina Sanabria','José Waldo Rojas','Leonor Moreno','Luz Dary Rodríguez','María del Carmen Durán','María Jaqueline Bautista','Martha Cecilia Oyola Ducuara','Michael Manrique','Miguel Moreno','Yolimar Manzanillo'];
+window._NO_DESTINATARIOS = ['ÁNGELA DÍAZ','ANGIE VIVIANA OBANDO','GUILLERMINA SANABRIA','JOSÉ WALDO ROJAS','LEONOR MORENO','LUZ DARY RODRÍGUEZ','MARÍA DEL CARMEN DURÁN','MARÍA JAQUELINE BAUTISTA','MARTHA CECILIA OYOLA DUCUARA','MICHAEL MANRIQUE','MIGUEL MORENO','YOLIMAR MANZANILLO'];
 
 // ── TRM oficial (datos.gov.co) ─────────────────────────────────────────────
 // Si la fecha es futura y aún no hay TRM publicada, se usa la última vigente.
@@ -9515,7 +9515,7 @@ window._trmAuto = async function(ci){
 
 // Sol Sebastián (14-jul-2026): personal de dirección/gerencia y de honorarios al que NO se le
 // registra ingreso-salida. No aparece en el selector del Control de Ingreso Personal.
-window._NO_CONTROL_INGRESO = ['Adriana Bernal','Andrés Leguizamón','Andres Leguizamon','Fabio Malaver','Fernando Herrera','Jonathan Zambrano','Maria Jose Tosta','María José Tosta','Natalia Muñoz','Zareth Varela'];
+window._NO_CONTROL_INGRESO = ['ADRIANA BERNAL','ANDRÉS LEGUIZAMÓN','ANDRES LEGUIZAMON','FABIO MALAVER','FERNANDO HERRERA','JONATHAN ZAMBRANO','MARIA JOSE TOSTA','MARÍA JOSÉ TOSTA','NATALIA MUÑOZ','ZARETH VARELA'];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPRAS — dos flujos (Sol. Santiago, 13-jul-2026). Aplica a 8010 y a Kubik.
@@ -11212,26 +11212,26 @@ window.cambiarEstadoCom = async function(id,val,el){
 // Directorio de personas por edificio (para dirigir y notificar por correo)
 const _DIRECTORIO = {
   '8010': [
-    {n:'Santiago Arias (Gerencia General)', e:'santiago.arias@8010urbanliving.com'},
-    {n:'Fabio Malaver (Gerencia Operativa)', e:'fabio.malaver@8010urbanliving.com'},
-    {n:'Cristina Cerviño', e:'cristina.cervino@8010urbanliving.com'},
-    {n:'María José Tosta', e:'maria.tosta@8010urbanliving.com'},
-    {n:'Sebastián Martínez', e:'sebastian.martinez@8010urbanliving.com'},
-    {n:'Andrés Parga', e:'andres.parga@8010urbanliving.com'},
-    {n:'Fernando Herrera', e:'fernando.herrera@8010urbanliving.com'},
-    {n:'Juan Fernando Martínez', e:'juan.martinez@8010urbanliving.com'},
-    {n:'Andrés Leguizamón (Compras)', e:'operativo.compras@8i8op.com'},
-    {n:'Zareth Varela', e:'zareth.varela@8010urbanliving.com'},
-    {n:'Natalia Muñoz (Eventos)', e:'natalia.munoz@8010urbanliving.com'}
+    {n:'SANTIAGO ARIAS (GERENCIA GENERAL)', e:'santiago.arias@8010urbanliving.com'},
+    {n:'FABIO MALAVER (GERENCIA OPERATIVA)', e:'fabio.malaver@8010urbanliving.com'},
+    {n:'CRISTINA CERVIÑO', e:'cristina.cervino@8010urbanliving.com'},
+    {n:'MARÍA JOSÉ TOSTA', e:'maria.tosta@8010urbanliving.com'},
+    {n:'SEBASTIÁN MARTÍNEZ', e:'sebastian.martinez@8010urbanliving.com'},
+    {n:'ANDRÉS PARGA', e:'andres.parga@8010urbanliving.com'},
+    {n:'FERNANDO HERRERA', e:'fernando.herrera@8010urbanliving.com'},
+    {n:'JUAN FERNANDO MARTÍNEZ', e:'juan.martinez@8010urbanliving.com'},
+    {n:'ANDRÉS LEGUIZAMÓN (COMPRAS)', e:'operativo.compras@8i8op.com'},
+    {n:'ZARETH VARELA', e:'zareth.varela@8010urbanliving.com'},
+    {n:'NATALIA MUÑOZ (EVENTOS)', e:'natalia.munoz@8010urbanliving.com'}
   ],
   'kubik': [
-    {n:'Santiago Arias (Gerencia General)', e:'sariase@8i8op.com'},
-    {n:'Gerencia Operativa', e:'operativo@8i8op.com'},
-    {n:'Carlos Andrés Jiménez', e:'admin4@8i8op.com'},
-    {n:'Ricardo Vallejo', e:'admin2@8i8op.com'},
-    {n:'Nancy Medina Pabón', e:'admin3@8i8op.com'},
-    {n:'Juanita Noguera', e:'admin1@8i8op.com'},
-    {n:'Angélica Olaya', e:'aolaya@kubiklab.com'}
+    {n:'SANTIAGO ARIAS (GERENCIA GENERAL)', e:'sariase@8i8op.com'},
+    {n:'GERENCIA OPERATIVA', e:'operativo@8i8op.com'},
+    {n:'CARLOS ANDRÉS JIMÉNEZ', e:'admin4@8i8op.com'},
+    {n:'RICARDO VALLEJO', e:'admin2@8i8op.com'},
+    {n:'NANCY MEDINA PABÓN', e:'admin3@8i8op.com'},
+    {n:'JUANITA NOGUERA', e:'admin1@8i8op.com'},
+    {n:'ANGÉLICA OLAYA', e:'aolaya@kubiklab.com'}
   ]
 };
 // Grupos de correo para dirigir comentarios de gerencia. Editable: av\u00edsame para ajustar miembros.
@@ -15838,16 +15838,16 @@ function compartirChecklist(){
 // NÓMINA 8i8 OPERADORA — solo gerencia
 // ═══════════════════════════════════════════════════════════
 const NOMINA_BASE_8I8 = [
- ['Cédula de Ciudadanía','79.946.865','Arias Echeverry Santiago','Gerente General',11000000,0],
- ['Cédula de Extranjería','481.927','Cerviño Fernandez Cristina','Director Mercadeo y Ventas',5000000,0],
- ['Cédula de Ciudadanía','52.457.082','Diaz Diaz Angela Patricia','Camarera',1751000,124548],
- ['Cédula de Ciudadanía','79.959.751','Jimenez Gonzalez Carlos A.','Administrador',2100000,124548],
- ['Permiso por Protección Temporal','5.999.107','Manzanillo Castillo Yolimar','Camarera',1751000,124548],
- ['Cédula de Ciudadanía','1.053.724.270','Medina Pabon Nancy Yurani','Administrador',2100000,124548],
- ['Cédula de Ciudadanía','1.013.037.214','Noguera Pinto Juana Milena','Administrador',2100000,124548],
- ['Cédula de Ciudadanía','80.066.298','Reyes Fierro Luis Alfonso','Jefe de Mantenimiento',2400000,124548],
- ['Cédula de Ciudadanía','1.033.680.662','Rodriguez Peña Luz Dary','Camarera',1751000,124548],
- ['Cédula de Ciudadanía','80.224.038','Vallejo Fernandez Ricardo','Administrador',2500000,124548]
+ ['Cédula de Ciudadanía','79.946.865','ARIAS ECHEVERRY SANTIAGO','GERENTE GENERAL',11000000,0],
+ ['Cédula de Extranjería','481.927','CERVIÑO FERNANDEZ CRISTINA','DIRECTOR MERCADEO Y VENTAS',5000000,0],
+ ['Cédula de Ciudadanía','52.457.082','DIAZ DIAZ ANGELA PATRICIA','CAMARERA',1751000,124548],
+ ['Cédula de Ciudadanía','79.959.751','JIMENEZ GONZALEZ CARLOS A.','ADMINISTRADOR',2100000,124548],
+ ['Permiso por Protección Temporal','5.999.107','MANZANILLO CASTILLO YOLIMAR','CAMARERA',1751000,124548],
+ ['Cédula de Ciudadanía','1.053.724.270','MEDINA PABON NANCY YURANI','ADMINISTRADOR',2100000,124548],
+ ['Cédula de Ciudadanía','1.013.037.214','NOGUERA PINTO JUANA MILENA','ADMINISTRADOR',2100000,124548],
+ ['Cédula de Ciudadanía','80.066.298','REYES FIERRO LUIS ALFONSO','JEFE DE MANTENIMIENTO',2400000,124548],
+ ['Cédula de Ciudadanía','1.033.680.662','RODRIGUEZ PEÑA LUZ DARY','CAMARERA',1751000,124548],
+ ['Cédula de Ciudadanía','80.224.038','VALLEJO FERNANDEZ RICARDO','ADMINISTRADOR',2500000,124548]
 ];
 async function renderNomina(){
   const ok = currentProfile?.rol==='gerente_general' || currentProfile?.rol==='asesora';
