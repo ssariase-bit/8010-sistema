@@ -1118,6 +1118,7 @@ const NAV_ITEMS = {
     { section: 'Operación' },
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
+    { id: 'datos-arrendatarios-list', icon: '🛂', label: 'Datos arrendatarios' },
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'comentarios', icon: '💬', label: 'Comentarios' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
@@ -1190,6 +1191,7 @@ const NAV_ITEMS = {
     { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
+    { id: 'datos-arrendatarios-list', icon: '🛂', label: 'Datos arrendatarios' },
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'comentarios', icon: '💬', label: 'Comentarios' },
     { section: 'Operación' },
@@ -1240,6 +1242,7 @@ const NAV_ITEMS = {
     { section: 'Mi turno' },
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
+    { id: 'datos-arrendatarios-list', icon: '🛂', label: 'Datos arrendatarios' },
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'comentarios', icon: '💬', label: 'Comentarios' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
@@ -1398,6 +1401,7 @@ rrhh: [
     { section: 'Mi turno' },
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
+    { id: 'datos-arrendatarios-list', icon: '🛂', label: 'Datos arrendatarios' },
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'comentarios', icon: '💬', label: 'Comentarios' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
@@ -1433,6 +1437,7 @@ const MENU_COMPLETO = [
   { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
   { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
+    { id: 'datos-arrendatarios-list', icon: '🛂', label: 'Datos arrendatarios' },
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'comentarios', icon: '💬', label: 'Comentarios' },
   { section: 'Operación' },
@@ -2584,6 +2589,7 @@ window.renderFlujoSemanal=async function(){
     case 'mantenimiento-list': await renderMantList(); break;
     case 'turnos-list':        await renderTurnosList(); break;
     case 'hk-list':            await renderHKList(); break;
+    case 'datos-arrendatarios-list': await renderDatosArrendatariosList(); break;
     case 'contratos-list':     await renderContratos(); break;
     case 'contratos-form':     renderGenForm('contratos','📄 Nuevo Contrato / Otrosí',[
       {id:'apto',label:'Apartamento',type:'text',req:true},
@@ -18252,6 +18258,95 @@ function _pregUsar(id){
   if(typeof showToast==='function') showToast('Datos del huésped cargados','success');
 }
 
+// ── Módulo "Datos arrendatarios": listado standalone de pre-registros ──
+// Sol. Sebastián (c9c1ee75, aprobado por Santiago 13-ago-2026): antes solo se podía
+// acceder a los pre-registros desde dentro del formulario de Nueva Reserva
+// (botón 📥 Traer datos del huésped). Este módulo los expone como listado propio.
+// IMPORTANTE: 'prereg' no está en TABLAS_POR_EDIFICIO (el interceptor de sb.from() en
+// la línea ~958 no la filtra automáticamente) — por eso aquí, igual que en _pregTraer(),
+// se filtra manualmente por EDIFICIO_ACTIVO. Nunca quitar ese .eq(): es lo único que
+// separa los datos de 8010 y Kubik Living en esta tabla.
+async function renderDatosArrendatariosList(){
+  var r = await sb.from('prereg').select('*').eq('edificio', EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(200);
+  var rows = r.data || [];
+  window._pregRows = window._pregRows || {};
+  rows.forEach(function(x){ window._pregRows[x.id] = x; });
+  var q = (window._datosArrQ || '').toLowerCase().trim();
+  var filtradas = rows.filter(function(x){
+    if(!q) return true;
+    var nom = [x.nombre,x.apellido1,x.apellido2].filter(Boolean).join(' ');
+    var hay = [nom, x.documento, x.telefono, x.empresa, x.email].filter(Boolean).join(' ').toLowerCase();
+    return hay.indexOf(q) >= 0;
+  });
+  function badge(estado){
+    var s = estado || 'pendiente';
+    var col = s==='importado' ? {bg:'var(--verde-c)',c:'var(--verde)'} : s==='completado' ? {bg:'#FEF3C7',c:'#92400E'} : {bg:'#F3F4F6',c:'#6B7280'};
+    return '<span style="background:'+col.bg+';color:'+col.c+';border-radius:12px;padding:3px 10px;font-size:11px;font-weight:700;white-space:nowrap">'+_pregEsc(s)+'</span>';
+  }
+  var filas = filtradas.map(function(x){
+    var nom = [x.nombre,x.apellido1,x.apellido2].filter(Boolean).join(' ') || '(sin nombre)';
+    var pax = [x.pax_adultos!=null?x.pax_adultos+' ad.':'', x.pax_menores?x.pax_menores+' niños':'', x.pax_infantes?x.pax_infantes+' inf.':''].filter(Boolean).join(', ');
+    var fch = x.created_at ? new Date(x.created_at).toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
+    return '<tr>' +
+      '<td>'+_pregEsc(fch)+'</td>' +
+      '<td><strong>'+_pregEsc(nom)+'</strong><br><small style="color:var(--gris-t)">'+_pregEsc(x.email||'')+'</small></td>' +
+      '<td>'+_pregEsc(x.documento||'-')+'</td>' +
+      '<td>'+_pregEsc(x.telefono||'-')+'</td>' +
+      '<td>'+_pregEsc(x.empresa||'-')+'</td>' +
+      '<td>'+_pregEsc(pax||'-')+'</td>' +
+      '<td>'+badge(x.estado)+'</td>' +
+      '<td style="white-space:nowrap"><button onclick="_datosArrVer(\''+x.id+'\')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">👁 Ver</button></td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('main-content').innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
+      '<div class="page-title" style="margin-bottom:0">🛂 Datos arrendatarios</div>' +
+      '<button class="btn btn-success btn-sm" onclick="_pregSolicitar()" style="padding:10px 20px">📲 Solicitar datos al huésped</button>' +
+    '</div>' +
+    '<div class="card" style="padding:10px">' +
+      '<input id="_datosArrBuscar" value="'+_pregEsc(window._datosArrQ||'')+'" oninput="window._datosArrQ=this.value;renderDatosArrendatariosList()" placeholder="Buscar por nombre, documento, teléfono, empresa o correo…" style="width:100%;padding:9px 10px;border:1px solid var(--gris-b);border-radius:8px;margin-bottom:10px;font-size:13px;box-sizing:border-box">' +
+      (filtradas.length===0
+        ? '<div class="empty"><div class="empty-icon">🛂</div><p>'+(rows.length===0 ? 'Aún no hay pre-registros para este edificio. Usa <strong>📲 Solicitar datos al huésped</strong> para enviar el formulario.' : 'Sin resultados para la búsqueda.')+'</p></div>'
+        : '<div style="overflow-x:auto"><table class="tabla"><thead><tr><th>Fecha</th><th>Huésped</th><th>Documento</th><th>Teléfono</th><th>Empresa</th><th>Pax</th><th>Estado</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div>') +
+    '</div>';
+}
+function _datosArrVer(id){
+  var x = (window._pregRows||{})[id]; if(!x) return;
+  var nom = [x.nombre,x.apellido1,x.apellido2].filter(Boolean).join(' ') || '(sin nombre)';
+  var acomp = Array.isArray(x.acompanantes) ? x.acompanantes : [];
+  var linea = function(label,val){ return val ? '<div style="margin-bottom:6px"><span style="color:var(--gris-t);font-size:11px">'+label+'</span><br><span style="font-size:13px">'+_pregEsc(val)+'</span></div>' : ''; };
+  var ov = document.getElementById('_preg-ov'); if(ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = '_preg-ov';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:85vh;overflow:auto;padding:22px;box-shadow:0 12px 40px rgba(0,0,0,.3)">' +
+      '<div style="font-size:17px;font-weight:700;margin-bottom:14px">🛂 '+_pregEsc(nom)+'</div>' +
+      linea('Documento', (x.tipo_doc?x.tipo_doc+' ':'')+(x.documento||'')) +
+      linea('Nacionalidad / Ciudad', [x.nacionalidad,x.ciudad].filter(Boolean).join(' · ')) +
+      linea('Correo', x.email) + linea('Teléfono', x.telefono) +
+      linea('Empresa a facturar', x.empresa) +
+      linea('Forma de pago', x.forma_pago) +
+      linea('Motivo del viaje', x.motivo_viaje) +
+      linea('Placa del vehículo', x.placa_vehiculo) +
+      linea('Contacto de emergencia', [x.emergencia_nombre,x.emergencia_tel].filter(Boolean).join(' · ')) +
+      linea('Pax', [x.pax_adultos!=null?x.pax_adultos+' adultos':'', x.pax_menores?x.pax_menores+' niños':'', x.pax_infantes?x.pax_infantes+' infantes':''].filter(Boolean).join(', ')) +
+      (acomp.length ? '<div style="margin-bottom:6px"><span style="color:var(--gris-t);font-size:11px">Acompañantes</span><br>'+acomp.map(function(a){ return '<span style="font-size:13px">'+_pregEsc([a.nombre,a.documento].filter(Boolean).join(' — '))+'</span>'; }).join('<br>')+'</div>' : '') +
+      (x.documento_foto_url ? '<div style="margin-bottom:6px"><span style="color:var(--gris-t);font-size:11px">Foto del documento</span><br><a href="'+_pregEsc(x.documento_foto_url)+'" target="_blank" rel="noopener">Ver imagen adjunta ↗</a></div>' : '') +
+      '<div style="text-align:right;margin-top:14px;display:flex;gap:8px;justify-content:flex-end">' +
+        '<button onclick="_datosArrUsarEnReserva(\''+x.id+'\')" class="btn btn-success btn-sm" style="padding:9px 16px">➕ Usar en Nueva Reserva</button>' +
+        '<button onclick="document.getElementById(\'_preg-ov\').remove()" style="padding:9px 16px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#555;font-weight:600;cursor:pointer">Cerrar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+}
+async function _datosArrUsarEnReserva(id){
+  var x = (window._pregRows||{})[id]; if(!x) return;
+  await loadView('nueva-reserva');
+  _pregUsar(id);
+}
+
 // ── Formulario público (cuando la URL trae ?prereg=TOKEN) ──
 function _pregBootPublico(){
   var qs = new URLSearchParams(location.search);
@@ -18294,11 +18389,8 @@ function _pregBootPublico(){
           '<div style="flex:1">'+_pregCampo('Fecha de nacimiento','_pregp-fnac','date','')+'</div>' +
           '<div style="flex:1">'+_pregSelect('Motivo del viaje','_pregp-mot',['Turismo','Trabajo','Evento','Otro'])+'</div>' +
         '</div>' +
-        _pregCampo('Empresa a facturar *','_pregp-emp','text','Razón social / NIT') +
-        '<div style="display:flex;gap:8px">' +
-          '<div style="flex:1">'+_pregSelect('Forma de pago *','_pregp-fpago',['Transferencia','Tarjeta','Efectivo','Otro'])+'</div>' +
-          '<div style="flex:1.3">'+_pregCampo('A quién se paga *','_pregp-paga','text','Entidad / cuenta')+'</div>' +
-        '</div>' +
+        _pregCampo('Empresa a facturar','_pregp-emp','text','Razón social / NIT') +
+        _pregSelect('Forma de pago *','_pregp-fpago',['Transferencia','Tarjeta','Efectivo','Otro']) +
         _pregCampo('Placa del vehículo (si trae)','_pregp-placa','text','') +
         '<div style="display:flex;gap:8px">' +
           '<div style="flex:1">'+_pregCampo('Contacto de emergencia','_pregp-emnom','text','Nombre')+'</div>' +
@@ -18309,13 +18401,40 @@ function _pregBootPublico(){
           '<div style="flex:1">'+_pregCampo('Niños','_pregp-pn','number','0')+'</div>' +
           '<div style="flex:1">'+_pregCampo('Infantes','_pregp-pi','number','0')+'</div>' +
         '</div>' +
+        '<div id="_pregp-acomp"></div>' +
+        '<label style="display:block;font-size:11px;color:rgba(255,255,255,.45);margin:12px 0 3px">Foto del documento de identidad (opcional)</label>' +
+        '<input id="_pregp-foto" type="file" accept="image/*,.pdf" style="width:100%;padding:8px;border:1px solid #333;border-radius:8px;background:#101012;color:#eee;font-size:12px;box-sizing:border-box">' +
         '<button id="_pregp-btn" onclick="_pregEnviarPublico(\''+_pregEsc(token)+'\',\''+ed+'\')" style="width:100%;padding:13px;border:0;border-radius:9px;background:#B8963E;color:#1a1a1a;font-weight:700;font-size:15px;cursor:pointer;margin-top:8px">Enviar mis datos</button>' +
         '<p id="_pregp-msg" style="font-size:12px;color:#c0392b;margin:10px 0 0;display:none"></p>' +
       '</div>' +
       '<p style="text-align:center;font-size:10px;color:rgba(255,255,255,.25);margin-top:14px">Sus datos se usan únicamente para gestionar su reserva.</p>' +
     '</div>';
   document.body.appendChild(wrap);
+  var _pa0=document.getElementById('_pregp-pa'), _pn0=document.getElementById('_pregp-pn');
+  if(_pa0) _pa0.addEventListener('input', _pregRenderAcomp);
+  if(_pn0) _pn0.addEventListener('input', _pregRenderAcomp);
+  _pregRenderAcomp();
   return true;
+}
+function _pregRenderAcomp(){
+  var cont = document.getElementById('_pregp-acomp'); if(!cont) return;
+  var pa = Math.max(0, parseInt((document.getElementById('_pregp-pa')||{}).value||'0',10)||0);
+  var pn = Math.max(0, parseInt((document.getElementById('_pregp-pn')||{}).value||'0',10)||0);
+  var extra = Math.max(0,pa-1) + pn;
+  var prev = {};
+  cont.querySelectorAll('input').forEach(function(inp){ prev[inp.id]=inp.value; });
+  var html = '';
+  if(extra>0){
+    html += '<div style="font-size:11px;color:rgba(255,255,255,.45);letter-spacing:.5px;margin:12px 0 3px">ACOMPAÑANTES ('+extra+')</div>';
+    for(var i=1;i<=extra;i++){
+      html += '<div style="display:flex;gap:8px">' +
+        '<div style="flex:1.4">'+_pregCampo('Nombre completo acomp. '+i,'_pregp-ac-n'+i,'text','')+'</div>' +
+        '<div style="flex:1">'+_pregCampo('Documento acomp. '+i,'_pregp-ac-d'+i,'text','')+'</div>' +
+      '</div>';
+    }
+  }
+  cont.innerHTML = html;
+  Object.keys(prev).forEach(function(id){ var el=document.getElementById(id); if(el && prev[id]) el.value=prev[id]; });
 }
 function _pregCampo(label,id,type,ph){
   var min = (type==='number') ? ' min="0" step="1"' : '';
@@ -18336,18 +18455,35 @@ async function _pregEnviarPublico(token, ed){
   var msg=document.getElementById('_pregp-msg');
   var nf=g('_pregp-nf');
   // Campos obligatorios
-  var req=[['_pregp-nf','nombre'],['_pregp-ap1','primer apellido'],['_pregp-doc','número de documento'],['_pregp-nac','nacionalidad'],['_pregp-ciu','ciudad de residencia'],['_pregp-email','correo'],['_pregp-tel','teléfono'],['_pregp-emp','empresa a facturar'],['_pregp-paga','a quién se paga']];
+  var req=[['_pregp-nf','nombre'],['_pregp-ap1','primer apellido'],['_pregp-doc','número de documento'],['_pregp-nac','nacionalidad'],['_pregp-ciu','ciudad de residencia'],['_pregp-email','correo'],['_pregp-tel','teléfono']];
   var falta=req.filter(function(f){ return !g(f[0]); }).map(function(f){ return f[1]; });
   var _pa=gn('_pregp-pa'); if(_pa<1) falta.push('adultos');
   if(falta.length){ msg.style.display='block'; msg.textContent='Faltan campos obligatorios: '+falta.join(', ')+'.'; return; }
   var _emv=g('_pregp-email'); if(_emv && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(_emv)){ msg.style.display='block'; msg.textContent='El correo no parece válido.'; return; }
   var btn=document.getElementById('_pregp-btn'); btn.disabled=true; btn.textContent='Enviando…';
+  var _pn=gn('_pregp-pn');
+  var _extra=Math.max(0,_pa-1)+_pn;
+  var _acomp=[];
+  for(var _i=1;_i<=_extra;_i++){ var _an=g('_pregp-ac-n'+_i), _ad=g('_pregp-ac-d'+_i); if(_an||_ad) _acomp.push({nombre:_an, documento:_ad}); }
+  var _fotoUrl=null;
+  try{
+    var _fEl=document.getElementById('_pregp-foto');
+  var _file=_fEl && _fEl.files && _fEl.files[0];
+    if(_file){
+      btn.textContent='Subiendo documento…';
+      var _path='prereg/'+token+'-'+Date.now()+'-'+_file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      var _up = await sb.storage.from('adjuntos').upload(_path, _file);
+      if(!_up.error){ var _pu = sb.storage.from('adjuntos').getPublicUrl(_path); _fotoUrl = _pu && _pu.data ? _pu.data.publicUrl : null; }
+      btn.textContent='Enviando…';
+    }
+  }catch(_){ /* la foto es opcional: si falla la subida, se continúa sin bloquear el envío */ }
   var baseRow={ token:token, edificio:ed, nombre:nf, apellido1:g('_pregp-ap1'), apellido2:g('_pregp-ap2'),
     documento:g('_pregp-doc'), email:g('_pregp-email'), telefono:g('_pregp-tel'), empresa:g('_pregp-emp'),
-    pax_adultos:_pa, pax_menores:gn('_pregp-pn'), pax_infantes:gn('_pregp-pi'), estado:'completado' };
+    pax_adultos:_pa, pax_menores:_pn, pax_infantes:gn('_pregp-pi'), estado:'completado' };
   var row=Object.assign({}, baseRow, { tipo_doc:_sel('_pregp-tdoc'), nacionalidad:g('_pregp-nac'), ciudad:g('_pregp-ciu'),
     fecha_nacimiento:(g('_pregp-fnac')||null), motivo_viaje:_sel('_pregp-mot'), forma_pago:_sel('_pregp-fpago'),
-    pagar_a:g('_pregp-paga'), placa_vehiculo:g('_pregp-placa'), emergencia_nombre:g('_pregp-emnom'), emergencia_tel:g('_pregp-emtel') });
+    placa_vehiculo:g('_pregp-placa'), emergencia_nombre:g('_pregp-emnom'), emergencia_tel:g('_pregp-emtel'),
+    acompanantes:(_acomp.length?_acomp:null), documento_foto_url:_fotoUrl });
   try{
     var r = await sb.from('prereg').insert(row);
     if(r.error && /(could not find|does not exist|schema cache|column)/i.test(r.error.message||'')){ r = await sb.from('prereg').insert(baseRow); }
