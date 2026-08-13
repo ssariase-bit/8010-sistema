@@ -12057,7 +12057,12 @@ async function generarInformeCaja(){
   cont.innerHTML = '<div style="color:var(--gris-t)">Cargando movimientos…</div>';
   var cajas = (typeof EB==='function' && EB().cajas) ? EB().cajas : [];
   var q = sb.from('caja').select('*').gte('fecha',desde).lte('fecha',hasta).order('fecha');
-  if(caja && caja!=='__todas') q = q.eq('empresa', caja); else q = q.in('empresa', cajas);
+  // Sol. Santiago (13-ago-2026): en modo "Todas las cajas" el filtro .in('empresa',cajas) excluia en
+  // silencio cualquier movimiento cuyo campo empresa fuera NULL o tuviera un nombre viejo/inconsistente
+  // (ej. "LTM3 SAS" en vez de "LTM3 (LTM3 SAS)", o vacio) -- en 8010 esto dejaba fuera 106 de 170 egresos
+  // (62%) del Informe de Caja sin ningun aviso. "Todas las cajas" ahora es TODO el rango, sin filtrar por
+  // empresa. Al elegir una caja especifica se conserva el filtro exacto (solicitud 3a257b8d).
+  if(caja && caja!=='__todas') q = q.eq('empresa', caja);
   var res = await q;
   if(res.error){ cont.innerHTML='<div style="color:#b91c1c">Error: '+res.error.message+'</div>'; return; }
   var rows = res.data || [];
