@@ -8104,9 +8104,19 @@ function ordenarTabla(th){
   Array.from(th.parentNode.children).forEach(t=>t.removeAttribute('data-asc'));
   th.setAttribute('data-asc', asc?'true':'false');
   const filas = Array.from(tbody.querySelectorAll('tr')).filter(tr=>tr.children.length>idx);
+  // Las columnas de fecha se muestran como texto DD/MM/AA(AA) (ej. "13/08/26"); comparar ese texto
+  // como string ordena por día primero, no cronológicamente. Se detecta el patrón y se compara
+  // por año-mes-día real; todo lo demás sigue con el orden alfabético/numérico de siempre.
+  const _fechaClave = s => {
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(s);
+    if(!m) return null;
+    let y = m[3]; if(y.length===2) y = (Number(y)<70?'20':'19')+y;
+    return y + m[2].padStart(2,'0') + m[1].padStart(2,'0');
+  };
   filas.sort((a,b)=>{
     const x=(a.children[idx]?.textContent||'').trim(), y=(b.children[idx]?.textContent||'').trim();
-    const cmp = x.localeCompare(y,'es',{numeric:true,sensitivity:'base'});
+    const kx=_fechaClave(x), ky=_fechaClave(y);
+    const cmp = (kx!==null && ky!==null) ? (kx<ky?-1:(kx>ky?1:0)) : x.localeCompare(y,'es',{numeric:true,sensitivity:'base'});
     return asc?cmp:-cmp;
   });
   filas.forEach(f=>tbody.appendChild(f));
