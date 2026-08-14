@@ -870,10 +870,36 @@ async function checkAppVersion(force){
     const sv = m[1];
     if(sv && sv !== APP_VERSION){
       if(sessionStorage.getItem('_vreload') === sv) return; // evitar bucle de recarga
-      // ¿Es seguro recargar ahora? No interrumpir si hay un modal abierto o un campo con datos en edición
+      // ¿Es seguro recargar ahora? No interrumpir si hay un modal abierto o un campo con datos en edición.
+      // OJO: antes solo se miraba document.activeElement — es decir, únicamente el campo con el
+      // cursor puesto EN ESE INSTANTE. Un formulario largo (ej. CKI/CKO, ~25 campos) se llena en
+      // varios minutos, cambiando de campo constantemente, y el usuario suele salir a otra app
+      // (copiar el nombre de la empresa de WhatsApp, etc.) — al volver, dispara el evento "focus"
+      // de la ventana, que llama a checkAppVersion(false). En ese momento el foco casi nunca está
+      // sobre un input con texto (puede estar en un botón, o en ningún elemento), así que "editing"
+      // daba false aunque el formulario tuviera 20 campos ya diligenciados — y location.replace()
+      // recargaba la página SIN AVISAR, borrando todo lo digitado. Esto coincide exactamente con
+      // el reporte de recepción: "se me sale" / "no deja generar check-in ni check-out" después de
+      // varios minutos llenando datos (Sol. Santiago 14-ago-2026, video de recepción).
+      // Fix: además del campo con foco, se revisa TODO #main-content por cualquier input/textarea/
+      // select con valor, o checkbox/radio marcado — si hay datos sin guardar en la vista actual,
+      // no se recarga sola; solo se avisa con el toast y se recarga cuando el formulario quede vacío.
       var modalOpen = document.querySelector('[id^="modal-"], div[style*="z-index:9999"]');
       var ae = document.activeElement;
       var editing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName||'') && String(ae.value||'').trim().length>0;
+      if(!editing){
+        try{
+          var _mc = document.getElementById('main-content');
+          if(_mc){
+            var _campos = _mc.querySelectorAll('input, textarea, select');
+            for(var _i=0; _i<_campos.length; _i++){
+              var _el = _campos[_i];
+              if(_el.type==='checkbox' || _el.type==='radio'){ if(_el.checked){ editing=true; break; } continue; }
+              if(String(_el.value||'').trim().length>0){ editing=true; break; }
+            }
+          }
+        }catch(_ed){}
+      }
       if(force || (!modalOpen && !editing)){
         sessionStorage.setItem('_vreload', sv);
         try{ if(typeof showToast==='function') showToast('🔄 Nueva versión — actualizando...','success'); }catch(_){ }
