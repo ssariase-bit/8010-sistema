@@ -18331,7 +18331,7 @@ async function renderDatosArrendatariosList(){
       '<td>'+_pregEsc(x.empresa||'-')+'</td>' +
       '<td>'+_pregEsc(pax||'-')+'</td>' +
       '<td>'+badge(x.estado)+'</td>' +
-      '<td style="white-space:nowrap"><button onclick="_datosArrVer(\''+x.id+'\')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">👁 Ver</button></td>' +
+      '<td style="white-space:nowrap"><button onclick="_datosArrVer(\''+x.id+'\')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">👁 Ver</button> '+_btnsEdit('prereg', x.id)+'</td>' +
     '</tr>';
   }).join('');
   document.getElementById('main-content').innerHTML =
@@ -18496,6 +18496,13 @@ async function _pregEnviarPublico(token, ed){
   var _pa=gn('_pregp-pa'); if(_pa<1) falta.push('adultos');
   if(falta.length){ msg.style.display='block'; msg.textContent='Faltan campos obligatorios: '+falta.join(', ')+'.'; return; }
   var _emv=g('_pregp-email'); if(_emv && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(_emv)){ msg.style.display='block'; msg.textContent='El correo no parece válido.'; return; }
+  // Sol. Santiago 14-ago-2026 (inconsistencia de teléfonos en Datos arrendatarios): este campo
+  // era texto libre — llegaban números sin indicativo de país, con espacios, o incompletos
+  // (ej. "317"). Se normaliza igual que el resto del SO (normTel: solo dígitos, con indicativo
+  // 57 si es un celular colombiano de 10 dígitos sin él) y se exige un mínimo de dígitos.
+  var _telDig = g('_pregp-tel').replace(/\D/g,'');
+  if(_telDig.length===10 && _telDig.charAt(0)==='3') _telDig = '57'+_telDig;
+  if(_telDig.length<10){ msg.style.display='block'; msg.textContent='El teléfono no parece válido — escriba el número completo, con indicativo de país si aplica.'; return; }
   var btn=document.getElementById('_pregp-btn'); btn.disabled=true; btn.textContent='Enviando…';
   var _pn=gn('_pregp-pn');
   var _extra=Math.max(0,_pa-1)+_pn;
@@ -18514,11 +18521,11 @@ async function _pregEnviarPublico(token, ed){
     }
   }catch(_){ /* la foto es opcional: si falla la subida, se continúa sin bloquear el envío */ }
   var baseRow={ token:token, edificio:ed, nombre:nf, apellido1:g('_pregp-ap1'), apellido2:g('_pregp-ap2'),
-    documento:g('_pregp-doc'), email:g('_pregp-email'), telefono:g('_pregp-tel'), empresa:g('_pregp-emp'),
+    documento:g('_pregp-doc'), email:g('_pregp-email'), telefono:_telDig, empresa:g('_pregp-emp'),
     pax_adultos:_pa, pax_menores:_pn, pax_infantes:gn('_pregp-pi'), estado:'completado' };
   var row=Object.assign({}, baseRow, { tipo_doc:_sel('_pregp-tdoc'), nacionalidad:g('_pregp-nac'), ciudad:g('_pregp-ciu'),
     fecha_nacimiento:(g('_pregp-fnac')||null), motivo_viaje:_sel('_pregp-mot'), forma_pago:_sel('_pregp-fpago'),
-    placa_vehiculo:g('_pregp-placa'), emergencia_nombre:g('_pregp-emnom'), emergencia_tel:g('_pregp-emtel'),
+    placa_vehiculo:g('_pregp-placa'), emergencia_nombre:g('_pregp-emnom'), emergencia_tel:(function(){ var d=g('_pregp-emtel').replace(/\D/g,''); if(d.length===10&&d.charAt(0)==='3') d='57'+d; return d; })(),
     acompanantes:(_acomp.length?_acomp:null), documento_foto_url:_fotoUrl });
   try{
     var r = await sb.from('prereg').insert(row);
