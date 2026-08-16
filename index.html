@@ -481,6 +481,9 @@ const APP_VERSION = '2026-07-22-aviso-factura';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-15', version:'2026-08-15-atelier-fecha-fin-y-dashboard', titulo:'Atelier: fecha fin para eventos de varios dias + entra al Dashboard (Sol. Santiago, KL)',
+    afecta:'Atelier / Dashboard',
+    detalle:'Se agrego el campo Fecha Fin (opcional) a las reservas de Atelier para eventos que duran mas de un dia. Ademas, el valor de sala y el valor de consumos de Atelier ahora se suman en las categorias "Salas de juntas" y "Alimentacion / consumos de eventos" del Dashboard (antes quedaban aislados en su propio modulo y no aparecian ahi).' },
   { fecha:'2026-07-22', version:'2026-07-22-aviso-factura', titulo:'Aviso automatico a Contabilidad al emitir factura (Sol. Santiago, KL)',
     afecta:'Generar Factura',
     detalle:'Al guardar una factura NUEVA se envia correo de aviso a Contabilidad (8i8: contador y admin.fin; 8010: zareth) con numero, cliente, total, emisor y apto. Solo facturas nuevas. No se envia nada al cliente.' },
@@ -2436,7 +2439,7 @@ window.renderFlujoSemanal=async function(){
   window._atSave=function(){clearTimeout(window._atT);window._atT=setTimeout(function(){try{sb.from('config').upsert({id:KEY,valor:JSON.stringify({items:window._atSt.items}),updated_at:new Date().toISOString()});}catch(e){}},500);};
   window._atFind=function(id){var st=window._atSt;if(!st)return null;for(var i=0;i<st.items.length;i++)if(st.items[i].id===id)return st.items[i];return null;};
   window._atSet=function(id,campo,val){var it=window._atFind(id);if(!it)return;it[campo]=val;window._atSave();if(campo==='valor_sala'||campo==='valor_consumos'||campo==='estado')window._atTot();};
-  window._atAdd=function(){var st=window._atSt;if(!st)return;st.items.push({id:_uid(),fecha:'',cliente:'',desde:'',hasta:'',valor_sala:0,proveedor:'Bagatelle',valor_consumos:0,estado:'Tentativa',obs:''});window._atSave();window._atRenderOnly();};
+  window._atAdd=function(){var st=window._atSt;if(!st)return;st.items.push({id:_uid(),fecha:'',fecha_fin:'',cliente:'',desde:'',hasta:'',valor_sala:0,proveedor:'Bagatelle',valor_consumos:0,estado:'Tentativa',obs:''});window._atSave();window._atRenderOnly();};
   window._atDel=function(id){var st=window._atSt;if(!st)return;for(var i=0;i<st.items.length;i++){if(st.items[i].id===id){st.items.splice(i,1);break;}}window._atSave();window._atRenderOnly();};
   window._atTot=function(){
     var st=window._atSt;if(!st)return;var totSala=0,totCons=0,conf=0,cnt=0;
@@ -2469,16 +2472,17 @@ window.renderFlujoSemanal=async function(){
     h+='<div style="padding:16px 18px;max-width:1320px;margin:0 auto">';
     h+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px"><h2 style="margin:0;font-size:20px">🎨 Atelier — Sala de Juntas (Último piso)</h2>';
     h+='<button onclick="window._atAdd()" style="margin-left:auto;background:#0f766e;color:#fff;border:0;border-radius:7px;padding:7px 14px;font-size:13px;cursor:pointer">➕ Nueva reserva</button></div>';
-    h+='<div style="font-size:12px;color:#666;margin-bottom:12px">Kubik · '+items.length+' reservas · registra fecha, cliente, horario, valor de sala y valor de consumos (Bagatelle u otro proveedor) por separado</div>';
+    h+='<div style="font-size:12px;color:#666;margin-bottom:12px">Kubik · '+items.length+' reservas · registra fecha (con fecha fin opcional si el evento dura varios días), cliente, horario, valor de sala y valor de consumos (Bagatelle u otro proveedor) por separado</div>';
     if(!items.length)h+='<div style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:10px">No hay reservas de Atelier. Usa <b>➕ Nueva reserva</b> para registrar la primera.</div>';
     h+='<div style="overflow:auto;border:1px solid #e5e7eb;border-radius:10px">';
     h+='<table style="border-collapse:collapse;width:100%;font-size:12.5px;min-width:1160px">';
-    h+='<thead><tr style="background:#f1f5f9"><th style="padding:8px 8px;text-align:left">Fecha</th><th style="padding:8px 8px;text-align:left;min-width:160px">Cliente</th><th style="padding:8px 6px">Desde</th><th style="padding:8px 6px">Hasta</th><th style="padding:8px 8px;text-align:right;min-width:100px">Valor Sala</th><th style="padding:8px 6px;min-width:100px">Consumo (prov.)</th><th style="padding:8px 8px;text-align:right;min-width:100px">Valor Consumos</th><th style="padding:8px 8px;text-align:right;min-width:100px">Total</th><th style="padding:8px 6px">Estado</th><th style="padding:8px 8px;text-align:left;min-width:150px">Observaciones</th><th></th></tr></thead><tbody>';
+    h+='<thead><tr style="background:#f1f5f9"><th style="padding:8px 8px;text-align:left">Fecha</th><th style="padding:8px 8px;text-align:left" title="Solo si el evento dura varios días">Fecha Fin</th><th style="padding:8px 8px;text-align:left;min-width:160px">Cliente</th><th style="padding:8px 6px">Desde</th><th style="padding:8px 6px">Hasta</th><th style="padding:8px 8px;text-align:right;min-width:100px">Valor Sala</th><th style="padding:8px 6px;min-width:100px">Consumo (prov.)</th><th style="padding:8px 8px;text-align:right;min-width:100px">Valor Consumos</th><th style="padding:8px 8px;text-align:right;min-width:100px">Total</th><th style="padding:8px 6px">Estado</th><th style="padding:8px 8px;text-align:left;min-width:150px">Observaciones</th><th></th></tr></thead><tbody>';
     items.forEach(function(x){
       var inp='style="border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:12px"';
       var tot=(+x.valor_sala||0)+(+x.valor_consumos||0);
       h+='<tr style="border-top:1px solid #eee">';
       h+='<td style="padding:4px 8px"><input type="date" value="'+_esc(x.fecha)+'" onchange="window._atSet(\''+x.id+'\',\'fecha\',this.value)" '+inp+'></td>';
+      h+='<td style="padding:4px 8px"><input type="date" value="'+_esc(x.fecha_fin)+'" min="'+_esc(x.fecha)+'" title="Solo si el evento dura varios días" onchange="window._atSet(\''+x.id+'\',\'fecha_fin\',this.value)" '+inp+'></td>';
       h+='<td style="padding:4px 8px"><input value="'+_esc(x.cliente)+'" oninput="window._atSet(\''+x.id+'\',\'cliente\',this.value)" placeholder="Cliente / empresa" style="width:160px;border:1px solid #ddd;border-radius:5px;padding:4px 6px;font-size:12px"></td>';
       h+='<td style="padding:4px 6px"><input type="time" value="'+_esc(x.desde)+'" onchange="window._atSet(\''+x.id+'\',\'desde\',this.value)" '+inp+'></td>';
       h+='<td style="padding:4px 6px"><input type="time" value="'+_esc(x.hasta)+'" onchange="window._atSet(\''+x.id+'\',\'hasta\',this.value)" '+inp+'></td>';
@@ -3657,16 +3661,24 @@ async function renderDashboard() {
   // ── VENTAS DEL MES POR CATEGORÍA (neto, sin impuestos) ────
   // Alojamiento = rack (ventasMes). Las demás vienen de sus módulos.
   let vSalas=0, vEvAlim=0, vConsumos=0, vOtros=0;
-  let _evd=[], _cod=[], _lcd=[];
+  let _evd=[], _cod=[], _lcd=[], _atd=[];
   try{
-    const [evRes, coRes, lcRes] = await Promise.all([
+    const [evRes, coRes, lcRes, atRes] = await Promise.all([
       sb.from('eventos').select('*').eq('edificio',EDIFICIO_ACTIVO).gte('fecha_inicio',monthStart).lte('fecha_inicio',monthEnd+'T23:59:59'),
       sb.from('consumos').select('*').gte('fecha',monthStart).lte('fecha',monthEnd),
       sb.from('listado_cargos').select('*').gte('fecha',monthStart).lte('fecha',monthEnd),
+      (EDIFICIO_ACTIVO==='kubik' ? sb.from('config').select('valor').eq('id','atelier_kubik').maybeSingle() : Promise.resolve({data:null})),
     ]);
     _evd=evRes.data||[]; _cod=coRes.data||[]; _lcd=lcRes.data||[];
-    vSalas    = _evd.reduce((s,x)=>s+(Number(x.val_sala)||0),0) + _lcd.reduce((s,x)=>s+(Number(x.salas)||0),0);
-    vEvAlim   = _evd.reduce((s,x)=>s+(Number(x.val_alimentacion)||0)+(Number(x.val_consumos)||0),0);
+    // Atelier (Sol Santiago: no alimentaba el Dashboard — quedaba aislado en su propio módulo)
+    try{
+      if(atRes && atRes.data && atRes.data.valor){
+        const _ato = JSON.parse(atRes.data.valor);
+        _atd = ((_ato && _ato.items) ? _ato.items : []).filter(x=>x.estado!=='Cancelada' && x.fecha>=monthStart && x.fecha<=monthEnd);
+      }
+    }catch(e){}
+    vSalas    = _evd.reduce((s,x)=>s+(Number(x.val_sala)||0),0) + _lcd.reduce((s,x)=>s+(Number(x.salas)||0),0) + _atd.reduce((s,x)=>s+(Number(x.valor_sala)||0),0);
+    vEvAlim   = _evd.reduce((s,x)=>s+(Number(x.val_alimentacion)||0)+(Number(x.val_consumos)||0),0) + _atd.reduce((s,x)=>s+(Number(x.valor_consumos)||0),0);
     vConsumos = _cod.reduce((s,x)=>s+(Number(x.valor)||0),0);
     vOtros    = _lcd.reduce((s,x)=>s+(Number(x.minibar)||0)+(Number(x.varios)||0)+(Number(x.lavanderia)||0)+(Number(x.transporte)||0),0);
   }catch(_e){}
@@ -3684,13 +3696,15 @@ async function renderDashboard() {
       _gA[k].noches++; _gA[k].valor += Number(r.tarifa)||0;
     });
     const aloj = Object.values(_gA).map(v=>({ desc:v.desc, sub:v.sub+' · '+v.noches+' noche'+(v.noches>1?'s':'')+' × $'+fmtNum(Math.round(v.valor/v.noches)), valor:v.valor }));
-    // Salas: eventos (val_sala) + listado de cargos (salas)
+    // Salas: eventos (val_sala) + listado de cargos (salas) + Atelier (valor_sala)
     const salas = [];
     _evd.forEach(x=>{ const v=Number(x.val_sala)||0; if(v>0) salas.push({ desc:_evNom(x), sub:'Evento · '+(x.fecha_inicio||'').split('T')[0], valor:v }); });
     _lcd.forEach(x=>{ const v=Number(x.salas)||0; if(v>0) salas.push({ desc:'Sala — Apto '+(x.apto||'—'), sub:'Listado de cargos · '+(x.fecha||''), valor:v }); });
-    // Alimentación / consumos de eventos
+    _atd.forEach(x=>{ const v=Number(x.valor_sala)||0; if(v>0) salas.push({ desc:(x.cliente||'Atelier'), sub:'Atelier · '+(x.fecha||'')+(x.fecha_fin?' a '+x.fecha_fin:''), valor:v }); });
+    // Alimentación / consumos de eventos (incluye consumos de Atelier, p.ej. Bagatelle)
     const evalim = [];
     _evd.forEach(x=>{ const v=(Number(x.val_alimentacion)||0)+(Number(x.val_consumos)||0); if(v>0) evalim.push({ desc:_evNom(x), sub:'Evento · '+(x.fecha_inicio||'').split('T')[0], valor:v }); });
+    _atd.forEach(x=>{ const v=Number(x.valor_consumos)||0; if(v>0) evalim.push({ desc:(x.cliente||'Atelier')+' — '+(x.proveedor||'Consumo'), sub:'Atelier · '+(x.fecha||''), valor:v }); });
     // Consumos de huéspedes
     const consumos = _cod.filter(x=>(Number(x.valor)||0)>0).map(x=>({ desc:(x.huesped||'Sin nombre'), sub:'Apto '+(x.apto||'—')+' · '+(x.fecha||''), valor:Number(x.valor)||0 }));
     // Otros cargos (desglosado por tipo)
@@ -3704,8 +3718,8 @@ async function renderDashboard() {
     const _ord = a => a.sort((p,q)=>q.valor-p.valor);
     window._dashDet = {
       aloj:     { titulo:'🛏️ Alojamiento',  color:'#1F7A3D', fuente:'Rack — tarifa cobrada por noche', items:_ord(aloj) },
-      salas:    { titulo:'🤝 Salas de juntas', color:'#1D3461', fuente:'Eventos + Listado de cargos', items:_ord(salas) },
-      evalim:   { titulo:'🍽️ Alimentación / consumos de eventos', color:'#7C3AED', fuente:'Módulo Eventos', items:_ord(evalim) },
+      salas:    { titulo:'🤝 Salas de juntas', color:'#1D3461', fuente:'Eventos + Listado de cargos + Atelier', items:_ord(salas) },
+      evalim:   { titulo:'🍽️ Alimentación / consumos de eventos', color:'#7C3AED', fuente:'Módulo Eventos + Atelier', items:_ord(evalim) },
       consumos: { titulo:'🧴 Consumos de huéspedes', color:'#B8963E', fuente:'Módulo Consumos', items:_ord(consumos) },
       otros:    { titulo:'📋 Otros cargos', color:'#92400E', fuente:'Listado de cargos', items:_ord(otros) },
     };
