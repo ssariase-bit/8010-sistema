@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-visto-dual-y-auditoria-v12';
+const APP_VERSION = '2026-08-16-resuelve-solicitudes-v13';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-resuelve-solicitudes-v13', titulo:'Revisión de las 34 solicitudes abiertas: bug financiero USD/TRM, menú de Sebastián, CKI, impresos, nómina (Sol. Santiago "Resuelve todas")',
+    afecta:'guardarReserva() (reservas.tarifa), _calcTarifaMoneda() (rack), generarMsgCKI() (informe CKI), _regRender() (Registro de huésped 80|10 y LTM3), _ITEMS_CONFID / _ITEMS_COMPRAS_FIN_8010 (menú de Sebastián Martínez), _agendaEventosImprimir (Agenda de Eventos), control_personal.nombre (typo Juana→Juanita Noguera, Kubik).',
+    detalle:'HALLAZGO FINANCIERO (Sol. 92290227/2c42959f/3ed2a9d0): en Reservas con moneda USD, el campo reservas.tarifa se guardaba CRUDO en dólares en vez de convertirse a pesos con la TRM (ej. reserva de USD 250 quedaba con tarifa=250 en vez de ≈$782.000). El rack ya convertía bien; el problema estaba solo en la tabla reservas. Confirmado en vivo: 18 de 32 reservas en USD de 8010 con TRM registrada (jun-ago/2026) tienen este error. Se corrige el cálculo hacia adelante; las 18 reservas históricas quedan pendientes de decisión de Santiago sobre si corregirlas retroactivamente (puede haber facturas ya generadas con esos valores). Segundo hallazgo relacionado: al editar una celda del rack directamente (no por "Nueva Reserva"), _calcTarifaMoneda() no tenía el piso mínimo de TRM que sí tienen "Nueva Reserva" y el CKI desde jul/ago — se podía digitar TRM=1 por error y la tarifa quedaba en dólares crudos dentro del campo de pesos (encontrado en vivo en apto 1001, 16-ago). Ya tiene el mismo candado (TRM<100 rechazada). // CKI (Sol. cfb4cb9e): la empresa/razón social se guardaba pero nunca se incluía en el mensaje/informe de CKI enviado — ya se agrega al encabezado. // Registro de huésped (Sol. 79261dbe/682f19c3): se quitó del impreso el texto "(precargados · editables)" (era una ayuda de pantalla que se colaba al PDF) y el campo "Noches" del formato LTM3 (pedido explícito). // Menú de Sebastián Martínez, rol administrador 8010 (Sol. c51f7cf6/5466b9fb/d536c6e5): "Facturado vs Devengado" aparecía en el menú aunque el módulo ya estaba bloqueado como confidencial al abrirlo — se agrega a la lista de módulos confidenciales para que no aparezca. Cartera/Por Pagar/Proveedores/Flujo de Caja ya estaban restringidos a compras-financiero desde jul-2026, pero Recaudo x Cliente, Flujo de Caja Mes, Proveedores x Pagar y Sala de Juntas se habían agregado al menú después y quedaron por fuera de esa lista — ya se incluyen. // Agenda de Eventos (Sol. f15d27ac): se quitó el "Entregado por" repetido del pie del impreso (ya sale en el encabezado "Copia para Seguridad · Impreso el... por..."). // Nómina/Horas extra (Sol. dd55012a/d4a9626e): "sin salario" en el Cuadro de Horas Extra — encontradas 16 marcaciones de control_personal en Kubik con el nombre "Juana Noguera" (no calzaba con "Juanita Noguera" en Personal) — corregido. Además encontrados: un registro duplicado de "Luis Reyes" (Kubik, MANTENIMIENTO) con salario $0 junto a otro con salario $2.400.000 — pendiente que Santiago confirme cuál es el vigente para poder unificarlos; y dos personas que marcan en control_personal sin ningún registro en Personal/RRHH ("Camila Cuartas", "Yeisson Rodriguez") — no se puede completar el salario sin que Santiago/RRHH lo confirme.' },
   { fecha:'2026-08-16', version:'2026-08-16-visto-dual-y-auditoria-v12', titulo:'Auditoria completa de mayusculas (14 tablas nuevas) + Visto Bueno independiente para Gerencia General y Gerencia Operativa (Sol. Santiago)',
     afecta:'TARGETS: reservas.huespedes_extra, compras (comprado_por/vb_por/entregado_por), maletas (nombre/apellido1), transportes (empresa/asunto), y las tablas nuevas check_carpetas, facturacion, firmas, listado_cargos, prereg, proveedores, reembolsos, revistas_nocturnas. TARGETS_TEXTO: compras.justificacion, paquetes.descripcion, reembolsos.descripcion, seguimientos_turno.detalle, tareas_fds.tarea, prestamos_tec.articulo, turnos.pendientes/notas. Ademas: novedades, mantenimiento, seguimientos_turno, reservas, solicitudes (columnas nuevas visto_gg_por/at, visto_go_por/at — requiere migracion SQL, ver nota abajo).',
     detalle:'Sol. Santiago (auditoria "a conciencia" de todo el sistema, dos edificios): se enumeraron TODAS las tablas y columnas de texto de la base (no solo las que ya se sabia que fallaban) comparando contra el codigo real de cada modulo, y se encontraron 14 tablas que nunca habian estado en el barrido — 3 de ellas (listado_cargos, prereg, revistas_nocturnas) estaban 100% en mayuscula porque nunca se habian tocado. Se agregaron todas a TARGETS/TARGETS_TEXTO. IMPORTANTE — se dejaron afuera a proposito los campos "cargo" (personal.cargo, control_personal.cargo, firmas.cargo, reservas.cargo): revisando el codigo se encontro que esos valores se usan como llave exacta en la tabla de jornadas/horas base (jornadas["ADMINISTRADOR"]=540) y en las opciones fijas de los formularios — si se les cambia el formato a Titulo se rompe silenciosamente el calculo de jornada laboral y el formulario de edicion deja de preseleccionar el cargo guardado. Se necesita un enfoque distinto (formatear solo en pantalla, no en la base) si se quiere resolver esto; queda pendiente de decision. Tambien se nota que el barrido retroactivo es solo eso -- retroactivo: registros nuevos que el personal siga escribiendo en mayuscula van a seguir apareciendo hasta que se corra de nuevo o se refuerce el auto-formato al escribir. // Segundo cambio: el "Visto Bueno" de gerencia (en Novedades/Comentarios, Mantenimiento, Seguimientos de turno, Reservas y Solicitudes) era un solo campo compartido -- quien lo marcara primero (Gerencia General o Gerencia Operativa) le quitaba a el otro la posibilidad de dejar su propio visto, porque el boton pasaba a decir "Quitar visto" en vez de ofrecer marcar el propio. Ahora son dos chulos independientes, uno por rol, cada quien marca/quita solo el suyo sin afectar al otro. El "Visto" viejo (revisado_por/revisado_at) se conserva y se muestra como "Visto anterior" para no perder el historial. REQUIERE UNA MIGRACION SQL (Santiago debe correrla desde el SQL Editor de Supabase, agrega columnas, no se puede hacer desde la app): alter table public.novedades add column if not exists visto_gg_por text, add column if not exists visto_gg_at timestamptz, add column if not exists visto_go_por text, add column if not exists visto_go_at timestamptz; -- repetir la misma linea para public.mantenimiento, public.seguimientos_turno, public.reservas y public.solicitudes.' },
@@ -1632,8 +1635,16 @@ window._puedeComprasFin8010 = function(){
   return wl.map(function(x){return x.toLowerCase();}).indexOf(em)>-1;
 };
 // Ítems restringidos por grupo
-window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','financiero-kl','nomina','indicadores','ventas-linea','personal-list'];
-window._ITEMS_COMPRAS_FIN_8010 = ['inventario-list','compras-orden-form','cartera-list','por-pagar-list','proveedores-list','flujo-caja-list','flujo-semanal-list'];
+// Fix (Sol. Sebastián, hallazgos c51f7cf6/5466b9fb/d536c6e5): "Facturado vs Devengado" ya estaba
+// protegido por _puedeConfidencial() al ABRIRLO (mostraba "Módulo confidencial"), pero el ítem del
+// menú nunca se agregó a esta lista — por eso seguía apareciendo en el sidebar de quien no tiene acceso,
+// y al entrar chocaba con el candado. Se agrega aquí para que ni siquiera se muestre en el menú.
+window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','financiero-kl','nomina','indicadores','ventas-linea','personal-list','fact-devengado'];
+// Fix (Sol. Sebastián, hallazgo c51f7cf6): "Retirar estos módulos ya que no son de nuestro uso" — el
+// equipo de Administración (rol administrador) no gestiona Cartera/CxP/Proveedores/Flujo de Caja. La
+// lista ya existía (Sol. Sebastián 23-jul-2026) pero le faltaban 4 ítems agregados al menú después:
+// recaudo-list, flujo-mes-list, proveedores-aging-list y sala-juntas-list (los mismos que señaló en su captura).
+window._ITEMS_COMPRAS_FIN_8010 = ['inventario-list','compras-orden-form','cartera-list','por-pagar-list','proveedores-list','flujo-caja-list','flujo-semanal-list','recaudo-list','flujo-mes-list','proveedores-aging-list','sala-juntas-list'];
 window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma'];
 // Módulos construidos sobre el presupuesto 2026 y las entidades 80-10 / LTM3 / PH (solo 8010): no se muestran en Kubik
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
@@ -4924,6 +4935,12 @@ function _calcTarifaMoneda(idTar, idMon, idTrm){
   const _trm=Number(document.getElementById(idTrm)?.value)||null;
   if(_mon==='USD' && _raw){
     if(!_trm){ return { error:'Ingresa la TRM para tarifas en USD' }; }
+    // Candado (Sol. Santiago 16-ago-2026, hallazgo 92290227/3ed2a9d0): esta era la ÚNICA ruta de
+    // guardado de tarifa en USD sin piso mínimo de TRM — al editar una celda del rack directamente
+    // (a diferencia de "Nueva Reserva" y el CKI, que desde jul/ago-2026 ya bloqueaban una TRM < 100),
+    // se podía digitar "1" en TRM y la tarifa quedaba guardada en USD crudo dentro del campo de pesos
+    // (ej. USD 365 guardado como $365 COP en vez de ≈ $1.140.000 COP). Ya detectado en vivo en el rack.
+    if(_trm < 100){ return { error:'La TRM digitada ('+_trm+') no es válida — revisa el dato, debe estar cerca de la tasa real del dólar (usualmente 3.000-5.000).' }; }
     return { tarifa: Math.round(_raw*_trm), tarifa_usd:_raw, moneda:'USD' };
   }
   return { tarifa:_raw, tarifa_usd:null, moneda:'COP' };
@@ -7425,7 +7442,15 @@ async function guardarReserva() {
   // Sol Andrés/María José: reflejar "Incluye desayuno" en las observaciones de la confirmación
   if ((document.getElementById('res-desayuno')?.value) === 'Si') { resData.obs = (resData.obs?resData.obs+' | ':'') + 'Incluye desayuno'; }
   if (typeof _adjSel!=='undefined' && _adjSel.length>0) { resData.obs = (resData.obs?resData.obs+' | ':'') + 'Combo unido: ' + _aptosW2.join(' + '); }
-  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, entidad: _entR, apto: resData.apto, config: resData.config, moneda: resData.moneda, tarifa_usd: resData.tarifa_usd||null, trm: resData.trm||null, tipo_apto_manual: resData.tipoAptoManual||null, iva: resData.iva, tarifa: Number(resData.tarifa)||null, noches: Number(resData.noches)||null, nombre: resData.nombre, huespedes_extra: _he2, numero: resData.numero, empresa: resData.empresa, pagador: resData.pagador, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, desayuno: (document.getElementById('res-desayuno')?.value || 'No'), user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',pagador:'Quién paga',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insR=await sb.from('reservas').insert(_rvRow).select('id').single(); if(_insR.error){ showToast('⚠️ Quedó en el rack pero NO se guardó en Reservas: '+_insR.error.message,'error'); } var _insH=(_insR.data)||{}; if(_insH.id){ try{ await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); }catch(_eh){} } } } catch(_e){ showToast('⚠️ Reserva en el rack, pero falló el registro en Reservas: '+(_e&&_e.message||_e),'error'); }
+  try { var _rvRow = { edificio: EDIFICIO_ACTIVO, entidad: _entR, apto: resData.apto, config: resData.config, moneda: resData.moneda, tarifa_usd: resData.tarifa_usd||null, trm: resData.trm||null, tipo_apto_manual: resData.tipoAptoManual||null, iva: resData.iva,
+    // Fix (Sol. Santiago 16-ago-2026, hallazgo 2c42959f/92290227/3ed2a9d0): en reservas USD, resData.tarifa
+    // guarda el valor CRUDO en dólares (se usa así para imprimir la Confirmación de Reserva en USD), pero
+    // este mismo valor se estaba insertando tal cual en reservas.tarifa — el campo pensado para pesos.
+    // El rack (tabla que alimenta Ventas/ADR) sí convertía bien con TRM; reservas.tarifa nunca lo hacía,
+    // así que cada reserva en USD quedaba en Reservas con tarifa = tarifa_usd (ej. "230" en vez de "≈$821.756").
+    // Se corrige aquí sin tocar resData.tarifa (para no romper la Confirmación impresa en USD).
+    tarifa: (_esUSDr ? Math.round((Number(resData.tarifa)||0) * (_trmR||0)) : Number(resData.tarifa))||null,
+    noches: Number(resData.noches)||null, nombre: resData.nombre, huespedes_extra: _he2, numero: resData.numero, empresa: resData.empresa, pagador: resData.pagador, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, desayuno: (document.getElementById('res-desayuno')?.value || 'No'), user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',pagador:'Quién paga',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insR=await sb.from('reservas').insert(_rvRow).select('id').single(); if(_insR.error){ showToast('⚠️ Quedó en el rack pero NO se guardó en Reservas: '+_insR.error.message,'error'); } var _insH=(_insR.data)||{}; if(_insH.id){ try{ await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); }catch(_eh){} } } } catch(_e){ showToast('⚠️ Reserva en el rack, pero falló el registro en Reservas: '+(_e&&_e.message||_e),'error'); }
   setTimeout(() => {
     if(confirm('¿Deseas generar la Confirmación de Reserva ahora?')) {
       generarConfirmacion(resData);
@@ -9412,7 +9437,11 @@ window._regRender = function(){
       + '<tr><td colspan="4" class="reg-sec">ACOMPAÑANTE(S)</td></tr>'
       + '<tr><td class="reg-lb">Nombre(s) y Apellido(s):</td><td class="reg-v" colspan="3">'+_in('rg-ac-nom','')+'</td></tr>'
       + '<tr><td class="reg-lb">Dirección:</td><td class="reg-v">'+_in('rg-ac-dir','')+'</td><td class="reg-lb">Sexo:</td><td class="reg-v">'+_in('rg-ac-sexo','')+'</td></tr>'
-      + '<tr><td colspan="4" class="reg-sec">DATOS DE LA RESERVA (precargados · editables)</td></tr>'
+      // Fix (Sol. Sebastián, hallazgo 79261dbe): el texto "(precargados · editables)" era una ayuda
+      // pensada solo para la pantalla, pero como el mismo bloque se usa para imprimir, salía también
+      // en el PDF/impreso del registro de huésped. Se quita del encabezado (el resaltado amarillo de
+      // los campos ya indica visualmente cuáles vienen precargados).
+      + '<tr><td colspan="4" class="reg-sec">DATOS DE LA RESERVA</td></tr>'
       + '<tr><td class="reg-lb">Apartamento:</td><td class="reg-v">'+_inH('rg-apto',apto)+'</td><td class="reg-lb">Cantidad de noches:</td><td class="reg-v">'+_inH('rg-noches',noches)+'</td></tr>'
       + '<tr><td class="reg-lb">Check-in:</td><td class="reg-v">'+_inH('rg-ci',ci)+'</td><td class="reg-lb">Check-out (CKO):</td><td class="reg-v">'+_inH('rg-co',co)+'</td></tr>'
       + '<tr><td colspan="2" class="reg-sec2">TARIFA SERVICIO DE HOSPEDAJE</td><td colspan="2" class="reg-v">'+_inH('rg-tarifa',tarifa)+'</td></tr>'
@@ -9426,7 +9455,8 @@ window._regRender = function(){
     var lc=function(es,en,inp){ return '<div class="reg-lc"><div class="reg-ll"><b>'+esc(es)+'</b><br><i>'+esc(en)+'</i></div><div class="reg-lv">'+inp+'</div></div>'; };
     cuerpo = '<div id="reg-print" class="ltm3p"><div class="ltm3-head"><img src="'+window._REG_LOGO+'" class="ltm3-logo"><div class="ltm3-t">REGISTRO LTM3</div>'
       + '<div class="ltm3-room"><b>HABITACIÓN</b> / ROOM<br>'+_inH('rg-hab',apto)+'</div></div>'
-      + '<div class="ltm3-fecha">Fecha Llegada: '+_inH('rg-ci',ci)+' &nbsp; Fecha Salida (CKO): '+_inH('rg-co',co)+' &nbsp; Noches: '+_inH('rg-noches',noches)+'</div>'
+      // Fix (Sol. Sebastián, hallazgo 682f19c3): "Favor retirar cantidad de noches" del REGISTRO LTM3 impreso.
+      + '<div class="ltm3-fecha">Fecha Llegada: '+_inH('rg-ci',ci)+' &nbsp; Fecha Salida (CKO): '+_inH('rg-co',co)+'</div>'
       + '<div class="reg-g2">'
         + lc('Nombre:','First Name:',_in('rg-l-nom',nombre))
         + lc('Apellidos:','Last Name:',_in('rg-l-ape',ape))
@@ -14272,9 +14302,11 @@ window.imprimirAgendaEventos = function(){
   var hoy=new Date();
   var impreso=hoy.getDate()+'/'+(hoy.getMonth()+1)+'/'+hoy.getFullYear()+' '+String(hoy.getHours()).padStart(2,'0')+':'+String(hoy.getMinutes()).padStart(2,'0');
   var quien=(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'';
+  // Fix (Sol. Sebastián, hallazgo f15d27ac): "Entregado por" quedaba repetido — ya está en el
+  // encabezado ("Copia para Seguridad · Impreso el ... por ..."). Se deja solo la casilla que
+  // realmente se diligencia a mano en la entrega: la firma de quien recibe (Seguridad).
   var recibo='<table class="rec"><tr>'
-    +'<td style="width:50%">Entregado por: '+esc(quien)+'<br><br>Firma: ______________________</td>'
-    +'<td>Recibido por (Seguridad): ______________________<br><br>Fecha y hora: __________  Firma: __________</td>'
+    +'<td>Recibido por (Seguridad): ______________________&nbsp;&nbsp;&nbsp; Fecha y hora: __________&nbsp;&nbsp;&nbsp; Firma: __________</td>'
     +'</tr></table>';
   var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Agenda de Eventos</title><style>'
     +'body{font-family:Arial,sans-serif;color:#111;padding:20px}'
@@ -16942,7 +16974,10 @@ function generarMsgCKI() {
   const migCKI = (document.getElementById('cki-migracion')?.value || '').startsWith('Sí') ? ', se envía reporte de ingreso a Migración Colombia' : '';
   // Sol Sebastián: mostrar el Apto (ubicación) y el tratamiento (Sr./Sra.) en el reporte/correo del CKI
   const _tratG = (document.getElementById('cki-tratamiento')?.value || '').trim();
-  const _encabCKI = `Apto ${apto} · ${_tratG ? _tratG + ' ' : ''}${huesped}`;
+  // Fix (Sol. Sebastián, hallazgo cfb4cb9e): la empresa/razón social se digitaba y se guardaba en el
+  // rack, pero nunca se incluía en el mensaje/informe de CKI que se envía — se corrige agregándola al encabezado.
+  const _empCKI = (document.getElementById('cki-empresa')?.value || '').trim();
+  const _encabCKI = `Apto ${apto} · ${_tratG ? _tratG + ' ' : ''}${huesped}${_empCKI ? ' · ' + _empCKI : ''}`;
   // TRM de referencia: si es USD, mostrar el estimado en pesos en el reporte
   const _trmMsg = Number(document.getElementById('cki-trm')?.value) || 0;
   const _copRef = (moneda === 'USD' && _trmMsg > 0) ? ` (≈ $${Math.round(total*_trmMsg).toLocaleString('es-CO')} COP · TRM ref. ${_trmMsg.toLocaleString('es-CO')})` : '';
