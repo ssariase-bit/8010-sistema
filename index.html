@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v5';
+const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v6';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v6', titulo:'Correccion retroactiva de mayusculas v6: se agrega profiles.nombre (Sol. Santiago)',
+    afecta:'profiles (nombre con el que aparece cada usuario en el sistema)',
+    detalle:'Santiago reporto que seguia viendo nombres de trabajadores en mayuscula sostenida despues de v5. Se encontro que la tabla profiles (el nombre visible de cada cuenta, ej. la esquina superior derecha) habia quedado fuera del alcance original por error. Se agrega a window._retroFixMayusculas(). Nota importante: por politica de seguridad, cada usuario solo puede corregir su PROPIO nombre de perfil -- no el de sus companeros. Al correr la funcion, el nombre de quien la ejecuta queda corregido; los demas perfiles quedaran marcados como bloqueados por permisos hasta que se ajuste la politica para permitir que un rol administrador edite perfiles ajenos.' },
   { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v5', titulo:'Correccion retroactiva de mayusculas v5: procesamiento en lotes paralelos, deteccion de tabla bloqueada por RLS (Sol. Santiago)',
     afecta:'turnos, rack, housekeeping, mantenimiento y en general todas las tablas cubiertas por window._retroFixMayusculas()',
     detalle:'Verificacion directa en la base de datos (no solo el resumen en pantalla) confirmo dos causas distintas de filas sin corregir: (1) turnos tiene un bloqueo real de permisos (RLS) que impide CUALQUIER actualizacion, incluso reescribir el mismo valor sin cambiarlo -- esto no se arregla con reintentos, requiere ajustar la politica de seguridad en Supabase; (2) rack (>10.000 filas), housekeeping y mantenimiento SI permiten guardar, pero el procesamiento fila por fila (v3/v4) era demasiado lento para tablas grandes. v5 procesa en lotes de 15 en paralelo (mucho mas rapido) y detecta si el primer lote de una tabla esta 100% bloqueado por permisos, en cuyo caso deja de intentar en esa tabla en vez de perder tiempo fila por fila -- lo marca "TABLA BLOQUEADA" en el resumen. Hallazgo adicional, fuera del alcance de esta correccion: bajo la cuenta de Santiago, las tablas turnos/housekeeping/mantenimiento/rack no muestran NINGUN registro de Kubik (edificio "kubik"), pese a que su perfil lo tiene asignado a ambos edificios -- queda pendiente confirmar si es porque Kubik no usa esos modulos o si hay un permiso mal configurado.' },
@@ -18821,7 +18824,8 @@ window._retroFixMayusculas = async function(){
     checklist_turnos: {hecho_por:'person'},
     facturas: {cliente:'company', huesped:'person'},
     inventario: {producto:'person', proveedor:'company'},
-    tes_proveedores: {nombre:'company'}
+    tes_proveedores: {nombre:'company'},
+    profiles: {nombre:'person'}
   };
 
   var report = {};
