@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-07-22-aviso-factura';
+const APP_VERSION = '2026-08-16-retro-fix-mayusculas';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-fix-autoactualizacion', titulo:'Fix: el numero interno de version (APP_VERSION) no se actualizaba en cada despliegue',
+    afecta:'Todo el sistema (recarga automatica)',
+    detalle:'El sistema tiene un chequeo automatico que compara version cargada vs. version publicada y recarga solo cuando hay una nueva (evitando interrumpir formularios sin guardar). Ese numero (APP_VERSION) no se veni­a actualizando en los ultimos despliegues (Atelier, Dashboard, formato Titulo, correccion retroactiva de mayusculas), asi que quienes tenian el SO abierto de antes (sobre todo abierto "como aplicacion", que se queda abierto dias) no recibian el aviso de recargar. De aqui en adelante cada despliegue debe traer APP_VERSION actualizado.' },
   { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas', titulo:'Correccion retroactiva: registros historicos en MAYUSCULA pasados a formato Titulo (Sol. Santiago)',
     afecta:'reservas, reservas_historial, solicitudes, reembolsos, revisiones_apto, saldos_aptos, check_carpetas, eventos, comunicaciones, cxp, proveedores, inventario_items, prestamos_elementos',
     detalle:'Complementa el cambio anterior (que solo aplicaba a datos nuevos): se corrigieron los nombres/empresas ya guardados en MAYUSCULA sostenida en 13 tablas (~2,378 valores). Nombres de persona a Formato Titulo simple ("Santiago Arias"). Nombres de empresa/proveedor igual, pero preservando siglas conocidas (SAS, SA, LLC, LTDA, etc. quedan en mayuscula: "Deseplast Productos Desechables SAS") y las grafias propias LTM3 y 8i8. No se tocaron campos de estado/categoria (logica exacta de la app) ni texto libre (observaciones/descripciones). inventario_items.nombre y prestamos_elementos.item se corrigieron juntos porque se cruzan por coincidencia exacta de texto para calcular disponibilidad; se verifico que siguen coincidiendo despues. 6 de las 13 tablas (reservas, reservas_historial, revisiones_apto, saldos_aptos, solicitudes, cxp) tienen una regla de seguridad que exige sesion autenticada para escribir, asi que esa parte corre con window._retroFixMayusculas() (o ?fixMayus2026 en la URL) estando logueado, en vez de por API externa.' },
