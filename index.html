@@ -481,6 +481,12 @@ const APP_VERSION = '2026-07-22-aviso-factura';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas', titulo:'Correccion retroactiva: registros historicos en MAYUSCULA pasados a formato Titulo (Sol. Santiago)',
+    afecta:'reservas, reservas_historial, solicitudes, reembolsos, revisiones_apto, saldos_aptos, check_carpetas, eventos, comunicaciones, cxp, proveedores, inventario_items, prestamos_elementos',
+    detalle:'Complementa el cambio anterior (que solo aplicaba a datos nuevos): se corrigieron los nombres/empresas ya guardados en MAYUSCULA sostenida en 13 tablas (~2,378 valores). Nombres de persona a Formato Titulo simple ("Santiago Arias"). Nombres de empresa/proveedor igual, pero preservando siglas conocidas (SAS, SA, LLC, LTDA, etc. quedan en mayuscula: "Deseplast Productos Desechables SAS") y las grafias propias LTM3 y 8i8. No se tocaron campos de estado/categoria (logica exacta de la app) ni texto libre (observaciones/descripciones). inventario_items.nombre y prestamos_elementos.item se corrigieron juntos porque se cruzan por coincidencia exacta de texto para calcular disponibilidad; se verifico que siguen coincidiendo despues. 6 de las 13 tablas (reservas, reservas_historial, revisiones_apto, saldos_aptos, solicitudes, cxp) tienen una regla de seguridad que exige sesion autenticada para escribir, asi que esa parte corre con window._retroFixMayusculas() (o ?fixMayus2026 en la URL) estando logueado, en vez de por API externa.' },
+  { fecha:'2026-08-16', version:'2026-08-16-formato-titulo-no-mayusculas', titulo:'Campos de texto: formato titulo en vez de MAYUSCULA sostenida (Sol. Santiago)',
+    afecta:'Todo el sistema (inputs de texto)',
+    detalle:'El 13-ago se agrego una normalizacion automatica a MAYUSCULA sostenida en todo input de texto (para que nombres/documentos con distinta capitalizacion se reconocieran como la misma persona). Genero quejas (todo en mayuscula, e inconsistencia entre registros viejos y nuevos). Se cambia a formato Titulo: "Santiago Arias" en vez de "SANTIAGO ARIAS". El matching interno de personas ya normalizaba a minuscula para comparar, asi que este cambio es solo de presentacion. Aplica solo a lo que se edite de aqui en adelante; los registros viejos en mayuscula sostenida no se corrigen automaticamente.' },
   { fecha:'2026-08-15', version:'2026-08-15-atelier-fecha-fin-y-dashboard', titulo:'Atelier: fecha fin para eventos de varios dias + entra al Dashboard (Sol. Santiago, KL)',
     afecta:'Atelier / Dashboard',
     detalle:'Se agrego el campo Fecha Fin (opcional) a las reservas de Atelier para eventos que duran mas de un dia. Ademas, el valor de sala y el valor de consumos de Atelier ahora se suman en las categorias "Salas de juntas" y "Alimentacion / consumos de eventos" del Dashboard (antes quedaban aislados en su propio modulo y no aparecian ahi).' },
@@ -18668,22 +18674,122 @@ async function _pregEnviarPublico(token, ed){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 })();
 
-// ── Normalización a MAYÚSCULAS en campos identificadores (Sol. Santiago 13-ago-2026) ──
-// Motivo: nombres/documentos escritos con distinta capitalización no se reconocían como
-// la misma persona (por eso existen _canonNom/_matchCam más arriba, para "arreglar" el
-// síntoma). Esto ataca la causa: al salir de cualquier <input type="text"> (nombres,
-// apellidos, documento, apto, placa, empresa, ciudad, nacionalidad, etc.) el valor se
-// pasa a mayúscula automáticamente. NO toca <textarea> (observaciones/notas de texto
-// libre) ni inputs type="email"/"password"/"tel"/"date"/"number"/etc. — esos quedan tal
-// cual el usuario los escriba. Para excluir un campo puntual, agregar data-no-upper.
+// ── Normalización a Formato Título en campos identificadores (Sol. Santiago 16-ago-2026) ──
+// Reemplaza el paso anterior a MAYÚSCULAS (13-ago-2026, "auditoria Santiago"): mismo
+// objetivo de forma canónica consistente para nombres/documentos, pero en formato título
+// ("Santiago Arias") en vez de mayúscula sostenida ("SANTIAGO ARIAS"). El matching real
+// para deduplicar personas (_normNom/_canonNom/_matchCam, más arriba) ya normaliza a
+// minúscula internamente para comparar, así que este cambio es solo de presentación — no
+// afecta esa lógica. Al salir de cualquier <input type="text"> (nombres, apellidos,
+// documento, apto, placa, empresa, ciudad, nacionalidad, etc.) el valor se reformatea:
+// primera letra de cada palabra en mayúscula, el resto en minúscula. NO toca <textarea>
+// (observaciones/notas de texto libre) ni inputs type="email"/"password"/"tel"/"date"/
+// "number"/etc. — esos quedan tal cual el usuario los escriba. Para excluir un campo
+// puntual, agregar data-no-upper (se conserva el nombre del atributo por compatibilidad).
+// Nota: esto solo aplica a lo que se edite de aquí en adelante — los registros viejos
+// guardados en mayúscula sostenida no se tocan automáticamente.
 document.addEventListener('blur', function(e){
   var el = e.target;
   if(!el || el.tagName !== 'INPUT' || el.type !== 'text' || el.hasAttribute('data-no-upper')) return;
   var v = el.value;
   if(!v) return;
-  var uv = v.toUpperCase();
+  var uv = v.toLowerCase().replace(/(^|[\s'\-\/.(])([a-záéíóúñü])/g, function(m,p,c){ return p+c.toUpperCase(); });
   if(uv !== v){ el.value = uv; try{ el.dispatchEvent(new Event('input',{bubbles:true})); }catch(_){} }
 }, true);
+
+// ── Corrección retroactiva de mayúsculas — fase 2, tablas con RLS autenticado (Sol. Santiago 16-ago-2026) ──
+// La fase 1 (vía API con llave anónima, corrida por el asistente) ya corrigió check_carpetas,
+// comunicaciones, eventos, inventario_items, prestamos_elementos, proveedores y reembolsos.
+// Estas 6 tablas (reservas, reservas_historial, revisiones_apto, saldos_aptos, solicitudes, cxp)
+// tienen una política RLS que solo permite UPDATE a usuarios autenticados, así que esta función
+// corre DENTRO de la app, usando la sesión ya autenticada de quien la ejecuta (mismo mecanismo
+// con el que el personal edita estos registros a diario). Es idempotente: si se corre más de una
+// vez, la segunda vez no encuentra nada en mayúscula sostenida y no hace cambios.
+// Uso: abrir la app ya con sesión iniciada y agregar ?fixMayus2026 a la URL, o ejecutar
+// window._retroFixMayusculas() desde la consola del navegador (F12).
+window._retroFixMayusculas = async function(){
+  if(!currentUser){ alert('Debes iniciar sesión primero.'); return; }
+  if(!confirm('Esto va a corregir a Formato Título los nombres/empresas en MAYÚSCULA sostenida en: reservas, historial de reservas, revisiones de apto, saldos de aptos, solicitudes y cuentas por pagar (cxp).\n\n¿Continuar?')) return;
+
+  var ACRONYMS = ['SAS','SA','LTDA','LTD','LLC','INC','CORP','EU','SCA','SAC','PLC','GMBH','NV','BV','CIA','SL','SRL'];
+  var OVERRIDES = {'LTM3':'LTM3','8I8':'8i8'};
+  var LOWER_RE = /[a-záéíóúñü]/;
+  var UPPER_RE = /[A-ZÁÉÍÓÚÑÜ]/;
+  var TOK_RE = /[A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9]+/g;
+  var LETTER_RE = /[A-Za-zÁÉÍÓÚÑÜáéíóúñü]/;
+
+  function isShouting(v){
+    if(typeof v!=='string' || !v.trim()) return false;
+    if(LOWER_RE.test(v)) return false;
+    if(!UPPER_RE.test(v)) return false;
+    return true;
+  }
+  function transformToken(tok, kind){
+    var up = tok.toUpperCase();
+    if(OVERRIDES[up]) return OVERRIDES[up];
+    if(kind==='company' && ACRONYMS.indexOf(up)>=0) return up;
+    var out='', cap=true;
+    for(var i=0;i<tok.length;i++){
+      var ch=tok[i];
+      if(LETTER_RE.test(ch)){
+        out += cap ? ch.toUpperCase() : ch.toLowerCase();
+        cap=false;
+      } else { out += ch; }
+    }
+    return out;
+  }
+  function titleCaseFix(s, kind){
+    return s.replace(TOK_RE, function(tok){ return transformToken(tok, kind); });
+  }
+
+  var TARGETS = {
+    reservas: {nombre:'person', empresa:'company', firmante:'person', revisado_por:'person', cki_por:'person', cko_por:'person'},
+    reservas_historial: {usuario:'person'},
+    revisiones_apto: {revisado_por:'person'},
+    saldos_aptos: {arrendatario:'person', empresa:'company'},
+    solicitudes: {solicitante:'person', dirigido_a:'person'},
+    cxp: {proveedor:'company'}
+  };
+
+  var report = {};
+  for(var table in TARGETS){
+    var colsKind = TARGETS[table];
+    var cols = Object.keys(colsKind);
+    var sel = ['id','edificio'].concat(cols).join(',');
+    var q = await sb.from(table).select(sel).limit(5000);
+    if(q.error){ report[table] = {error: q.error.message}; console.error(table, q.error); continue; }
+    var rows = q.data || [];
+    var ok=0, fail=0, colCounts={}; cols.forEach(function(c){colCounts[c]=0;});
+    for(var i=0;i<rows.length;i++){
+      var row = rows[i];
+      var changes = {};
+      (function(){
+        cols.forEach(function(c){
+          var v = row[c];
+          if(isShouting(v)){
+            var nv = titleCaseFix(v, colsKind[c]);
+            if(nv !== v){ changes[c] = nv; }
+          }
+        });
+      })();
+      if(Object.keys(changes).length){
+        var upd = await sb.from(table).update(changes).eq('id', row.id);
+        if(upd.error){ fail++; console.error(table, row.id, upd.error); }
+        else { ok++; Object.keys(changes).forEach(function(c){colCounts[c]++;}); }
+      }
+    }
+    report[table] = {ok:ok, fail:fail, colCounts:colCounts};
+    console.log('[_retroFixMayusculas]', table, report[table]);
+  }
+  console.log('=== RESUMEN CORRECCION MAYUSCULAS (fase 2, autenticado) ===', report);
+  var resumen = Object.keys(report).map(function(t){
+    var r = report[t];
+    if(r.error) return t+': ERROR '+r.error;
+    return t+': '+r.ok+' filas corregidas'+(r.fail?(' ('+r.fail+' fallidas)'):'');
+  }).join('\n');
+  alert('Corrección completada:\n\n'+resumen+'\n\nDetalle completo en la consola del navegador (F12) — cópialo y pégaselo a tu asistente para el reporte final.');
+  return report;
+};
 
 // ═══════════════════════════════════════════════════════════
 // AUTO-LOGIN si hay sesión activa
@@ -18694,6 +18800,9 @@ document.addEventListener('blur', function(e){
   if (session) {
     currentUser = session.user;
     await loadProfile();
+  }
+  if (/[?&]fixMayus2026\b/.test(location.search) && currentUser) {
+    setTimeout(function(){ window._retroFixMayusculas(); }, 700);
   }
 })();
 </script>
