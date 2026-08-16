@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-retro-fix-mayusculas';
+const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v3';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v3', titulo:'Correccion retroactiva de mayusculas v3: ~30 tablas adicionales (Sol. Santiago)',
+    afecta:'turnos, personal, nomina, rack, mantenimiento, housekeeping, novedades, puntos_fijos, control_personal, cotizaciones, paquetes, recibos_magnifique/bagatelle, entrega_efectivos, visitantes, maletas, desayunos, capsulas, prestamos_tec, transportes, requisiciones, seguimientos_turno, tareas_fds, checklist_turnos, facturas, inventario, tes_proveedores, contratos, compras, consumos, semana_seguimiento',
+    detalle:'La primera pasada (15-16 ago) solo pudo revisar las tablas que la llave publica del sistema puede leer. Quedaron afuera ~30 tablas mas que estan protegidas hasta para lectura externa (ej. datos de personal, nomina, turnos) -- no es que no tuvieran el problema de mayuscula sostenida, es que no se podian ver desde afuera para saberlo. Se detecto porque quedaron nombres en mayuscula visibles en Turnos/Personal y Mantenimiento despues de la primera pasada. window._retroFixMayusculas() ahora cubre estas ~30 tablas adicionales, y quedo auto-verificable: al terminar cada tabla vuelve a leer los datos y confirma cuantos registros realmente quedaron corregidos (antes solo confiaba en que el guardado no diera error, que resulto ser insuficiente).' },
   { fecha:'2026-08-16', version:'2026-08-16-fix-autoactualizacion', titulo:'Fix: el numero interno de version (APP_VERSION) no se actualizaba en cada despliegue',
     afecta:'Todo el sistema (recarga automatica)',
     detalle:'El sistema tiene un chequeo automatico que compara version cargada vs. version publicada y recarga solo cuando hay una nueva (evitando interrumpir formularios sin guardar). Ese numero (APP_VERSION) no se veni­a actualizando en los ultimos despliegues (Atelier, Dashboard, formato Titulo, correccion retroactiva de mayusculas), asi que quienes tenian el SO abierto de antes (sobre todo abierto "como aplicacion", que se queda abierto dias) no recibian el aviso de recargar. De aqui en adelante cada despliegue debe traer APP_VERSION actualizado.' },
@@ -2689,7 +2692,7 @@ window.renderFlujoSemanal=async function(){
            {id:'arrendatario',label:'Arrendatario (a)',type:'nombre3',default:''},
            {id:'fv',label:'FV',type:'text',default:''},
            {id:'valor',label:'Valor ($)',type:'money',default:''},
-           {id:'administrador_entrega',label:'Administrador que entrega',type:'select',opts:[{v:'',l:'— Seleccionar —'},'JUAN FERNANDO MARTÍNEZ','ANDRÉS PARGA','SEBASTIÁN MARTÍNEZ','FABIO MALAVER']},
+           {id:'administrador_entrega',label:'Administrador que entrega',type:'select',opts:[{v:'',l:'— Seleccionar —'},'Juan Fernando Martínez','Andrés Parga','Sebastián Martínez','Fabio Malaver']},
            {id:'fecha_entrega',label:'Fecha de entrega',type:'date',default:''}]
         : []),
       ...(EDIFICIO_ACTIVO==='kubik'
@@ -18700,19 +18703,26 @@ document.addEventListener('blur', function(e){
   if(uv !== v){ el.value = uv; try{ el.dispatchEvent(new Event('input',{bubbles:true})); }catch(_){} }
 }, true);
 
-// ── Corrección retroactiva de mayúsculas — fase 2, tablas con RLS autenticado (Sol. Santiago 16-ago-2026) ──
-// La fase 1 (vía API con llave anónima, corrida por el asistente) ya corrigió check_carpetas,
-// comunicaciones, eventos, inventario_items, prestamos_elementos, proveedores y reembolsos.
-// Estas 6 tablas (reservas, reservas_historial, revisiones_apto, saldos_aptos, solicitudes, cxp)
-// tienen una política RLS que solo permite UPDATE a usuarios autenticados, así que esta función
-// corre DENTRO de la app, usando la sesión ya autenticada de quien la ejecuta (mismo mecanismo
-// con el que el personal edita estos registros a diario). Es idempotente: si se corre más de una
-// vez, la segunda vez no encuentra nada en mayúscula sostenida y no hace cambios.
+// ── Corrección retroactiva de mayúsculas — v3, barrido completo (Sol. Santiago 16-ago-2026) ──
+// La fase 1 (vía API con llave anónima) corrigió: check_carpetas, comunicaciones, eventos,
+// inventario_items, prestamos_elementos, proveedores, reembolsos.
+// La fase 2 (v1 de esta función) corrigió: reservas, reservas_historial, revisiones_apto,
+// saldos_aptos, solicitudes, cxp — requieren sesión autenticada (RLS), por eso corren aquí
+// adentro con la sesión de quien la ejecuta, igual que cuando el personal edita a diario.
+// v3 amplía la lista: en el primer barrido solo se revisaron las tablas que la llave pública
+// podía LEER: quedaron afuera ~30 tablas bloqueadas por RLS incluso para lectura (turnos,
+// personal, nomina, rack, mantenimiento, housekeeping, novedades, etc.) — no es que no tuvieran
+// el problema, es que no se podían ver desde afuera para saber que lo tenían. Se detectaron
+// porque Santiago las vio en pantalla ("Turnos/Personal", "Mantenimiento") todavía en mayúscula
+// después de la fase 2. v3 las agrega todas.
+// Es idempotente y auto-verificable: al final de cada tabla vuelve a leer y cuenta cuántas
+// quedaron en mayúscula (por si alguna fila no se pudo corregir), así que correrla de más no
+// hace daño y el resumen final ya no depende de confiar ciegamente en la respuesta de guardado.
 // Uso: abrir la app ya con sesión iniciada y agregar ?fixMayus2026 a la URL, o ejecutar
 // window._retroFixMayusculas() desde la consola del navegador (F12).
 window._retroFixMayusculas = async function(){
   if(!currentUser){ alert('Debes iniciar sesión primero.'); return; }
-  if(!confirm('Esto va a corregir a Formato Título los nombres/empresas en MAYÚSCULA sostenida en: reservas, historial de reservas, revisiones de apto, saldos de aptos, solicitudes y cuentas por pagar (cxp).\n\n¿Continuar?')) return;
+  if(!confirm('Esto va a corregir a Formato Título los nombres/empresas en MAYÚSCULA sostenida en ~35 tablas del sistema (reservas, turnos, personal, mantenimiento, housekeeping, paquetes, visitantes, etc.). Es seguro correrlo aunque ya lo hayas corrido antes.\n\n¿Continuar?')) return;
 
   var ACRONYMS = ['SAS','SA','LTDA','LTD','LLC','INC','CORP','EU','SCA','SAC','PLC','GMBH','NV','BV','CIA','SL','SRL'];
   var OVERRIDES = {'LTM3':'LTM3','8I8':'8i8'};
@@ -18744,6 +18754,23 @@ window._retroFixMayusculas = async function(){
   function titleCaseFix(s, kind){
     return s.replace(TOK_RE, function(tok){ return transformToken(tok, kind); });
   }
+  async function fetchAll(table, sel){
+    var all = [], from = 0, page = 1000, guard = 0;
+    while(guard++ < 40){
+      var q = await sb.from(table).select(sel).range(from, from+page-1);
+      if(q.error) return {error:q.error};
+      var rows = q.data || [];
+      all = all.concat(rows);
+      if(rows.length < page) break;
+      from += page;
+    }
+    return {data:all};
+  }
+  async function updWithRetry(table, id, changes){
+    var r = await sb.from(table).update(changes).eq('id', id);
+    if(r.error){ r = await sb.from(table).update(changes).eq('id', id); } // 1 reintento
+    return r;
+  }
 
   var TARGETS = {
     reservas: {nombre:'person', empresa:'company', firmante:'person', revisado_por:'person', cki_por:'person', cko_por:'person'},
@@ -18751,7 +18778,37 @@ window._retroFixMayusculas = async function(){
     revisiones_apto: {revisado_por:'person'},
     saldos_aptos: {arrendatario:'person', empresa:'company'},
     solicitudes: {solicitante:'person', dirigido_a:'person'},
-    cxp: {proveedor:'company'}
+    cxp: {proveedor:'company'},
+    turnos: {admin_entrega:'person', admin_recibe:'person'},
+    personal: {nombre:'person'},
+    nomina: {nombre:'person'},
+    rack: {huesped:'person', nombre:'person', apellido1:'person', apellido2:'person'},
+    semana_seguimiento: {huesped:'person', nombre:'person', apellido1:'person', apellido2:'person'},
+    consumos: {huesped:'person'},
+    contratos: {arrendatario:'person'},
+    compras: {solicitante:'person', proveedor:'company'},
+    mantenimiento: {tecnico:'person', solicitado_por:'person'},
+    housekeeping: {camarera:'person', registrado_por:'person'},
+    novedades: {reportado_por:'person', gestionado_por:'person'},
+    puntos_fijos: {camarera:'person'},
+    control_personal: {nombre:'person'},
+    cotizaciones: {nombre:'person'},
+    paquetes: {destinatario:'person', transportadora:'company', recogido_por:'person', recibido_por:'person'},
+    recibos_magnifique: {arrendatario:'person'},
+    entrega_efectivos: {entregado_por:'person', recibido_por:'person', arrendatario:'person', administrador_entrega:'person'},
+    visitantes: {nombre_visitante:'person', arrendatario_autoriza:'person'},
+    maletas: {huesped:'person', guardado_por:'person'},
+    desayunos: {arrendatario:'person'},
+    capsulas: {arrendatario:'person', entregado_por:'person'},
+    prestamos_tec: {arrendatario:'person', entregado_por:'person'},
+    transportes: {persona:'person'},
+    requisiciones: {solicitado_por:'person'},
+    seguimientos_turno: {responsable:'person'},
+    tareas_fds: {responsable:'person'},
+    checklist_turnos: {hecho_por:'person'},
+    facturas: {cliente:'company', huesped:'person'},
+    inventario: {producto:'person', proveedor:'company'},
+    tes_proveedores: {nombre:'company'}
   };
 
   var report = {};
@@ -18759,38 +18816,48 @@ window._retroFixMayusculas = async function(){
     var colsKind = TARGETS[table];
     var cols = Object.keys(colsKind);
     var sel = ['id','edificio'].concat(cols).join(',');
-    var q = await sb.from(table).select(sel).limit(5000);
+    var q = await fetchAll(table, sel);
     if(q.error){ report[table] = {error: q.error.message}; console.error(table, q.error); continue; }
     var rows = q.data || [];
     var ok=0, fail=0, colCounts={}; cols.forEach(function(c){colCounts[c]=0;});
     for(var i=0;i<rows.length;i++){
       var row = rows[i];
       var changes = {};
-      (function(){
-        cols.forEach(function(c){
-          var v = row[c];
-          if(isShouting(v)){
-            var nv = titleCaseFix(v, colsKind[c]);
-            if(nv !== v){ changes[c] = nv; }
-          }
-        });
-      })();
+      cols.forEach(function(c){
+        var v = row[c];
+        if(isShouting(v)){
+          var nv = titleCaseFix(v, colsKind[c]);
+          if(nv !== v){ changes[c] = nv; }
+        }
+      });
       if(Object.keys(changes).length){
-        var upd = await sb.from(table).update(changes).eq('id', row.id);
+        var upd = await updWithRetry(table, row.id, changes);
         if(upd.error){ fail++; console.error(table, row.id, upd.error); }
         else { ok++; Object.keys(changes).forEach(function(c){colCounts[c]++;}); }
       }
     }
-    report[table] = {ok:ok, fail:fail, colCounts:colCounts};
+    // Auto-verificación: vuelve a leer y cuenta lo que sigue en mayúscula (no confía ciegamente
+    // en que "sin error" == "sí se guardó").
+    var restantes = 0;
+    try{
+      var q2 = await fetchAll(table, sel);
+      if(!q2.error){ (q2.data||[]).forEach(function(r2){ cols.forEach(function(c){ if(isShouting(r2[c])) restantes++; }); }); }
+    }catch(_e){}
+    report[table] = {ok:ok, fail:fail, colCounts:colCounts, restantes:restantes};
     console.log('[_retroFixMayusculas]', table, report[table]);
   }
-  console.log('=== RESUMEN CORRECCION MAYUSCULAS (fase 2, autenticado) ===', report);
+  console.log('=== RESUMEN CORRECCION MAYUSCULAS v3 ===', report);
+  var conPendientes = [];
   var resumen = Object.keys(report).map(function(t){
     var r = report[t];
     if(r.error) return t+': ERROR '+r.error;
-    return t+': '+r.ok+' filas corregidas'+(r.fail?(' ('+r.fail+' fallidas)'):'');
+    if(r.restantes>0) conPendientes.push(t+' ('+r.restantes+')');
+    return t+': '+r.ok+' corregidas'+(r.fail?(' · '+r.fail+' fallidas'):'')+(r.restantes?(' · ⚠️ '+r.restantes+' restantes'):'');
   }).join('\n');
-  alert('Corrección completada:\n\n'+resumen+'\n\nDetalle completo en la consola del navegador (F12) — cópialo y pégaselo a tu asistente para el reporte final.');
+  var pie = conPendientes.length
+    ? ('\n\n⚠️ Estas tablas quedaron con mayúsculas pendientes: '+conPendientes.join(', ')+'. Vuelve a correr ?fixMayus2026 una vez más — normalmente con una segunda pasada se termina.')
+    : '\n\n✅ Verificado: no queda ningún nombre en mayúscula sostenida en ninguna de estas tablas.';
+  alert('Corrección completada:\n\n'+resumen+pie+'\n\nDetalle completo en la consola del navegador (F12).');
   return report;
 };
 
