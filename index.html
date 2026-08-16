@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v4';
+const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v5';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v5', titulo:'Correccion retroactiva de mayusculas v5: procesamiento en lotes paralelos, deteccion de tabla bloqueada por RLS (Sol. Santiago)',
+    afecta:'turnos, rack, housekeeping, mantenimiento y en general todas las tablas cubiertas por window._retroFixMayusculas()',
+    detalle:'Verificacion directa en la base de datos (no solo el resumen en pantalla) confirmo dos causas distintas de filas sin corregir: (1) turnos tiene un bloqueo real de permisos (RLS) que impide CUALQUIER actualizacion, incluso reescribir el mismo valor sin cambiarlo -- esto no se arregla con reintentos, requiere ajustar la politica de seguridad en Supabase; (2) rack (>10.000 filas), housekeeping y mantenimiento SI permiten guardar, pero el procesamiento fila por fila (v3/v4) era demasiado lento para tablas grandes. v5 procesa en lotes de 15 en paralelo (mucho mas rapido) y detecta si el primer lote de una tabla esta 100% bloqueado por permisos, en cuyo caso deja de intentar en esa tabla en vez de perder tiempo fila por fila -- lo marca "TABLA BLOQUEADA" en el resumen. Hallazgo adicional, fuera del alcance de esta correccion: bajo la cuenta de Santiago, las tablas turnos/housekeeping/mantenimiento/rack no muestran NINGUN registro de Kubik (edificio "kubik"), pese a que su perfil lo tiene asignado a ambos edificios -- queda pendiente confirmar si es porque Kubik no usa esos modulos o si hay un permiso mal configurado.' },
   { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v4', titulo:'Correccion retroactiva de mayusculas v4: mas reintentos, detecta bloqueos de permisos, resumen legible (Sol. Santiago)',
     afecta:'turnos y en general todas las tablas cubiertas por window._retroFixMayusculas()',
     detalle:'La v3 dejo turnos con 184 corregidas y 368 pendientes. Causas posibles: fallas transitorias de red, o que el permiso (RLS) de tu usuario bloquee en silencio el guardado de algunas filas (Supabase puede responder "sin error" aunque en realidad no haya escrito nada). v4: (1) sube los reintentos por fila de 1 a 3 con espera progresiva; (2) ahora se revisa explicitamente si el guardado devolvio la fila actualizada -- si no la devuelve, se cuenta como "bloqueada por permisos" en vez de darse por buena; (3) el resumen final ya no lista las ~35 tablas sin nada pendiente una por una (se cortaba en el alert) -- solo muestra las que tuvieron actividad o problemas.' },
@@ -18829,9 +18832,8 @@ window._retroFixMayusculas = async function(){
     var q = await fetchAll(table, sel);
     if(q.error){ report[table] = {error: q.error.message}; console.error(table, q.error); continue; }
     var rows = q.data || [];
-    var ok=0, fail=0, blocked=0, colCounts={}, errMsg=null; cols.forEach(function(c){colCounts[c]=0;});
-    for(var i=0;i<rows.length;i++){
-      var row = rows[i];
+    var pending = [];
+    rows.forEach(function(row){
       var changes = {};
       cols.forEach(function(c){
         var v = row[c];
@@ -18840,17 +18842,35 @@ window._retroFixMayusculas = async function(){
           if(nv !== v){ changes[c] = nv; }
         }
       });
-      if(Object.keys(changes).length){
-        var upd = await updWithRetry(table, row.id, changes);
-        if(upd.error){
-          fail++; console.error(table, row.id, upd.error);
-          if(!errMsg) errMsg = upd.error.message || String(upd.error);
-        } else if(!upd.data || !upd.data.length){
-          // Sin error pero tampoco filas devueltas: RLS bloqueó el UPDATE en silencio.
-          blocked++; console.warn('[_retroFixMayusculas] bloqueado por RLS (sin error, 0 filas):', table, row.id);
+      if(Object.keys(changes).length) pending.push({id: row.id, changes: changes});
+    });
+    // Se procesa en lotes concurrentes (no fila por fila) — con tablas grandes (rack tiene
+    // >10.000 filas) el modo secuencial de v3 tardaba demasiado y parecía trabado.
+    var ok=0, fail=0, blocked=0, colCounts={}, errMsg=null, tableBlocked=false;
+    cols.forEach(function(c){colCounts[c]=0;});
+    var BATCH = 15;
+    for(var bi=0; bi<pending.length; bi+=BATCH){
+      if(tableBlocked) break; // primer lote 100% bloqueado por permisos: no seguir intentando en vano
+      var batch = pending.slice(bi, bi+BATCH);
+      var results = await Promise.all(batch.map(function(item){
+        return updWithRetry(table, item.id, item.changes).then(function(r){ return {item:item, r:r}; });
+      }));
+      var blockedInBatch = 0;
+      results.forEach(function(res){
+        var r = res.r, item = res.item;
+        if(r.error){
+          fail++; console.error(table, item.id, r.error);
+          if(!errMsg) errMsg = r.error.message || String(r.error);
+        } else if(!r.data || !r.data.length){
+          blocked++; blockedInBatch++;
+          console.warn('[_retroFixMayusculas] bloqueado por RLS (sin error, 0 filas):', table, item.id);
         } else {
-          ok++; Object.keys(changes).forEach(function(c){colCounts[c]++;});
+          ok++; Object.keys(item.changes).forEach(function(c){ if(item.changes[c]!==undefined) colCounts[c]++; });
         }
+      });
+      if(bi===0 && blockedInBatch===batch.length && batch.length>0){
+        tableBlocked = true;
+        console.warn('[_retroFixMayusculas] tabla '+table+': el primer lote completo fue bloqueado por permisos — se detiene aquí, no tiene caso seguir intentando fila por fila.');
       }
     }
     // Auto-verificación: vuelve a leer y cuenta lo que sigue en mayúscula (no confía ciegamente
@@ -18860,10 +18880,10 @@ window._retroFixMayusculas = async function(){
       var q2 = await fetchAll(table, sel);
       if(!q2.error){ (q2.data||[]).forEach(function(r2){ cols.forEach(function(c){ if(isShouting(r2[c])) restantes++; }); }); }
     }catch(_e){}
-    report[table] = {ok:ok, fail:fail, blocked:blocked, colCounts:colCounts, restantes:restantes, errMsg:errMsg};
+    report[table] = {ok:ok, fail:fail, blocked:blocked, tableBlocked:tableBlocked, colCounts:colCounts, restantes:restantes, errMsg:errMsg};
     console.log('[_retroFixMayusculas]', table, report[table]);
   }
-  console.log('=== RESUMEN CORRECCION MAYUSCULAS v3 ===', report);
+  console.log('=== RESUMEN CORRECCION MAYUSCULAS v4 ===', report);
   // Resumen compacto: solo se listan tablas con actividad real o problemas; el resto (sin nada
   // que corregir) se colapsa en una sola línea para que el alert() no se corte visualmente.
   var conPendientes = [], conBloqueadas = [], conErrores = [], lineas = [], limpias = 0;
@@ -18871,19 +18891,19 @@ window._retroFixMayusculas = async function(){
     var r = report[t];
     if(r.error){ conErrores.push(t+': '+r.error); lineas.push(t+': ERROR '+r.error); return; }
     if(r.restantes>0) conPendientes.push(t+' ('+r.restantes+')');
-    if(r.blocked>0) conBloqueadas.push(t+' ('+r.blocked+')');
+    if(r.blocked>0) conBloqueadas.push(t+' ('+r.blocked+')'+(r.tableBlocked?' 🔒TABLA BLOQUEADA':''));
     var huboActividad = r.ok>0 || r.fail>0 || r.blocked>0 || r.restantes>0;
     if(!huboActividad){ limpias++; return; }
     lineas.push(t+': '+r.ok+' corregidas'
       +(r.fail?(' · '+r.fail+' fallidas ('+r.errMsg+')'):'')
-      +(r.blocked?(' · 🔒 '+r.blocked+' bloqueadas por permisos'):'')
+      +(r.blocked?(' · 🔒 '+r.blocked+' bloqueadas por permisos'+(r.tableBlocked?' (tabla completa)':'')):'')
       +(r.restantes?(' · ⚠️ '+r.restantes+' restantes'):''));
   });
   if(limpias>0) lineas.push('('+limpias+' tablas más sin nada pendiente ✅)');
   var resumen = lineas.join('\n');
   var pie = '';
   if(conBloqueadas.length){
-    pie += '\n\n🔒 Estas tablas tienen filas que tu usuario no tiene permiso de modificar (bloqueo de seguridad, no error técnico): '+conBloqueadas.join(', ')+'. Esto hay que revisarlo conmigo, no se arregla solo con reintentar.';
+    pie += '\n\n🔒 Estas tablas tienen filas que tu usuario no tiene permiso de modificar (bloqueo de seguridad de Supabase, no error técnico ni de red): '+conBloqueadas.join(', ')+'. Esto NO se arregla reintentando — hay que ajustar la política de seguridad (RLS) en Supabase. Avísame para revisarlo.';
   }
   if(conPendientes.length){
     pie += '\n\n⚠️ Estas tablas quedaron con mayúsculas pendientes: '+conPendientes.join(', ')+'. Vuelve a correr ?fixMayus2026 una vez más — normalmente con una segunda pasada se termina.';
