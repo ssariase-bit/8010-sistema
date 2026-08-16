@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v10';
+const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v11';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v11', titulo:'Correccion de mayusculas: se agrega novedades.comentarios (modulo "Comentarios") (Sol. Santiago)',
+    afecta:'novedades.comentarios[].autor (Formato Titulo) y novedades.comentarios[].texto (Formato Oracion)',
+    detalle:'Sol. Santiago (captura del modulo "Comentarios"): el autor de cada comentario de gerencia sobre una novedad ("RICARDO VALLEJO", "SANTIAGO ARIAS", "FABIO MALAVER", etc.) seguia en mayuscula sostenida porque comentarios es un arreglo JSON dentro de la tabla novedades, igual que respuestas en comunicaciones -- no encajaba en el barrido generico de columnas ni en el de texto libre. Se agrego un caso especial que recorre el arreglo de cada novedad y corrige autor (nombre de persona) y texto (formato oracion) igual que se hizo con comunicaciones.respuestas en v10. De paso: se verifico por que Fabio Malaver (rol gerencia_operativa) puede dar "Visto"/VB en Comentarios -- es intencional, el codigo permite esa accion a currentProfile.rol en [gerente_general, gerencia_operativa], no es un bug.' },
   { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v10', titulo:'Auditoria completa de mayusculas: se agrega caja (nombres) y texto libre en Formato Oracion (Sol. Santiago)',
     afecta:'caja (entregado_por/recibido_por), caja.concepto, caja.observaciones, comunicaciones.mensaje y respuestas, contratos.observaciones, control_personal.observaciones, novedades.descripcion, housekeeping.observaciones',
     detalle:'Auditoria completa pedida por Santiago tras revisar capturas reales de la app: encontro que la tabla caja nunca habia quedado incluida en la correccion (entregado_por/recibido_por seguian en mayuscula), y que varios campos de texto libre (concepto de caja, mensajes de Comunicaciones, observaciones) tambien estaban en mayuscula sostenida. Se agrego caja a la correccion de nombres normal. Para el texto libre se agrego una Fase 2 nueva: en vez de Formato Titulo (que se ve mal en una frase completa, ej. "Compra Suministros Eventos"), se usa Formato Oracion (mayuscula solo al inicio de cada oracion) y se restauran los nombres propios y siglas conocidas usando un diccionario armado con los nombres de personal ya corregidos, para no dejar nombres de personas en minuscula dentro del texto. comunicaciones.respuestas se maneja aparte por ser un arreglo JSON. Nota: en texto libre historico el resultado puede no ser perfecto en el 100% de los casos (un nombre propio no incluido en el diccionario podria quedar en minuscula) -- es mucho mejor que mayuscula sostenida pero no es infalible como si lo es la correccion de nombres en columnas dedicadas.' },
@@ -19044,6 +19047,41 @@ window._retroFixMayusculas = async function(){
       }
     }
     reportTexto['comunicaciones (texto)'] = {ok:comOk, fail:comFail, blocked:comBlocked};
+
+    // Caso especial: novedades.comentarios es un arreglo JSON con {autor, texto, ...} — son los
+    // comentarios de gerencia sobre una novedad que se ven en el módulo "Comentarios" (autor en
+    // Formato Título, texto en Formato Oración). No encaja en el patrón genérico de columna simple.
+    var qn = await fetchAll('novedades', 'id,comentarios');
+    var novOk=0, novFail=0, novBlocked=0;
+    if(!qn.error){
+      for(var ni=0; ni<(qn.data||[]).length; ni++){
+        var nrow = qn.data[ni];
+        var narr = nrow.comentarios;
+        if(!Array.isArray(narr) || !narr.length) continue;
+        var nChanged = false;
+        var newNarr = narr.map(function(cm){
+          if(!cm) return cm;
+          var patch = {};
+          if(isShouting(cm.autor)){
+            var nva = titleCaseFix(cm.autor, 'person');
+            if(nva !== cm.autor) patch.autor = nva;
+          }
+          if(isShouting(cm.texto)){
+            var nvt = sentenceCaseFix(cm.texto);
+            if(nvt !== cm.texto) patch.texto = nvt;
+          }
+          if(Object.keys(patch).length){ nChanged = true; return Object.assign({}, cm, patch); }
+          return cm;
+        });
+        if(nChanged){
+          var updN = await updWithRetry('novedades', nrow.id, {comentarios: newNarr});
+          if(updN.error) novFail++;
+          else if(!updN.data || !updN.data.length) novBlocked++;
+          else novOk++;
+        }
+      }
+    }
+    reportTexto['novedades.comentarios (texto)'] = {ok:novOk, fail:novFail, blocked:novBlocked};
   }catch(_eTexto){
     reportTexto['fase2_texto_libre'] = {error: String(_eTexto)};
     console.error('[_retroFixMayusculas] error en fase 2 (texto libre):', _eTexto);
