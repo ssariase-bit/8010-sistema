@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v6';
+const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v7';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v7', titulo:'Fix: la correccion de mayusculas no funcionaba desde el celular (Sol. Santiago)',
+    afecta:'window._retroFixMayusculas() -- el disparador por URL ?fixMayus2026',
+    detalle:'Santiago probo desde el celular y no le salio ninguna ventana de confirmacion. Causa: la funcion se llamaba sola con setTimeout al cargar la pagina, sin que mediara un toque/clic real de la persona -- varios navegadores (Safari/Chrome en iOS, navegadores dentro de otras apps) bloquean o descartan en silencio los confirm()/alert() que no vienen de un gesto directo del usuario. Se cambio para mostrar un boton visible en pantalla; la funcion solo se ejecuta dentro del evento de clic de ese boton, lo que cuenta como un toque real y funciona igual en computador y en celular.' },
   { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v6', titulo:'Correccion retroactiva de mayusculas v6: se agrega profiles.nombre (Sol. Santiago)',
     afecta:'profiles (nombre con el que aparece cada usuario en el sistema)',
     detalle:'Santiago reporto que seguia viendo nombres de trabajadores en mayuscula sostenida despues de v5. Se encontro que la tabla profiles (el nombre visible de cada cuenta, ej. la esquina superior derecha) habia quedado fuera del alcance original por error. Se agrega a window._retroFixMayusculas(). Nota importante: por politica de seguridad, cada usuario solo puede corregir su PROPIO nombre de perfil -- no el de sus companeros. Al correr la funcion, el nombre de quien la ejecuta queda corregido; los demas perfiles quedaran marcados como bloqueados por permisos hasta que se ajuste la politica para permitir que un rol administrador edite perfiles ajenos.' },
@@ -18930,7 +18933,23 @@ window._retroFixMayusculas = async function(){
     await loadProfile();
   }
   if (/[?&]fixMayus2026\b/.test(location.search) && currentUser) {
-    setTimeout(function(){ window._retroFixMayusculas(); }, 700);
+    // IMPORTANTE: no se llama automáticamente con setTimeout. Varios navegadores (sobre todo en
+    // celular: Safari/Chrome iOS y algunos navegadores dentro de apps) bloquean o descartan en
+    // silencio los confirm()/alert() cuando no vienen de un toque/clic real de la persona — por
+    // eso antes "no salía nada" en el celular. Se muestra un botón visible y la función solo se
+    // llama dentro de su propio evento de clic, para que el confirm() cuente como un toque real.
+    setTimeout(function(){
+      var btn = document.createElement('button');
+      btn.textContent = '🔧 Tocar aquí para corregir mayúsculas';
+      btn.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:99999;'
+        + 'background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:14px 20px;'
+        + 'font-size:16px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.3);cursor:pointer;';
+      btn.onclick = function(){
+        btn.remove();
+        window._retroFixMayusculas();
+      };
+      document.body.appendChild(btn);
+    }, 300);
   }
 })();
 </script>
