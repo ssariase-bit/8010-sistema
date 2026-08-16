@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v7';
+const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v8';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v8', titulo:'Fix: dos errores reales encontrados en la corrida del celular (Sol. Santiago)',
+    afecta:'tes_proveedores, profiles',
+    detalle:'La corrida desde el celular mostro dos problemas concretos: (1) tes_proveedores daba ERROR porque el codigo pedia una columna "edificio" que esa tabla no tiene (no se usaba para nada, se quito del pedido); (2) profiles se marco 100% "bloqueada por permisos" sin intentar siquiera el propio nombre de quien la corre -- el codigo cortaba la tabla entera apenas el primer lote salia bloqueado, asumiendo que era un bloqueo de tabla completa como en turnos, pero en profiles el bloqueo es por fila (cada quien solo puede editar su propio perfil), no por tabla. Se quito ese corte anticipado: ahora se intentan todas las filas siempre (las bloqueadas responden rapido, no cuesta tiempo real), y el propio nombre de quien corre la funcion si debe quedar corregido.' },
   { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v7', titulo:'Fix: la correccion de mayusculas no funcionaba desde el celular (Sol. Santiago)',
     afecta:'window._retroFixMayusculas() -- el disparador por URL ?fixMayus2026',
     detalle:'Santiago probo desde el celular y no le salio ninguna ventana de confirmacion. Causa: la funcion se llamaba sola con setTimeout al cargar la pagina, sin que mediara un toque/clic real de la persona -- varios navegadores (Safari/Chrome en iOS, navegadores dentro de otras apps) bloquean o descartan en silencio los confirm()/alert() que no vienen de un gesto directo del usuario. Se cambio para mostrar un boton visible en pantalla; la funcion solo se ejecuta dentro del evento de clic de ese boton, lo que cuenta como un toque real y funciona igual en computador y en celular.' },
@@ -18835,7 +18838,7 @@ window._retroFixMayusculas = async function(){
   for(var table in TARGETS){
     var colsKind = TARGETS[table];
     var cols = Object.keys(colsKind);
-    var sel = ['id','edificio'].concat(cols).join(',');
+    var sel = ['id'].concat(cols).join(','); // (no se pide 'edificio': no todas las tablas lo tienen, ej. tes_proveedores, y no se usaba)
     var q = await fetchAll(table, sel);
     if(q.error){ report[table] = {error: q.error.message}; console.error(table, q.error); continue; }
     var rows = q.data || [];
@@ -18853,33 +18856,32 @@ window._retroFixMayusculas = async function(){
     });
     // Se procesa en lotes concurrentes (no fila por fila) — con tablas grandes (rack tiene
     // >10.000 filas) el modo secuencial de v3 tardaba demasiado y parecía trabado.
-    var ok=0, fail=0, blocked=0, colCounts={}, errMsg=null, tableBlocked=false;
+    // No se corta la tabla al primer lote bloqueado: el bloqueo puede ser por fila (ej. "profiles",
+    // donde cada quien solo puede corregir su propio nombre) y no por tabla completa (ej. "turnos"),
+    // así que hay que intentar todas las filas para no dejar afuera a las que sí tienen permiso.
+    // Como las filas bloqueadas responden rápido y sin error (no activan reintento), no cuesta tiempo real.
+    var ok=0, fail=0, blocked=0, colCounts={}, errMsg=null;
     cols.forEach(function(c){colCounts[c]=0;});
     var BATCH = 15;
     for(var bi=0; bi<pending.length; bi+=BATCH){
-      if(tableBlocked) break; // primer lote 100% bloqueado por permisos: no seguir intentando en vano
       var batch = pending.slice(bi, bi+BATCH);
       var results = await Promise.all(batch.map(function(item){
         return updWithRetry(table, item.id, item.changes).then(function(r){ return {item:item, r:r}; });
       }));
-      var blockedInBatch = 0;
       results.forEach(function(res){
         var r = res.r, item = res.item;
         if(r.error){
           fail++; console.error(table, item.id, r.error);
           if(!errMsg) errMsg = r.error.message || String(r.error);
         } else if(!r.data || !r.data.length){
-          blocked++; blockedInBatch++;
+          blocked++;
           console.warn('[_retroFixMayusculas] bloqueado por RLS (sin error, 0 filas):', table, item.id);
         } else {
           ok++; Object.keys(item.changes).forEach(function(c){ if(item.changes[c]!==undefined) colCounts[c]++; });
         }
       });
-      if(bi===0 && blockedInBatch===batch.length && batch.length>0){
-        tableBlocked = true;
-        console.warn('[_retroFixMayusculas] tabla '+table+': el primer lote completo fue bloqueado por permisos — se detiene aquí, no tiene caso seguir intentando fila por fila.');
-      }
     }
+    var tableBlocked = (blocked>0 && ok===0 && fail===0); // todas las filas intentadas quedaron bloqueadas
     // Auto-verificación: vuelve a leer y cuenta lo que sigue en mayúscula (no confía ciegamente
     // en que "sin error" == "sí se guardó").
     var restantes = 0;
