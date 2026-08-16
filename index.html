@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v11';
+const APP_VERSION = '2026-08-16-visto-dual-y-auditoria-v12';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-visto-dual-y-auditoria-v12', titulo:'Auditoria completa de mayusculas (14 tablas nuevas) + Visto Bueno independiente para Gerencia General y Gerencia Operativa (Sol. Santiago)',
+    afecta:'TARGETS: reservas.huespedes_extra, compras (comprado_por/vb_por/entregado_por), maletas (nombre/apellido1), transportes (empresa/asunto), y las tablas nuevas check_carpetas, facturacion, firmas, listado_cargos, prereg, proveedores, reembolsos, revistas_nocturnas. TARGETS_TEXTO: compras.justificacion, paquetes.descripcion, reembolsos.descripcion, seguimientos_turno.detalle, tareas_fds.tarea, prestamos_tec.articulo, turnos.pendientes/notas. Ademas: novedades, mantenimiento, seguimientos_turno, reservas, solicitudes (columnas nuevas visto_gg_por/at, visto_go_por/at — requiere migracion SQL, ver nota abajo).',
+    detalle:'Sol. Santiago (auditoria "a conciencia" de todo el sistema, dos edificios): se enumeraron TODAS las tablas y columnas de texto de la base (no solo las que ya se sabia que fallaban) comparando contra el codigo real de cada modulo, y se encontraron 14 tablas que nunca habian estado en el barrido — 3 de ellas (listado_cargos, prereg, revistas_nocturnas) estaban 100% en mayuscula porque nunca se habian tocado. Se agregaron todas a TARGETS/TARGETS_TEXTO. IMPORTANTE — se dejaron afuera a proposito los campos "cargo" (personal.cargo, control_personal.cargo, firmas.cargo, reservas.cargo): revisando el codigo se encontro que esos valores se usan como llave exacta en la tabla de jornadas/horas base (jornadas["ADMINISTRADOR"]=540) y en las opciones fijas de los formularios — si se les cambia el formato a Titulo se rompe silenciosamente el calculo de jornada laboral y el formulario de edicion deja de preseleccionar el cargo guardado. Se necesita un enfoque distinto (formatear solo en pantalla, no en la base) si se quiere resolver esto; queda pendiente de decision. Tambien se nota que el barrido retroactivo es solo eso -- retroactivo: registros nuevos que el personal siga escribiendo en mayuscula van a seguir apareciendo hasta que se corra de nuevo o se refuerce el auto-formato al escribir. // Segundo cambio: el "Visto Bueno" de gerencia (en Novedades/Comentarios, Mantenimiento, Seguimientos de turno, Reservas y Solicitudes) era un solo campo compartido -- quien lo marcara primero (Gerencia General o Gerencia Operativa) le quitaba a el otro la posibilidad de dejar su propio visto, porque el boton pasaba a decir "Quitar visto" en vez de ofrecer marcar el propio. Ahora son dos chulos independientes, uno por rol, cada quien marca/quita solo el suyo sin afectar al otro. El "Visto" viejo (revisado_por/revisado_at) se conserva y se muestra como "Visto anterior" para no perder el historial. REQUIERE UNA MIGRACION SQL (Santiago debe correrla desde el SQL Editor de Supabase, agrega columnas, no se puede hacer desde la app): alter table public.novedades add column if not exists visto_gg_por text, add column if not exists visto_gg_at timestamptz, add column if not exists visto_go_por text, add column if not exists visto_go_at timestamptz; -- repetir la misma linea para public.mantenimiento, public.seguimientos_turno, public.reservas y public.solicitudes.' },
   { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v11', titulo:'Correccion de mayusculas: se agrega novedades.comentarios (modulo "Comentarios") (Sol. Santiago)',
     afecta:'novedades.comentarios[].autor (Formato Titulo) y novedades.comentarios[].texto (Formato Oracion)',
     detalle:'Sol. Santiago (captura del modulo "Comentarios"): el autor de cada comentario de gerencia sobre una novedad ("RICARDO VALLEJO", "SANTIAGO ARIAS", "FABIO MALAVER", etc.) seguia en mayuscula sostenida porque comentarios es un arreglo JSON dentro de la tabla novedades, igual que respuestas en comunicaciones -- no encajaba en el barrido generico de columnas ni en el de texto libre. Se agrego un caso especial que recorre el arreglo de cada novedad y corrige autor (nombre de persona) y texto (formato oracion) igual que se hizo con comunicaciones.respuestas en v10. De paso: se verifico por que Fabio Malaver (rol gerencia_operativa) puede dar "Visto"/VB en Comentarios -- es intencional, el codigo permite esa accion a currentProfile.rol en [gerente_general, gerencia_operativa], no es un bug.' },
@@ -8691,19 +8694,40 @@ window._segComentar = async function(id){
   renderSeguimientosTurno();
 };
 // ── Revisión de Gerencia GENÉRICA (reutilizable en cualquier módulo/tabla) ──
+// v12 (Sol. Santiago): antes era un solo "Visto" compartido — quien lo marcaba primero (Gerencia
+// General o Gerencia Operativa) le quitaba la posibilidad al otro de dejar su propio visto bueno.
+// Ahora son dos chulos independientes (uno por rol), cada quien marca/quita solo el suyo. Se guarda
+// en columnas nuevas (visto_gg_por/at, visto_go_por/at) para no perder el historial del campo viejo
+// (revisado_por/revisado_at), que se sigue mostrando como "Visto anterior" si existe.
 window._revGerCell = function(tabla, r){
-  var esGer = ['gerente_general','gerencia_operativa'].includes(currentProfile?.rol);
+  var rol = currentProfile?.rol;
+  var esGG = rol === 'gerente_general';
+  var esGO = rol === 'gerencia_operativa';
   var esc = function(s){return String(s==null?'':s).replace(/</g,'&lt;');};
-  var com = r.comentario_gerencia, rev = r.revisado_por, revAt = r.revisado_at;
+  var com = r.comentario_gerencia;
   var html = '';
   if(com) html += '<div style="background:#FEF9E7;border-left:3px solid #B8963E;border-radius:6px;padding:5px 8px;font-size:11px;margin-bottom:4px;line-height:1.4"><strong>Gerencia:</strong> '+esc(com)+'</div>';
-  if(rev) html += '<div style="font-size:11px;color:#1F7A3D;font-weight:600">✔ Visto por '+esc(rev)+(revAt?(' · '+fmtDate(String(revAt).substring(0,10))):'')+'</div>';
-  if(esGer) html += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"><button onclick="_revGer(\''+tabla+'\',\''+r.id+'\','+(rev?'true':'false')+')" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 7px">'+(rev?'Quitar visto':'✔ Revisado')+'</button><button onclick="_revGerComentar(\''+tabla+'\',\''+r.id+'\')" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 7px">💬 '+(com?'Editar':'Comentar')+'</button></div>';
-  else if(!com && !rev) html += '<span style="color:#c2c8d0;font-size:11px">—</span>';
+  if(r.revisado_por && !r.visto_gg_por && !r.visto_go_por){
+    html += '<div style="font-size:10.5px;color:#8b94a1;font-style:italic;margin-bottom:2px">Visto anterior: '+esc(r.revisado_por)+(r.revisado_at?(' · '+fmtDate(String(r.revisado_at).substring(0,10))):'')+'</div>';
+  }
+  function linea(label, por, at, key, propio){
+    var chulo = por ? '✔' : '○';
+    var color = por ? '#1F7A3D' : '#c2c8d0';
+    var texto = por ? (esc(por)+(at?(' · '+fmtDate(String(at).substring(0,10))):'')) : label;
+    var btn = propio ? (' <button onclick="_revGer(\''+tabla+'\',\''+r.id+'\',\''+key+'\','+(por?'true':'false')+')" class="btn btn-outline btn-xs" style="font-size:9px;padding:1px 6px;margin-left:4px">'+(por?'Quitar':'Marcar')+'</button>') : '';
+    return '<div style="font-size:11px;color:'+color+';font-weight:'+(por?'600':'400')+'">'+chulo+' '+label+': '+texto+btn+'</div>';
+  }
+  if(esGG || esGO || r.visto_gg_por) html += linea('Gerencia General', r.visto_gg_por, r.visto_gg_at, 'gg', esGG);
+  if(esGG || esGO || r.visto_go_por) html += linea('Gerencia Operativa', r.visto_go_por, r.visto_go_at, 'go', esGO);
+  if(esGG || esGO) html += '<div style="margin-top:4px"><button onclick="_revGerComentar(\''+tabla+'\',\''+r.id+'\')" class="btn btn-outline btn-xs" style="font-size:10px;padding:2px 7px">💬 '+(com?'Editar':'Comentar')+'</button></div>';
+  else if(!com && !r.revisado_por && !r.visto_gg_por && !r.visto_go_por) html = '<span style="color:#c2c8d0;font-size:11px">—</span>';
   return html;
 };
-window._revGer = async function(tabla, id, ya){
-  var upd = ya ? { revisado_por:null, revisado_at:null } : { revisado_por:(currentProfile&&currentProfile.nombre)||'Gerencia', revisado_at:new Date().toISOString() };
+window._revGer = async function(tabla, id, which, ya){
+  var nombre = (currentProfile&&currentProfile.nombre)||'Gerencia';
+  var upd = which==='gg'
+    ? (ya ? { visto_gg_por:null, visto_gg_at:null } : { visto_gg_por:nombre, visto_gg_at:new Date().toISOString() })
+    : (ya ? { visto_go_por:null, visto_go_at:null } : { visto_go_por:nombre, visto_go_at:new Date().toISOString() });
   var r = await sb.from(tabla).update(upd).eq('id', id);
   if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
   showToast(ya?'Visto retirado':'✔ Marcado como revisado','success');
@@ -9583,7 +9607,7 @@ window.responderSolicitud = async function(id){
 window.eliminarSolicitud = async function(id){ if(!confirm('¿Eliminar esta solicitud?')) return; await sb.from('solicitudes').delete().eq('id',id); if(typeof showToast==='function') showToast('Eliminada','success'); if(typeof loadView==='function') loadView('solicitudes'); else renderSolicitudes(); };
 window.renderSolicitudes = async function(filtro){
   filtro=(filtro===undefined?(window._solFiltro||''):filtro); window._solFiltro=filtro;
-  var _cols='id,created_at,edificio,solicitante,dirigido_a,descripcion,prioridad,estado,tiene_imagen,adjuntos,respuesta,resuelto_at,comentario_gerencia,revisado_por,revisado_at';
+  var _cols='id,created_at,edificio,solicitante,dirigido_a,descripcion,prioridad,estado,tiene_imagen,adjuntos,respuesta,resuelto_at,comentario_gerencia,revisado_por,revisado_at,visto_gg_por,visto_gg_at,visto_go_por,visto_go_at';
   var res=await sb.from('solicitudes').select(_cols).eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(2000);
   if(res.error && /dirigido_a/.test(res.error.message||'')){ res=await sb.from('solicitudes').select(_cols.replace(',dirigido_a','')).eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(2000); }
   var rows=(res.data||[]).filter(function(r){ if(filtro==='dirigidas') return !!(r.dirigido_a&&String(r.dirigido_a).trim()); return !filtro || r.estado===filtro; });
@@ -11340,7 +11364,7 @@ window.renderComentariosGerencia = async function(filtro){
   // del numerito, se abre por defecto cuando hay pendientes, y el numerito lleva directo ahí.
   var _auto = (filtro===undefined && !window._cmFiltro);
   filtro=(filtro===undefined?(window._cmFiltro||''):filtro);
-  var res=await sb.from('novedades').select('id,fecha,area,apto,descripcion,comentarios,estado,comentario_gerencia,revisado_por,revisado_at').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(600);
+  var res=await sb.from('novedades').select('id,fecha,area,apto,descripcion,comentarios,estado,comentario_gerencia,revisado_por,revisado_at,visto_gg_por,visto_gg_at,visto_go_por,visto_go_at').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(600);
   // Los que cuenta el badge: el ÚLTIMO comentario de cada novedad, dirigido a alguien, que no escribí yo.
   var _pendientes=[];
   (res.data||[]).forEach(function(n){ var arr=Array.isArray(n.comentarios)?n.comentarios:[]; if(!arr.length) return; var last=arr[arr.length-1]; if(!last||!last.dirigido_a) return; if(!window._cmEsMio(last)) _pendientes.push({n:n, cm:last}); });
@@ -18814,7 +18838,7 @@ window._retroFixMayusculas = async function(){
   }
 
   var TARGETS = {
-    reservas: {nombre:'person', empresa:'company', firmante:'person', revisado_por:'person', cki_por:'person', cko_por:'person'},
+    reservas: {nombre:'person', empresa:'company', firmante:'person', revisado_por:'person', cki_por:'person', cko_por:'person', huespedes_extra:'person'},
     reservas_historial: {usuario:'person'},
     revisiones_apto: {revisado_por:'person'},
     saldos_aptos: {arrendatario:'person', empresa:'company'},
@@ -18827,7 +18851,7 @@ window._retroFixMayusculas = async function(){
     semana_seguimiento: {huesped:'person', nombre:'person', apellido1:'person', apellido2:'person'},
     consumos: {huesped:'person'},
     contratos: {arrendatario:'person'},
-    compras: {solicitante:'person', proveedor:'company'},
+    compras: {solicitante:'person', proveedor:'company', comprado_por:'person', vb_por:'person', entregado_por:'person'},
     mantenimiento: {tecnico:'person', solicitado_por:'person'},
     housekeeping: {camarera:'person', registrado_por:'person'},
     novedades: {reportado_por:'person', gestionado_por:'person'},
@@ -18838,11 +18862,11 @@ window._retroFixMayusculas = async function(){
     recibos_magnifique: {arrendatario:'person'},
     entrega_efectivos: {entregado_por:'person', recibido_por:'person', arrendatario:'person', administrador_entrega:'person'},
     visitantes: {nombre_visitante:'person', arrendatario_autoriza:'person'},
-    maletas: {huesped:'person', guardado_por:'person'},
+    maletas: {huesped:'person', guardado_por:'person', nombre:'person', apellido1:'person'},
     desayunos: {arrendatario:'person'},
     capsulas: {arrendatario:'person', entregado_por:'person'},
     prestamos_tec: {arrendatario:'person', entregado_por:'person'},
-    transportes: {persona:'person'},
+    transportes: {persona:'person', empresa:'company', asunto:'person'},
     requisiciones: {solicitado_por:'person'},
     seguimientos_turno: {responsable:'person'},
     tareas_fds: {responsable:'person'},
@@ -18850,6 +18874,16 @@ window._retroFixMayusculas = async function(){
     facturas: {cliente:'company', huesped:'person'},
     inventario: {producto:'person', proveedor:'company'},
     tes_proveedores: {nombre:'company'},
+    // Tablas nuevas agregadas en la auditoria completa v12 (Sol. Santiago): estaban totalmente
+    // afuera de la correccion, algunas al 100% en mayuscula (listado_cargos, prereg, revistas_nocturnas).
+    check_carpetas: {facturar_a:'company'},
+    facturacion: {titular:'person'},
+    firmas: {nombre:'person'},
+    listado_cargos: {arrendatario:'person'},
+    prereg: {nombre:'person', apellido1:'person', apellido2:'person', empresa:'company'},
+    proveedores: {nombre:'company'},
+    reembolsos: {empresa:'company'},
+    revistas_nocturnas: {responsable:'person'},
     profiles: {nombre:'person'},
     caja: {entregado_por:'person', recibido_por:'person'}
   };
@@ -18973,7 +19007,15 @@ window._retroFixMayusculas = async function(){
       contratos: ['observaciones'],
       control_personal: ['observaciones'],
       novedades: ['descripcion'],
-      housekeeping: ['observaciones']
+      housekeeping: ['observaciones'],
+      // Agregado en la auditoria completa v12 (Sol. Santiago): texto libre que quedo afuera.
+      compras: ['justificacion'],
+      paquetes: ['descripcion'],
+      reembolsos: ['descripcion'],
+      seguimientos_turno: ['detalle'],
+      tareas_fds: ['tarea'],
+      prestamos_tec: ['articulo'],
+      turnos: ['pendientes','notas']
     };
     for(var table2 in TARGETS_TEXTO){
       var cols2 = TARGETS_TEXTO[table2];
