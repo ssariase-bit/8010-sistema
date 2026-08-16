@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v8';
+const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v9';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v9', titulo:'Correccion retroactiva de mayusculas v9: la funcion solo estaba revisando UN edificio a la vez (Sol. Santiago)',
+    afecta:'rack, turnos, personal, mantenimiento, housekeeping, novedades, control_personal, contratos, transportes, prestamos_tec, maletas, entrega_efectivos, capsulas, caja, recibos_magnifique, check_carpetas, desayunos, listado_cargos, requisiciones, compras, inventario, saldos_aptos, cotizaciones, paquetes, consumos, semana_seguimiento, checklist_turnos y demas tablas de TABLAS_POR_EDIFICIO',
+    detalle:'Causa raiz de por que Santiago seguia viendo nombres en mayuscula despues de varias corridas "exitosas": el sistema tiene un interceptor (linea ~1044) que le agrega en silencio un filtro por edificio activo a todo sb.from(tabla).select() para ~30 tablas. window._retroFixMayusculas() usaba sb.from normal sin saberlo, asi que cada corrida SOLO revisaba y corregia el edificio que estuviera seleccionado en la pestaña en ese momento (8010 o Kubik, nunca los dos) -- el otro edificio quedaba intacto y el resumen no lo advertia. Se cambio para usar window._sbFromRaw (el acceso sin ese filtro) para que cada corrida cubra los dos edificios de una vez.' },
   { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v8', titulo:'Fix: dos errores reales encontrados en la corrida del celular (Sol. Santiago)',
     afecta:'tes_proveedores, profiles',
     detalle:'La corrida desde el celular mostro dos problemas concretos: (1) tes_proveedores daba ERROR porque el codigo pedia una columna "edificio" que esa tabla no tiene (no se usaba para nada, se quito del pedido); (2) profiles se marco 100% "bloqueada por permisos" sin intentar siquiera el propio nombre de quien la corre -- el codigo cortaba la tabla entera apenas el primer lote salia bloqueado, asumiendo que era un bloqueo de tabla completa como en turnos, pero en profiles el bloqueo es por fila (cada quien solo puede editar su propio perfil), no por tabla. Se quito ese corte anticipado: ahora se intentan todas las filas siempre (las bloqueadas responden rapido, no cuesta tiempo real), y el propio nombre de quien corre la funcion si debe quedar corregido.' },
@@ -18769,10 +18772,18 @@ window._retroFixMayusculas = async function(){
   function titleCaseFix(s, kind){
     return s.replace(TOK_RE, function(tok){ return transformToken(tok, kind); });
   }
+  // IMPORTANTE: se usa window._sbFromRaw (el "from" SIN el interceptor de edificio) en vez de
+  // sb.from directo. El sistema intercepta sb.from para ~30 tablas (rack, turnos, personal,
+  // mantenimiento, etc. — ver TABLAS_POR_EDIFICIO) y le agrega en silencio ".eq('edificio',
+  // EDIFICIO_ACTIVO)" a todo .select(). Eso significa que corriendo con sb.from normal, esta
+  // función SOLO revisaba/corregía el edificio que estuviera activo en la pestaña en ese momento
+  // -- el otro edificio (8010 o Kubik, el que no estuviera seleccionado) ni se tocaba, aunque el
+  // resumen no lo decía. Con _sbFromRaw se procesan las filas de AMBOS edificios en una sola corrida.
+  var _rawFrom = window._sbFromRaw || function(t){ return sb.from(t); };
   async function fetchAll(table, sel){
     var all = [], from = 0, page = 1000, guard = 0;
     while(guard++ < 40){
-      var q = await sb.from(table).select(sel).range(from, from+page-1);
+      var q = await _rawFrom(table).select(sel).range(from, from+page-1);
       if(q.error) return {error:q.error};
       var rows = q.data || [];
       all = all.concat(rows);
@@ -18785,11 +18796,13 @@ window._retroFixMayusculas = async function(){
   // .select('id') al final es clave: permite distinguir "se guardó" de "RLS lo bloqueó en
   // silencio" (Supabase/PostgREST responde 200 sin error aunque la política de seguridad haya
   // filtrado la fila y en realidad no se haya escrito nada — sin el .select() esto es invisible).
+  // (update/delete no pasan por el interceptor de edificio, así que aquí da igual usar _rawFrom o sb.from
+  // -- se usa _rawFrom por consistencia.)
   async function updWithRetry(table, id, changes){
-    var r = await sb.from(table).update(changes).eq('id', id).select('id');
+    var r = await _rawFrom(table).update(changes).eq('id', id).select('id');
     for(var attempt=1; attempt<=3 && r.error; attempt++){ // hasta 3 reintentos con espera breve
       await _sleep(250*attempt);
-      r = await sb.from(table).update(changes).eq('id', id).select('id');
+      r = await _rawFrom(table).update(changes).eq('id', id).select('id');
     }
     return r;
   }
