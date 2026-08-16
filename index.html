@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v9';
+const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v10';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v10', titulo:'Auditoria completa de mayusculas: se agrega caja (nombres) y texto libre en Formato Oracion (Sol. Santiago)',
+    afecta:'caja (entregado_por/recibido_por), caja.concepto, caja.observaciones, comunicaciones.mensaje y respuestas, contratos.observaciones, control_personal.observaciones, novedades.descripcion, housekeeping.observaciones',
+    detalle:'Auditoria completa pedida por Santiago tras revisar capturas reales de la app: encontro que la tabla caja nunca habia quedado incluida en la correccion (entregado_por/recibido_por seguian en mayuscula), y que varios campos de texto libre (concepto de caja, mensajes de Comunicaciones, observaciones) tambien estaban en mayuscula sostenida. Se agrego caja a la correccion de nombres normal. Para el texto libre se agrego una Fase 2 nueva: en vez de Formato Titulo (que se ve mal en una frase completa, ej. "Compra Suministros Eventos"), se usa Formato Oracion (mayuscula solo al inicio de cada oracion) y se restauran los nombres propios y siglas conocidas usando un diccionario armado con los nombres de personal ya corregidos, para no dejar nombres de personas en minuscula dentro del texto. comunicaciones.respuestas se maneja aparte por ser un arreglo JSON. Nota: en texto libre historico el resultado puede no ser perfecto en el 100% de los casos (un nombre propio no incluido en el diccionario podria quedar en minuscula) -- es mucho mejor que mayuscula sostenida pero no es infalible como si lo es la correccion de nombres en columnas dedicadas.' },
   { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v9', titulo:'Correccion retroactiva de mayusculas v9: la funcion solo estaba revisando UN edificio a la vez (Sol. Santiago)',
     afecta:'rack, turnos, personal, mantenimiento, housekeeping, novedades, control_personal, contratos, transportes, prestamos_tec, maletas, entrega_efectivos, capsulas, caja, recibos_magnifique, check_carpetas, desayunos, listado_cargos, requisiciones, compras, inventario, saldos_aptos, cotizaciones, paquetes, consumos, semana_seguimiento, checklist_turnos y demas tablas de TABLAS_POR_EDIFICIO',
     detalle:'Causa raiz de por que Santiago seguia viendo nombres en mayuscula despues de varias corridas "exitosas": el sistema tiene un interceptor (linea ~1044) que le agrega en silencio un filtro por edificio activo a todo sb.from(tabla).select() para ~30 tablas. window._retroFixMayusculas() usaba sb.from normal sin saberlo, asi que cada corrida SOLO revisaba y corregia el edificio que estuviera seleccionado en la pestaña en ese momento (8010 o Kubik, nunca los dos) -- el otro edificio quedaba intacto y el resumen no lo advertia. Se cambio para usar window._sbFromRaw (el acceso sin ese filtro) para que cada corrida cubra los dos edificios de una vez.' },
@@ -18740,7 +18743,7 @@ document.addEventListener('blur', function(e){
 // window._retroFixMayusculas() desde la consola del navegador (F12).
 window._retroFixMayusculas = async function(){
   if(!currentUser){ alert('Debes iniciar sesión primero.'); return; }
-  if(!confirm('Esto va a corregir a Formato Título los nombres/empresas en MAYÚSCULA sostenida en ~35 tablas del sistema (reservas, turnos, personal, mantenimiento, housekeeping, paquetes, visitantes, etc.). Es seguro correrlo aunque ya lo hayas corrido antes.\n\n¿Continuar?')) return;
+  if(!confirm('Esto va a corregir a Formato Título los nombres/empresas y a Formato Oración los textos libres (conceptos de caja, observaciones, mensajes) en MAYÚSCULA sostenida, en ~40 tablas del sistema, cubriendo los DOS edificios (8010 y Kubik) en una sola pasada. Es seguro correrlo aunque ya lo hayas corrido antes.\n\n¿Continuar?')) return;
 
   var ACRONYMS = ['SAS','SA','LTDA','LTD','LLC','INC','CORP','EU','SCA','SAC','PLC','GMBH','NV','BV','CIA','SL','SRL'];
   var OVERRIDES = {'LTM3':'LTM3','8I8':'8i8'};
@@ -18844,7 +18847,8 @@ window._retroFixMayusculas = async function(){
     facturas: {cliente:'company', huesped:'person'},
     inventario: {producto:'person', proveedor:'company'},
     tes_proveedores: {nombre:'company'},
-    profiles: {nombre:'person'}
+    profiles: {nombre:'person'},
+    caja: {entregado_por:'person', recibido_por:'person'}
   };
 
   var report = {};
@@ -18905,7 +18909,148 @@ window._retroFixMayusculas = async function(){
     report[table] = {ok:ok, fail:fail, blocked:blocked, tableBlocked:tableBlocked, colCounts:colCounts, restantes:restantes, errMsg:errMsg};
     console.log('[_retroFixMayusculas]', table, report[table]);
   }
-  console.log('=== RESUMEN CORRECCION MAYUSCULAS v4 ===', report);
+
+  // ═══════════════════════════════════════════════════════════
+  // FASE 2: texto libre (conceptos de caja, observaciones, mensajes de comunicaciones) —
+  // Formato Oración, NO Formato Título. Una frase completa en Formato Título se ve mal en
+  // español ("Compra Suministros Eventos" en vez de "Compra suministros eventos"), así que aquí
+  // se usa mayúscula solo al inicio de cada oración, resto en minúscula, y se restauran los
+  // nombres propios conocidos (personal/perfiles ya corregidos arriba) y las siglas, para no
+  // dejar por ejemplo "liliana" en vez de "Liliana" dentro del texto.
+  // ═══════════════════════════════════════════════════════════
+  var reportTexto = {};
+  try{
+    var nameDict = {};
+    (function(){
+      function addName(v){
+        if(typeof v !== 'string') return;
+        v.split(/[\s'\-\/.,()]+/).forEach(function(tok){
+          if(tok.length<2) return;
+          var up = tok.toUpperCase();
+          if(!nameDict[up]) nameDict[up] = transformToken(tok, 'person');
+        });
+      }
+      // Usa los datos ya corregidos por la Fase 1 en esta misma corrida (personal, nomina,
+      // profiles, control_personal, etc. via TARGETS) — no hace falta releerlos: se toman de
+      // los mismos "rows" ya en memoria si existieran, pero por simplicidad se reconstruyen
+      // rápido con los overrides/acronyms igual que la Fase 1.
+      window.__addNameToDict = addName;
+    })();
+    async function buildNameDict(){
+      var sources = [
+        ['personal',['nombre']], ['nomina',['nombre']], ['profiles',['nombre']],
+        ['control_personal',['nombre']], ['contratos',['arrendatario']],
+        ['housekeeping',['camarera']], ['mantenimiento',['tecnico']],
+        ['comunicaciones',['autor']], ['cotizaciones',['nombre']]
+      ];
+      for(var i=0;i<sources.length;i++){
+        var t = sources[i][0], cs = sources[i][1];
+        var r = await fetchAll(t, ['id'].concat(cs).join(','));
+        if(r.error) continue;
+        (r.data||[]).forEach(function(row){ cs.forEach(function(c){ window.__addNameToDict(row[c]); }); });
+      }
+    }
+    await buildNameDict();
+    var HONORIFICOS = {'SR':'Sr','SRA':'Sra','SRTA':'Srta','DR':'Dr','DRA':'Dra'}; // tratamientos comunes en el texto libre (ej. "Sr. Osuna") que deben quedar con mayúscula inicial, no en minúscula
+    function sentenceCaseFix(s){
+      var lower = s.toLowerCase();
+      var out = lower.replace(/(^\s*|[.!?]\s+)([a-záéíóúñü])/g, function(m,p,c){ return p+c.toUpperCase(); });
+      out = out.replace(TOK_RE, function(tok){
+        var up = tok.toUpperCase();
+        if(OVERRIDES[up]) return OVERRIDES[up];
+        if(ACRONYMS.indexOf(up)>=0) return up;
+        if(HONORIFICOS[up]) return HONORIFICOS[up];
+        if(nameDict[up]) return nameDict[up];
+        return tok;
+      });
+      return out;
+    }
+    var TARGETS_TEXTO = {
+      caja: ['concepto','observaciones'],
+      contratos: ['observaciones'],
+      control_personal: ['observaciones'],
+      novedades: ['descripcion'],
+      housekeeping: ['observaciones']
+    };
+    for(var table2 in TARGETS_TEXTO){
+      var cols2 = TARGETS_TEXTO[table2];
+      var sel2 = ['id'].concat(cols2).join(',');
+      var q3 = await fetchAll(table2, sel2);
+      if(q3.error){ reportTexto[table2] = {error:q3.error.message}; continue; }
+      var pending2 = [];
+      (q3.data||[]).forEach(function(row){
+        var changes2 = {};
+        cols2.forEach(function(c){
+          var v = row[c];
+          if(isShouting(v)){
+            var nv = sentenceCaseFix(v);
+            if(nv !== v) changes2[c] = nv;
+          }
+        });
+        if(Object.keys(changes2).length) pending2.push({id:row.id, changes:changes2});
+      });
+      var ok2=0, fail2=0, blocked2=0;
+      var BATCH2 = 15;
+      for(var bj=0; bj<pending2.length; bj+=BATCH2){
+        var batch2 = pending2.slice(bj, bj+BATCH2);
+        var results2 = await Promise.all(batch2.map(function(item){
+          return updWithRetry(table2, item.id, item.changes).then(function(r){ return {item:item,r:r}; });
+        }));
+        results2.forEach(function(res){
+          var r = res.r;
+          if(r.error) fail2++;
+          else if(!r.data || !r.data.length) blocked2++;
+          else ok2++;
+        });
+      }
+      var restantes2 = 0;
+      try{
+        var q4 = await fetchAll(table2, sel2);
+        if(!q4.error) (q4.data||[]).forEach(function(r2){ cols2.forEach(function(c){ if(isShouting(r2[c])) restantes2++; }); });
+      }catch(_e){}
+      reportTexto[table2+' (texto)'] = {ok:ok2, fail:fail2, blocked:blocked2, restantes:restantes2};
+    }
+
+    // Caso especial: comunicaciones.respuestas es un arreglo JSON (no una columna de texto
+    // simple), así que no encaja en el patrón genérico de arriba.
+    var qc = await fetchAll('comunicaciones', 'id,mensaje,respuestas');
+    var comOk=0, comFail=0, comBlocked=0;
+    if(!qc.error){
+      for(var ci=0; ci<(qc.data||[]).length; ci++){
+        var crow = qc.data[ci];
+        var cchanges = {};
+        if(isShouting(crow.mensaje)){
+          var nvm = sentenceCaseFix(crow.mensaje);
+          if(nvm !== crow.mensaje) cchanges.mensaje = nvm;
+        }
+        var respArr = crow.respuestas;
+        if(Array.isArray(respArr) && respArr.length){
+          var changedResp = false;
+          var newResp = respArr.map(function(resp){
+            if(resp && isShouting(resp.texto)){
+              var nvr = sentenceCaseFix(resp.texto);
+              if(nvr !== resp.texto){ changedResp = true; return Object.assign({}, resp, {texto: nvr}); }
+            }
+            return resp;
+          });
+          if(changedResp) cchanges.respuestas = newResp;
+        }
+        if(Object.keys(cchanges).length){
+          var updC = await updWithRetry('comunicaciones', crow.id, cchanges);
+          if(updC.error) comFail++;
+          else if(!updC.data || !updC.data.length) comBlocked++;
+          else comOk++;
+        }
+      }
+    }
+    reportTexto['comunicaciones (texto)'] = {ok:comOk, fail:comFail, blocked:comBlocked};
+  }catch(_eTexto){
+    reportTexto['fase2_texto_libre'] = {error: String(_eTexto)};
+    console.error('[_retroFixMayusculas] error en fase 2 (texto libre):', _eTexto);
+  }
+  Object.keys(reportTexto).forEach(function(k){ report[k] = reportTexto[k]; });
+
+  console.log('=== RESUMEN CORRECCION MAYUSCULAS v10 ===', report);
   // Resumen compacto: solo se listan tablas con actividad real o problemas; el resto (sin nada
   // que corregir) se colapsa en una sola línea para que el alert() no se corte visualmente.
   var conPendientes = [], conBloqueadas = [], conErrores = [], lineas = [], limpias = 0;
