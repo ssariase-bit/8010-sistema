@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v3';
+const APP_VERSION = '2026-08-16-retro-fix-mayusculas-v4';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v4', titulo:'Correccion retroactiva de mayusculas v4: mas reintentos, detecta bloqueos de permisos, resumen legible (Sol. Santiago)',
+    afecta:'turnos y en general todas las tablas cubiertas por window._retroFixMayusculas()',
+    detalle:'La v3 dejo turnos con 184 corregidas y 368 pendientes. Causas posibles: fallas transitorias de red, o que el permiso (RLS) de tu usuario bloquee en silencio el guardado de algunas filas (Supabase puede responder "sin error" aunque en realidad no haya escrito nada). v4: (1) sube los reintentos por fila de 1 a 3 con espera progresiva; (2) ahora se revisa explicitamente si el guardado devolvio la fila actualizada -- si no la devuelve, se cuenta como "bloqueada por permisos" en vez de darse por buena; (3) el resumen final ya no lista las ~35 tablas sin nada pendiente una por una (se cortaba en el alert) -- solo muestra las que tuvieron actividad o problemas.' },
   { fecha:'2026-08-16', version:'2026-08-16-retro-fix-mayusculas-v3', titulo:'Correccion retroactiva de mayusculas v3: ~30 tablas adicionales (Sol. Santiago)',
     afecta:'turnos, personal, nomina, rack, mantenimiento, housekeeping, novedades, puntos_fijos, control_personal, cotizaciones, paquetes, recibos_magnifique/bagatelle, entrega_efectivos, visitantes, maletas, desayunos, capsulas, prestamos_tec, transportes, requisiciones, seguimientos_turno, tareas_fds, checklist_turnos, facturas, inventario, tes_proveedores, contratos, compras, consumos, semana_seguimiento',
     detalle:'La primera pasada (15-16 ago) solo pudo revisar las tablas que la llave publica del sistema puede leer. Quedaron afuera ~30 tablas mas que estan protegidas hasta para lectura externa (ej. datos de personal, nomina, turnos) -- no es que no tuvieran el problema de mayuscula sostenida, es que no se podian ver desde afuera para saberlo. Se detecto porque quedaron nombres en mayuscula visibles en Turnos/Personal y Mantenimiento despues de la primera pasada. window._retroFixMayusculas() ahora cubre estas ~30 tablas adicionales, y quedo auto-verificable: al terminar cada tabla vuelve a leer los datos y confirma cuantos registros realmente quedaron corregidos (antes solo confiaba en que el guardado no diera error, que resulto ser insuficiente).' },
@@ -18766,9 +18769,16 @@ window._retroFixMayusculas = async function(){
     }
     return {data:all};
   }
+  function _sleep(ms){ return new Promise(function(res){ setTimeout(res, ms); }); }
+  // .select('id') al final es clave: permite distinguir "se guardó" de "RLS lo bloqueó en
+  // silencio" (Supabase/PostgREST responde 200 sin error aunque la política de seguridad haya
+  // filtrado la fila y en realidad no se haya escrito nada — sin el .select() esto es invisible).
   async function updWithRetry(table, id, changes){
-    var r = await sb.from(table).update(changes).eq('id', id);
-    if(r.error){ r = await sb.from(table).update(changes).eq('id', id); } // 1 reintento
+    var r = await sb.from(table).update(changes).eq('id', id).select('id');
+    for(var attempt=1; attempt<=3 && r.error; attempt++){ // hasta 3 reintentos con espera breve
+      await _sleep(250*attempt);
+      r = await sb.from(table).update(changes).eq('id', id).select('id');
+    }
     return r;
   }
 
@@ -18819,7 +18829,7 @@ window._retroFixMayusculas = async function(){
     var q = await fetchAll(table, sel);
     if(q.error){ report[table] = {error: q.error.message}; console.error(table, q.error); continue; }
     var rows = q.data || [];
-    var ok=0, fail=0, colCounts={}; cols.forEach(function(c){colCounts[c]=0;});
+    var ok=0, fail=0, blocked=0, colCounts={}, errMsg=null; cols.forEach(function(c){colCounts[c]=0;});
     for(var i=0;i<rows.length;i++){
       var row = rows[i];
       var changes = {};
@@ -18832,8 +18842,15 @@ window._retroFixMayusculas = async function(){
       });
       if(Object.keys(changes).length){
         var upd = await updWithRetry(table, row.id, changes);
-        if(upd.error){ fail++; console.error(table, row.id, upd.error); }
-        else { ok++; Object.keys(changes).forEach(function(c){colCounts[c]++;}); }
+        if(upd.error){
+          fail++; console.error(table, row.id, upd.error);
+          if(!errMsg) errMsg = upd.error.message || String(upd.error);
+        } else if(!upd.data || !upd.data.length){
+          // Sin error pero tampoco filas devueltas: RLS bloqueó el UPDATE en silencio.
+          blocked++; console.warn('[_retroFixMayusculas] bloqueado por RLS (sin error, 0 filas):', table, row.id);
+        } else {
+          ok++; Object.keys(changes).forEach(function(c){colCounts[c]++;});
+        }
       }
     }
     // Auto-verificación: vuelve a leer y cuenta lo que sigue en mayúscula (no confía ciegamente
@@ -18843,20 +18860,37 @@ window._retroFixMayusculas = async function(){
       var q2 = await fetchAll(table, sel);
       if(!q2.error){ (q2.data||[]).forEach(function(r2){ cols.forEach(function(c){ if(isShouting(r2[c])) restantes++; }); }); }
     }catch(_e){}
-    report[table] = {ok:ok, fail:fail, colCounts:colCounts, restantes:restantes};
+    report[table] = {ok:ok, fail:fail, blocked:blocked, colCounts:colCounts, restantes:restantes, errMsg:errMsg};
     console.log('[_retroFixMayusculas]', table, report[table]);
   }
   console.log('=== RESUMEN CORRECCION MAYUSCULAS v3 ===', report);
-  var conPendientes = [];
-  var resumen = Object.keys(report).map(function(t){
+  // Resumen compacto: solo se listan tablas con actividad real o problemas; el resto (sin nada
+  // que corregir) se colapsa en una sola línea para que el alert() no se corte visualmente.
+  var conPendientes = [], conBloqueadas = [], conErrores = [], lineas = [], limpias = 0;
+  Object.keys(report).forEach(function(t){
     var r = report[t];
-    if(r.error) return t+': ERROR '+r.error;
+    if(r.error){ conErrores.push(t+': '+r.error); lineas.push(t+': ERROR '+r.error); return; }
     if(r.restantes>0) conPendientes.push(t+' ('+r.restantes+')');
-    return t+': '+r.ok+' corregidas'+(r.fail?(' · '+r.fail+' fallidas'):'')+(r.restantes?(' · ⚠️ '+r.restantes+' restantes'):'');
-  }).join('\n');
-  var pie = conPendientes.length
-    ? ('\n\n⚠️ Estas tablas quedaron con mayúsculas pendientes: '+conPendientes.join(', ')+'. Vuelve a correr ?fixMayus2026 una vez más — normalmente con una segunda pasada se termina.')
-    : '\n\n✅ Verificado: no queda ningún nombre en mayúscula sostenida en ninguna de estas tablas.';
+    if(r.blocked>0) conBloqueadas.push(t+' ('+r.blocked+')');
+    var huboActividad = r.ok>0 || r.fail>0 || r.blocked>0 || r.restantes>0;
+    if(!huboActividad){ limpias++; return; }
+    lineas.push(t+': '+r.ok+' corregidas'
+      +(r.fail?(' · '+r.fail+' fallidas ('+r.errMsg+')'):'')
+      +(r.blocked?(' · 🔒 '+r.blocked+' bloqueadas por permisos'):'')
+      +(r.restantes?(' · ⚠️ '+r.restantes+' restantes'):''));
+  });
+  if(limpias>0) lineas.push('('+limpias+' tablas más sin nada pendiente ✅)');
+  var resumen = lineas.join('\n');
+  var pie = '';
+  if(conBloqueadas.length){
+    pie += '\n\n🔒 Estas tablas tienen filas que tu usuario no tiene permiso de modificar (bloqueo de seguridad, no error técnico): '+conBloqueadas.join(', ')+'. Esto hay que revisarlo conmigo, no se arregla solo con reintentar.';
+  }
+  if(conPendientes.length){
+    pie += '\n\n⚠️ Estas tablas quedaron con mayúsculas pendientes: '+conPendientes.join(', ')+'. Vuelve a correr ?fixMayus2026 una vez más — normalmente con una segunda pasada se termina.';
+  }
+  if(!pie){
+    pie = '\n\n✅ Verificado: no queda ningún nombre en mayúscula sostenida en ninguna de estas tablas.';
+  }
   alert('Corrección completada:\n\n'+resumen+pie+'\n\nDetalle completo en la consola del navegador (F12).');
   return report;
 };
