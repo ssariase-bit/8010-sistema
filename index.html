@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-17-resuelve-solicitudes-v20';
+const APP_VERSION = '2026-08-17-atelier-guardado-v21';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-17', version:'2026-08-17-atelier-guardado-v21', titulo:'Atelier y Reposición de Aptos: el guardado automático fallaba en silencio (Sol. Nancy, KL)',
+    afecta:'window._atSave (Atelier), window._rpSave (Reposición de Aptos)',
+    detalle:'Sol. Nancy (17-ago-2026, KL, con captura de pantalla): registró una reserva de Atelier (evento Motorola, 14-15 de agosto) y no quedó guardada — el módulo seguía mostrando "0 reservas". Causa encontrada: el guardado automático (debounced, 500ms) llamaba a sb.from(\'config\').upsert(...) sin esperar la respuesta (sin await) y sin mostrar ningún aviso si fallaba — un error real de Supabase se perdía en silencio. Se confirmó en vivo que la fila "atelier_kubik" nunca se había creado en la tabla config: ningún guardado de Atelier había funcionado nunca. Se corrige para que ahora se espere la respuesta y, si falla, se muestre un aviso claro en pantalla con el motivo. Se encontró y corrigió el mismo problema en Reposición de Aptos (mismo patrón). Pendiente: pedirle a Nancy que reintente la reserva del evento Motorola para ver el aviso de error real y terminar de diagnosticar la causa de fondo (probablemente un permiso de la tabla config).' },
   { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v20', titulo:'Carlos Jiménez (ex-Kubik) seguía apareciendo en los selectores de personal (Sol. Juanita Noguera)',
     afecta:'personal.estado (Carlos Andrés Jiménez, Kubik), selectores de personal en tareas_fds, el desplegable transversal (responsable/entregado/recibido/encargado/asignado/revisado/realiza/autoriza/solicita) y la Calculadora de Recargos',
     detalle:'Sol. Juanita Noguera (hallazgo aa545413): pidió retirar a un ex-compañero, Carlos Andrés Jiménez, de los selectores. Se encontró que su registro en la tabla personal de Kubik seguía con estado "Activo" — se cambia a "Inactivo" (no se borra el registro ni se toca su cargo, para no afectar el histórico de control_personal/turnos donde aparece legítimamente). Además se encontraron 3 selectores de personal que no filtraban por estado (a diferencia de otros que ya lo hacían bien): el de "Responsable" en Tareas de Fin de Semana, el desplegable transversal más usado del sistema (aplica a cualquier campo de responsable/entregado/recibido/encargado/asignado/revisado/realiza/autoriza/solicita), y el de la Calculadora de Recargos — los tres ya excluyen personal inactivo. Con esto, marcar a alguien como Inactivo en Personal lo retira de TODOS los selectores del sistema, no solo de algunos.' },
@@ -2510,7 +2513,11 @@ window.renderFlujoSemanal=async function(){
     try{var r=await sb.from('config').select('valor').eq('id',KEY).maybeSingle();if(r.data&&r.data.valor){var o=JSON.parse(r.data.valor);return (o&&o.items)?o.items:[];}}catch(e){}
     return [];
   };
-  window._atSave=function(){clearTimeout(window._atT);window._atT=setTimeout(function(){try{sb.from('config').upsert({id:KEY,valor:JSON.stringify({items:window._atSt.items}),updated_at:new Date().toISOString()});}catch(e){}},500);};
+  // Sol. Sebastián/Nancy (17-ago-2026, KL): una reserva de Atelier (evento Motorola) no quedó
+  // guardada y nadie se enteró — el guardado automático fallaba en silencio (sin await, sin
+  // mostrar el error). Ahora se espera la respuesta y, si falla, se avisa en pantalla en vez
+  // de perder el cambio sin decir nada.
+  window._atSave=function(){clearTimeout(window._atT);window._atT=setTimeout(async function(){try{var _r=await sb.from('config').upsert({id:KEY,valor:JSON.stringify({items:window._atSt.items}),updated_at:new Date().toISOString()});if(_r&&_r.error){if(typeof showToast==='function') showToast('⚠️ No se pudo guardar Atelier: '+(_r.error.message||'error desconocido'),'error');}}catch(e){if(typeof showToast==='function') showToast('⚠️ No se pudo guardar Atelier: '+(e&&e.message?e.message:e),'error');}},500);};
   window._atFind=function(id){var st=window._atSt;if(!st)return null;for(var i=0;i<st.items.length;i++)if(st.items[i].id===id)return st.items[i];return null;};
   window._atSet=function(id,campo,val){var it=window._atFind(id);if(!it)return;it[campo]=val;window._atSave();if(campo==='valor_sala'||campo==='valor_consumos'||campo==='estado')window._atTot();};
   window._atAdd=function(){var st=window._atSt;if(!st)return;st.items.push({id:_uid(),fecha:'',fecha_fin:'',cliente:'',desde:'',hasta:'',valor_sala:0,proveedor:'Bagatelle',valor_consumos:0,estado:'Tentativa',obs:''});window._atSave();window._atRenderOnly();};
@@ -2595,7 +2602,8 @@ window.renderFlujoSemanal=async function(){
     try{var r=await sb.from('config').select('valor').eq('id',window._rpKey(ed)).maybeSingle();if(r.data&&r.data.valor){var o=JSON.parse(r.data.valor);return (o&&o.items)?o.items:[];}}catch(e){}
     return [];
   };
-  window._rpSave=function(){clearTimeout(window._rpT);window._rpT=setTimeout(function(){try{var st=window._rpSt;sb.from('config').upsert({id:window._rpKey(st.ed),valor:JSON.stringify({items:st.items}),updated_at:new Date().toISOString()});}catch(e){}},500);};
+  // Mismo bug que Atelier (17-ago-2026): guardado automático sin await ni aviso de error.
+  window._rpSave=function(){clearTimeout(window._rpT);window._rpT=setTimeout(async function(){try{var st=window._rpSt;var _r=await sb.from('config').upsert({id:window._rpKey(st.ed),valor:JSON.stringify({items:st.items}),updated_at:new Date().toISOString()});if(_r&&_r.error){if(typeof showToast==='function') showToast('⚠️ No se pudo guardar Reposición: '+(_r.error.message||'error desconocido'),'error');}}catch(e){if(typeof showToast==='function') showToast('⚠️ No se pudo guardar Reposición: '+(e&&e.message?e.message:e),'error');}},500);};
   window._rpFind=function(id){var st=window._rpSt;if(!st)return null;for(var i=0;i<st.items.length;i++)if(st.items[i].id===id)return st.items[i];return null;};
   window._rpSet=function(id,campo,val){var it=window._rpFind(id);if(!it)return;it[campo]=val;window._rpSave();if(campo==='cantidad')window._rpTot();};
   window._rpAdd=function(){var st=window._rpSt;if(!st)return;st.items.push({id:_uid(),fecha:'',articulo:'',apto:'',cantidad:1,responsable:'',notas:''});window._rpSave();window.renderReposicion(true);};
