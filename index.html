@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-17-atelier-guardado-v21';
+const APP_VERSION = '2026-08-17-atelier-categoria-propia-v22';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-17', version:'2026-08-17-atelier-categoria-propia-v22', titulo:'Dashboard (KL): Atelier ya no aparece mezclado dentro de "Salas de juntas" (Sol. Santiago)',
+    afecta:'renderDashboard() — Ventas del mes por categoría',
+    detalle:'Sol. Santiago: Atelier (sala del último piso) y Sala de Juntas (primer piso) son dos espacios físicos distintos, y en el Dashboard el valor de Atelier se sumaba dentro de la categoría "Salas de juntas" (y su consumo dentro de "Alimentación/consumos de eventos"), lo cual mezclaba las dos cosas. Se corrige: Atelier ahora tiene su propia categoría "🎨 Atelier (último piso)" en la tabla de Ventas del mes (solo visible en Kubik), con su propio detalle al hacer clic. "Salas de juntas" se renombra a "Salas de juntas (primer piso)" para que quede claro que ya no incluye Atelier. El total general no cambia, solo se reparte distinto entre categorías.' },
   { fecha:'2026-08-17', version:'2026-08-17-atelier-guardado-v21', titulo:'Atelier y Reposición de Aptos: el guardado automático fallaba en silencio (Sol. Nancy, KL)',
     afecta:'window._atSave (Atelier), window._rpSave (Reposición de Aptos)',
     detalle:'Sol. Nancy (17-ago-2026, KL, con captura de pantalla): registró una reserva de Atelier (evento Motorola, 14-15 de agosto) y no quedó guardada — el módulo seguía mostrando "0 reservas". Causa encontrada: el guardado automático (debounced, 500ms) llamaba a sb.from(\'config\').upsert(...) sin esperar la respuesta (sin await) y sin mostrar ningún aviso si fallaba — un error real de Supabase se perdía en silencio. Se confirmó en vivo que la fila "atelier_kubik" nunca se había creado en la tabla config: ningún guardado de Atelier había funcionado nunca. Se corrige para que ahora se espere la respuesta y, si falla, se muestre un aviso claro en pantalla con el motivo. Se encontró y corrigió el mismo problema en Reposición de Aptos (mismo patrón). Pendiente: pedirle a Nancy que reintente la reserva del evento Motorola para ver el aviso de error real y terminar de diagnosticar la causa de fondo (probablemente un permiso de la tabla config).' },
@@ -3742,7 +3745,7 @@ async function renderDashboard() {
 
   // ── VENTAS DEL MES POR CATEGORÍA (neto, sin impuestos) ────
   // Alojamiento = rack (ventasMes). Las demás vienen de sus módulos.
-  let vSalas=0, vEvAlim=0, vConsumos=0, vOtros=0;
+  let vSalas=0, vEvAlim=0, vConsumos=0, vOtros=0, vAtelier=0;
   let _evd=[], _cod=[], _lcd=[], _atd=[];
   try{
     const [evRes, coRes, lcRes, atRes] = await Promise.all([
@@ -3759,13 +3762,17 @@ async function renderDashboard() {
         _atd = ((_ato && _ato.items) ? _ato.items : []).filter(x=>x.estado!=='Cancelada' && x.fecha>=monthStart && x.fecha<=monthEnd);
       }
     }catch(e){}
-    vSalas    = _evd.reduce((s,x)=>s+(Number(x.val_sala)||0),0) + _lcd.reduce((s,x)=>s+(Number(x.salas)||0),0) + _atd.reduce((s,x)=>s+(Number(x.valor_sala)||0),0);
-    vEvAlim   = _evd.reduce((s,x)=>s+(Number(x.val_alimentacion)||0)+(Number(x.val_consumos)||0),0) + _atd.reduce((s,x)=>s+(Number(x.valor_consumos)||0),0);
+    // Sol. Santiago (17-ago-2026, KL): Atelier (último piso) y Salas de juntas (primer piso) son
+    // dos espacios físicos distintos — Atelier NO debe sumarse dentro de "Salas de juntas", tiene
+    // su propia categoría en el Dashboard.
+    vSalas    = _evd.reduce((s,x)=>s+(Number(x.val_sala)||0),0) + _lcd.reduce((s,x)=>s+(Number(x.salas)||0),0);
+    vEvAlim   = _evd.reduce((s,x)=>s+(Number(x.val_alimentacion)||0)+(Number(x.val_consumos)||0),0);
+    vAtelier  = _atd.reduce((s,x)=>s+(Number(x.valor_sala)||0)+(Number(x.valor_consumos)||0),0);
     vConsumos = _cod.reduce((s,x)=>s+(Number(x.valor)||0),0);
     vOtros    = _lcd.reduce((s,x)=>s+(Number(x.minibar)||0)+(Number(x.varios)||0)+(Number(x.lavanderia)||0)+(Number(x.transporte)||0),0);
   }catch(_e){}
   const vAlojamiento = ventasMes;
-  const vTotalCat = vAlojamiento + vSalas + vEvAlim + vConsumos + vOtros;
+  const vTotalCat = vAlojamiento + vSalas + vEvAlim + vAtelier + vConsumos + vOtros;
 
   // ── DETALLE DE VENTAS (Sol Santiago: clic en cada línea para ver de qué se compone) ──
   (function(){
@@ -3778,15 +3785,17 @@ async function renderDashboard() {
       _gA[k].noches++; _gA[k].valor += Number(r.tarifa)||0;
     });
     const aloj = Object.values(_gA).map(v=>({ desc:v.desc, sub:v.sub+' · '+v.noches+' noche'+(v.noches>1?'s':'')+' × $'+fmtNum(Math.round(v.valor/v.noches)), valor:v.valor }));
-    // Salas: eventos (val_sala) + listado de cargos (salas) + Atelier (valor_sala)
+    // Salas de juntas (primer piso): eventos (val_sala) + listado de cargos (salas). Atelier
+    // (último piso) es un espacio distinto — tiene su propia categoría, ver "atelier" abajo.
     const salas = [];
     _evd.forEach(x=>{ const v=Number(x.val_sala)||0; if(v>0) salas.push({ desc:_evNom(x), sub:'Evento · '+(x.fecha_inicio||'').split('T')[0], valor:v }); });
     _lcd.forEach(x=>{ const v=Number(x.salas)||0; if(v>0) salas.push({ desc:'Sala — Apto '+(x.apto||'—'), sub:'Listado de cargos · '+(x.fecha||''), valor:v }); });
-    _atd.forEach(x=>{ const v=Number(x.valor_sala)||0; if(v>0) salas.push({ desc:(x.cliente||'Atelier'), sub:'Atelier · '+(x.fecha||'')+(x.fecha_fin?' a '+x.fecha_fin:''), valor:v }); });
-    // Alimentación / consumos de eventos (incluye consumos de Atelier, p.ej. Bagatelle)
+    // Alimentación / consumos de eventos
     const evalim = [];
     _evd.forEach(x=>{ const v=(Number(x.val_alimentacion)||0)+(Number(x.val_consumos)||0); if(v>0) evalim.push({ desc:_evNom(x), sub:'Evento · '+(x.fecha_inicio||'').split('T')[0], valor:v }); });
-    _atd.forEach(x=>{ const v=Number(x.valor_consumos)||0; if(v>0) evalim.push({ desc:(x.cliente||'Atelier')+' — '+(x.proveedor||'Consumo'), sub:'Atelier · '+(x.fecha||''), valor:v }); });
+    // Atelier (último piso, Kubik): sala + consumos juntos, categoría propia
+    const atelier = [];
+    _atd.forEach(x=>{ const vs=Number(x.valor_sala)||0, vc=Number(x.valor_consumos)||0; if(vs>0) atelier.push({ desc:(x.cliente||'Atelier')+' — Sala', sub:'Atelier · '+(x.fecha||'')+(x.fecha_fin?' a '+x.fecha_fin:''), valor:vs }); if(vc>0) atelier.push({ desc:(x.cliente||'Atelier')+' — '+(x.proveedor||'Consumo'), sub:'Atelier · '+(x.fecha||''), valor:vc }); });
     // Consumos de huéspedes
     const consumos = _cod.filter(x=>(Number(x.valor)||0)>0).map(x=>({ desc:(x.huesped||'Sin nombre'), sub:'Apto '+(x.apto||'—')+' · '+(x.fecha||''), valor:Number(x.valor)||0 }));
     // Otros cargos (desglosado por tipo)
@@ -3800,8 +3809,9 @@ async function renderDashboard() {
     const _ord = a => a.sort((p,q)=>q.valor-p.valor);
     window._dashDet = {
       aloj:     { titulo:'🛏️ Alojamiento',  color:'#1F7A3D', fuente:'Rack — tarifa cobrada por noche', items:_ord(aloj) },
-      salas:    { titulo:'🤝 Salas de juntas', color:'#1D3461', fuente:'Eventos + Listado de cargos + Atelier', items:_ord(salas) },
-      evalim:   { titulo:'🍽️ Alimentación / consumos de eventos', color:'#7C3AED', fuente:'Módulo Eventos + Atelier', items:_ord(evalim) },
+      salas:    { titulo:'🤝 Salas de juntas (primer piso)', color:'#1D3461', fuente:'Eventos + Listado de cargos', items:_ord(salas) },
+      evalim:   { titulo:'🍽️ Alimentación / consumos de eventos', color:'#7C3AED', fuente:'Módulo Eventos', items:_ord(evalim) },
+      atelier:  { titulo:'🎨 Atelier (último piso)', color:'#0f766e', fuente:'Módulo Atelier', items:_ord(atelier) },
       consumos: { titulo:'🧴 Consumos de huéspedes', color:'#B8963E', fuente:'Módulo Consumos', items:_ord(consumos) },
       otros:    { titulo:'📋 Otros cargos', color:'#92400E', fuente:'Listado de cargos', items:_ord(otros) },
     };
@@ -3912,8 +3922,9 @@ async function renderDashboard() {
           </tr></thead>
           <tbody>
             ${_catRow('🛏️ Alojamiento', vAlojamiento, '#1F7A3D', 'aloj')}
-            ${_catRow('🤝 Salas de juntas', vSalas, '#1D3461', 'salas')}
+            ${_catRow('🤝 Salas de juntas (primer piso)', vSalas, '#1D3461', 'salas')}
             ${_catRow('🍽️ Alimentación / consumos de eventos', vEvAlim, '#7C3AED', 'evalim')}
+            ${EDIFICIO_ACTIVO==='kubik' ? _catRow('🎨 Atelier (último piso)', vAtelier, '#0f766e', 'atelier') : ''}
             ${_catRow('🧴 Consumos de huéspedes', vConsumos, '#B8963E', 'consumos')}
             ${_catRow('📋 Otros cargos (minibar, varios, lavandería, transporte)', vOtros, '#92400E', 'otros')}
           </tbody>
