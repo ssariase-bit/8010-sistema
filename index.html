@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-17-resuelve-solicitudes-v19';
+const APP_VERSION = '2026-08-17-resuelve-solicitudes-v20';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v20', titulo:'Carlos Jiménez (ex-Kubik) seguía apareciendo en los selectores de personal (Sol. Juanita Noguera)',
+    afecta:'personal.estado (Carlos Andrés Jiménez, Kubik), selectores de personal en tareas_fds, el desplegable transversal (responsable/entregado/recibido/encargado/asignado/revisado/realiza/autoriza/solicita) y la Calculadora de Recargos',
+    detalle:'Sol. Juanita Noguera (hallazgo aa545413): pidió retirar a un ex-compañero, Carlos Andrés Jiménez, de los selectores. Se encontró que su registro en la tabla personal de Kubik seguía con estado "Activo" — se cambia a "Inactivo" (no se borra el registro ni se toca su cargo, para no afectar el histórico de control_personal/turnos donde aparece legítimamente). Además se encontraron 3 selectores de personal que no filtraban por estado (a diferencia de otros que ya lo hacían bien): el de "Responsable" en Tareas de Fin de Semana, el desplegable transversal más usado del sistema (aplica a cualquier campo de responsable/entregado/recibido/encargado/asignado/revisado/realiza/autoriza/solicita), y el de la Calculadora de Recargos — los tres ya excluyen personal inactivo. Con esto, marcar a alguien como Inactivo en Personal lo retira de TODOS los selectores del sistema, no solo de algunos.' },
   { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v19', titulo:'Pre-Registro / Datos arrendatarios: ajustes al formulario público, menú y diagnóstico del documento que no aparecía (Sol. Sebastián/Luis Guzmán, seguimiento a "Resuelve todas")',
     afecta:'Formulario público de pre-registro (_pregBootPublico/_pregEnviarPublico), menú de gerente_general (NAV_ITEMS), módulo "Datos arrendatarios"',
     detalle:'Sol. Sebastián (f5a5d5b6/c9c1ee75) — revisión completa de la propuesta detallada que mandó para el link de pre-registro: (1) "Empresa a facturar" ya era opcional, no se pedía cambio. (2) Se quitó el campo "Forma de pago" del formulario público (y el de "a quién se paga", que ya no existía como campo aparte) — el huésped no necesariamente conoce esa información y las ejecutivas ya la tienen por la reserva; el dato histórico ya guardado no se toca. (3) Contacto de emergencia se mantiene, ya existía. (4) Acompañantes: ya se rellenan aparte (nombre/documento por cada uno) según adultos/niños indicados — ya estaba implementado. (5) El módulo para consultar esta información ya existía ("Datos arrendatarios"). (6) Subida del documento: ya existía la opción, pero tenía el bug de db44e5be (ver abajo). (7) Se movió "Datos arrendatarios" a la sección Principal del menú de Gerencia General — en Gerencia Operativa y en el menú completo ya estaba ahí; solo faltaba en ese rol. // BUG (Sol. Luis Guzmán, hallazgo db44e5be): en las pruebas, el documento se seleccionaba pero nunca quedaba guardado en el SO. Se confirmó en vivo que el resto de los datos del registro de prueba de Sebastián llegaron completos, pero con el campo del documento vacío — el error real de la subida se estaba tragando en silencio (a propósito, para no bloquear el envío si fallaba solo la foto). La causa más probable es que el bucket de Storage no tiene permiso de subida para usuarios sin sesión (el formulario público no requiere login, a diferencia de todo el resto del sistema) — necesita una política nueva en Supabase que Santiago debe crear desde el SQL Editor (no se puede hacer desde la app; ver mensaje aparte con el SQL exacto). Mientras tanto, ya no se traga el error: si la subida del documento falla, el huésped ve un aviso en pantalla en vez de creer que quedó todo guardado.' },
@@ -7998,8 +8001,10 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
   if (tabla === 'tareas_fds') {
     (async () => {
       try {
-        const pe = await sb.from('personal').select('nombre');
-        const nombres = [...new Set([...(EB().camareras||[]), ...((pe.data||[]).map(x=>x.nombre))].filter(Boolean))].sort((a,b)=>String(a).localeCompare(b));
+        const pe = await sb.from('personal').select('nombre,estado');
+        // Sol. Juanita Noguera (17-ago-2026, aa545413): personal inactivo (ex-empleados) seguía
+        // apareciendo en los selectores del personal — este era uno de los que faltaba filtrar.
+        const nombres = [...new Set([...(EB().camareras||[]), ...((pe.data||[]).filter(x=>x.estado!=='Inactivo').map(x=>x.nombre))].filter(Boolean))].sort((a,b)=>String(a).localeCompare(b));
         const inp = document.getElementById('gf-responsable');
         if (inp){ let dl=document.getElementById('dl-fds-resp'); if(!dl){dl=document.createElement('datalist');dl.id='dl-fds-resp';inp.parentNode.appendChild(dl);} dl.innerHTML=nombres.map(n=>`<option value="${String(n).replace(/"/g,'&quot;')}">`).join(''); inp.setAttribute('list','dl-fds-resp'); inp.setAttribute('autocomplete','off'); inp.setAttribute('placeholder','Escribe o elige del personal'); }
       } catch(e){}
@@ -8094,8 +8099,12 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
       var _campos = Array.prototype.slice.call(document.querySelectorAll('#main-content input[type="text"], #main-content input:not([type])'))
         .filter(function(e){ return /responsable|entregado|entrego|recibido|recibio|recibe|encargado|asignado|revisado|realiza|autoriza|solicita/i.test(e.id||''); });
       if(!_campos.length) return;
-      var _pe = await sb.from('personal').select('nombre').limit(800);
-      var _nombres = [...new Set([].concat(EB().camareras||[], ((_pe.data)||[]).map(function(x){return x.nombre;})).filter(Boolean))].sort(function(a,b){return String(a).localeCompare(b);});
+      var _pe = await sb.from('personal').select('nombre,estado').limit(800);
+      // Sol. Juanita Noguera (17-ago-2026, aa545413): personal inactivo (ex-empleados) seguía
+      // apareciendo en este selector (el más usado — aplica a responsable/entregado/recibido/
+      // encargado/asignado/revisado/realiza/autoriza/solicita en TODO el sistema).
+      var _pe_activos = ((_pe.data)||[]).filter(function(x){ return x.estado!=='Inactivo'; });
+      var _nombres = [...new Set([].concat(EB().camareras||[], _pe_activos.map(function(x){return x.nombre;})).filter(Boolean))].sort(function(a,b){return String(a).localeCompare(b);});
       if(!_nombres.length) return;
       var _dl = document.getElementById('dl-personal-gen');
       if(!_dl){ _dl=document.createElement('datalist'); _dl.id='dl-personal-gen'; document.body.appendChild(_dl); }
@@ -12306,7 +12315,8 @@ async function tablaControlPersonal(fechaSel) {
 
 async function calcRecargos(){
   var hoy=new Date(); var D=(hoy>=new Date('2026-07-01'))?0.90:0.80;
-  var _pers=[]; try{ var _pr=await sb.from('personal').select('nombre,salario').order('nombre'); _pers=(_pr.data||[]).filter(function(p){return p.nombre;}); }catch(e){}
+  // Sol. Juanita Noguera (17-ago-2026, aa545413): excluye personal inactivo del selector.
+  var _pers=[]; try{ var _pr=await sb.from('personal').select('nombre,salario,estado').order('nombre'); _pers=(_pr.data||[]).filter(function(p){return p.nombre && p.estado!=='Inactivo';}); }catch(e){}
   var _empOpts='<option value="0">— Selecciona empleado (carga su salario) —</option>'+_pers.map(function(p){return '<option value="'+(Number(p.salario)||0)+'">'+String(p.nombre).replace(/</g,'&lt;')+(Number(p.salario)>0?'':' (sin salario)')+'</option>';}).join('');
   var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite ventanas emergentes','error'); return; }
   var html=`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Calculadora de recargos</title>
