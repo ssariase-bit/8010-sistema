@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-17-resuelve-solicitudes-v18';
+const APP_VERSION = '2026-08-17-resuelve-solicitudes-v19';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v19', titulo:'Pre-Registro / Datos arrendatarios: ajustes al formulario público, menú y diagnóstico del documento que no aparecía (Sol. Sebastián/Luis Guzmán, seguimiento a "Resuelve todas")',
+    afecta:'Formulario público de pre-registro (_pregBootPublico/_pregEnviarPublico), menú de gerente_general (NAV_ITEMS), módulo "Datos arrendatarios"',
+    detalle:'Sol. Sebastián (f5a5d5b6/c9c1ee75) — revisión completa de la propuesta detallada que mandó para el link de pre-registro: (1) "Empresa a facturar" ya era opcional, no se pedía cambio. (2) Se quitó el campo "Forma de pago" del formulario público (y el de "a quién se paga", que ya no existía como campo aparte) — el huésped no necesariamente conoce esa información y las ejecutivas ya la tienen por la reserva; el dato histórico ya guardado no se toca. (3) Contacto de emergencia se mantiene, ya existía. (4) Acompañantes: ya se rellenan aparte (nombre/documento por cada uno) según adultos/niños indicados — ya estaba implementado. (5) El módulo para consultar esta información ya existía ("Datos arrendatarios"). (6) Subida del documento: ya existía la opción, pero tenía el bug de db44e5be (ver abajo). (7) Se movió "Datos arrendatarios" a la sección Principal del menú de Gerencia General — en Gerencia Operativa y en el menú completo ya estaba ahí; solo faltaba en ese rol. // BUG (Sol. Luis Guzmán, hallazgo db44e5be): en las pruebas, el documento se seleccionaba pero nunca quedaba guardado en el SO. Se confirmó en vivo que el resto de los datos del registro de prueba de Sebastián llegaron completos, pero con el campo del documento vacío — el error real de la subida se estaba tragando en silencio (a propósito, para no bloquear el envío si fallaba solo la foto). La causa más probable es que el bucket de Storage no tiene permiso de subida para usuarios sin sesión (el formulario público no requiere login, a diferencia de todo el resto del sistema) — necesita una política nueva en Supabase que Santiago debe crear desde el SQL Editor (no se puede hacer desde la app; ver mensaje aparte con el SQL exacto). Mientras tanto, ya no se traga el error: si la subida del documento falla, el huésped ve un aviso en pantalla en vez de creer que quedó todo guardado.' },
   { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v18', titulo:'Requisiciones pendientes: el correo ahora sale con el mismo estilo de los demás informes (Sol. Sebastián, seguimiento a "Resuelve todas")',
     afecta:'window._reqEnviarPendientes() (Requisiciones · botón "Enviar solo lo PENDIENTE")',
     detalle:'Sol. Sebastián (hallazgo 6485a582): el botón "📧 Enviar solo lo PENDIENTE" armaba un mailto: en texto plano, sin el membrete ni el formato de los demás correos automáticos del sistema (Rack, Novedades, Camareras, etc.). Se cambió para que use el mismo mecanismo (_informeHTML + enviarInformeCorreo, vía la función enviar-informe): mismo membrete de la empresa, mismo estilo de tabla/lista, y de paso queda con copia automática a recepción como el resto de los informes.' },
@@ -1201,10 +1204,13 @@ const NAV_ITEMS = {
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'informe-ejecutivo', icon: '📈', label: 'Informe Ejecutivo' },
     { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
+    // Sol. Sebastián (17-ago-2026, c9c1ee75): pidió que "Datos arrendatarios" quedara en la
+    // sección Principal (ya estaba así en gerencia_operativa y en MENU_COMPLETO; solo faltaba
+    // en gerente_general, donde estaba bajo Operación).
+    { id: 'datos-arrendatarios-list', icon: '🛂', label: 'Datos arrendatarios' },
     { section: 'Operación' },
     { id: 'nueva-reserva', icon: '➕', label: 'Nueva Reserva' },
     { id: 'reservas', icon: '📋', label: 'Reservas' },
-    { id: 'datos-arrendatarios-list', icon: '🛂', label: 'Datos arrendatarios' },
     { id: 'solicitudes', icon: '📨', label: 'Solicitudes' },
     { id: 'comentarios', icon: '💬', label: 'Comentarios' },
     { id: 'turno-form', icon: '📝', label: 'Informe de Turno' },
@@ -18725,7 +18731,6 @@ function _pregBootPublico(){
           '<div style="flex:1">'+_pregSelect('Motivo del viaje','_pregp-mot',['Turismo','Trabajo','Evento','Otro'])+'</div>' +
         '</div>' +
         _pregCampo('Empresa a facturar','_pregp-emp','text','Razón social / NIT') +
-        _pregSelect('Forma de pago *','_pregp-fpago',['Transferencia','Tarjeta','Efectivo','Otro']) +
         _pregCampo('Placa del vehículo (si trae)','_pregp-placa','text','') +
         '<div style="display:flex;gap:8px">' +
           '<div style="flex:1">'+_pregCampo('Contacto de emergencia','_pregp-emnom','text','Nombre')+'</div>' +
@@ -18807,23 +18812,43 @@ async function _pregEnviarPublico(token, ed){
   var _extra=Math.max(0,_pa-1)+_pn;
   var _acomp=[];
   for(var _i=1;_i<=_extra;_i++){ var _an=g('_pregp-ac-n'+_i), _ad=g('_pregp-ac-d'+_i); if(_an||_ad) _acomp.push({nombre:_an, documento:_ad}); }
-  var _fotoUrl=null;
+  // Sol. Luis Guzmán / Sebastián (hallazgo db44e5be, 17-ago-2026): en pruebas, el documento SÍ
+  // se seleccionaba pero nunca aparecía en el SO — el error de la subida quedaba atrapado en
+  // un catch vacío (a propósito, para no bloquear el envío si fallaba la foto) y no dejaba
+  // rastro de por qué. Se confirmó en vivo: el registro de prueba de Sebastián llegó completo
+  // (nombre, documento, nacionalidad, etc.) pero con documento_foto_url en null. La causa más
+  // probable es que el bucket de Storage "adjuntos" no tiene una política que permita subir
+  // (INSERT) a usuarios anónimos — el formulario público de pre-registro NO tiene sesión
+  // iniciada, a diferencia de todo el resto del sistema. Requiere una política nueva en
+  // Supabase (Santiago debe crearla desde el SQL Editor; no se puede hacer desde la app):
+  //   create policy "prereg publico puede subir su documento"
+  //   on storage.objects for insert to anon
+  //   with check (bucket_id = 'adjuntos' and (storage.foldername(name))[1] = 'prereg');
+  // Mientras se confirma/crea esa política, se deja de tragar el error en silencio: si la
+  // subida falla, ahora se guarda el motivo y se avisa al huésped en la pantalla de "Gracias"
+  // para que no quede la falsa impresión de que el documento sí quedó guardado.
+  var _fotoUrl=null, _fotoError=null;
   try{
     var _fEl=document.getElementById('_pregp-foto');
   var _file=_fEl && _fEl.files && _fEl.files[0];
     if(_file){
       btn.textContent='Subiendo documento…';
       var _path='prereg/'+token+'-'+Date.now()+'-'+_file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
-      var _up = await sb.storage.from('adjuntos').upload(_path, _file);
+      var _up = await sb.storage.from('adjuntos').upload(_path, _file, {contentType:_file.type||undefined});
       if(!_up.error){ var _pu = sb.storage.from('adjuntos').getPublicUrl(_path); _fotoUrl = _pu && _pu.data ? _pu.data.publicUrl : null; }
+      else { _fotoError = _up.error.message||String(_up.error); }
       btn.textContent='Enviando…';
     }
-  }catch(_){ /* la foto es opcional: si falla la subida, se continúa sin bloquear el envío */ }
+  }catch(_e2){ _fotoError = (_e2&&_e2.message)||String(_e2); /* la foto es opcional: si falla la subida, se continúa sin bloquear el envío */ }
   var baseRow={ token:token, edificio:ed, nombre:nf, apellido1:g('_pregp-ap1'), apellido2:g('_pregp-ap2'),
     documento:g('_pregp-doc'), email:g('_pregp-email'), telefono:_telDig, empresa:g('_pregp-emp'),
     pax_adultos:_pa, pax_menores:_pn, pax_infantes:gn('_pregp-pi'), estado:'completado' };
+  // Sol. Sebastián (17-ago-2026, c9c1ee75): se quita "Forma de pago" del formulario público —
+  // el huésped no necesariamente sabe si va a ser pago directo o CxC, y las ejecutivas ya
+  // tienen ese dato por la reserva; el campo (y el de "a quién se paga", que ya no existía
+  // como campo aparte) sobraban. El registro histórico que ya tenía forma_pago no se toca.
   var row=Object.assign({}, baseRow, { tipo_doc:_sel('_pregp-tdoc'), nacionalidad:g('_pregp-nac'), ciudad:g('_pregp-ciu'),
-    fecha_nacimiento:(g('_pregp-fnac')||null), motivo_viaje:_sel('_pregp-mot'), forma_pago:_sel('_pregp-fpago'),
+    fecha_nacimiento:(g('_pregp-fnac')||null), motivo_viaje:_sel('_pregp-mot'),
     placa_vehiculo:g('_pregp-placa'), emergencia_nombre:g('_pregp-emnom'), emergencia_tel:(function(){ var d=g('_pregp-emtel').replace(/\D/g,''); if(d.length===10&&d.charAt(0)==='3') d='57'+d; return d; })(),
     acompanantes:(_acomp.length?_acomp:null), documento_foto_url:_fotoUrl });
   try{
@@ -18835,6 +18860,7 @@ async function _pregEnviarPublico(token, ed){
         '<div style="font-size:46px;margin-bottom:8px">✅</div>' +
         '<div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px">¡Gracias, '+_pregEsc(nf)+'!</div>' +
         '<div style="font-size:13px;color:rgba(255,255,255,.55)">Recibimos sus datos. En breve le enviaremos la confirmación de su reserva.</div>' +
+        (_fotoError ? '<div style="font-size:12px;color:#f0b429;margin-top:12px;padding:8px 10px;background:rgba(240,180,41,.12);border-radius:8px">⚠️ No se pudo adjuntar la foto del documento. Puede mostrarlo directamente en recepción al llegar.</div>' : '') +
       '</div>';
   }catch(e){
     btn.disabled=false; btn.textContent='Enviar mis datos';
