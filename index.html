@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-17-resuelve-solicitudes-v15';
+const APP_VERSION = '2026-08-17-resuelve-solicitudes-v16';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v16', titulo:'Reembolsos por lote: escaneo completo del lote en el formulario de registro (Sol. Sebastián, seguimiento a "Resuelve todas")',
+    afecta:'renderReembolsoLote() / _loteGuardar() (Reembolsos por lote)',
+    detalle:'Sol. Sebastián (hallazgo 415ef6b1): pedía poder anexar el escaneo completo de todos los recibos en la parte de registro del reembolso, no solo por recibo individual. Ya existía la opción de subir un PDF único del lote, pero solo aparecía DESPUÉS de sacar el lote (listado, con consecutivo asignado) — durante el registro/bandeja (antes de sacar el lote) no había forma de anexar un escaneo conjunto. Se agrega un campo "📄 Escaneo completo del lote" en el formulario de Registrar recibos: si un recibo del guardado no tiene su propio escaneo individual, queda cubierto por este archivo único (columna adjunto, sin necesidad de columnas nuevas en la base). Si se está agregando a un reembolso que ya tiene consecutivo, además se guarda como soporte_pdf del lote, para que también se vea en la barra "📄 Soporte del lote" del listado.' },
   { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v15', titulo:'CKO con datos de una reserva anterior, pausa de camareras y bienvenida en inglés (Sol. Santiago, seguimiento a "Resuelve todas")',
     afecta:'cargarTotalCKO() (Informe CKO), housekeeping (botón ⏸️ Pausa), waBienvenida()/enviarBienvenidaCKI() (mensaje en inglés)',
     detalle:'CKO (Sol. Andrés Parga, hallazgo 15a2d741, caso apto 1001/Sr. Salazar): el autocompletado del Informe CKO traía los datos del huésped más reciente dentro de una ventana de 7 días — si el apto quedó vacío unos días entre un huésped y el siguiente, podía traer al huésped ANTERIOR en vez del que realmente se está despidiendo. Se ajustó a 1 día (hoy/ayer) para reducir ese riesgo. Nota: la otra mitad de la queja ("se sale de la pantalla mientras se digita") no la pude reproducir todavía — si vuelve a pasar, contexto de cuándo ocurre (¿al cambiar de apto? ¿al escribir rápido?) ayuda a diagnosticarlo. // Pausa de camareras (Sol. Sebastián, hallazgo 326ff14b): ya existía el campo pausa_min en la base pero solo se podía cargar al crear el tiempo o mezclado en el editor genérico de todos los campos — se agrega un botón dedicado (⏸️) en Tiempos de Camareras para agregarla/editarla sin tocar el resto del registro ni tener que eliminar y volver a crear. // Bienvenida en inglés (Sol. Sebastián, hallazgo b6a2dac6): se agrega un botón "🇬🇧 EN" junto al de bienvenida (en Estado de Huéspedes y en el CKI) que envía la misma bienvenida traducida, para huéspedes extranjeros.' },
@@ -13123,7 +13126,15 @@ async function renderReembolsoLote(_consec){
       +'<div class="form-group"><label>Realiza / Entrega</label><input id="lt-entregado" value="'+_esc(_h.entregado_por||q)+'"></div>'
       +'<div class="form-group"><label>Aprobado por</label><input id="lt-aprobado" value="'+_esc(_h.aprobado_por||'')+'"></div>'
       +'<div class="form-group"><label>Observaciones</label><input id="lt-obs" value="'+_esc(_h.observaciones||'')+'"></div>'
-    +'</div></div>'
+    +'</div>'
+    // Sol. Sebastián (17-ago-2026, 415ef6b1): además del escaneo por recibo (columna de la tabla),
+    // se puede anexar aquí un solo archivo con el escaneo completo de TODOS los recibos del lote.
+    // Si un recibo no tiene su propio escaneo individual, queda cubierto por este archivo (columna
+    // "adjunto"); si el lote ya tiene consecutivo (se está agregando a un reembolso ya sacado),
+    // también se guarda como soporte_pdf del lote completo (mismo mecanismo que la barra
+    // "📄 Soporte del lote" del listado).
+    +'<div class="form-row"><div class="form-group" style="flex:1"><label>📄 Escaneo completo del lote (un solo PDF/imagen con todos los recibos) — opcional</label><input type="file" id="lt-pdflote" accept="image/*,application/pdf,.pdf"><div style="font-size:11px;color:var(--gris-t);margin-top:2px">Si algún recibo no tiene su propio escaneo, quedará cubierto por este archivo.</div></div></div>'
+    +'</div>'
     +'<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px"><div style="font-weight:700;color:var(--azul)">'+(_abierto?'Recibos nuevos a agregar':'Recibos')+'</div><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" style="border-color:#1A5C2E;color:#1A5C2E" onclick="_loteCargarPendientes()">⬇️ Cargar gastos pendientes de la caja</button><button class="btn btn-outline btn-sm" onclick="_loteAddRow()">+ Añadir recibo</button></div></div>'
     +'<div style="overflow-x:auto"><table class="tabla" id="lt-tabla"><thead><tr><th>Fecha recibo</th><th>No. Recibo</th><th>Descripción</th><th style="text-align:right">Valor ($)</th><th>📎 Recibo escaneado</th><th></th></tr></thead><tbody id="lt-rows"></tbody>'
     +'<tfoot>'+(_abierto?'<tr style="color:#666"><td colspan="3" style="text-align:right">Ya registrado en '+_ref+'</td><td style="text-align:right">'+_fmt(_yaTotal)+'</td><td></td><td></td></tr><tr style="color:#666"><td colspan="3" style="text-align:right">Se agrega ahora</td><td style="text-align:right" id="lt-total">$ 0</td><td></td><td></td></tr><tr style="background:var(--azul-c);font-weight:800"><td colspan="3" style="text-align:right">TOTAL DEL REEMBOLSO</td><td style="text-align:right" id="lt-granTotal">'+_fmt(_yaTotal)+'</td><td></td><td></td></tr>':'<tr style="background:var(--azul-c);font-weight:800"><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right" id="lt-total">$ 0</td><td></td><td></td></tr>')+'</tfoot></table></div></div>'
@@ -13181,6 +13192,21 @@ async function _loteGuardar(btn){
   var empresa=document.getElementById('lt-empresa').value.trim();
   if(!empresa){ showToast('Falta la empresa/proveedor','error'); return; }
   if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+  // Sol. Sebastián (17-ago-2026, 415ef6b1): escaneo completo del lote (un solo archivo para
+  // todos los recibos), como alternativa al escaneo por recibo. Se sube una sola vez y se usa
+  // como respaldo ("adjunto") de cualquier recibo de este guardado que no tenga su propio
+  // escaneo individual.
+  var _pdfLoteUrl=null; var _pdfLoteInp=document.getElementById('lt-pdflote'); var _pdfLoteFile=_pdfLoteInp && _pdfLoteInp.files && _pdfLoteInp.files[0];
+  if(_pdfLoteFile){
+    if(_pdfLoteFile.size > 25*1024*1024){ showToast('El escaneo completo supera 25 MB','error'); if(btn){ btn.disabled=false; btn.textContent=(window._loteConsec!=null)?('💾 Agregar al reembolso R-'+String(window._loteConsec).padStart(4,'0')):'💾 Guardar en bandeja'; } return; }
+    if(btn) btn.textContent='Subiendo escaneo completo…';
+    try{
+      var _pL='reembolsos/lotepdf_'+Date.now()+'_'+String(_pdfLoteFile.name||'lote').replace(/[^a-zA-Z0-9._-]/g,'_');
+      var _upL=await sb.storage.from('adjuntos').upload(_pL,_pdfLoteFile,{cacheControl:'3600',upsert:false,contentType:_pdfLoteFile.type||undefined});
+      if(!_upL.error) _pdfLoteUrl=sb.storage.from('adjuntos').getPublicUrl(_pL).data.publicUrl;
+      else showToast('No se pudo subir el escaneo completo: '+_upL.error.message,'error');
+    }catch(e){ showToast('Error subiendo el escaneo completo','error'); }
+  }
   var recibos=[];
   var _rowsDom=[].slice.call(document.querySelectorAll('#lt-rows .lt-row'));
   for(var i=0;i<_rowsDom.length;i++){ var tr=_rowsDom[i];
@@ -13192,7 +13218,7 @@ async function _loteGuardar(btn){
       if(btn) btn.textContent='Subiendo recibos…';
       try{ var _f=_fi.files[0]; var _p='reembolsos/'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'_'+String(_f.name||'recibo').replace(/[^a-zA-Z0-9._-]/g,'_'); var _up=await sb.storage.from('adjuntos').upload(_p,_f,{cacheControl:'3600',upsert:false,contentType:_f.type||undefined}); if(!_up.error) _adjU=sb.storage.from('adjuntos').getPublicUrl(_p).data.publicUrl; }catch(e){}
     }
-    recibos.push({ fecha_factura:(tr.querySelector('.lt-fec').value||null), recibo_no:(tr.querySelector('.lt-rec').value.trim()||null), descripcion:(desc||'(sin descripción)'), valor:val, adjunto:_adjU });
+    recibos.push({ fecha_factura:(tr.querySelector('.lt-fec').value||null), recibo_no:(tr.querySelector('.lt-rec').value.trim()||null), descripcion:(desc||'(sin descripción)'), valor:val, adjunto:(_adjU||_pdfLoteUrl) });
   }
   var _reabre = (window._loteConsec!=null);
   if(!recibos.length){ showToast('Añade al menos un recibo con valor','error'); if(btn){ btn.disabled=false; btn.textContent=_reabre?('💾 Agregar al reembolso R-'+String(window._loteConsec).padStart(4,'0')):'💾 Guardar reembolso'; } return; }
@@ -13214,6 +13240,13 @@ async function _loteGuardar(btn){
   if(window._loteCajaIds && window._loteCajaIds.length){
     try{ await sb.from('caja').update({ estado_legal:'En lote', lote_consec:consec }).in('id', window._loteCajaIds); }catch(e){}
     window._loteCajaIds=[];
+  }
+  // Si el lote ya tenía consecutivo (se estaba agregando a un reembolso ya sacado), el escaneo
+  // completo también se guarda como soporte_pdf del lote (mismo campo que usa la barra "📄 Soporte
+  // del lote" del listado), para que quede visible ahí también. Best-effort: si falta la columna
+  // soporte_pdf, no rompe el flujo (el respaldo por "adjunto" ya quedó guardado arriba).
+  if(_pdfLoteUrl && _reabre && consec!=null){
+    try{ await sb.from('reembolsos').update({ soporte_pdf:_pdfLoteUrl }).eq('edificio',EDIFICIO_ACTIVO).eq('consecutivo', consec); }catch(e){}
   }
   window._loteConsec=null; window._loteYaTotal=0;
   if(_reabre){
