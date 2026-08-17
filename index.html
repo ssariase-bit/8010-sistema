@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-17-resuelve-solicitudes-v16';
+const APP_VERSION = '2026-08-17-resuelve-solicitudes-v17';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v17', titulo:'Puntos Fijos: selector de fecha para el reporte (Sol. Sebastián, seguimiento a "Resuelve todas")',
+    afecta:'renderPuntosFijos() (Puntos Fijos de Pisos)',
+    detalle:'Sol. Sebastián (hallazgo 8e15db47): al enviar el informe de Puntos Fijos (📱 WhatsApp / ✉️ Correo) se mandaba SIEMPRE el historial completo de todas las fechas juntas, sin poder elegir un día puntual. Se agrega un selector "📅 Fecha del reporte" en la parte de arriba: por defecto muestra la fecha más reciente con registros (lo normal para el envío del día), y también permite escoger cualquier otra fecha con registros o "Todas las fechas" para ver/enviar el historial completo como antes. Lo que se ve en pantalla en ese momento es lo que se envía.' },
   { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v16', titulo:'Reembolsos por lote: escaneo completo del lote en el formulario de registro (Sol. Sebastián, seguimiento a "Resuelve todas")',
     afecta:'renderReembolsoLote() / _loteGuardar() (Reembolsos por lote)',
     detalle:'Sol. Sebastián (hallazgo 415ef6b1): pedía poder anexar el escaneo completo de todos los recibos en la parte de registro del reembolso, no solo por recibo individual. Ya existía la opción de subir un PDF único del lote, pero solo aparecía DESPUÉS de sacar el lote (listado, con consecutivo asignado) — durante el registro/bandeja (antes de sacar el lote) no había forma de anexar un escaneo conjunto. Se agrega un campo "📄 Escaneo completo del lote" en el formulario de Registrar recibos: si un recibo del guardado no tiene su propio escaneo individual, queda cubierto por este archivo único (columna adjunto, sin necesidad de columnas nuevas en la base). Si se está agregando a un reembolso que ya tiene consecutivo, además se guarda como soporte_pdf del lote, para que también se vea en la barra "📄 Soporte del lote" del listado.' },
@@ -8899,9 +8902,24 @@ async function savePuntosFijos(){
 }
 async function renderPuntosFijos(){
   const { data } = await sb.from('puntos_fijos').select('*').eq('edificio', EDIFICIO_ACTIVO).order('fecha',{ascending:false}).order('piso',{ascending:true});
-  const rows = data || [];
+  const rowsAll = data || [];
   const esc = s => String(s==null?'':s).replace(/</g,'&lt;');
   const chk = (id,campo,v)=>{ const on=v==='Sí'; return `<button onclick="togglePF('${id}','${campo}','${on?'No':'Sí'}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">${on?'✅ Sí':'⬜ No'}</button>`; };
+  // Sol. Sebastián (17-ago-2026, 8e15db47): al enviar el informe (📱/✉️) se mandaba SIEMPRE el
+  // historial completo de todas las fechas — no había forma de elegir qué día enviar. Se agrega
+  // un selector de fecha: por defecto queda en la fecha más reciente con registros (el reporte
+  // del día), y "Todas las fechas" para ver/enviar el historial completo como antes.
+  const _fechasPF = Array.from(new Set(rowsAll.map(r=>r.fecha?String(r.fecha).substring(0,10):null).filter(Boolean))).sort().reverse();
+  // "Todas las fechas" (valor '') siempre es válido; cualquier otro valor debe existir en ESTE
+  // edificio — si no (p.ej. venías de Kubik y aquí no hay registros en esa fecha), se reinicia
+  // a la fecha más reciente de este edificio en vez de mostrar un filtro fantasma.
+  if(window._pfFechaSel===undefined || (window._pfFechaSel!=='' && _fechasPF.indexOf(window._pfFechaSel)===-1)) window._pfFechaSel = _fechasPF[0] || '';
+  const rows = window._pfFechaSel ? rowsAll.filter(r=>r.fecha && String(r.fecha).substring(0,10)===window._pfFechaSel) : rowsAll;
+  const _pfSelectorHTML = `<label style="font-size:12px;font-weight:700;color:var(--azul)">📅 Fecha del reporte
+      <select onchange="window._pfFechaSel=this.value;renderPuntosFijos()" style="padding:6px;border:1px solid var(--gris-b);border-radius:6px;margin-left:4px">
+        ${_fechasPF.map(f=>`<option value="${f}"${window._pfFechaSel===f?' selected':''}>${fmtDate(f)}</option>`).join('')}
+        <option value=""${window._pfFechaSel===''?' selected':''}>Todas las fechas</option>
+      </select></label>`;
   // Organizados por fecha: cada día (camareras los hacen en fin de semana/festivos y no todas reportan el mismo día)
   const _colsPF = EDIFICIO_ACTIVO==='kubik' ? 7 : 6;
   let _lastFechaPF = null;
@@ -8921,12 +8939,13 @@ async function renderPuntosFijos(){
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div class="page-title" style="margin-bottom:0">🧽 Puntos Fijos de Pisos</div>
+      ${_pfSelectorHTML}
       ${barraCompartir()}
       <button class="btn btn-success btn-sm" style="width:auto" onclick="loadView('puntos-fijos-form')">+ Nuevo Punto Fijo</button>
     </div>
     <div class="card">
       <table class="tabla"><thead><tr><th>Piso</th><th>Camarera</th><th>Cuadros</th><th>Tapete</th>${(typeof EDIFICIO_ACTIVO!=='undefined'&&EDIFICIO_ACTIVO==='kubik')?'<th>Gabinete incendios</th><th>Puerta cortafuegos</th>':'<th>Ventanas y Marcos</th>'}<th></th></tr></thead>
-      <tbody>${filas || `<tr><td colspan="${_colsPF}" style="text-align:center;color:#999;padding:20px">Sin registros. Crea uno con “+ Nuevo Punto Fijo”.</td></tr>`}</tbody></table>
+      <tbody>${filas || `<tr><td colspan="${_colsPF}" style="text-align:center;color:#999;padding:20px">Sin registros para esta fecha.</td></tr>`}</tbody></table>
     </div>`;
 }
 async function togglePF(id, campo, val){
