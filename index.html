@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-17-resuelve-solicitudes-v17';
+const APP_VERSION = '2026-08-17-resuelve-solicitudes-v18';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v18', titulo:'Requisiciones pendientes: el correo ahora sale con el mismo estilo de los demás informes (Sol. Sebastián, seguimiento a "Resuelve todas")',
+    afecta:'window._reqEnviarPendientes() (Requisiciones · botón "Enviar solo lo PENDIENTE")',
+    detalle:'Sol. Sebastián (hallazgo 6485a582): el botón "📧 Enviar solo lo PENDIENTE" armaba un mailto: en texto plano, sin el membrete ni el formato de los demás correos automáticos del sistema (Rack, Novedades, Camareras, etc.). Se cambió para que use el mismo mecanismo (_informeHTML + enviarInformeCorreo, vía la función enviar-informe): mismo membrete de la empresa, mismo estilo de tabla/lista, y de paso queda con copia automática a recepción como el resto de los informes.' },
   { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v17', titulo:'Puntos Fijos: selector de fecha para el reporte (Sol. Sebastián, seguimiento a "Resuelve todas")',
     afecta:'renderPuntosFijos() (Puntos Fijos de Pisos)',
     detalle:'Sol. Sebastián (hallazgo 8e15db47): al enviar el informe de Puntos Fijos (📱 WhatsApp / ✉️ Correo) se mandaba SIEMPRE el historial completo de todas las fechas juntas, sin poder elegir un día puntual. Se agrega un selector "📅 Fecha del reporte" en la parte de arriba: por defecto muestra la fecha más reciente con registros (lo normal para el envío del día), y también permite escoger cualquier otra fecha con registros o "Todas las fechas" para ver/enviar el historial completo como antes. Lo que se ve en pantalla en ese momento es lo que se envía.' },
@@ -5892,36 +5895,31 @@ window._reqBotonPendientes = function(){
       b.style.cssText = 'background:#B45309;color:#fff;border:none;font-weight:700;margin-left:6px';
       b.textContent = '📧 Enviar solo lo PENDIENTE';
       b.title = 'Envía por correo únicamente las requisiciones que están pendientes';
-      b.onclick = window._reqEnviarPendientes;
+      b.onclick = function(){ window._reqEnviarPendientes(b); };
       cont.appendChild(b);
     }catch(e){}
   }, 350);
 };
 
-window._reqEnviarPendientes = async function(){
+// Sol. Sebastián (17-ago-2026, 6485a582): este correo salía como un mailto: en texto plano
+// (sin el formato ni el membrete de los demás informes automáticos del sistema). Se cambia
+// para usar el mismo mecanismo que Rack/Novedades/Camareras/etc. (_informeHTML +
+// enviarInformeCorreo → función enviar-informe): mismo membrete, mismo estilo, y además queda
+// con copia automática a recepción como los demás informes.
+window._reqEnviarPendientes = async function(btn){
   var r = await sb.from('requisiciones').select('*').eq('estado','Pendiente').order('fecha',{ascending:true});
   if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
   var d = r.data||[];
   if(!d.length){ showToast('No hay requisiciones pendientes','info'); return; }
-  var eb = (typeof EB==='function' && EB()) || {};
   var fFmt = function(f){ if(!f) return '—'; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
-  var lineas = d.map(function(x,i){
-    return (i+1)+'. '+(x.articulo||'')+'  ×'+(x.cantidad_solicitada||'')
-      + '   ('+(x.area||'')+' · solicitó '+(x.solicitado_por||'')+' · '+fFmt(x.fecha)+')';
-  }).join('\n');
-  var asunto = 'Requisiciones pendientes — '+(eb.nombre||'')+' · '+d.length+' artículo'+(d.length===1?'':'s');
-  var cuerpo = 'Cordial saludo.\n\nSe relacionan las requisiciones que se encuentran pendientes de compra:\n\n'
-    + lineas
-    + '\n\nTotal: '+d.length+' artículo'+(d.length===1?'':'s')+' pendiente'+(d.length===1?'':'s')+'.'
-    + '\n\nCordialmente,\n'+((currentProfile&&currentProfile.nombre)||'')+'\n'+(eb.nombre||'');
+  var texto = '*Requisiciones pendientes de compra*\n'
+    + d.map(function(x,i){ return (i+1)+'. '+(x.articulo||'')+' ×'+(x.cantidad_solicitada||'')+' — '+(x.area||'')+' · solicitó '+(x.solicitado_por||'')+' · '+fFmt(x.fecha); }).join('\n')
+    + '\n*Total: '+d.length+' artículo'+(d.length===1?'':'s')+' pendiente'+(d.length===1?'':'s')+'*';
   var para = window.prompt('Correo del destinatario (Compras):', 'compras@8010urbanliving.com');
   if(para === null) return;
-  var url = 'mailto:'+encodeURIComponent(String(para).trim())+'?subject='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(cuerpo);
-  if(url.length > 1900){
-    try{ await navigator.clipboard.writeText(cuerpo); showToast('El listado es largo: se copió al portapapeles. Péguelo en el correo.','info'); }catch(e){}
-    url = 'mailto:'+encodeURIComponent(String(para).trim())+'?subject='+encodeURIComponent(asunto);
-  }
-  window.open(url,'_blank');
+  para = String(para).trim();
+  if(!para){ showToast('Falta el correo del destinatario','error'); return; }
+  await enviarInformeCorreo('Requisiciones pendientes', texto, btn, null, { to:[para], cc:[] });
 };
 
 // Sol. Sebastián (14-jul-2026): "Compañía que factura" (LTM3 / 80-10) y "A cargo de
