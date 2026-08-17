@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-16-resuelve-solicitudes-v14';
+const APP_VERSION = '2026-08-17-resuelve-solicitudes-v15';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-17', version:'2026-08-17-resuelve-solicitudes-v15', titulo:'CKO con datos de una reserva anterior, pausa de camareras y bienvenida en inglés (Sol. Santiago, seguimiento a "Resuelve todas")',
+    afecta:'cargarTotalCKO() (Informe CKO), housekeeping (botón ⏸️ Pausa), waBienvenida()/enviarBienvenidaCKI() (mensaje en inglés)',
+    detalle:'CKO (Sol. Andrés Parga, hallazgo 15a2d741, caso apto 1001/Sr. Salazar): el autocompletado del Informe CKO traía los datos del huésped más reciente dentro de una ventana de 7 días — si el apto quedó vacío unos días entre un huésped y el siguiente, podía traer al huésped ANTERIOR en vez del que realmente se está despidiendo. Se ajustó a 1 día (hoy/ayer) para reducir ese riesgo. Nota: la otra mitad de la queja ("se sale de la pantalla mientras se digita") no la pude reproducir todavía — si vuelve a pasar, contexto de cuándo ocurre (¿al cambiar de apto? ¿al escribir rápido?) ayuda a diagnosticarlo. // Pausa de camareras (Sol. Sebastián, hallazgo 326ff14b): ya existía el campo pausa_min en la base pero solo se podía cargar al crear el tiempo o mezclado en el editor genérico de todos los campos — se agrega un botón dedicado (⏸️) en Tiempos de Camareras para agregarla/editarla sin tocar el resto del registro ni tener que eliminar y volver a crear. // Bienvenida en inglés (Sol. Sebastián, hallazgo b6a2dac6): se agrega un botón "🇬🇧 EN" junto al de bienvenida (en Estado de Huéspedes y en el CKI) que envía la misma bienvenida traducida, para huéspedes extranjeros.' },
   { fecha:'2026-08-16', version:'2026-08-16-resuelve-solicitudes-v14', titulo:'Kubik: recepción vuelve a recibir copia de Novedades/Rack/Camareras/Control de personal (Sol. Juanita Noguera 8a0386ab)',
     afecta:'_DEST_KUBIK_REPORTES',
     detalle:'Desde la migración de correos de 8i8, recepcion@8i8op.com nunca se agregó de vuelta a las listas de distribución de Kubik (comparado con 8010, donde recepción sí está en cc de esos mismos reportes) — se agrega a novedad, rack, camareras y control de personal.' },
@@ -6724,7 +6727,7 @@ async function renderHKList() {
                   <td style="font-size:11px;white-space:nowrap">${h.frecuencia||'-'}</td>
                   <td style="max-width:140px;font-size:11px">${h.observaciones||'-'}</td>
                   <td style="font-size:11px;white-space:nowrap">${h.registrado_por||'-'}${(h.salida_por&&h.salida_por!==h.registrado_por)?('<br><span style="color:#888">salida: '+h.salida_por+'</span>'):''}</td>
-                  <td style="white-space:nowrap">${_btnsEdit('housekeeping', h.id)}</td>
+                  <td style="white-space:nowrap"><button onclick="_hkPausa('${h.id}',${Number(h.pausa_min)||0})" title="Agregar/editar pausa" style="border:none;background:none;cursor:pointer;font-size:15px;padding:2px">⏸️</button>${_btnsEdit('housekeeping', h.id)}</td>
                 </tr>`;
               }).join('')}</tbody>
             </table></div>
@@ -8362,6 +8365,23 @@ async function eliminarGen(tabla, id){
 }
 function _btnsEdit(tabla, id){
   return `<button onclick="abrirEditarGen('${tabla}','${id}')" title="Editar" style="border:none;background:none;cursor:pointer;font-size:15px;padding:2px">✏️</button><button onclick="eliminarGen('${tabla}','${id}')" title="Eliminar" style="border:none;background:none;cursor:pointer;font-size:15px;padding:2px">🗑️</button>`;
+}
+// Fix (Sol. Sebastián, hallazgo 326ff14b): agregar una pausa a un tiempo de camarera ya registrado
+// obligaba a eliminar el registro completo y crearlo de nuevo, porque la pausa solo se podía cargar
+// desde "Registrar Tiempo" (al crear). En realidad ya existía pausa_min/pausa_detalle en la tabla y
+// se podían editar desde el lápiz genérico (✏️), pero mezclado entre todos los campos, no era obvio.
+// Se agrega un botón dedicado (⏸️) que solo pide la pausa, sin tocar el resto del registro.
+async function _hkPausa(id, actual){
+  var min = prompt('Minutos de pausa para este tiempo de limpieza:', actual||0);
+  if(min===null) return;
+  min = parseInt(min,10); if(isNaN(min)||min<0){ showToast('Escribe un número de minutos válido','error'); return; }
+  var det = prompt('Motivo de la pausa (opcional):','') || null;
+  var upd = { pausa_min: min };
+  if(det) upd.pausa_detalle = det;
+  var r = await sb.from('housekeeping').update(upd).eq('id', id);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  showToast('⏸️ Pausa guardada','success');
+  loadView(window._currentView||'hk-list');
 }
 
 function _informeTextoDOM(){
@@ -13894,7 +13914,18 @@ function anuncioMasivo(){
 }
 function copiarTelefonos(){ var rows=(window._ehRows||[]).filter(function(r){ return r.huesped&&r.telefono; }); var seen={}; rows=rows.filter(function(r){ var k=(r.huesped||'').trim().toLowerCase(); if(!k||seen[k]) return false; seen[k]=1; return true; }); if(!rows.length){ alert('Ningún huésped en casa tiene WhatsApp guardado todavía.'); return; } var t=rows.map(function(r){ return '+'+normTel(r.telefono)+'  ('+(r.huesped||'')+' · Apto '+r.apto+')'; }).join('\n'); navigator.clipboard.writeText(t).then(function(){ showToast('📋 '+rows.length+' números copiados','success'); }); }
 function waAnuncio(nombreId){ var el=document.getElementById(nombreId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(nombreId); var body=(document.getElementById('anuncio-body')||{}).value||''; if(!body.trim()){ alert('Escribe el mensaje del anuncio primero.'); return; } var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var _trpA=trat?trat+' ':''; var msg=saludo+', '+_trpA+(nombre||'')+'.\n\n'+body+'\n\nCualquier duda o solicitud, comuníquese con nosotros por este medio — estamos disponibles 24/7. Mil gracias.\n*'+(((typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'))+'*'; window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
-function waBienvenida(codeId){ var el=document.getElementById(codeId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(codeId); var code=(el&&el.value)?el.value:'XXXX#'; var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var ed=(typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'; var _trpB=trat?trat+' ':''; var msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.'+(EDIFICIO_ACTIVO==='8010'?'':('\n'+'Código de puerta: '+code)); var _wf=(typeof EB==='function'&&EB().wifi)||null; if(_wf&&_wf.red){ msg+='\nRed WiFi: '+_wf.red+' · Contraseña: '+(_wf.clave||''); } window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
+// Fix (Sol. Sebastián, hallazgo b6a2dac6): opción de enviar la bienvenida en inglés (huéspedes extranjeros).
+function waBienvenida(codeId, lang){ var el=document.getElementById(codeId); var nombre=el?(el.dataset.nombre||''):''; var trat=el?(el.dataset.tratamiento||''):''; var tel=_telDeFila(codeId); var code=(el&&el.value)?el.value:'XXXX#'; var h=new Date().getHours(); var ed=(typeof EB==='function'&&EB().nombre)||'KUBIK LIVING 8i8'; var msg;
+  if(lang==='en'){
+    var greetEn=h<12?'Good morning':h<19?'Good afternoon':'Good evening'; var _trpE=trat?trat+' ':'';
+    msg=greetEn+', '+_trpE+(nombre||'')+'.\n'+'Welcome to '+ed+'. Thank you for choosing us.\n'+'Remember we are available 24/7 to assist you with anything you need, so your stay feels comfortable and just like home.'+(EDIFICIO_ACTIVO==='8010'?'':('\n'+'Door code: '+code));
+    var _wfE=(typeof EB==='function'&&EB().wifi)||null; if(_wfE&&_wfE.red){ msg+='\nWiFi network: '+_wfE.red+' · Password: '+(_wfE.clave||''); }
+  } else {
+    var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var _trpB=trat?trat+' ':'';
+    msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.'+(EDIFICIO_ACTIVO==='8010'?'':('\n'+'Código de puerta: '+code));
+    var _wf=(typeof EB==='function'&&EB().wifi)||null; if(_wf&&_wf.red){ msg+='\nRed WiFi: '+_wf.red+' · Contraseña: '+(_wf.clave||''); }
+  }
+  window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
 // ═══════════════════════════════════════════════════════════
 // INFORME EJECUTIVO — vista unica que jala toda la base + alertas
 // ═══════════════════════════════════════════════════════════
@@ -14071,7 +14102,7 @@ async function renderEstadoHuespedes() {
               <td style="text-align:center">${(function(){var d=(_resMap[r.apto]&&_resMap[r.apto].desayuno)||''; return String(d).toLowerCase()==='si' ? '<span style="background:#DCFCE7;color:#14532D;font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap">🥐 Incluido</span>' : '<span style="color:#bbb;font-size:11px">—</span>';})()}</td>
               <td style="text-align:center"><input type="number" min="0" value="${r.pax!=null?r.pax:''}" onchange="guardarPaxHuesped('${r.id}','${r.apto}',this.value)" placeholder="-" title="PAX en casa" style="width:55px;padding:4px;font-size:13px;text-align:center"></td>
               <td style="max-width:170px"><input value="${String(r.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Nota del huésped..." title="Se guarda sola al salir del campo" style="width:160px;padding:4px;font-size:11px" onchange="guardarNotaHuesped('${r.id}','${r.apto}',this.value)"><input value="${String(r.seguimiento||'').replace(/"/g,'&quot;')}" placeholder="📌 Seguimiento..." title="Seguimiento — se guarda solo al salir" style="width:160px;padding:4px;font-size:11px;margin-top:3px" onchange="guardarSeguimiento('${r.id}',this.value)"></td>
-              <td>${_esKL?`<input id="tel-${r.id}" value="${r.telefono||''}" placeholder="📱 WhatsApp" title="WhatsApp del huésped — se guarda solo al salir del campo" style="width:108px;padding:4px;font-size:11px" onchange="guardarTelHuesped('${r.id}','${r.apto}',this.value)"> <input id="dc-${r.id}" data-nombre="${String(r.huesped||'').replace(/"/g,'')}" data-tratamiento="${r.tratamiento||''}" data-tel="${r.telefono||''}" placeholder="Cód. puerta" style="width:84px;padding:4px;font-size:11px"> <button onclick="waBienvenida('dc-${r.id}')" class="btn btn-sm" style="background:#25D366;color:#fff">💬 Bienvenida</button> <button onclick="waAnuncio('dc-${r.id}')" class="btn btn-sm" style="background:#1D3461;color:#fff">📢</button> `:''}<button onclick="openAptoModal('${r.id}','${r.apto}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
+              <td>${_esKL?`<input id="tel-${r.id}" value="${r.telefono||''}" placeholder="📱 WhatsApp" title="WhatsApp del huésped — se guarda solo al salir del campo" style="width:108px;padding:4px;font-size:11px" onchange="guardarTelHuesped('${r.id}','${r.apto}',this.value)"> <input id="dc-${r.id}" data-nombre="${String(r.huesped||'').replace(/"/g,'')}" data-tratamiento="${r.tratamiento||''}" data-tel="${r.telefono||''}" placeholder="Cód. puerta" style="width:84px;padding:4px;font-size:11px"> <button onclick="waBienvenida('dc-${r.id}')" class="btn btn-sm" style="background:#25D366;color:#fff">💬 Bienvenida</button> <button onclick="waBienvenida('dc-${r.id}','en')" title="Welcome message in English" class="btn btn-sm btn-outline" style="font-size:11px">🇬🇧 EN</button> <button onclick="waAnuncio('dc-${r.id}')" class="btn btn-sm" style="background:#1D3461;color:#fff">📢</button> `:''}<button onclick="openAptoModal('${r.id}','${r.apto}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px">✏️ Editar</button></td>
             </tr>`).join('')}
             <tr style="background:var(--azul-c);font-weight:700">
               <td colspan="2" style="color:var(--azul)">TOTAL: ${rows.length} aptos</td>
@@ -16791,6 +16822,7 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
       <div class="form-actions">
         <button class="btn btn-outline btn-sm" onclick="loadView(window._currentView||'dashboard')">Cancelar</button>
         <button class="btn" style="background:#25D366;color:#fff;min-width:220px" onclick="enviarBienvenidaCKI()">📲 Bienvenida al arrendatario</button>
+        <button class="btn btn-outline" style="min-width:90px" onclick="enviarBienvenidaCKI('en')" title="Welcome message in English">🇬🇧 EN</button>
         <button class="btn btn-success" onclick="generarMsgCKI()" style="min-width:200px">📤 Generar Informe CKI</button>
       </div>
     </div>`;
@@ -16884,7 +16916,8 @@ async function ckiAutollenar(){
     if(typeof showToast==='function') showToast('📋 Datos traídos de la reserva: '+(d.huesped||partes.nombre||apto)+_cortMsg,'success');
   }catch(e){ /* silencioso */ }
 }
-function enviarBienvenidaCKI(){
+// Fix (Sol. Sebastián, hallazgo b6a2dac6): opción de enviar la bienvenida del CKI en inglés.
+function enviarBienvenidaCKI(lang){
   // Mismo mensaje que waBienvenida (Estado de Huéspedes), disparado desde el CKI.
   var apto=(document.getElementById('cki-apto')||{}).value||'';
   var nombre=((document.getElementById('cki-nombre')||{}).value||'').trim();
@@ -16893,11 +16926,18 @@ function enviarBienvenidaCKI(){
   var code=((document.getElementById('cki-clave')||{}).value||'').trim()||'XXXX#';
   if(!apto){ showToast('Selecciona el apartamento','error'); return; }
   if(EDIFICIO_ACTIVO!=='8010' && !((document.getElementById('cki-clave')||{}).value||'').trim()){ showToast('Escribe la clave de acceso al apto','error'); return; }
-  var h=new Date().getHours(); var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
+  var h=new Date().getHours();
   var ed=(typeof EB==='function'&&EB().nombre)||'';
-  var _trpB=trat?trat+' ':'';
-  var msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.'+(EDIFICIO_ACTIVO==='8010'?'':('\n'+'Código de puerta: '+code));
-  var _wf=(typeof EB==='function'&&EB().wifi)||null; if(_wf&&_wf.red){ msg+='\nRed WiFi: '+_wf.red+' · Contraseña: '+(_wf.clave||''); }
+  var msg;
+  if(lang==='en'){
+    var greetEn=h<12?'Good morning':h<19?'Good afternoon':'Good evening'; var _trpE=trat?trat+' ':'';
+    msg=greetEn+', '+_trpE+(nombre||'')+'.\n'+'Welcome to '+ed+'. Thank you for choosing us.\n'+'Remember we are available 24/7 to assist you with anything you need, so your stay feels comfortable and just like home.'+(EDIFICIO_ACTIVO==='8010'?'':('\n'+'Door code: '+code));
+    var _wfE=(typeof EB==='function'&&EB().wifi)||null; if(_wfE&&_wfE.red){ msg+='\nWiFi network: '+_wfE.red+' · Password: '+(_wfE.clave||''); }
+  } else {
+    var saludo=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'; var _trpB=trat?trat+' ':'';
+    msg=saludo+', '+_trpB+(nombre||'')+'.\n'+'Bienvenido a '+ed+'. Gracias por elegirnos.\n'+'Recuerde que estamos disponibles 24/7 para asistirle en todo lo que necesite y acompañarle para que su experiencia sea cómoda, tranquila y como en casa.'+(EDIFICIO_ACTIVO==='8010'?'':('\n'+'Código de puerta: '+code));
+    var _wf=(typeof EB==='function'&&EB().wifi)||null; if(_wf&&_wf.red){ msg+='\nRed WiFi: '+_wf.red+' · Contraseña: '+(_wf.clave||''); }
+  }
   if(!tel){ if(typeof navigator!=='undefined'&&navigator.clipboard){ navigator.clipboard.writeText(msg); } showToast('Sin WhatsApp del huésped — mensaje copiado','info'); return; }
   window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank');
 }
@@ -17189,8 +17229,14 @@ async function cargarTotalCKO(force){
       prev=r.fecha;
       if(r.tarifa){ total+=Number(r.tarifa)||0; noches++; }
     }
+    // Fix (Sol. Andrés Parga, hallazgo 15a2d741, caso apto 1001/Sr. Salazar): con una tolerancia de
+    // 7 días, si el apto quedó vacío unos días entre un huésped y el siguiente, y el nuevo huésped
+    // aún no tenía fila en el rack (recién llegado, apenas se le va a hacer el CKO), esta función
+    // igual autocompletaba con los datos del huésped ANTERIOR (el más reciente dentro de esos 7 días),
+    // sin relación con la estadía que realmente se está cerrando. Se ajusta a 1 día (hoy o ayer) para
+    // que solo autocomplete con una estadía recién terminada, no con "la última que hubo en ese apto".
     var _gapDias=Math.round((new Date(TODAY+'T00:00:00')-new Date((rows[0].fecha||TODAY)+'T00:00:00'))/86400000);
-    if(_gapDias<=7){ var _np0=window._nombrePartes(rows[0]||{}); var _se=function(id,v){var e=document.getElementById(id); if(e&&(force||!e.value)) e.value=v||'';}; _se('cko-nombre',_np0.nombre); _se('cko-apellido1',_np0.apellido1); _se('cko-apellido2',_np0.apellido2); _se('cko-tel', rows[0].telefono); _se('cko-canal', rows[0].canal); if(force && typeof showToast==='function') showToast('📋 Datos traídos: '+((rows[0].huesped||_np0.nombre||'').trim()||('Apto '+apto)),'success'); }
+    if(_gapDias<=1){ var _np0=window._nombrePartes(rows[0]||{}); var _se=function(id,v){var e=document.getElementById(id); if(e&&(force||!e.value)) e.value=v||'';}; _se('cko-nombre',_np0.nombre); _se('cko-apellido1',_np0.apellido1); _se('cko-apellido2',_np0.apellido2); _se('cko-tel', rows[0].telefono); _se('cko-canal', rows[0].canal); if(force && typeof showToast==='function') showToast('📋 Datos traídos: '+((rows[0].huesped||_np0.nombre||'').trim()||('Apto '+apto)),'success'); }
     const aEl=document.getElementById('cko-aloja'); if(aEl) aEl.value=total;
     const nEl=document.getElementById('cko-noches'); if(nEl) nEl.value=noches;
   }catch(e){ console.error('cargarTotalCKO', e); }
