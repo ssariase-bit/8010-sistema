@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-17-atelier-categoria-propia-v22';
+const APP_VERSION = '2026-08-19-modalidad-pago-confirmacion-v23';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-19', version:'2026-08-19-modalidad-pago-confirmacion-v23', titulo:'Confirmacion de Reserva: ahora muestra la MODALIDAD de pago (Directo / CxC empresa) y no el instrumento (Sol. Juanita Noguera, KL)',
+    afecta:'generarConfirmacion() — documento impreso de Confirmacion de Reserva y mensaje de WhatsApp',
+    detalle:'Sol. Juanita Noguera (19-ago-2026): la Confirmacion de Reserva mostraba en "Forma de Pago" el instrumento con el que se paga (Efectivo, Tarjeta, Transferencia), que es un dato que se define al momento de pagar y que al huesped o a la empresa no le dice nada al confirmar. Lo que necesitan saber es si la reserva la paga el huesped directamente o si queda a cargo de la empresa por cuenta de cobro. Ahora la primera linea dice "Modalidad de Pago: DIRECTO — A CARGO DEL HUESPED" o "CxC — A CARGO DE LA EMPRESA", y el medio de pago pasa a una linea secundaria que solo aparece cuando el pago es directo (en CxC no aplica). La modalidad se deduce de tres campos ya existentes: metodo de pago "Por facturar", tipo de cuenta por cobrar distinto de "No Aplica", o quien paga = "Compania / Empresa" — basta con que uno se cumpla. Si el pagador es la empresa pero nadie marco CxC Full o CxC Aloj, no se asume ninguno y se omite el detalle. El mismo texto se agrego al mensaje de WhatsApp para que coincida con el documento impreso.' },
   { fecha:'2026-08-17', version:'2026-08-17-atelier-categoria-propia-v22', titulo:'Dashboard (KL): Atelier ya no aparece mezclado dentro de "Salas de juntas" (Sol. Santiago)',
     afecta:'renderDashboard() — Ventas del mes por categoría',
     detalle:'Sol. Santiago: Atelier (sala del último piso) y Sala de Juntas (primer piso) son dos espacios físicos distintos, y en el Dashboard el valor de Atelier se sumaba dentro de la categoría "Salas de juntas" (y su consumo dentro de "Alimentación/consumos de eventos"), lo cual mezclaba las dos cosas. Se corrige: Atelier ahora tiene su propia categoría "🎨 Atelier (último piso)" en la tabla de Ventas del mes (solo visible en Kubik), con su propio detalle al hacer clic. "Salas de juntas" se renombra a "Salas de juntas (primer piso)" para que quede claro que ya no incluye Atelier. El total general no cambia, solo se reparte distinto entre categorías.' },
@@ -7703,7 +7706,34 @@ function generarConfirmacion(r) {
     <tr><td>Tarifa Apartamento por Mes</td><td>N/A</td></tr>
     <tr><td>Valor Total del Contrato</td><td class="bold-val">${simb} ${(((r.valorTotal!=null&&r.valorTotal>0)?r.valorTotal:(r.tarifa*r.noches))||0).toLocaleString('es-CO')}${conIVA?' + IVA':''}</td></tr>
     ${esUSD ? `<tr><td>Moneda de cobro</td><td><strong>USD — Dólares americanos</strong></td></tr><tr><td>Conversión a pesos</td><td>Se realiza el día del pago, a la TRM de ese día.</td></tr>` : ``}
-    <tr><td>Forma de Pago</td><td>${/factur/i.test(r.pago||'') ? `Pago <strong>POR FACTURAR</strong> &mdash; <strong>${r.cxcTipo||'CxC Full'}</strong> a cargo de la empresa.<br>Facturar por <strong>${r.cxcRazon||_razon}</strong>` : `Pago <strong>${r.pago.toUpperCase()}</strong> ${r.estadoPago==='Pagado' ? '&mdash; <strong>YA PAGADA</strong>' : (r.estadoPago==='50% adelanto' ? '&mdash; <strong>50% de adelanto recibido</strong>, saldo a su llegada' : 'por parte del Cliente <strong>a su llegada</strong>')}.<br>Facturar por <strong>${r.cxcRazon||_razon}</strong>`}</td></tr>
+    ${(function(){
+      // Sol. Juanita Noguera (19-ago-2026, KL): en la Confirmacion de Reserva el huesped y la empresa
+      // necesitan ver la MODALIDAD de pago (Directo o CxC a cargo de la empresa), no el instrumento
+      // (efectivo, tarjeta, transferencia) — ese se define al momento de pagar y aqui solo confunde.
+      // Se antepone "Modalidad de Pago" y el medio queda como linea secundaria, solo si es pago directo.
+      var _cxcT   = String(r.cxcTipo||'').trim();
+      var _esCxC  = /factur/i.test(r.pago||'')
+                 || (_cxcT && _cxcT.toLowerCase() !== 'no aplica')
+                 || /compa|empresa/i.test(String(r.pagador||''));
+      var _razonF = r.cxcRazon || _razon;
+      if (_esCxC) {
+        // El tipo de CxC solo se muestra si quedo definido en la reserva. Si el pagador es la empresa
+        // pero nadie marco CxC Full / CxC Aloj, no se asume ninguno: se deja sin el detalle.
+        var _tipoOk = (_cxcT && _cxcT.toLowerCase() !== 'no aplica');
+        return '<tr><td>Modalidad de Pago</td><td><strong>CxC &mdash; A CARGO DE LA EMPRESA</strong>'
+             + (_tipoOk ? ' <span style="color:#666">(' + _cxcT + ')</span>' : '')
+             + '<br>Facturar por <strong>' + _razonF + '</strong></td></tr>';
+      }
+      var _estTxt = (r.estadoPago==='Pagado')
+                      ? '&mdash; <strong>YA PAGADA</strong>'
+                      : ((r.estadoPago==='50% adelanto')
+                          ? '&mdash; <strong>50% de adelanto recibido</strong>, saldo a su llegada'
+                          : 'a su llegada');
+      var _medio = String(r.pago||'').trim();
+      return '<tr><td>Modalidad de Pago</td><td><strong>DIRECTO &mdash; A CARGO DEL HU&Eacute;SPED</strong> ' + _estTxt + '.'
+           + '<br>Facturar por <strong>' + _razonF + '</strong></td></tr>'
+           + (_medio ? '<tr><td>Medio de pago</td><td>' + _medio.toUpperCase() + '</td></tr>' : '');
+    })()}
     <tr>
       <td>Incluidos en la Tarifa</td>
       <td>
@@ -7767,6 +7797,18 @@ function generarConfirmacion(r) {
   const _cantLbl = (r.tipoTarifa==='TxD')?'Días':'Noches';
   const _cantVal = (r.tipoTarifa==='TxD')?(Number(r.noches)+1):r.noches;
   const _totVal = (r.valorTotal>0?r.valorTotal:(r.tarifa*Number(r.noches)));
+  // Sol. Juanita Noguera (19-ago-2026, KL): mostrar la modalidad de pago (Directo / CxC empresa)
+  // tambien en el mensaje de WhatsApp, para que coincida con la Confirmacion impresa.
+  const _cxcTw   = String(r.cxcTipo||'').trim();
+  const _esCxCw  = /factur/i.test(r.pago||'')
+                || (_cxcTw && _cxcTw.toLowerCase() !== 'no aplica')
+                || /compa|empresa/i.test(String(r.pagador||''));
+  const _modPagoTxt = _esCxCw
+      ? ('CxC — a cargo de la empresa'
+         + ((_cxcTw && _cxcTw.toLowerCase()!=='no aplica') ? (' (' + _cxcTw + ')') : ''))
+      : ('Directo — a cargo del huésped'
+         + (r.estadoPago==='Pagado' ? ' (ya pagada)'
+            : (r.estadoPago==='50% adelanto' ? ' (50% de adelanto recibido)' : ' (pago a su llegada)')));
   const waMsg = encodeURIComponent(
     `*${_edN} — Confirmación de Reserva ${r.numero||''}*\n\n`+
     `Estimado/a ${r.nombre}, su reserva está confirmada. Por favor verifique la información:\n\n`+
@@ -7780,6 +7822,7 @@ function generarConfirmacion(r) {
     `▪ ${_cantLbl}: ${_cantVal}\n`+
     `▪ Tarifa: $${r.tarifa.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''} /${(r.tipoTarifa==='TxD')?'día':'noche'}\n`+
     `▪ Total: $${_totVal.toLocaleString('es-CO')} ${monedaLabel}${conIVA?' + IVA':''}\n`+
+    `▪ Modalidad de pago: ${_modPagoTxt}\n`+
     `▪ Facturar a: ${r.cxcRazon||_razon}`+
     (r.obs?`\n▪ Observaciones: ${r.obs}`:'')+
     (_esKLc?'':`\n\n▪ Guía de Comportamiento: ${guiaUrl}`)+
