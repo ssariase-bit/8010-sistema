@@ -477,10 +477,16 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-19-uso-de-dia-v25';
+const APP_VERSION = '2026-08-19-matriz-uso-v27';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-19', version:'2026-08-19-matriz-uso-v27', titulo:'Candado que impide guardar una tarifa en dolares que en realidad son pesos (caso de $2.880 millones por noche)',
+    afecta:'guardarReserva() — validacion previa al guardado en reservas en USD',
+    detalle:'Caso real detectado el 19-ago-2026: una reserva del SD4 en Kubik quedo con tarifa_usd = 929.637 porque se digito el valor YA CONVERTIDO A PESOS dentro del campo de dolares. El sistema lo multiplico otra vez por la TRM y guardo $2.880.749.839 por noche; replicado en el rack sobre las dos unidades del combo durante dos noches, sumo $11.522.999.356 a las ventas de agosto de Kubik. Un solo dato mal digitado bastaba para destruir el reporte del mes sin que nada avisara. Ahora, si la moneda es USD y la tarifa supera USD 3.000 por noche (o USD 20.000 de canon mensual en TxM), el sistema muestra el equivalente en pesos y pide confirmacion expresa antes de guardar, sugiriendo cambiar la moneda a COP si el valor estaba en pesos. Se pide confirmacion en lugar de bloquear, para no impedir una tarifa alta legitima. La reserva afectada y sus filas de rack se corrigieron a USD 300 (=$929.637).' },
+  { fecha:'2026-08-19', version:'2026-08-19-matriz-uso-v27', titulo:'Nuevo modulo temporal "Matriz de Uso por Persona": levanta quien usa cada modulo para deducir los cargos reales (Sol. Santiago)',
+    afecta:'nuevo modulo matriz-uso (solo gerencia general) + tabla config',
+    detalle:'Sol. Santiago (19-ago-2026): la matriz de roles llevaba semanas discutiendose en chat sin cerrarse porque se estaba armando por suposicion. Este modulo la construye al reves: lista los 82 modulos y submodulos del sistema como filas y las personas como columnas, y en cada cruce se marca SI o NO segun si esa persona realmente lo usa. Al terminar, el boton "Ver cargos que resultan" agrupa a quienes tienen exactamente el mismo patron de modulos marcados: cada grupo es un cargo real y su lista de modulos es el alcance de ese cargo. Con eso los permisos se definen sobre uso observado y no sobre supuestos. 8010 y Kubik se levantan por separado y cada persona aparece solo en la matriz del edificio al que tiene acceso, respetando la regla de no mezclar las dos companias. Cada clic cambia la celda entre sin definir, SI y NO, y guarda solo; hay botones para marcar una fila o una columna completa, un campo de cargo por persona, contador de avance y exportacion a CSV. Se guarda en la tabla config (ids matriz_uso_8010 y matriz_uso_kubik) para no crear tablas nuevas. Es un modulo temporal: una vez definidos los cargos se implementan los permisos en codigo y este modulo se puede retirar.' },
   { fecha:'2026-08-19', version:'2026-08-19-uso-de-dia-v25', titulo:'Reservas: ya se puede registrar un uso de dia (entrada y salida el mismo dia) para eventos, como el PH1 (Sol. Juanita Noguera, KL)',
     afecta:'guardarReserva() — validacion de fechas, filas del rack y campo noches',
     detalle:'Sol. Juanita Noguera (19-ago-2026): al registrar un evento en el PH1 el sistema no dejaba guardar la reserva con entrada y salida el mismo dia — devolvia "Las fechas no son validas" porque el guardado exigia noches > 0. Un evento o uso de dia no pernocta, asi que noches = 0 es correcto. Ahora se permite guardar con 0 noches siempre que la Modalidad de Tarifa sea "TxD — Por dia", que es la que cobra el dia usado; si esta en "TxN — Por noche" el total daria $0, y en ese caso el sistema ya no bloquea sin explicar sino que indica que se cambie la modalidad. En el rack, un uso de dia genera UNA sola fila en la fecha del evento con estado "Ocupado" y la tarifa del dia, para que cuente en ventas y el apartamento se vea usado; no se agrega la fila de check-out, que caeria sobre la misma fecha y dejaria el dia duplicado y sin tarifa. Ademas se corrigio que el campo noches guardaba null en vez de 0 (por el 0||null de JavaScript), lo que borraba el dato de la reserva.' },
@@ -1639,6 +1645,7 @@ const MENU_COMPLETO = [
   { id: 'mi-firma', icon: '✍️', label: 'Mi Firma' },
   { id: 'import-rack', icon: '🔄', label: 'Importar Rack 2026' },
   { id: 'changelog', icon: '🛠️', label: 'Registro de Cambios' },
+  { id: 'matriz-uso', icon: '🧩', label: 'Matriz de Uso por Persona' },
 ];
 
 // ── Permisos por persona (correo de acceso) + edificio ──
@@ -1684,7 +1691,7 @@ window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','fi
 // lista ya existía (Sol. Sebastián 23-jul-2026) pero le faltaban 4 ítems agregados al menú después:
 // recaudo-list, flujo-mes-list, proveedores-aging-list y sala-juntas-list (los mismos que señaló en su captura).
 window._ITEMS_COMPRAS_FIN_8010 = ['inventario-list','compras-orden-form','cartera-list','por-pagar-list','proveedores-list','flujo-caja-list','flujo-semanal-list','recaudo-list','flujo-mes-list','proveedores-aging-list','sala-juntas-list'];
-window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma'];
+window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma','matriz-uso'];
 // Módulos construidos sobre el presupuesto 2026 y las entidades 80-10 / LTM3 / PH (solo 8010): no se muestran en Kubik
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
 // Sol Santiago: procesos que son ÚNICAMENTE de Kubik. En 8010 no existen y no deben aparecer:
@@ -2968,6 +2975,7 @@ window.renderFlujoSemanal=async function(){
     case 'cuadro-extras':      await renderCuadroExtras(); break;
     case 'import-rack':        renderImportRack(); break;
     case 'changelog':          renderChangelog(); break;
+    case 'matriz-uso':         await renderMatrizUso(); break;
 
     // ── MÓDULOS DE AUDITORÍA ───────────────────────────────
     case 'check-carpetas-list': await renderList('check_carpetas','📂 Check List Carpetas','check-carpetas-form',
@@ -7331,6 +7339,26 @@ async function guardarReserva() {
   if (noches === 0 && _tipoTG !== 'TxD') {
     showToast('Entrada y salida el mismo día: cambia la Modalidad de Tarifa a "TxD — Por día" (uso de día / evento sin pernoctar)', 'error');
     return;
+  }
+
+  // Candado anti-tarifa-absurda en USD (19-ago-2026). Caso real: una reserva de Kubik quedo con
+  // tarifa_usd = 929.637 porque se digito el valor YA EN PESOS dentro del campo de dolares; el
+  // sistema lo multiplico por la TRM y guardo $2.880.749.839 por noche, que en el rack sumaron
+  // $11.522.999.356 a las ventas del mes. Nadie cobra miles de dolares por noche en estos edificios,
+  // asi que un valor de ese orden solo puede ser pesos digitados en el campo equivocado.
+  // Se avisa y se pide confirmacion en vez de bloquear, por si algun dia hay una tarifa alta real.
+  if (_esUSDr) {
+    var _limUSD = (_tipoTG === 'TxM') ? 20000 : 3000;   // TxM es canon mensual, admite mas
+    if (_tarifaRaw > _limUSD) {
+      var _equiv = _trmR > 0 ? Math.round(_tarifaRaw * _trmR) : 0;
+      var _msgU = '⚠️ TARIFA EN DÓLARES INUSUALMENTE ALTA\n\n'
+        + 'Estás registrando USD ' + Number(_tarifaRaw).toLocaleString('es-CO') + (_tipoTG==='TxM'?' de canon mensual':' por noche')
+        + (_equiv ? ('\nA la TRM registrada eso equivale a $' + _equiv.toLocaleString('es-CO') + ' COP.') : '')
+        + '\n\n¿El valor está realmente en DÓLARES?\n'
+        + 'Si lo tienes en PESOS, cancela y cambia Moneda a "COP — Pesos".\n\n'
+        + '¿Guardar de todos modos?';
+      if (!confirm(_msgU)) { showToast('Reserva no guardada — revisa la moneda y la tarifa', 'info'); return; }
+    }
   }
 
   const btn = document.querySelector('.btn-success');
@@ -17640,6 +17668,247 @@ function _histCKFiltrar(){
 // ═══════════════════════════════════════════════════════════
 // REGISTRO DE CAMBIOS — bitácora de cambios estructurales del SO
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// MATRIZ DE USO POR PERSONA (Sol. Santiago, 19-ago-2026)
+//
+// Modulo temporal para levantar, con datos reales y no por suposicion, quien usa
+// cada modulo del sistema. Se listan TODOS los modulos y submodulos como filas y
+// las personas como columnas; en cada cruce se marca SI o NO. Al final el modulo
+// agrupa a las personas que tienen exactamente el mismo patron de uso: esos grupos
+// son los cargos reales, y su conjunto de modulos marcados es el alcance de cada uno.
+//
+// 8010 y Kubik se levantan por separado (regla permanente: no se mezclan). Cada
+// persona aparece solo en la matriz del edificio al que tiene acceso.
+//
+// Se guarda en la tabla config (ids matriz_uso_8010 / matriz_uso_kubik) para no
+// crear tablas nuevas. Estructura: { cargos:{persona:cargo}, celdas:{'persona|modulo':'S'|'N'} }
+// ═══════════════════════════════════════════════════════════════════════════
+window._mtxState = { ed:'8010', datos:{cargos:{},celdas:{}}, personas:[], filtro:'' };
+
+window._mtxModulos = function(){
+  var out=[], sec=null;
+  (typeof MENU_COMPLETO!=='undefined'?MENU_COMPLETO:[]).forEach(function(it){
+    if(it.section){ sec=it.section; return; }
+    if(!it.id) return;
+    if(it.id==='matriz-uso') return;          // el modulo no se evalua a si mismo
+    out.push({id:it.id, label:it.label||it.id, icon:it.icon||'', sec:sec||'Otros'});
+  });
+  return out;
+};
+
+window._mtxCargar = async function(){
+  var st=window._mtxState;
+  var q = await window._sbFromRaw('config').select('valor').eq('id','matriz_uso_'+st.ed).maybeSingle();
+  var v = (q && q.data && q.data.valor) || '';
+  try{ st.datos = v ? JSON.parse(v) : {cargos:{},celdas:{}}; }catch(e){ st.datos={cargos:{},celdas:{}}; }
+  if(!st.datos.cargos) st.datos.cargos={};
+  if(!st.datos.celdas) st.datos.celdas={};
+  var p = await window._sbFromRaw('profiles').select('id,nombre,rol,edificios').order('nombre');
+  var todos = (p && p.data) || [];
+  st.personas = todos.filter(function(x){
+    var e = x.edificios || [];
+    return Array.isArray(e) ? e.indexOf(st.ed)>-1 : String(e).indexOf(st.ed)>-1;
+  });
+};
+
+window._mtxGuardar = async function(){
+  var st=window._mtxState;
+  var r = await window._sbFromRaw('config').upsert({id:'matriz_uso_'+st.ed, valor:JSON.stringify(st.datos), updated_at:new Date().toISOString()});
+  if(r && r.error){ showToast('No se pudo guardar: '+r.error.message,'error'); return false; }
+  return true;
+};
+
+window._mtxSet = async function(persona, modulo, el){
+  var st=window._mtxState, k=persona+'|'+modulo;
+  var actual = st.datos.celdas[k] || '';
+  var sig = actual==='' ? 'S' : (actual==='S' ? 'N' : '');
+  if(sig==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=sig;
+  _mtxPintaCelda(el, sig);
+  _mtxTotales();
+  await window._mtxGuardar();
+};
+
+function _mtxPintaCelda(el, v){
+  if(!el) return;
+  el.textContent = v==='S' ? 'SI' : (v==='N' ? 'NO' : '·');
+  el.style.background = v==='S' ? '#E7F3EA' : (v==='N' ? '#FBE9EA' : '#fff');
+  el.style.color      = v==='S' ? '#1A5C2E' : (v==='N' ? '#9B2226' : '#c9ccd1');
+  el.style.fontWeight = v ? '700' : '400';
+}
+
+window._mtxFila = async function(modulo, valor){
+  var st=window._mtxState;
+  st.personas.forEach(function(p){
+    var k=p.nombre+'|'+modulo;
+    if(valor==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=valor;
+  });
+  await window._mtxGuardar(); renderMatrizUso();
+};
+
+window._mtxColumna = async function(persona, valor){
+  var st=window._mtxState;
+  window._mtxModulos().forEach(function(m){
+    var k=persona+'|'+m.id;
+    if(valor==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=valor;
+  });
+  await window._mtxGuardar(); renderMatrizUso();
+};
+
+window._mtxCargo = async function(persona, val){
+  window._mtxState.datos.cargos[persona] = String(val||'').trim();
+  await window._mtxGuardar();
+};
+
+function _mtxTotales(){
+  var st=window._mtxState, mods=window._mtxModulos();
+  st.personas.forEach(function(p){
+    var si=0, no=0, pend=0;
+    mods.forEach(function(m){
+      var v=st.datos.celdas[p.nombre+'|'+m.id]||'';
+      if(v==='S') si++; else if(v==='N') no++; else pend++;
+    });
+    var e=document.getElementById('mtx-tot-'+_mtxSlug(p.nombre));
+    if(e) e.innerHTML = '<span style="color:#1A5C2E;font-weight:700">'+si+'</span> / <span style="color:#9B2226">'+no+'</span>'
+                      + (pend? '<div style="font-size:9px;color:#B3801A">faltan '+pend+'</div>' : '<div style="font-size:9px;color:#1A5C2E">completo</div>');
+  });
+  var tot=mods.length*st.personas.length, marc=0;
+  mods.forEach(function(m){ st.personas.forEach(function(p){ if(st.datos.celdas[p.nombre+'|'+m.id]) marc++; }); });
+  var b=document.getElementById('mtx-avance');
+  if(b) b.innerHTML = marc+' de '+tot+' celdas marcadas · <strong>'+(tot?Math.round(marc/tot*100):0)+'%</strong>';
+}
+
+function _mtxSlug(s){ return String(s||'').replace(/[^a-zA-Z0-9]/g,'_'); }
+
+// Agrupa personas cuyo patron de SI es identico: cada grupo es un cargo real.
+window._mtxAnalisis = function(){
+  var st=window._mtxState, mods=window._mtxModulos();
+  var firmas={};
+  st.personas.forEach(function(p){
+    var usa=mods.filter(function(m){ return st.datos.celdas[p.nombre+'|'+m.id]==='S'; }).map(function(m){return m.id;});
+    var f=usa.slice().sort().join(',');
+    if(!firmas[f]) firmas[f]={personas:[], mods:usa};
+    firmas[f].personas.push(p.nombre);
+  });
+  var grupos=Object.keys(firmas).map(function(f){ return firmas[f]; })
+              .sort(function(a,b){ return b.mods.length-a.mods.length; });
+  var esc=function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var html='<div style="padding:4px 2px">';
+  html+='<p style="font-size:13px;color:var(--gris-t);margin:0 0 12px">Cada grupo reune a las personas que usan <strong>exactamente los mismos modulos</strong>. Ese conjunto es el alcance real del cargo. Las personas con patron unico probablemente necesitan un rol propio, o falta terminar de marcarlas.</p>';
+  grupos.forEach(function(g,i){
+    var nom=g.personas.map(function(n){ return esc(st.datos.cargos[n]||'') ? esc(n)+' <span style="color:#6B7280">('+esc(st.datos.cargos[n])+')</span>' : esc(n); });
+    html+='<div style="border:1px solid var(--gris-b);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff">'
+       + '<div style="font-weight:700;color:#1D3461;font-size:13px">Grupo '+(i+1)+' — '+g.personas.length+' persona'+(g.personas.length>1?'s':'')+' · '+g.mods.length+' modulos</div>'
+       + '<div style="font-size:12.5px;margin:6px 0">'+nom.join(' &middot; ')+'</div>'
+       + '<div style="font-size:11.5px;color:#6B7280;line-height:1.6">'+(g.mods.length? g.mods.map(esc).join(', ') : '<em>sin modulos marcados</em>')+'</div>'
+       + '</div>';
+  });
+  html+='</div>';
+  var m=document.createElement('div'); m.id='mtx-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px';
+  m.innerHTML='<div style="background:#F7F8FA;border-radius:14px;max-width:860px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">'
+    +'<div style="background:#1D3461;color:#fff;padding:16px 20px;font-size:16px;font-weight:700">🧩 Cargos que se desprenden del uso real</div>'
+    +'<div style="padding:14px 16px;overflow:auto;flex:1">'+html+'</div>'
+    +'<div style="padding:12px 16px;border-top:1px solid #eef0f2;text-align:right"><button onclick="document.getElementById(\'mtx-modal\').remove()" style="background:#1D3461;color:#fff;border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">Cerrar</button></div>'
+    +'</div>';
+  m.addEventListener('click',function(e){ if(e.target===m) m.remove(); });
+  document.body.appendChild(m);
+};
+
+window._mtxCSV = function(){
+  var st=window._mtxState, mods=window._mtxModulos();
+  var filas=[['Seccion','Modulo','ID'].concat(st.personas.map(function(p){ return p.nombre+(st.datos.cargos[p.nombre]?(' ('+st.datos.cargos[p.nombre]+')'):''); }))];
+  mods.forEach(function(m){
+    filas.push([m.sec,m.label,m.id].concat(st.personas.map(function(p){
+      var v=st.datos.celdas[p.nombre+'|'+m.id]||''; return v==='S'?'SI':(v==='N'?'NO':'');
+    })));
+  });
+  var csv=filas.map(function(f){ return f.map(function(c){ return '"'+String(c==null?'':c).replace(/"/g,'""')+'"'; }).join(';'); }).join('\n');
+  var a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
+  a.download='matriz_uso_'+st.ed+'.csv'; a.click();
+};
+
+async function renderMatrizUso(){
+  var mc=document.getElementById('main-content');
+  if(!(currentProfile && currentProfile.rol==='gerente_general')){
+    mc.innerHTML='<div class="page-title">🧩 Matriz de Uso</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Solo gerencia general.</p></div>'; return;
+  }
+  mc.innerHTML='<div class="page-title">🧩 Matriz de Uso por Persona</div><p style="color:var(--gris-t)">Cargando…</p>';
+  await window._mtxCargar();
+  var st=window._mtxState, mods=window._mtxModulos();
+  var esc=function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); };
+  var edBtn=['8010','kubik'].map(function(e){
+    var on=(st.ed===e);
+    return '<button onclick="window._mtxState.ed=\''+e+'\';renderMatrizUso()" style="border:none;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;background:'+(on?'#1D3461':'#fff')+';color:'+(on?'#fff':'#1D3461')+'">'+(e==='8010'?'8010 Urban Living':'Kubik Living')+'</button>';
+  }).join('');
+
+  if(!st.personas.length){
+    mc.innerHTML='<div class="page-title">🧩 Matriz de Uso por Persona</div>'
+      +'<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:9px;overflow:hidden;margin-bottom:14px">'+edBtn+'</div>'
+      +'<div class="card"><p style="font-size:14px">No hay personas con acceso a este edificio.</p></div>'; return;
+  }
+
+  // encabezado de personas
+  var th='<th style="position:sticky;left:0;top:0;background:#1D3461;color:#fff;text-align:left;min-width:250px;z-index:6">Módulo</th>';
+  st.personas.forEach(function(p){
+    var sl=_mtxSlug(p.nombre);
+    th+='<th style="position:sticky;top:0;background:#1D3461;color:#fff;min-width:112px;z-index:5;vertical-align:top;padding:8px 6px">'
+      + '<div style="font-size:11.5px;font-weight:700;line-height:1.25">'+esc(p.nombre)+'</div>'
+      + '<div style="font-size:9.5px;opacity:.75;margin-top:1px">'+esc(p.rol||'')+'</div>'
+      + '<input value="'+esc(st.datos.cargos[p.nombre]||'')+'" placeholder="cargo…" onchange="window._mtxCargo(\''+esc(p.nombre)+'\',this.value)" style="width:100%;margin-top:5px;border:none;border-radius:5px;padding:3px 5px;font-size:10.5px;text-align:center">'
+      + '<div style="margin-top:4px;display:flex;gap:3px;justify-content:center">'
+      +   '<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'S\')" title="Marcar SI en toda la columna" style="cursor:pointer;background:#1A5C2E;border-radius:4px;padding:1px 6px;font-size:9.5px">SI</span>'
+      +   '<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'N\')" title="Marcar NO en toda la columna" style="cursor:pointer;background:#9B2226;border-radius:4px;padding:1px 6px;font-size:9.5px">NO</span>'
+      +   '<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'\')" title="Limpiar columna" style="cursor:pointer;background:#5A6472;border-radius:4px;padding:1px 6px;font-size:9.5px">·</span>'
+      + '</div>'
+      + '<div id="mtx-tot-'+sl+'" style="margin-top:5px;font-size:11px;background:#fff;color:#1D3461;border-radius:5px;padding:2px 4px"></div>'
+      + '</th>';
+  });
+
+  var body='', secAct=null;
+  mods.forEach(function(m){
+    if(m.sec!==secAct){
+      secAct=m.sec;
+      body+='<tr><td colspan="'+(st.personas.length+1)+'" style="position:sticky;left:0;background:#EEF1F5;font-weight:700;font-size:11.5px;color:#1D3461;text-transform:uppercase;letter-spacing:.5px;padding:7px 11px">'+esc(secAct)+'</td></tr>';
+    }
+    var celdas='';
+    st.personas.forEach(function(p){
+      var v=st.datos.celdas[p.nombre+'|'+m.id]||'';
+      var bg = v==='S'?'#E7F3EA':(v==='N'?'#FBE9EA':'#fff');
+      var col= v==='S'?'#1A5C2E':(v==='N'?'#9B2226':'#c9ccd1');
+      celdas+='<td style="padding:0;text-align:center"><div onclick="window._mtxSet(\''+esc(p.nombre)+'\',\''+m.id+'\',this)" '
+           + 'style="cursor:pointer;user-select:none;padding:7px 2px;font-size:11px;font-weight:'+(v?'700':'400')+';background:'+bg+';color:'+col+'">'
+           + (v==='S'?'SI':(v==='N'?'NO':'·'))+'</div></td>';
+    });
+    body+='<tr>'
+      + '<td style="position:sticky;left:0;background:#fff;text-align:left;font-size:12px;border-right:1px solid var(--gris-b)">'
+      +   '<span style="opacity:.8">'+esc(m.icon)+'</span> '+esc(m.label)
+      +   '<div style="display:inline-flex;gap:3px;margin-left:6px;vertical-align:middle">'
+      +     '<span onclick="window._mtxFila(\''+m.id+'\',\'S\')" title="Marcar SI en toda la fila" style="cursor:pointer;color:#1A5C2E;border:1px solid #cfe3d5;border-radius:4px;padding:0 5px;font-size:9.5px">SI</span>'
+      +     '<span onclick="window._mtxFila(\''+m.id+'\',\'N\')" title="Marcar NO en toda la fila" style="cursor:pointer;color:#9B2226;border:1px solid #f0cdcf;border-radius:4px;padding:0 5px;font-size:9.5px">NO</span>'
+      +   '</div>'
+      +   '<div style="font-size:9.5px;color:#9aa0a6">'+m.id+'</div>'
+      + '</td>' + celdas + '</tr>';
+  });
+
+  mc.innerHTML='<div class="page-title">🧩 Matriz de Uso por Persona</div>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'
+    +   '<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:9px;overflow:hidden">'+edBtn+'</div>'
+    +   '<button onclick="window._mtxAnalisis()" style="background:#1A5C2E;color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer">📊 Ver cargos que resultan</button>'
+    +   '<button onclick="window._mtxCSV()" style="background:#fff;color:#1D3461;border:1px solid #1D3461;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer">⬇️ Exportar CSV</button>'
+    +   '<div id="mtx-avance" style="font-size:12.5px;color:var(--gris-t)"></div>'
+    + '</div>'
+    + '<div style="background:#FEF9E7;border:1px solid #F1D89B;border-radius:9px;padding:10px 14px;font-size:12.5px;color:#6b5a1e;margin-bottom:12px">'
+    +   'Cada clic en una celda cambia entre <strong>·</strong> (sin definir) → <strong>SI</strong> → <strong>NO</strong>. Se guarda solo. '
+    +   'Los botones SI/NO al lado de cada módulo marcan la fila completa, y los del encabezado marcan la columna de esa persona. '
+    +   'Cuando termines, <strong>Ver cargos que resultan</strong> agrupa a quienes usan exactamente los mismos módulos: cada grupo es un cargo real y su lista es el alcance.'
+    + '</div>'
+    + '<div style="overflow:auto;max-height:74vh;border:1px solid var(--gris-b);border-radius:10px;background:#fff">'
+    +   '<table style="border-collapse:separate;border-spacing:0;width:max-content;min-width:100%"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table>'
+    + '</div>';
+  _mtxTotales();
+}
+
 function renderChangelog(){
   var _e = (typeof esc==='function') ? esc : function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   var cl = (typeof CHANGELOG!=='undefined' && Array.isArray(CHANGELOG)) ? CHANGELOG : [];
