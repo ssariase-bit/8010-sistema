@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-19-modalidad-pago-confirmacion-v23';
+const APP_VERSION = '2026-08-19-ppto-julio-y-doble-conteo-v24';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-19', version:'2026-08-19-ppto-julio-y-doble-conteo-v24', titulo:'Ventas vs Presupuesto (8010): presupuesto actualizado al corte de JULIO y corregido un doble conteo que inflaba la meta ~9% todos los meses (Sol. Santiago)',
+    afecta:'renderVentasPpto() — arrays PPTO_APTOS y PPTO_EVCO',
+    detalle:'Dos correcciones. (1) DESACTUALIZACION: el presupuesto estaba congelado en el corte de MAYO 2026. Contra el cierre real de julio, la meta de junio estaba $148.136.172 por encima y la de julio $145.111.787 por encima, asi que el modulo mostraba esos meses como si el objetivo hubiera sido mucho mayor. Se actualizo al corte "60% JULIO 2026": enero a julio ahora son cifras reales de cierre y agosto a diciembre presupuesto. (2) DOBLE CONTEO: el modulo calcula la meta como PPTO_APTOS + PPTO_EVCO, pero PPTO_APTOS no traia alojamiento sino la fila TOTAL INGRESOS del Excel, que ya incluye Salas de Juntas y Servicios Adicionales; PPTO_EVCO volvia a sumar esa misma plata. La meta quedaba inflada entre 8% y 9% cada mes ($1.214.056.697 en el ano) y el porcentaje de cumplimiento se mostraba peor del real desde que existe el modulo. Ahora las dos lineas son complementarias: PPTO_APTOS = Total Apartamentos + Operador Turistico + Parqueaderos, y PPTO_EVCO = Salas de Juntas + Servicios Adicionales. Verificado mes a mes: la suma da exacto el TOTAL INGRESOS del Excel en los 12 meses. La meta del ano pasa de $7.213.781.401 a $5.999.724.704, que es la cifra real del presupuesto.' },
   { fecha:'2026-08-19', version:'2026-08-19-modalidad-pago-confirmacion-v23', titulo:'Confirmacion de Reserva: ahora muestra la MODALIDAD de pago (Directo / CxC empresa) y no el instrumento (Sol. Juanita Noguera, KL)',
     afecta:'generarConfirmacion() — documento impreso de Confirmacion de Reserva y mensaje de WhatsApp',
     detalle:'Sol. Juanita Noguera (19-ago-2026): la Confirmacion de Reserva mostraba en "Forma de Pago" el instrumento con el que se paga (Efectivo, Tarjeta, Transferencia), que es un dato que se define al momento de pagar y que al huesped o a la empresa no le dice nada al confirmar. Lo que necesitan saber es si la reserva la paga el huesped directamente o si queda a cargo de la empresa por cuenta de cobro. Ahora la primera linea dice "Modalidad de Pago: DIRECTO — A CARGO DEL HUESPED" o "CxC — A CARGO DE LA EMPRESA", y el medio de pago pasa a una linea secundaria que solo aparece cuando el pago es directo (en CxC no aplica). La modalidad se deduce de tres campos ya existentes: metodo de pago "Por facturar", tipo de cuenta por cobrar distinto de "No Aplica", o quien paga = "Compania / Empresa" — basta con que uno se cumpla. Si el pagador es la empresa pero nadie marco CxC Full o CxC Aloj, no se asume ninguno y se omite el detalle. El mismo texto se agrego al mensaje de WhatsApp para que coincida con el documento impreso.' },
@@ -15213,9 +15216,16 @@ async function renderVentasPpto(){
   var Y=2026;
   var MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   var MC=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  // Presupuesto 2026 (Excel "60% MAYO 2026"): Aptos = TOTAL ingresos (80-10 oper. turistico + LTM3 arriendo); EvCo = LTM3 "TOTAL EVENTOS Y CONSUMOS"
-  var PPTO_APTOS=[371615407,452161143,419408742,329120350,544395498,563011120,602257512,607432512,587920720,609432512,612018560,541793672];
-  var PPTO_EVCO=[35364386,38881754,38042672,33521241,50859600,104369000,112725000,116900000,116900000,116900000,133600000,75150000];
+  // Presupuesto 2026 — actualizado al corte "60% JULIO 2026" (Sol. Santiago, 19-ago-2026).
+  // Antes se tomaba del corte de MAYO y ademas PPTO_APTOS traia la fila TOTAL INGRESOS del Excel
+  // (que ya incluye Salas de Juntas y Servicios Adicionales); al sumarle PPTO_EVCO encima, la meta
+  // quedaba inflada ~9% todos los meses y el cumplimiento se mostraba peor del real.
+  // Ahora las dos lineas son complementarias y suman exacto el TOTAL INGRESOS del Excel:
+  //   PPTO_APTOS = Total Apartamentos + Operador Turistico UL 80-10 + Parqueaderos
+  //   PPTO_EVCO  = Salas de Juntas + Servicios Adicionales
+  // Ene-Jul son cifras REALES del cierre; Ago-Dic son presupuesto.
+  var PPTO_APTOS=[307852683,376238091,385814328,297505760,471147093,343876721,405039931,468532512,448020720,468532512,453418560,440643672];
+  var PPTO_EVCO=[63762724,75923052,33594414,31614590,73248405,70998227,52105794,149380983,150380983,151380983,169080983,111630983];
   document.getElementById('main-content').innerHTML='<div class="page-title">🎯 Ventas vs Presupuesto '+Y+'</div><p style="color:var(--gris-t)">Cargando datos del rack, consumos y eventos…</p>';
   // Esta vista es fija de 8010: usamos el from "crudo" para no chocar con el filtro de edificio activo (rack y consumos lo aplican)
   var _RAW=(typeof window._sbFromRaw==='function')?window._sbFromRaw:function(t){return sb.from(t);};
