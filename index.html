@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-19-matriz-uso-v27';
+const APP_VERSION = '2026-08-19-matriz-uso-v28';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-19', version:'2026-08-19-matriz-uso-v28', titulo:'Matriz de Uso: casillas SI/NO independientes, acciones internas por modulo y acceso desde el primer lugar del menu (Sol. Santiago)',
+    afecta:'modulo matriz-uso y su posicion en MENU_COMPLETO',
+    detalle:'Tres ajustes pedidos sobre la primera version. (1) El cruce ya no es un solo boton que va rotando entre sin definir, SI y NO — eso obligaba a contar clics para saber en que estado quedaba. Ahora hay DOS casillas independientes, SI y NO: marcar una desmarca la otra y volver a hacer clic la deja en blanco, y la celda se pinta verde o roja para leerla de un vistazo. (2) El modulo estaba al final del menu, en la seccion Sistema; se movio al primer lugar de la seccion Principal, que es donde se va a usar todos los dias mientras dure el levantamiento. (3) Faltaba el detalle interno: marcar solo el modulo dice si lo usa, pero no con que alcance. Ahora cada modulo se despliega con la flecha y muestra sus acciones — Consultar, Crear/registrar, Editar, Eliminar y, en los que llevan visto bueno, Aprobar — para definir hasta donde llega cada persona. Los 27 modulos que son de pura consulta (informes, historicos, indicadores, estados de resultados) solo ofrecen Consultar, para no preguntar por acciones que no existen. El analisis de cargos ahora agrupa por modulo Y alcance, asi que dos personas que ven el mismo modulo pero una solo consulta y la otra edita quedan en cargos distintos, que es lo correcto.' },
   { fecha:'2026-08-19', version:'2026-08-19-matriz-uso-v27', titulo:'Candado que impide guardar una tarifa en dolares que en realidad son pesos (caso de $2.880 millones por noche)',
     afecta:'guardarReserva() — validacion previa al guardado en reservas en USD',
     detalle:'Caso real detectado el 19-ago-2026: una reserva del SD4 en Kubik quedo con tarifa_usd = 929.637 porque se digito el valor YA CONVERTIDO A PESOS dentro del campo de dolares. El sistema lo multiplico otra vez por la TRM y guardo $2.880.749.839 por noche; replicado en el rack sobre las dos unidades del combo durante dos noches, sumo $11.522.999.356 a las ventas de agosto de Kubik. Un solo dato mal digitado bastaba para destruir el reporte del mes sin que nada avisara. Ahora, si la moneda es USD y la tarifa supera USD 3.000 por noche (o USD 20.000 de canon mensual en TxM), el sistema muestra el equivalente en pesos y pide confirmacion expresa antes de guardar, sugiriendo cambiar la moneda a COP si el valor estaba en pesos. Se pide confirmacion en lugar de bloquear, para no impedir una tarifa alta legitima. La reserva afectada y sus filas de rack se corrigieron a USD 300 (=$929.637).' },
@@ -1548,6 +1551,7 @@ rrhh: [
 
 const MENU_COMPLETO = [
   { section: 'Principal' },
+  { id: 'matriz-uso', icon: '🧩', label: 'Matriz de Uso por Persona' },
   { id: 'dashboard', icon: '📊', label: 'Dashboard' },
   { id: 'comunicaciones-list', icon: '📣', label: 'Comunicaciones' },
   { id: 'rack', icon: '🏠', label: 'Rack de Aptos' },
@@ -1645,7 +1649,6 @@ const MENU_COMPLETO = [
   { id: 'mi-firma', icon: '✍️', label: 'Mi Firma' },
   { id: 'import-rack', icon: '🔄', label: 'Importar Rack 2026' },
   { id: 'changelog', icon: '🛠️', label: 'Registro de Cambios' },
-  { id: 'matriz-uso', icon: '🧩', label: 'Matriz de Uso por Persona' },
 ];
 
 // ── Permisos por persona (correo de acceso) + edificio ──
@@ -17668,29 +17671,45 @@ function _histCKFiltrar(){
 // ═══════════════════════════════════════════════════════════
 // REGISTRO DE CAMBIOS — bitácora de cambios estructurales del SO
 // ═══════════════════════════════════════════════════════════
+
 // ═══════════════════════════════════════════════════════════════════════════
-// MATRIZ DE USO POR PERSONA (Sol. Santiago, 19-ago-2026)
+// MATRIZ DE USO POR PERSONA (Sol. Santiago, 19-ago-2026 · v2)
 //
-// Modulo temporal para levantar, con datos reales y no por suposicion, quien usa
-// cada modulo del sistema. Se listan TODOS los modulos y submodulos como filas y
-// las personas como columnas; en cada cruce se marca SI o NO. Al final el modulo
-// agrupa a las personas que tienen exactamente el mismo patron de uso: esos grupos
-// son los cargos reales, y su conjunto de modulos marcados es el alcance de cada uno.
+// Levanta con datos reales — no por suposicion — quien usa cada modulo y con que
+// alcance. Filas = los 82 modulos del sistema, cada uno desplegable en las acciones
+// que admite (Ver, Crear, Editar, Eliminar, Aprobar). Columnas = las personas, con
+// DOS casillas independientes por cruce: SI y NO.
 //
-// 8010 y Kubik se levantan por separado (regla permanente: no se mezclan). Cada
-// persona aparece solo en la matriz del edificio al que tiene acceso.
+// Al terminar, "Ver cargos que resultan" agrupa a quienes tienen exactamente el mismo
+// patron de marcas: cada grupo es un cargo real y su lista es el alcance de ese cargo.
 //
-// Se guarda en la tabla config (ids matriz_uso_8010 / matriz_uso_kubik) para no
-// crear tablas nuevas. Estructura: { cargos:{persona:cargo}, celdas:{'persona|modulo':'S'|'N'} }
+// 8010 y Kubik se levantan por separado (regla permanente: no se mezclan).
+// Se guarda en config (matriz_uso_8010 / matriz_uso_kubik) — no se crean tablas.
 // ═══════════════════════════════════════════════════════════════════════════
-window._mtxState = { ed:'8010', datos:{cargos:{},celdas:{}}, personas:[], filtro:'' };
+window._mtxState = { ed:'8010', datos:{cargos:{},celdas:{}}, personas:[], abiertos:{}, verAcc:false };
+
+// Modulos que solo se consultan: no tiene sentido preguntar por crear/editar/eliminar.
+window._MTX_SOLO_VER = ['informe-cki','informe-cko','historico-ck','informe-noshow','caja-informe',
+  'ocupacion','semana-info','formato-huespedes','resumen-ventas','finanzas','indicadores',
+  'detalle-ventas','ventas-linea','requisiciones-list','reembolsos-informe','flujo-semanal-list',
+  'rotulos','tareas-fds-list','semana-resumen','changelog','ingresos','ventas-ppto','fact-devengado',
+  'financiero-kl','dashboard','novedades-diarias','saldos-list','cargos-list'];
+// Modulos que llevan Visto Bueno / aprobacion de gerencia.
+window._MTX_CON_VB = ['compras-ordenes','compras-orden-form','compras-requis','reembolsos-list',
+  'reembolsos-lote','anticipos-list','solicitudes','novedades-list','mantenimiento-list','reservas'];
+
+window._mtxAcciones = function(id){
+  if(window._MTX_SOLO_VER.indexOf(id)>-1) return [{k:'ver',n:'Consultar'}];
+  var a=[{k:'ver',n:'Consultar'},{k:'crear',n:'Crear / registrar'},{k:'editar',n:'Editar'},{k:'borrar',n:'Eliminar'}];
+  if(window._MTX_CON_VB.indexOf(id)>-1) a.push({k:'aprobar',n:'Aprobar / dar visto bueno'});
+  return a;
+};
 
 window._mtxModulos = function(){
   var out=[], sec=null;
   (typeof MENU_COMPLETO!=='undefined'?MENU_COMPLETO:[]).forEach(function(it){
     if(it.section){ sec=it.section; return; }
-    if(!it.id) return;
-    if(it.id==='matriz-uso') return;          // el modulo no se evalua a si mismo
+    if(!it.id || it.id==='matriz-uso') return;
     out.push({id:it.id, label:it.label||it.id, icon:it.icon||'', sec:sec||'Otros'});
   });
   return out;
@@ -17704,8 +17723,7 @@ window._mtxCargar = async function(){
   if(!st.datos.cargos) st.datos.cargos={};
   if(!st.datos.celdas) st.datos.celdas={};
   var p = await window._sbFromRaw('profiles').select('id,nombre,rol,edificios').order('nombre');
-  var todos = (p && p.data) || [];
-  st.personas = todos.filter(function(x){
+  st.personas = ((p && p.data)||[]).filter(function(x){
     var e = x.edificios || [];
     return Array.isArray(e) ? e.indexOf(st.ed)>-1 : String(e).indexOf(st.ed)>-1;
   });
@@ -17718,28 +17736,27 @@ window._mtxGuardar = async function(){
   return true;
 };
 
-window._mtxSet = async function(persona, modulo, el){
-  var st=window._mtxState, k=persona+'|'+modulo;
+// Casillas independientes: marcar SI apaga NO y viceversa; volver a hacer clic desmarca.
+window._mtxChk = async function(persona, clave, valor, el){
+  var st=window._mtxState, k=persona+'|'+clave;
   var actual = st.datos.celdas[k] || '';
-  var sig = actual==='' ? 'S' : (actual==='S' ? 'N' : '');
-  if(sig==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=sig;
-  _mtxPintaCelda(el, sig);
+  var nuevo = (actual===valor) ? '' : valor;
+  if(nuevo==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=nuevo;
+  var td = el.closest('td');
+  if(td){
+    var si=td.querySelector('[data-v="S"]'), no=td.querySelector('[data-v="N"]');
+    if(si) si.checked = (nuevo==='S');
+    if(no) no.checked = (nuevo==='N');
+    td.style.background = nuevo==='S' ? '#E7F3EA' : (nuevo==='N' ? '#FBE9EA' : '');
+  }
   _mtxTotales();
   await window._mtxGuardar();
 };
 
-function _mtxPintaCelda(el, v){
-  if(!el) return;
-  el.textContent = v==='S' ? 'SI' : (v==='N' ? 'NO' : '·');
-  el.style.background = v==='S' ? '#E7F3EA' : (v==='N' ? '#FBE9EA' : '#fff');
-  el.style.color      = v==='S' ? '#1A5C2E' : (v==='N' ? '#9B2226' : '#c9ccd1');
-  el.style.fontWeight = v ? '700' : '400';
-}
-
-window._mtxFila = async function(modulo, valor){
+window._mtxFila = async function(clave, valor){
   var st=window._mtxState;
   st.personas.forEach(function(p){
-    var k=p.nombre+'|'+modulo;
+    var k=p.nombre+'|'+clave;
     if(valor==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=valor;
   });
   await window._mtxGuardar(); renderMatrizUso();
@@ -17750,6 +17767,10 @@ window._mtxColumna = async function(persona, valor){
   window._mtxModulos().forEach(function(m){
     var k=persona+'|'+m.id;
     if(valor==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=valor;
+    window._mtxAcciones(m.id).forEach(function(a){
+      var ka=persona+'|'+m.id+'#'+a.k;
+      if(valor==='') delete st.datos.celdas[ka]; else st.datos.celdas[ka]=valor;
+    });
   });
   await window._mtxGuardar(); renderMatrizUso();
 };
@@ -17759,74 +17780,103 @@ window._mtxCargo = async function(persona, val){
   await window._mtxGuardar();
 };
 
+window._mtxToggle = function(id){
+  var st=window._mtxState;
+  st.abiertos[id] = !st.abiertos[id];
+  renderMatrizUso();
+};
+window._mtxTodos = function(abrir){
+  var st=window._mtxState;
+  st.abiertos={};
+  if(abrir) window._mtxModulos().forEach(function(m){ st.abiertos[m.id]=true; });
+  renderMatrizUso();
+};
+
 function _mtxTotales(){
   var st=window._mtxState, mods=window._mtxModulos();
   st.personas.forEach(function(p){
-    var si=0, no=0, pend=0;
+    var si=0,no=0,pend=0;
     mods.forEach(function(m){
       var v=st.datos.celdas[p.nombre+'|'+m.id]||'';
       if(v==='S') si++; else if(v==='N') no++; else pend++;
     });
     var e=document.getElementById('mtx-tot-'+_mtxSlug(p.nombre));
-    if(e) e.innerHTML = '<span style="color:#1A5C2E;font-weight:700">'+si+'</span> / <span style="color:#9B2226">'+no+'</span>'
-                      + (pend? '<div style="font-size:9px;color:#B3801A">faltan '+pend+'</div>' : '<div style="font-size:9px;color:#1A5C2E">completo</div>');
+    if(e) e.innerHTML='<span style="color:#1A5C2E;font-weight:700">'+si+'</span> / <span style="color:#9B2226">'+no+'</span>'
+        + (pend?'<div style="font-size:9px;color:#B3801A">faltan '+pend+'</div>':'<div style="font-size:9px;color:#1A5C2E">completo</div>');
   });
   var tot=mods.length*st.personas.length, marc=0;
   mods.forEach(function(m){ st.personas.forEach(function(p){ if(st.datos.celdas[p.nombre+'|'+m.id]) marc++; }); });
   var b=document.getElementById('mtx-avance');
-  if(b) b.innerHTML = marc+' de '+tot+' celdas marcadas · <strong>'+(tot?Math.round(marc/tot*100):0)+'%</strong>';
+  if(b) b.innerHTML='Módulos: '+marc+' de '+tot+' · <strong>'+(tot?Math.round(marc/tot*100):0)+'%</strong>';
 }
-
 function _mtxSlug(s){ return String(s||'').replace(/[^a-zA-Z0-9]/g,'_'); }
 
-// Agrupa personas cuyo patron de SI es identico: cada grupo es un cargo real.
 window._mtxAnalisis = function(){
   var st=window._mtxState, mods=window._mtxModulos();
   var firmas={};
   st.personas.forEach(function(p){
-    var usa=mods.filter(function(m){ return st.datos.celdas[p.nombre+'|'+m.id]==='S'; }).map(function(m){return m.id;});
-    var f=usa.slice().sort().join(',');
-    if(!firmas[f]) firmas[f]={personas:[], mods:usa};
+    var usa=[];
+    mods.forEach(function(m){
+      if(st.datos.celdas[p.nombre+'|'+m.id]==='S'){
+        var acc=window._mtxAcciones(m.id).filter(function(a){ return st.datos.celdas[p.nombre+'|'+m.id+'#'+a.k]==='S'; }).map(function(a){return a.k;});
+        usa.push(m.label + (acc.length? ' ['+acc.join('/')+']' : ''));
+      }
+    });
+    var f=usa.slice().sort().join(' ~ ');
+    if(!firmas[f]) firmas[f]={personas:[],mods:usa};
     firmas[f].personas.push(p.nombre);
   });
-  var grupos=Object.keys(firmas).map(function(f){ return firmas[f]; })
-              .sort(function(a,b){ return b.mods.length-a.mods.length; });
+  var grupos=Object.keys(firmas).map(function(f){return firmas[f];}).sort(function(a,b){return b.mods.length-a.mods.length;});
   var esc=function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
-  var html='<div style="padding:4px 2px">';
-  html+='<p style="font-size:13px;color:var(--gris-t);margin:0 0 12px">Cada grupo reune a las personas que usan <strong>exactamente los mismos modulos</strong>. Ese conjunto es el alcance real del cargo. Las personas con patron unico probablemente necesitan un rol propio, o falta terminar de marcarlas.</p>';
+  var html='<p style="font-size:13px;color:var(--gris-t);margin:0 0 12px">Cada grupo reúne a las personas que usan <strong>exactamente los mismos módulos y con el mismo alcance</strong>. Ese conjunto es el cargo real. Quien aparezca solo, o necesita un rol propio o falta terminar de marcarlo.</p>';
   grupos.forEach(function(g,i){
-    var nom=g.personas.map(function(n){ return esc(st.datos.cargos[n]||'') ? esc(n)+' <span style="color:#6B7280">('+esc(st.datos.cargos[n])+')</span>' : esc(n); });
+    var nom=g.personas.map(function(n){ var c=st.datos.cargos[n]||''; return esc(n)+(c?' <span style="color:#6B7280">('+esc(c)+')</span>':''); });
     html+='<div style="border:1px solid var(--gris-b);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff">'
-       + '<div style="font-weight:700;color:#1D3461;font-size:13px">Grupo '+(i+1)+' — '+g.personas.length+' persona'+(g.personas.length>1?'s':'')+' · '+g.mods.length+' modulos</div>'
-       + '<div style="font-size:12.5px;margin:6px 0">'+nom.join(' &middot; ')+'</div>'
-       + '<div style="font-size:11.5px;color:#6B7280;line-height:1.6">'+(g.mods.length? g.mods.map(esc).join(', ') : '<em>sin modulos marcados</em>')+'</div>'
-       + '</div>';
+       +'<div style="font-weight:700;color:#1D3461;font-size:13px">Grupo '+(i+1)+' — '+g.personas.length+' persona'+(g.personas.length>1?'s':'')+' · '+g.mods.length+' módulos</div>'
+       +'<div style="font-size:12.5px;margin:6px 0">'+nom.join(' &middot; ')+'</div>'
+       +'<div style="font-size:11.5px;color:#6B7280;line-height:1.65">'+(g.mods.length? g.mods.map(esc).join(' · ') : '<em>sin módulos marcados</em>')+'</div></div>';
   });
-  html+='</div>';
   var m=document.createElement('div'); m.id='mtx-modal';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px';
-  m.innerHTML='<div style="background:#F7F8FA;border-radius:14px;max-width:860px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">'
+  m.innerHTML='<div style="background:#F7F8FA;border-radius:14px;max-width:880px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">'
     +'<div style="background:#1D3461;color:#fff;padding:16px 20px;font-size:16px;font-weight:700">🧩 Cargos que se desprenden del uso real</div>'
     +'<div style="padding:14px 16px;overflow:auto;flex:1">'+html+'</div>'
-    +'<div style="padding:12px 16px;border-top:1px solid #eef0f2;text-align:right"><button onclick="document.getElementById(\'mtx-modal\').remove()" style="background:#1D3461;color:#fff;border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">Cerrar</button></div>'
-    +'</div>';
+    +'<div style="padding:12px 16px;border-top:1px solid #eef0f2;text-align:right"><button onclick="document.getElementById(\'mtx-modal\').remove()" style="background:#1D3461;color:#fff;border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">Cerrar</button></div></div>';
   m.addEventListener('click',function(e){ if(e.target===m) m.remove(); });
   document.body.appendChild(m);
 };
 
 window._mtxCSV = function(){
   var st=window._mtxState, mods=window._mtxModulos();
-  var filas=[['Seccion','Modulo','ID'].concat(st.personas.map(function(p){ return p.nombre+(st.datos.cargos[p.nombre]?(' ('+st.datos.cargos[p.nombre]+')'):''); }))];
+  var head=['Seccion','Modulo','Accion','Clave'].concat(st.personas.map(function(p){ var c=st.datos.cargos[p.nombre]; return p.nombre+(c?(' ('+c+')'):''); }));
+  var filas=[head];
   mods.forEach(function(m){
-    filas.push([m.sec,m.label,m.id].concat(st.personas.map(function(p){
+    filas.push([m.sec,m.label,'(módulo completo)',m.id].concat(st.personas.map(function(p){
       var v=st.datos.celdas[p.nombre+'|'+m.id]||''; return v==='S'?'SI':(v==='N'?'NO':'');
     })));
+    window._mtxAcciones(m.id).forEach(function(a){
+      filas.push([m.sec,m.label,a.n,m.id+'#'+a.k].concat(st.personas.map(function(p){
+        var v=st.datos.celdas[p.nombre+'|'+m.id+'#'+a.k]||''; return v==='S'?'SI':(v==='N'?'NO':'');
+      })));
+    });
   });
   var csv=filas.map(function(f){ return f.map(function(c){ return '"'+String(c==null?'':c).replace(/"/g,'""')+'"'; }).join(';'); }).join('\n');
   var a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
   a.download='matriz_uso_'+st.ed+'.csv'; a.click();
 };
+
+function _mtxCelda(persona, clave){
+  var st=window._mtxState, v=st.datos.celdas[persona+'|'+clave]||'';
+  var bg = v==='S'?'#E7F3EA':(v==='N'?'#FBE9EA':'');
+  var e=function(x){ return String(x).replace(/'/g,"\\'"); };
+  return '<td style="padding:4px 2px;text-align:center;background:'+bg+'">'
+    + '<label style="display:inline-flex;align-items:center;gap:2px;cursor:pointer;font-size:9.5px;color:#1A5C2E;font-weight:700;margin-right:5px">'
+    +   '<input type="checkbox" data-v="S" '+(v==='S'?'checked':'')+' onclick="window._mtxChk(\''+e(persona)+'\',\''+e(clave)+'\',\'S\',this)" style="width:13px;height:13px;accent-color:#1A5C2E;cursor:pointer">SI</label>'
+    + '<label style="display:inline-flex;align-items:center;gap:2px;cursor:pointer;font-size:9.5px;color:#9B2226;font-weight:700">'
+    +   '<input type="checkbox" data-v="N" '+(v==='N'?'checked':'')+' onclick="window._mtxChk(\''+e(persona)+'\',\''+e(clave)+'\',\'N\',this)" style="width:13px;height:13px;accent-color:#9B2226;cursor:pointer">NO</label>'
+    + '</td>';
+}
 
 async function renderMatrizUso(){
   var mc=document.getElementById('main-content');
@@ -17839,30 +17889,24 @@ async function renderMatrizUso(){
   var esc=function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); };
   var edBtn=['8010','kubik'].map(function(e){
     var on=(st.ed===e);
-    return '<button onclick="window._mtxState.ed=\''+e+'\';renderMatrizUso()" style="border:none;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;background:'+(on?'#1D3461':'#fff')+';color:'+(on?'#fff':'#1D3461')+'">'+(e==='8010'?'8010 Urban Living':'Kubik Living')+'</button>';
+    return '<button onclick="window._mtxState.ed=\''+e+'\';window._mtxState.abiertos={};renderMatrizUso()" style="border:none;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;background:'+(on?'#1D3461':'#fff')+';color:'+(on?'#fff':'#1D3461')+'">'+(e==='8010'?'8010 Urban Living':'Kubik Living')+'</button>';
   }).join('');
 
   if(!st.personas.length){
-    mc.innerHTML='<div class="page-title">🧩 Matriz de Uso por Persona</div>'
-      +'<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:9px;overflow:hidden;margin-bottom:14px">'+edBtn+'</div>'
-      +'<div class="card"><p style="font-size:14px">No hay personas con acceso a este edificio.</p></div>'; return;
+    mc.innerHTML='<div class="page-title">🧩 Matriz de Uso por Persona</div><div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:9px;overflow:hidden;margin-bottom:14px">'+edBtn+'</div><div class="card"><p style="font-size:14px">No hay personas con acceso a este edificio.</p></div>'; return;
   }
 
-  // encabezado de personas
-  var th='<th style="position:sticky;left:0;top:0;background:#1D3461;color:#fff;text-align:left;min-width:250px;z-index:6">Módulo</th>';
+  var th='<th style="position:sticky;left:0;top:0;background:#1D3461;color:#fff;text-align:left;min-width:270px;z-index:6">Módulo / acción</th>';
   st.personas.forEach(function(p){
-    var sl=_mtxSlug(p.nombre);
-    th+='<th style="position:sticky;top:0;background:#1D3461;color:#fff;min-width:112px;z-index:5;vertical-align:top;padding:8px 6px">'
-      + '<div style="font-size:11.5px;font-weight:700;line-height:1.25">'+esc(p.nombre)+'</div>'
-      + '<div style="font-size:9.5px;opacity:.75;margin-top:1px">'+esc(p.rol||'')+'</div>'
-      + '<input value="'+esc(st.datos.cargos[p.nombre]||'')+'" placeholder="cargo…" onchange="window._mtxCargo(\''+esc(p.nombre)+'\',this.value)" style="width:100%;margin-top:5px;border:none;border-radius:5px;padding:3px 5px;font-size:10.5px;text-align:center">'
-      + '<div style="margin-top:4px;display:flex;gap:3px;justify-content:center">'
-      +   '<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'S\')" title="Marcar SI en toda la columna" style="cursor:pointer;background:#1A5C2E;border-radius:4px;padding:1px 6px;font-size:9.5px">SI</span>'
-      +   '<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'N\')" title="Marcar NO en toda la columna" style="cursor:pointer;background:#9B2226;border-radius:4px;padding:1px 6px;font-size:9.5px">NO</span>'
-      +   '<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'\')" title="Limpiar columna" style="cursor:pointer;background:#5A6472;border-radius:4px;padding:1px 6px;font-size:9.5px">·</span>'
-      + '</div>'
-      + '<div id="mtx-tot-'+sl+'" style="margin-top:5px;font-size:11px;background:#fff;color:#1D3461;border-radius:5px;padding:2px 4px"></div>'
-      + '</th>';
+    th+='<th style="position:sticky;top:0;background:#1D3461;color:#fff;min-width:128px;z-index:5;vertical-align:top;padding:8px 6px">'
+      +'<div style="font-size:11.5px;font-weight:700;line-height:1.25">'+esc(p.nombre)+'</div>'
+      +'<div style="font-size:9.5px;opacity:.75">'+esc(p.rol||'')+'</div>'
+      +'<input value="'+esc(st.datos.cargos[p.nombre]||'')+'" placeholder="cargo…" onchange="window._mtxCargo(\''+esc(p.nombre)+'\',this.value)" style="width:100%;margin-top:5px;border:none;border-radius:5px;padding:3px 5px;font-size:10.5px;text-align:center">'
+      +'<div style="margin-top:4px;display:flex;gap:3px;justify-content:center">'
+      +'<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'S\')" title="SI a todo" style="cursor:pointer;background:#1A5C2E;border-radius:4px;padding:1px 6px;font-size:9.5px">SI</span>'
+      +'<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'N\')" title="NO a todo" style="cursor:pointer;background:#9B2226;border-radius:4px;padding:1px 6px;font-size:9.5px">NO</span>'
+      +'<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'\')" title="Limpiar" style="cursor:pointer;background:#5A6472;border-radius:4px;padding:1px 6px;font-size:9.5px">·</span>'
+      +'</div><div id="mtx-tot-'+_mtxSlug(p.nombre)+'" style="margin-top:5px;font-size:11px;background:#fff;color:#1D3461;border-radius:5px;padding:2px 4px"></div></th>';
   });
 
   var body='', secAct=null;
@@ -17871,41 +17915,44 @@ async function renderMatrizUso(){
       secAct=m.sec;
       body+='<tr><td colspan="'+(st.personas.length+1)+'" style="position:sticky;left:0;background:#EEF1F5;font-weight:700;font-size:11.5px;color:#1D3461;text-transform:uppercase;letter-spacing:.5px;padding:7px 11px">'+esc(secAct)+'</td></tr>';
     }
-    var celdas='';
-    st.personas.forEach(function(p){
-      var v=st.datos.celdas[p.nombre+'|'+m.id]||'';
-      var bg = v==='S'?'#E7F3EA':(v==='N'?'#FBE9EA':'#fff');
-      var col= v==='S'?'#1A5C2E':(v==='N'?'#9B2226':'#c9ccd1');
-      celdas+='<td style="padding:0;text-align:center"><div onclick="window._mtxSet(\''+esc(p.nombre)+'\',\''+m.id+'\',this)" '
-           + 'style="cursor:pointer;user-select:none;padding:7px 2px;font-size:11px;font-weight:'+(v?'700':'400')+';background:'+bg+';color:'+col+'">'
-           + (v==='S'?'SI':(v==='N'?'NO':'·'))+'</div></td>';
-    });
-    body+='<tr>'
-      + '<td style="position:sticky;left:0;background:#fff;text-align:left;font-size:12px;border-right:1px solid var(--gris-b)">'
-      +   '<span style="opacity:.8">'+esc(m.icon)+'</span> '+esc(m.label)
-      +   '<div style="display:inline-flex;gap:3px;margin-left:6px;vertical-align:middle">'
-      +     '<span onclick="window._mtxFila(\''+m.id+'\',\'S\')" title="Marcar SI en toda la fila" style="cursor:pointer;color:#1A5C2E;border:1px solid #cfe3d5;border-radius:4px;padding:0 5px;font-size:9.5px">SI</span>'
-      +     '<span onclick="window._mtxFila(\''+m.id+'\',\'N\')" title="Marcar NO en toda la fila" style="cursor:pointer;color:#9B2226;border:1px solid #f0cdcf;border-radius:4px;padding:0 5px;font-size:9.5px">NO</span>'
-      +   '</div>'
-      +   '<div style="font-size:9.5px;color:#9aa0a6">'+m.id+'</div>'
-      + '</td>' + celdas + '</tr>';
+    var abierto=!!st.abiertos[m.id], acc=window._mtxAcciones(m.id);
+    var celdas=''; st.personas.forEach(function(p){ celdas+=_mtxCelda(p.nombre, m.id); });
+    body+='<tr style="background:#fbfcfd">'
+      +'<td style="position:sticky;left:0;background:#fbfcfd;text-align:left;font-size:12.5px;border-right:1px solid var(--gris-b);font-weight:600">'
+      +  '<span onclick="window._mtxToggle(\''+m.id+'\')" style="cursor:pointer;display:inline-block;width:14px;color:#1D3461;font-weight:700">'+(abierto?'▾':'▸')+'</span> '
+      +  '<span style="opacity:.8">'+esc(m.icon)+'</span> '+esc(m.label)
+      +  '<span style="font-size:9.5px;color:#9aa0a6;font-weight:400"> · '+acc.length+' acción'+(acc.length>1?'es':'')+'</span>'
+      +  '<div style="display:inline-flex;gap:3px;margin-left:6px;vertical-align:middle">'
+      +    '<span onclick="window._mtxFila(\''+m.id+'\',\'S\')" style="cursor:pointer;color:#1A5C2E;border:1px solid #cfe3d5;border-radius:4px;padding:0 5px;font-size:9.5px">SI</span>'
+      +    '<span onclick="window._mtxFila(\''+m.id+'\',\'N\')" style="cursor:pointer;color:#9B2226;border:1px solid #f0cdcf;border-radius:4px;padding:0 5px;font-size:9.5px">NO</span>'
+      +  '</div></td>'+celdas+'</tr>';
+    if(abierto){
+      acc.forEach(function(a){
+        var cel=''; st.personas.forEach(function(p){ cel+=_mtxCelda(p.nombre, m.id+'#'+a.k); });
+        body+='<tr><td style="position:sticky;left:0;background:#fff;text-align:left;font-size:11.5px;color:#5A6472;padding-left:34px;border-right:1px solid var(--gris-b)">'
+          +'↳ '+esc(a.n)
+          +'<div style="display:inline-flex;gap:3px;margin-left:6px;vertical-align:middle">'
+          +'<span onclick="window._mtxFila(\''+m.id+'#'+a.k+'\',\'S\')" style="cursor:pointer;color:#1A5C2E;border:1px solid #cfe3d5;border-radius:4px;padding:0 5px;font-size:9px">SI</span>'
+          +'<span onclick="window._mtxFila(\''+m.id+'#'+a.k+'\',\'N\')" style="cursor:pointer;color:#9B2226;border:1px solid #f0cdcf;border-radius:4px;padding:0 5px;font-size:9px">NO</span>'
+          +'</div></td>'+cel+'</tr>';
+      });
+    }
   });
 
   mc.innerHTML='<div class="page-title">🧩 Matriz de Uso por Persona</div>'
-    + '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'
-    +   '<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:9px;overflow:hidden">'+edBtn+'</div>'
-    +   '<button onclick="window._mtxAnalisis()" style="background:#1A5C2E;color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer">📊 Ver cargos que resultan</button>'
-    +   '<button onclick="window._mtxCSV()" style="background:#fff;color:#1D3461;border:1px solid #1D3461;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer">⬇️ Exportar CSV</button>'
-    +   '<div id="mtx-avance" style="font-size:12.5px;color:var(--gris-t)"></div>'
-    + '</div>'
-    + '<div style="background:#FEF9E7;border:1px solid #F1D89B;border-radius:9px;padding:10px 14px;font-size:12.5px;color:#6b5a1e;margin-bottom:12px">'
-    +   'Cada clic en una celda cambia entre <strong>·</strong> (sin definir) → <strong>SI</strong> → <strong>NO</strong>. Se guarda solo. '
-    +   'Los botones SI/NO al lado de cada módulo marcan la fila completa, y los del encabezado marcan la columna de esa persona. '
-    +   'Cuando termines, <strong>Ver cargos que resultan</strong> agrupa a quienes usan exactamente los mismos módulos: cada grupo es un cargo real y su lista es el alcance.'
-    + '</div>'
-    + '<div style="overflow:auto;max-height:74vh;border:1px solid var(--gris-b);border-radius:10px;background:#fff">'
-    +   '<table style="border-collapse:separate;border-spacing:0;width:max-content;min-width:100%"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table>'
-    + '</div>';
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'
+    +'<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:9px;overflow:hidden">'+edBtn+'</div>'
+    +'<button onclick="window._mtxTodos(true)" style="background:#fff;color:#1D3461;border:1px solid #1D3461;border-radius:9px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer">▾ Abrir acciones</button>'
+    +'<button onclick="window._mtxTodos(false)" style="background:#fff;color:#1D3461;border:1px solid #1D3461;border-radius:9px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer">▸ Cerrar acciones</button>'
+    +'<button onclick="window._mtxAnalisis()" style="background:#1A5C2E;color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer">📊 Ver cargos que resultan</button>'
+    +'<button onclick="window._mtxCSV()" style="background:#fff;color:#1D3461;border:1px solid #1D3461;border-radius:9px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer">⬇️ CSV</button>'
+    +'<div id="mtx-avance" style="font-size:12.5px;color:var(--gris-t)"></div></div>'
+    +'<div style="background:#FEF9E7;border:1px solid #F1D89B;border-radius:9px;padding:10px 14px;font-size:12.5px;color:#6b5a1e;margin-bottom:12px">'
+    +'Cada cruce tiene <strong>dos casillas independientes: SI y NO</strong>. Marcar una desmarca la otra; volver a hacer clic la deja en blanco. Se guarda solo. '
+    +'La flecha <strong>▸</strong> al lado de cada módulo despliega sus acciones internas (consultar, crear, editar, eliminar, aprobar) para definir el alcance con detalle. '
+    +'Los botones SI/NO de cada fila marcan a todas las personas de una vez, y los del encabezado marcan la columna completa de esa persona.</div>'
+    +'<div style="overflow:auto;max-height:74vh;border:1px solid var(--gris-b);border-radius:10px;background:#fff">'
+    +'<table style="border-collapse:separate;border-spacing:0;width:max-content;min-width:100%"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>';
   _mtxTotales();
 }
 
