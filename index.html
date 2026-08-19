@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-19-ppto-julio-y-doble-conteo-v24';
+const APP_VERSION = '2026-08-19-uso-de-dia-v25';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-19', version:'2026-08-19-uso-de-dia-v25', titulo:'Reservas: ya se puede registrar un uso de dia (entrada y salida el mismo dia) para eventos, como el PH1 (Sol. Juanita Noguera, KL)',
+    afecta:'guardarReserva() — validacion de fechas, filas del rack y campo noches',
+    detalle:'Sol. Juanita Noguera (19-ago-2026): al registrar un evento en el PH1 el sistema no dejaba guardar la reserva con entrada y salida el mismo dia — devolvia "Las fechas no son validas" porque el guardado exigia noches > 0. Un evento o uso de dia no pernocta, asi que noches = 0 es correcto. Ahora se permite guardar con 0 noches siempre que la Modalidad de Tarifa sea "TxD — Por dia", que es la que cobra el dia usado; si esta en "TxN — Por noche" el total daria $0, y en ese caso el sistema ya no bloquea sin explicar sino que indica que se cambie la modalidad. En el rack, un uso de dia genera UNA sola fila en la fecha del evento con estado "Ocupado" y la tarifa del dia, para que cuente en ventas y el apartamento se vea usado; no se agrega la fila de check-out, que caeria sobre la misma fecha y dejaria el dia duplicado y sin tarifa. Ademas se corrigio que el campo noches guardaba null en vez de 0 (por el 0||null de JavaScript), lo que borraba el dato de la reserva.' },
   { fecha:'2026-08-19', version:'2026-08-19-ppto-julio-y-doble-conteo-v24', titulo:'Ventas vs Presupuesto (8010): presupuesto actualizado al corte de JULIO y corregido un doble conteo que inflaba la meta ~9% todos los meses (Sol. Santiago)',
     afecta:'renderVentasPpto() — arrays PPTO_APTOS y PPTO_EVCO',
     detalle:'Dos correcciones. (1) DESACTUALIZACION: el presupuesto estaba congelado en el corte de MAYO 2026. Contra el cierre real de julio, la meta de junio estaba $148.136.172 por encima y la de julio $145.111.787 por encima, asi que el modulo mostraba esos meses como si el objetivo hubiera sido mucho mayor. Se actualizo al corte "60% JULIO 2026": enero a julio ahora son cifras reales de cierre y agosto a diciembre presupuesto. (2) DOBLE CONTEO: el modulo calcula la meta como PPTO_APTOS + PPTO_EVCO, pero PPTO_APTOS no traia alojamiento sino la fila TOTAL INGRESOS del Excel, que ya incluye Salas de Juntas y Servicios Adicionales; PPTO_EVCO volvia a sumar esa misma plata. La meta quedaba inflada entre 8% y 9% cada mes ($1.214.056.697 en el ano) y el porcentaje de cumplimiento se mostraba peor del real desde que existe el modulo. Ahora las dos lineas son complementarias: PPTO_APTOS = Total Apartamentos + Operador Turistico + Parqueaderos, y PPTO_EVCO = Salas de Juntas + Servicios Adicionales. Verificado mes a mes: la suma da exacto el TOTAL INGRESOS del Excel en los 12 meses. La meta del ano pasa de $7.213.781.401 a $5.999.724.704, que es la cifra real del presupuesto.' },
@@ -7320,7 +7323,15 @@ async function guardarReserva() {
   if (!apto || !ci || !co || !nombre) {
     showToast('Completa: Apartamento, fechas y nombre del huésped', 'error'); return;
   }
-  if (noches <= 0) { showToast('Las fechas no son válidas', 'error'); return; }
+  // Sol. Juanita Noguera (19-ago-2026, KL): un evento o uso de dia — por ejemplo el PH1 alquilado
+  // para un evento — entra y sale el MISMO dia, asi que noches = 0 y el guardado lo rechazaba.
+  // Ahora se permite, pero solo con la modalidad "TxD — Por dia", que es la que cobra el dia usado.
+  // Con "TxN — Por noche" el total daria $0, por eso se guia a cambiar la modalidad en vez de bloquear.
+  if (noches < 0) { showToast('Las fechas no son válidas', 'error'); return; }
+  if (noches === 0 && _tipoTG !== 'TxD') {
+    showToast('Entrada y salida el mismo día: cambia la Modalidad de Tarifa a "TxD — Por día" (uso de día / evento sin pernoctar)', 'error');
+    return;
+  }
 
   const btn = document.querySelector('.btn-success');
   if (window._reservaEnCurso) { return; } // candado anti doble-clic (evita reservas duplicadas)
@@ -7391,8 +7402,23 @@ async function guardarReserva() {
     for (const _a of _aptosW2){ const _sib=(_adjSel.length>0 && _a!==apto); const _tA=_sib?null:(tNocheCOP||null); const _tU=(_esUSDr && !_sib)?(tNoche||null):null; rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _ahM ? 'Air House' : (_trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null)))) }); }
   }
   // Día de check-out
+  // Uso de dia (noches = 0, modalidad TxD): el ciclo de arriba no recorre ninguna noche, pero el dia
+  // SI se ocupa y se cobra. Se registra una sola fila con la tarifa del dia — estado "Ocupado" para
+  // que cuente en ventas y el rack lo muestre usado — y no se agrega la fila de check-out, que caeria
+  // sobre la misma fecha y dejaria el dia duplicado y sin tarifa.
+  if (noches === 0) {
+    const _tDia    = porNoche ? (tarifasNoche[ci] ?? tarifa) : tarifa;
+    const _tDiaCOP = _esUSDr ? Math.round(_tDia*_trmR) : _tDia;
+    for (const _a of _aptosW2){
+      const _sib = (_adjSel.length>0 && _a!==apto);
+      const _tA  = _sib ? null : (_tDiaCOP||null);
+      const _tU  = (_esUSDr && !_sib) ? (_tDia||null) : null;
+      rows.push({ fecha: ci, apto:_a, estado: 'Ocupado', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _ahM ? 'Air House' : (_trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null)))) });
+    }
+  } else {
   const dco = new Date(co);
   for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _ahM ? 'Air House' : (_trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null)))) });
+  }
 
   // Guardia anti-borrado: avisar si esas fechas ya tienen una reserva de OTRO huésped (evita sobrescribir por error)
   try{
@@ -7494,7 +7520,9 @@ async function guardarReserva() {
     // así que cada reserva en USD quedaba en Reservas con tarifa = tarifa_usd (ej. "230" en vez de "≈$821.756").
     // Se corrige aquí sin tocar resData.tarifa (para no romper la Confirmación impresa en USD).
     tarifa: (_esUSDr ? Math.round((Number(resData.tarifa)||0) * (_trmR||0)) : Number(resData.tarifa))||null,
-    noches: Number(resData.noches)||null, nombre: resData.nombre, huespedes_extra: _he2, numero: resData.numero, empresa: resData.empresa, pagador: resData.pagador, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, desayuno: (document.getElementById('res-desayuno')?.value || 'No'), user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',pagador:'Quién paga',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insR=await sb.from('reservas').insert(_rvRow).select('id').single(); if(_insR.error){ showToast('⚠️ Quedó en el rack pero NO se guardó en Reservas: '+_insR.error.message,'error'); } var _insH=(_insR.data)||{}; if(_insH.id){ try{ await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); }catch(_eh){} } } } catch(_e){ showToast('⚠️ Reserva en el rack, pero falló el registro en Reservas: '+(_e&&_e.message||_e),'error'); }
+    // Uso de dia = 0 noches: se guarda 0, no null. El 0||null de JavaScript convertia el cero en
+    // null y la reserva quedaba sin el dato de noches.
+    noches: (Number.isFinite(Number(resData.noches)) && Number(resData.noches)>=0) ? Number(resData.noches) : null, nombre: resData.nombre, huespedes_extra: _he2, numero: resData.numero, empresa: resData.empresa, pagador: resData.pagador, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, desayuno: (document.getElementById('res-desayuno')?.value || 'No'), user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',pagador:'Quién paga',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insR=await sb.from('reservas').insert(_rvRow).select('id').single(); if(_insR.error){ showToast('⚠️ Quedó en el rack pero NO se guardó en Reservas: '+_insR.error.message,'error'); } var _insH=(_insR.data)||{}; if(_insH.id){ try{ await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); }catch(_eh){} } } } catch(_e){ showToast('⚠️ Reserva en el rack, pero falló el registro en Reservas: '+(_e&&_e.message||_e),'error'); }
   setTimeout(() => {
     if(confirm('¿Deseas generar la Confirmación de Reserva ahora?')) {
       generarConfirmacion(resData);
