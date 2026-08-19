@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-19-matriz-uso-v28';
+const APP_VERSION = '2026-08-19-matriz-uso-v29';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-19', version:'2026-08-19-matriz-uso-v29', titulo:'Matriz de Uso abierta a todo el equipo: cada persona marca su columna, con proteccion contra pisarse entre usuarios (Sol. Santiago)',
+    afecta:'visibilidad del modulo matriz-uso y forma de guardado en la tabla config',
+    detalle:'Sol. Santiago (19-ago-2026): "Ya TODOS lo deberian ver". Hasta v28 la matriz estaba dentro de _ITEMS_SISTEMA y solo la abria el rol gerente_general, lo que obligaba a recoger las respuestas por WhatsApp y transcribirlas a mano — cerca de 15 personas por 82 modulos por 5 acciones. Ahora el modulo lo ve todo el equipo y cada quien marca directamente lo que usa, que es el dato de primera mano y sin intermediario. Se conserva una restriccion: quien no es gerencia general queda amarrado a la matriz del edificio en el que esta trabajando y no puede cambiar de compania desde el selector, porque 8010 y Kubik no se mezclan en ninguna vista. Junto con la apertura se corrigio un riesgo que antes no existia y con varios usuarios si: toda la matriz vive en UNA sola fila de la tabla config, y guardar el objeto completo hacia que el ultimo en grabar borrara lo que los demas hubieran marcado en los minutos anteriores. El guardado ahora lleva un registro de los cambios propios (_mtxPend), relee la fila antes de escribir y aplica unicamente esos cambios sobre el estado mas reciente, de modo que nadie borra el trabajo de otro. Se agrego el boton Actualizar para traer lo que marcaron los demas, ya que la pantalla no se refresca sola.' },
   { fecha:'2026-08-19', version:'2026-08-19-matriz-uso-v28', titulo:'Matriz de Uso: casillas SI/NO independientes, acciones internas por modulo y acceso desde el primer lugar del menu (Sol. Santiago)',
     afecta:'modulo matriz-uso y su posicion en MENU_COMPLETO',
     detalle:'Tres ajustes pedidos sobre la primera version. (1) El cruce ya no es un solo boton que va rotando entre sin definir, SI y NO — eso obligaba a contar clics para saber en que estado quedaba. Ahora hay DOS casillas independientes, SI y NO: marcar una desmarca la otra y volver a hacer clic la deja en blanco, y la celda se pinta verde o roja para leerla de un vistazo. (2) El modulo estaba al final del menu, en la seccion Sistema; se movio al primer lugar de la seccion Principal, que es donde se va a usar todos los dias mientras dure el levantamiento. (3) Faltaba el detalle interno: marcar solo el modulo dice si lo usa, pero no con que alcance. Ahora cada modulo se despliega con la flecha y muestra sus acciones — Consultar, Crear/registrar, Editar, Eliminar y, en los que llevan visto bueno, Aprobar — para definir hasta donde llega cada persona. Los 27 modulos que son de pura consulta (informes, historicos, indicadores, estados de resultados) solo ofrecen Consultar, para no preguntar por acciones que no existen. El analisis de cargos ahora agrupa por modulo Y alcance, asi que dos personas que ven el mismo modulo pero una solo consulta y la otra edita quedan en cargos distintos, que es lo correcto.' },
@@ -1694,7 +1697,10 @@ window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','fi
 // lista ya existía (Sol. Sebastián 23-jul-2026) pero le faltaban 4 ítems agregados al menú después:
 // recaudo-list, flujo-mes-list, proveedores-aging-list y sala-juntas-list (los mismos que señaló en su captura).
 window._ITEMS_COMPRAS_FIN_8010 = ['inventario-list','compras-orden-form','cartera-list','por-pagar-list','proveedores-list','flujo-caja-list','flujo-semanal-list','recaudo-list','flujo-mes-list','proveedores-aging-list','sala-juntas-list'];
-window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma','matriz-uso'];
+// Sol. Santiago (19-ago-2026): "Ya TODOS lo deberian ver" — la Matriz de Uso sale de esta lista para
+// que todo el equipo pueda marcar su propia columna. El levantamiento lo hace cada persona, no el
+// gerente transcribiendo respuestas de WhatsApp. Sigue siendo un modulo temporal.
+window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma'];
 // Módulos construidos sobre el presupuesto 2026 y las entidades 80-10 / LTM3 / PH (solo 8010): no se muestran en Kubik
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
 // Sol Santiago: procesos que son ÚNICAMENTE de Kubik. En 8010 no existen y no deben aparecer:
@@ -17729,10 +17735,26 @@ window._mtxCargar = async function(){
   });
 };
 
+// Toda la matriz vive en UNA sola fila de config, y desde el 19-ago-2026 la edita todo el equipo al
+// tiempo. Guardar el objeto local completo haria que el ultimo en grabar pisara lo que marcaron los
+// demas en los ultimos minutos. Por eso se registra en _mtxPend solo lo que ESTA persona toco, y al
+// guardar se relee la fila, se aplican unicamente esos cambios y se reescribe. Nadie borra a nadie.
+window._mtxPend = { celdas:{}, cargos:{} };
+
 window._mtxGuardar = async function(){
-  var st=window._mtxState;
-  var r = await window._sbFromRaw('config').upsert({id:'matriz_uso_'+st.ed, valor:JSON.stringify(st.datos), updated_at:new Date().toISOString()});
+  var st=window._mtxState, P=window._mtxPend;
+  if(!Object.keys(P.celdas).length && !Object.keys(P.cargos).length) return true;
+  var base = {cargos:{}, celdas:{}};
+  var q = await window._sbFromRaw('config').select('valor').eq('id','matriz_uso_'+st.ed).maybeSingle();
+  try{ var v=(q && q.data && q.data.valor)||''; if(v) base=JSON.parse(v); }catch(e){ base={cargos:{},celdas:{}}; }
+  if(!base.cargos) base.cargos={};
+  if(!base.celdas) base.celdas={};
+  Object.keys(P.celdas).forEach(function(k){ var x=P.celdas[k]; if(x) base.celdas[k]=x; else delete base.celdas[k]; });
+  Object.keys(P.cargos).forEach(function(p){ var x=P.cargos[p]; if(x) base.cargos[p]=x; else delete base.cargos[p]; });
+  var r = await window._sbFromRaw('config').upsert({id:'matriz_uso_'+st.ed, valor:JSON.stringify(base), updated_at:new Date().toISOString()});
   if(r && r.error){ showToast('No se pudo guardar: '+r.error.message,'error'); return false; }
+  st.datos = base;
+  window._mtxPend = { celdas:{}, cargos:{} };
   return true;
 };
 
@@ -17742,6 +17764,7 @@ window._mtxChk = async function(persona, clave, valor, el){
   var actual = st.datos.celdas[k] || '';
   var nuevo = (actual===valor) ? '' : valor;
   if(nuevo==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=nuevo;
+  window._mtxPend.celdas[k]=nuevo;
   var td = el.closest('td');
   if(td){
     var si=td.querySelector('[data-v="S"]'), no=td.querySelector('[data-v="N"]');
@@ -17758,6 +17781,7 @@ window._mtxFila = async function(clave, valor){
   st.personas.forEach(function(p){
     var k=p.nombre+'|'+clave;
     if(valor==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=valor;
+    window._mtxPend.celdas[k]=valor;
   });
   await window._mtxGuardar(); renderMatrizUso();
 };
@@ -17767,16 +17791,20 @@ window._mtxColumna = async function(persona, valor){
   window._mtxModulos().forEach(function(m){
     var k=persona+'|'+m.id;
     if(valor==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=valor;
+    window._mtxPend.celdas[k]=valor;
     window._mtxAcciones(m.id).forEach(function(a){
       var ka=persona+'|'+m.id+'#'+a.k;
       if(valor==='') delete st.datos.celdas[ka]; else st.datos.celdas[ka]=valor;
+      window._mtxPend.celdas[ka]=valor;
     });
   });
   await window._mtxGuardar(); renderMatrizUso();
 };
 
 window._mtxCargo = async function(persona, val){
-  window._mtxState.datos.cargos[persona] = String(val||'').trim();
+  var v = String(val||'').trim();
+  window._mtxState.datos.cargos[persona] = v;
+  window._mtxPend.cargos[persona] = v;
   await window._mtxGuardar();
 };
 
@@ -17880,17 +17908,22 @@ function _mtxCelda(persona, clave){
 
 async function renderMatrizUso(){
   var mc=document.getElementById('main-content');
-  if(!(currentProfile && currentProfile.rol==='gerente_general')){
-    mc.innerHTML='<div class="page-title">🧩 Matriz de Uso</div><div class="card" style="max-width:480px"><p style="font-size:14px">🔒 Solo gerencia general.</p></div>'; return;
+  // Sol. Santiago (19-ago-2026): el modulo lo usa todo el equipo. Se retira el candado de gerencia.
+  // Lo que NO se abre es el cruce entre companias: quien no es gerencia general queda amarrado a la
+  // matriz del edificio en el que esta trabajando, porque 8010 y Kubik no se mezclan en ninguna vista.
+  var _mtxGG = !!(currentProfile && currentProfile.rol==='gerente_general');
+  if(!_mtxGG){
+    window._mtxState.ed = (typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO==='kubik') ? 'kubik' : '8010';
   }
   mc.innerHTML='<div class="page-title">🧩 Matriz de Uso por Persona</div><p style="color:var(--gris-t)">Cargando…</p>';
   await window._mtxCargar();
   var st=window._mtxState, mods=window._mtxModulos();
   var esc=function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); };
-  var edBtn=['8010','kubik'].map(function(e){
+  var edBtn = _mtxGG ? ['8010','kubik'].map(function(e){
     var on=(st.ed===e);
     return '<button onclick="window._mtxState.ed=\''+e+'\';window._mtxState.abiertos={};renderMatrizUso()" style="border:none;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;background:'+(on?'#1D3461':'#fff')+';color:'+(on?'#fff':'#1D3461')+'">'+(e==='8010'?'8010 Urban Living':'Kubik Living')+'</button>';
-  }).join('');
+  }).join('')
+  : '<span style="display:inline-block;padding:8px 16px;font-size:13px;font-weight:700;background:#1D3461;color:#fff">'+(st.ed==='kubik'?'Kubik Living':'8010 Urban Living')+'</span>';
 
   if(!st.personas.length){
     mc.innerHTML='<div class="page-title">🧩 Matriz de Uso por Persona</div><div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:9px;overflow:hidden;margin-bottom:14px">'+edBtn+'</div><div class="card"><p style="font-size:14px">No hay personas con acceso a este edificio.</p></div>'; return;
@@ -17946,11 +17979,14 @@ async function renderMatrizUso(){
     +'<button onclick="window._mtxTodos(false)" style="background:#fff;color:#1D3461;border:1px solid #1D3461;border-radius:9px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer">▸ Cerrar acciones</button>'
     +'<button onclick="window._mtxAnalisis()" style="background:#1A5C2E;color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer">📊 Ver cargos que resultan</button>'
     +'<button onclick="window._mtxCSV()" style="background:#fff;color:#1D3461;border:1px solid #1D3461;border-radius:9px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer">⬇️ CSV</button>'
+    +'<button onclick="renderMatrizUso()" style="background:#fff;color:#1D3461;border:1px solid #1D3461;border-radius:9px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer">🔄 Actualizar</button>'
     +'<div id="mtx-avance" style="font-size:12.5px;color:var(--gris-t)"></div></div>'
     +'<div style="background:#FEF9E7;border:1px solid #F1D89B;border-radius:9px;padding:10px 14px;font-size:12.5px;color:#6b5a1e;margin-bottom:12px">'
+    +'<strong>Busque su nombre en el encabezado y marque su propia columna.</strong> '
     +'Cada cruce tiene <strong>dos casillas independientes: SI y NO</strong>. Marcar una desmarca la otra; volver a hacer clic la deja en blanco. Se guarda solo. '
     +'La flecha <strong>▸</strong> al lado de cada módulo despliega sus acciones internas (consultar, crear, editar, eliminar, aprobar) para definir el alcance con detalle. '
-    +'Los botones SI/NO de cada fila marcan a todas las personas de una vez, y los del encabezado marcan la columna completa de esa persona.</div>'
+    +'Los botones SI/NO de cada fila marcan a todas las personas de una vez, y los del encabezado marcan la columna completa de esa persona. '
+    +'<br><strong>La matriz la diligencian varias personas al mismo tiempo:</strong> lo que marque cada quien se conserva, pero para ver lo que marcaron los demás hay que oprimir <strong>🔄 Actualizar</strong>.</div>'
     +'<div style="overflow:auto;max-height:74vh;border:1px solid var(--gris-b);border-radius:10px;background:#fff">'
     +'<table style="border-collapse:separate;border-spacing:0;width:max-content;min-width:100%"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>';
   _mtxTotales();
