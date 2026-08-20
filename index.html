@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-19-matriz-uso-v29';
+const APP_VERSION = '2026-08-19-combo-no-duplica-v30';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-19', version:'2026-08-19-combo-no-duplica-v30', titulo:'El apartamento combinado deja de cobrar la misma noche dos veces ($107.140.602 inflados en la venta 2026)',
+    afecta:'guardarReserva (generacion de filas de rack) y la regla canonica de venta _esVentaAloja',
+    detalle:'Hallazgo de la auditoria del rack del 19-ago-2026. Una reserva de combinado se registra con codigo de unidad (FR7, TR5, SD4, Air House) y el rack trabaja con numeracion de apartamento, de modo que al guardar se creaban las noches en las DOS unidades fisicas. El problema es que a cada una se le escribia la tarifa COMPLETA: FR7 generaba la noche en el 701 y en el 702, cada uno con la tarifa entera, y una sola estadia quedaba cobrada dos veces. La causa exacta: la variable que marcaba la unidad hermana solo se activaba cuando el combo se armaba a mano con el selector de adjuntos, y nunca cuando venia de un codigo FR/TR/SD/AH, que es como se registra en Kubik. Medido sobre 2026: 130 noches con la tarifa replicada por $107.140.602, de los cuales $102.853.366 eran de Kubik y $4.287.236 de 8010. Al corregir los datos, la diferencia entre el Sistema Operativo y el archivo maestro de Kubik paso de +$121.953.401 a +$19.100.035: el 84% del descuadre del ano era esto. Ahora la tarifa se escribe UNICAMENTE en la unidad principal, que es la de numeracion menor (FR7 cobra en el 701, TR5 en el 502, SD4 en el 404, Air House en el PH1) y, cuando el combo se arma con adjuntos, en el apto de la reserva; la unidad hermana queda ocupada pero sin tarifa, que es la misma regla que ya se usaba para las habitaciones con sufijo A. Se corrigio ademas por que la proteccion construida en julio no sirvio: el filtro _esVentaAloja solo descartaba la unidad secundaria cuando el campo tipo de la fila decia Two Residence o Family Residence, y las 130 filas tenian ese campo VACIO, asi que el filtro nunca se activo y los $107 millones completos llegaron al Dashboard, a Resumen de Ventas y a Ventas vs Presupuesto. El tipo de combinado ahora se escribe siempre, y el filtro se arreglo en dos puntos: comparaba contra "Family Residence" cuando el sistema guarda "Famili Residence" (por lo que no atrapaba ni una sola fila de FR), y no contemplaba Suite Deluxe ni Air House. Aun asi, el arreglo de fondo no es el filtro sino el origen: un dato que no existe no se puede contar dos veces. Las noches siguen marcadas como ocupadas en ambas unidades, de modo que la ocupacion, el ADR y el RevPAR no cambian.' },
   { fecha:'2026-08-19', version:'2026-08-19-matriz-uso-v29', titulo:'Matriz de Uso abierta a todo el equipo: cada persona marca su columna, con proteccion contra pisarse entre usuarios (Sol. Santiago)',
     afecta:'visibilidad del modulo matriz-uso y forma de guardado en la tabla config',
     detalle:'Sol. Santiago (19-ago-2026): "Ya TODOS lo deberian ver". Hasta v28 la matriz estaba dentro de _ITEMS_SISTEMA y solo la abria el rol gerente_general, lo que obligaba a recoger las respuestas por WhatsApp y transcribirlas a mano — cerca de 15 personas por 82 modulos por 5 acciones. Ahora el modulo lo ve todo el equipo y cada quien marca directamente lo que usa, que es el dato de primera mano y sin intermediario. Se conserva una restriccion: quien no es gerencia general queda amarrado a la matriz del edificio en el que esta trabajando y no puede cambiar de compania desde el selector, porque 8010 y Kubik no se mezclan en ninguna vista. Junto con la apertura se corrigio un riesgo que antes no existia y con varios usuarios si: toda la matriz vive en UNA sola fila de la tabla config, y guardar el objeto completo hacia que el ultimo en grabar borrara lo que los demas hubieran marcado en los minutos anteriores. El guardado ahora lleva un registro de los cambios propios (_mtxPend), relee la fila antes de escribir y aplica unicamente esos cambios sobre el estado mas reciente, de modo que nadie borra el trabajo de otro. Se agrego el boton Actualizar para traer lo que marcaron los demas, ya que la pantalla no se refresca sola.' },
@@ -4967,7 +4970,16 @@ window._esVentaAloja = function(r){
   if((Number(r.tarifa)||0) <= 0) return false;
   // Combo Two/Family Residence de 8010: la pareja X02+X03 comparte UNA sola tarifa -> no contar la unidad
   // secundaria (03/02) para no duplicar. Los 03 independientes de Kubik NO son tipo Two/Family -> sí cuentan.
-  var esParSec = (r.tipo==='Two Residence' && /03$/.test(String(r.apto))) || (r.tipo==='Family Residence' && /02$/.test(String(r.apto)));
+  // Segunda linea de defensa sobre filas historicas. Desde el 19-ago-2026 la unidad hermana de un
+  // combinado se guarda SIN tarifa, asi que el chequeo de arriba ya la descarta; esto solo cubre lo
+  // que quedo escrito antes. Se corrigen dos fallas del filtro original: (a) comparaba contra
+  // 'Family Residence' mientras que guardarReserva escribe 'Famili Residence', de modo que no
+  // atrapaba ni una sola fila de FR; (b) no contemplaba Suite Deluxe ni Air House.
+  var _ap = String(r.apto||''), _tp = String(r.tipo||'');
+  var esParSec = (_tp==='Two Residence'  && /03$/.test(_ap))
+              || (/^Fami(li|ly) Residence$/.test(_tp) && /02$/.test(_ap))
+              || (_tp==='Suite Deluxe'   && /A$/.test(_ap))
+              || (_tp==='Air House'      && _ap==='PH2');
   if(esParSec) return false;
   return true;
 };
@@ -7385,6 +7397,23 @@ async function guardarReserva() {
   const _adjSel = Array.from((document.getElementById('res-adjuntos')||{}).selectedOptions||[]).map(o=>o.value).filter(a=>a&&_aptosW.indexOf(a)<0);
   const _aptosW2 = [..._aptosW, ..._adjSel];
   const _nCombo = _aptosW2.length;
+  // ── Unidad que cobra en un combinado ────────────────────────────────────────────────────
+  // Auditoria 19-ago-2026: una reserva de combinado escribia la tarifa COMPLETA en las dos
+  // unidades (FR7 -> 701 y 702, cada una con la tarifa entera), y el mes quedaba cobrado dos
+  // veces. Eran $107.140.602 inflados en 130 noches; el 84% del descuadre de Kubik contra el
+  // archivo maestro. La causa: la variable que marcaba la unidad hermana solo se activaba
+  // cuando el combo se armaba a mano con "adjuntos", nunca cuando venia de un codigo FR/TR/SD/AH.
+  // Regla: la tarifa se escribe UNICAMENTE en la unidad principal, que es la primera que
+  // devuelve _aptosFisicosDe (siempre la de numeracion menor: FR7->701, TR5->502, SD4->404,
+  // AH->PH1) y, cuando el combo se arma con adjuntos, el apto de la reserva. La unidad hermana
+  // queda ocupada pero sin tarifa. No se corrige el filtro de reportes sino el origen: un dato
+  // que no existe no se puede contar dos veces.
+  const _aptoPrincipal = _aptosW[0];
+  const _esHermana = (_a) => (_aptosW2.length > 1 && _a !== _aptoPrincipal);
+  // El tipo de combinado se escribe SIEMPRE en la fila. Las 130 filas duplicadas que encontro
+  // la auditoria tenian este campo vacio, y por eso el filtro _esVentaAloja de julio nunca se
+  // activo sobre ellas.
+  const _tipoCombo = _ahM ? 'Air House' : (_trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0 ? 'Combo' : null))));
   // Aviso preventivo de doble-booking: si el/los apto(s) ya están ocupados por OTRO huésped en esas fechas
   try {
     const _coPrev = (function(){ const d=new Date(co); d.setDate(d.getDate()-1); return d.toISOString().split('T')[0]; })();
@@ -7436,7 +7465,7 @@ async function guardarReserva() {
     const _tCanon = _canonMensual ? window._canonNoche(_canonMensual, fecha) : null;
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : (_tCanon !== null ? _tCanon : tarifa);
     const tNocheCOP = _esUSDr ? Math.round(tNoche*_trmR) : tNoche; // USD→COP (la TRM ya está validada arriba)
-    for (const _a of _aptosW2){ const _sib=(_adjSel.length>0 && _a!==apto); const _tA=_sib?null:(tNocheCOP||null); const _tU=(_esUSDr && !_sib)?(tNoche||null):null; rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _ahM ? 'Air House' : (_trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null)))) }); }
+    for (const _a of _aptosW2){ const _sib=_esHermana(_a); const _tA=_sib?null:(tNocheCOP||null); const _tU=(_esUSDr && !_sib)?(tNoche||null):null; rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _tipoCombo }); }
   }
   // Día de check-out
   // Uso de dia (noches = 0, modalidad TxD): el ciclo de arriba no recorre ninguna noche, pero el dia
@@ -7447,14 +7476,14 @@ async function guardarReserva() {
     const _tDia    = porNoche ? (tarifasNoche[ci] ?? tarifa) : tarifa;
     const _tDiaCOP = _esUSDr ? Math.round(_tDia*_trmR) : _tDia;
     for (const _a of _aptosW2){
-      const _sib = (_adjSel.length>0 && _a!==apto);
+      const _sib = _esHermana(_a);
       const _tA  = _sib ? null : (_tDiaCOP||null);
       const _tU  = (_esUSDr && !_sib) ? (_tDia||null) : null;
-      rows.push({ fecha: ci, apto:_a, estado: 'Ocupado', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _ahM ? 'Air House' : (_trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null)))) });
+      rows.push({ fecha: ci, apto:_a, estado: 'Ocupado', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _tipoCombo });
     }
   } else {
   const dco = new Date(co);
-  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _ahM ? 'Air House' : (_trM ? 'Two Residence' : (_frM ? 'Famili Residence' : (_sdM ? 'Suite Deluxe' : (_adjSel.length>0?'Combo':null)))) });
+  for (const _a of _aptosW2) rows.push({ fecha: co, apto:_a, estado: 'Check-out hoy', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: null, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _tipoCombo });
   }
 
   // Guardia anti-borrado: avisar si esas fechas ya tienen una reserva de OTRO huésped (evita sobrescribir por error)
