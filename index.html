@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-19-combo-no-duplica-v30';
+const APP_VERSION = '2026-08-20-composicion-huespedes-v31';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-20', version:'2026-08-20-composicion-huespedes-v31', titulo:'La composicion del grupo se registra por rango de edad y sexo, y deja de depender del criterio de cada administrador (Sol. Santiago)',
+    afecta:'formulario de reserva y check-in, campos pax_* y nueva columna composicion en reservas',
+    detalle:'Sol. Santiago (19-ago-2026): hasta hoy cada administrador describia a los acompanantes como le parecia — esposa, novia, lo que considerara. Es un dato subjetivo, no comparable entre registros y que no sirve para medir la ocupacion real. Se reemplaza por una composicion objetiva: cuatro rangos de edad (Adulto 18+, Adolescente 12-17, Nino 2-11, Infante 0-1) y en cada uno cuantos hombres y cuantas mujeres. El total de personas se calcula solo y deja de digitarse a mano, con lo que desaparece la diferencia frecuente entre el numero de PAX escrito y las personas realmente listadas. Los campos historicos pax_adultos, pax_menores y pax_infantes se siguen alimentando de forma calculada para no romper los informes, la confirmacion de reserva ni el precheck-in que ya los consumen; los menores agrupan adolescentes mas ninos, que es lo que ese campo significaba antes. Las reservas anteriores al cambio no traen composicion: al abrirlas se reparten los valores viejos dejando el sexo sin definir, para que quien haga el check-in complete el dato en vez de que el sistema se lo invente. El detalle completo se guarda en una columna nueva llamada composicion, que se agrega con un SQL aparte; mientras ese SQL no se corra el sistema guarda la reserva igual y avisa en pantalla que falta, de modo que ninguna reserva se pierde por el orden en que se despliegue.' },
   { fecha:'2026-08-19', version:'2026-08-19-combo-no-duplica-v30', titulo:'El apartamento combinado deja de cobrar la misma noche dos veces ($107.140.602 inflados en la venta 2026)',
     afecta:'guardarReserva (generacion de filas de rack) y la regla canonica de venta _esVentaAloja',
     detalle:'Hallazgo de la auditoria del rack del 19-ago-2026. Una reserva de combinado se registra con codigo de unidad (FR7, TR5, SD4, Air House) y el rack trabaja con numeracion de apartamento, de modo que al guardar se creaban las noches en las DOS unidades fisicas. El problema es que a cada una se le escribia la tarifa COMPLETA: FR7 generaba la noche en el 701 y en el 702, cada uno con la tarifa entera, y una sola estadia quedaba cobrada dos veces. La causa exacta: la variable que marcaba la unidad hermana solo se activaba cuando el combo se armaba a mano con el selector de adjuntos, y nunca cuando venia de un codigo FR/TR/SD/AH, que es como se registra en Kubik. Medido sobre 2026: 130 noches con la tarifa replicada por $107.140.602, de los cuales $102.853.366 eran de Kubik y $4.287.236 de 8010. Al corregir los datos, la diferencia entre el Sistema Operativo y el archivo maestro de Kubik paso de +$121.953.401 a +$19.100.035: el 84% del descuadre del ano era esto. Ahora la tarifa se escribe UNICAMENTE en la unidad principal, que es la de numeracion menor (FR7 cobra en el 701, TR5 en el 502, SD4 en el 404, Air House en el PH1) y, cuando el combo se arma con adjuntos, en el apto de la reserva; la unidad hermana queda ocupada pero sin tarifa, que es la misma regla que ya se usaba para las habitaciones con sufijo A. Se corrigio ademas por que la proteccion construida en julio no sirvio: el filtro _esVentaAloja solo descartaba la unidad secundaria cuando el campo tipo de la fila decia Two Residence o Family Residence, y las 130 filas tenian ese campo VACIO, asi que el filtro nunca se activo y los $107 millones completos llegaron al Dashboard, a Resumen de Ventas y a Ventas vs Presupuesto. El tipo de combinado ahora se escribe siempre, y el filtro se arreglo en dos puntos: comparaba contra "Family Residence" cuando el sistema guarda "Famili Residence" (por lo que no atrapaba ni una sola fila de FR), y no contemplaba Suite Deluxe ni Air House. Aun asi, el arreglo de fondo no es el filtro sino el origen: un dato que no existe no se puede contar dos veces. Las noches siguen marcadas como ocupadas en ambas unidades, de modo que la ocupacion, el ADR y el RevPAR no cambian.' },
@@ -4787,7 +4790,74 @@ function toggleAptoCompleto(chk) {
 }
 
 function _paxSum(){ var g=function(id){ var e=document.getElementById(id); return (e&&e.value!=='')?(Number(e.value)||0):0; }; var t=g('m-pax-ad')+g('m-pax-me')+g('m-pax-in'); var p=document.getElementById('m-pax'); if(p) p.value=t; }
-function _resPaxSum(){ var g=function(id){ var e=document.getElementById(id); return (e&&e.value!=='')?(Number(e.value)||0):0; }; var a=g('res-pax-ad'), n=g('res-pax-me'), i=g('res-pax-in'); var t=a+n+i; var parts=[]; if(a) parts.push(a+' adulto'+(a>1?'s':'')); if(n) parts.push(n+' niño'+(n>1?'s':'')); if(i) parts.push(i+' infante'+(i>1?'s':'')); var pe=document.getElementById('res-personas'); if(pe) pe.value=parts.join(', ')||'1 adulto'; var px=document.getElementById('res-pax'); if(px) px.value=t||1; }
+// Sol. Santiago (19-ago-2026): la composicion del grupo se registra por rango de edad y sexo.
+// Rangos: adulto 18+, adolescente 12-17, nino 2-11, infante 0-1. Se elimina el parentesco.
+// Los campos historicos pax_adultos / pax_menores / pax_infantes se siguen alimentando (calculados,
+// ya no digitados) para no romper informes, confirmacion de reserva ni precheck-in: los menores
+// agrupan adolescentes + ninos, que es lo que ese campo significaba antes.
+window._RES_COMP = [
+  {k:'ad', et:'adulto',      etp:'adultos',      lbl:'Adultos'},
+  {k:'ao', et:'adolescente', etp:'adolescentes', lbl:'Adolescentes'},
+  {k:'ni', et:'niño',        etp:'niños',        lbl:'Niños'},
+  {k:'if', et:'infante',     etp:'infantes',     lbl:'Infantes'}
+];
+window._resComposicion = function(){
+  var g=function(id){ var e=document.getElementById(id); return (e && e.value!=='') ? Math.max(0, Number(e.value)||0) : 0; };
+  var o={};
+  window._RES_COMP.forEach(function(r){ o[r.k]={h:g('res-px-'+r.k+'-h'), m:g('res-px-'+r.k+'-m')}; });
+  return o;
+};
+function _resPaxSum(){
+  var c=window._resComposicion(), th=0, tm=0, parts=[];
+  window._RES_COMP.forEach(function(r){
+    var s=c[r.k].h+c[r.k].m; th+=c[r.k].h; tm+=c[r.k].m;
+    var td=document.getElementById('res-tot-'+r.k); if(td) td.textContent=s;
+    if(s) parts.push(s+' '+(s>1?r.etp:r.et));
+  });
+  var t=th+tm;
+  var sh=document.getElementById('res-tot-h'); if(sh) sh.textContent=th;
+  var sm=document.getElementById('res-tot-m'); if(sm) sm.textContent=tm;
+  var sg=document.getElementById('res-tot-gral'); if(sg) sg.textContent=t;
+  var st=function(id,v){ var e=document.getElementById(id); if(e) e.value=v; };
+  st('res-pax-ad', c.ad.h+c.ad.m);
+  st('res-pax-me', c.ao.h+c.ao.m + c.ni.h+c.ni.m);
+  st('res-pax-in', c.if.h+c.if.m);
+  st('res-personas', parts.join(', ') || '1 adulto');
+  st('res-pax', t||1);
+}
+// Texto legible de la composicion, para informes y para la confirmacion al huesped.
+window._resCompTexto = function(c){
+  if(!c) return '';
+  try{ if(typeof c==='string') c=JSON.parse(c); }catch(e){ return ''; }
+  var p=[];
+  window._RES_COMP.forEach(function(r){
+    var x=c[r.k]||{}, h=Number(x.h)||0, m=Number(x.m)||0, s=h+m;
+    if(!s) return;
+    var d=[]; if(h) d.push(h+'H'); if(m) d.push(m+'M');
+    p.push(s+' '+(s>1?r.etp:r.et)+(d.length?' ('+d.join(' / ')+')':''));
+  });
+  return p.join(' · ');
+};
+// Carga la composicion guardada en el formulario. Si la reserva es anterior al cambio no trae
+// composicion: se reparten los campos viejos dejando el sexo sin definir, y se marca para que
+// quien haga el check-in complete el dato en lugar de que el sistema se lo invente.
+window._resCompCargar = function(x){
+  var st=function(id,v){ var e=document.getElementById(id); if(e) e.value=v; };
+  var c=x && x.composicion;
+  try{ if(typeof c==='string') c=JSON.parse(c); }catch(e){ c=null; }
+  if(c && typeof c==='object'){
+    window._RES_COMP.forEach(function(r){
+      st('res-px-'+r.k+'-h', Number((c[r.k]||{}).h)||0);
+      st('res-px-'+r.k+'-m', Number((c[r.k]||{}).m)||0);
+    });
+  } else {
+    window._RES_COMP.forEach(function(r){ st('res-px-'+r.k+'-h',0); st('res-px-'+r.k+'-m',0); });
+    st('res-px-ad-h', Number(x && x.pax_adultos)||0);
+    st('res-px-ni-h', Number(x && x.pax_menores)||0);
+    st('res-px-if-h', Number(x && x.pax_infantes)||0);
+  }
+  _resPaxSum();
+};
 // Mayúscula inicial: solo normaliza si el texto viene TODO en mayúsculas (no toca nombres ya bien escritos)
 function _titleCase(s){ s=String(s==null?'':s); if(!s) return s; if(/[a-záéíóúñü]/.test(s)) return s; return s.toLowerCase().replace(/(^|[\s'\-\/.])([a-záéíóúñü])/g, function(m,p,c){ return p+c.toUpperCase(); }); }
 async function cambiarAptoModal(){
@@ -7172,18 +7242,49 @@ function renderNuevaReserva() {
             <label>N° de reserva (NewHotel)</label>
             <input type="text" id="res-num-reserva" placeholder="Ej: 424/2026">
           </div>
-          <div class="form-group">
-            <label>Adultos</label>
-            <input type="number" id="res-pax-ad" min="0" step="1" value="1" placeholder="0" oninput="_resPaxSum()">
+          <!-- Sol. Santiago (19-ago-2026): la composicion del grupo se registra por rango de edad y
+               sexo, no por parentesco. Antes cada administrador escribia "esposa", "novia" o lo que
+               considerara, un dato subjetivo que no sirve para medir ocupacion. -->
+          <div class="form-group" style="flex:1 1 100%;min-width:0">
+            <label>Composición del grupo</label>
+            <div style="overflow-x:auto">
+            <table id="res-comp-tab" style="border-collapse:collapse;font-size:12.5px;min-width:430px">
+              <thead><tr>
+                <th style="text-align:left;padding:3px 8px 3px 0;font-weight:600;color:#5A6472">Rango</th>
+                <th style="padding:3px 6px;font-weight:600;color:#5A6472">Hombres</th>
+                <th style="padding:3px 6px;font-weight:600;color:#5A6472">Mujeres</th>
+                <th style="padding:3px 6px;font-weight:600;color:#5A6472">Total</th>
+              </tr></thead>
+              <tbody>
+                <tr><td style="padding:2px 8px 2px 0">Adultos <span style="color:#9aa0a6;font-size:11px">18+</span></td>
+                  <td style="padding:2px 6px"><input type="number" id="res-px-ad-h" class="res-px" min="0" step="1" value="1" oninput="_resPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+                  <td style="padding:2px 6px"><input type="number" id="res-px-ad-m" class="res-px" min="0" step="1" value="0" oninput="_resPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+                  <td id="res-tot-ad" style="padding:2px 6px;text-align:center;color:#5A6472">1</td></tr>
+                <tr><td style="padding:2px 8px 2px 0">Adolescentes <span style="color:#9aa0a6;font-size:11px">12–17</span></td>
+                  <td style="padding:2px 6px"><input type="number" id="res-px-ao-h" class="res-px" min="0" step="1" value="0" oninput="_resPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+                  <td style="padding:2px 6px"><input type="number" id="res-px-ao-m" class="res-px" min="0" step="1" value="0" oninput="_resPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+                  <td id="res-tot-ao" style="padding:2px 6px;text-align:center;color:#5A6472">0</td></tr>
+                <tr><td style="padding:2px 8px 2px 0">Niños <span style="color:#9aa0a6;font-size:11px">2–11</span></td>
+                  <td style="padding:2px 6px"><input type="number" id="res-px-ni-h" class="res-px" min="0" step="1" value="0" oninput="_resPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+                  <td style="padding:2px 6px"><input type="number" id="res-px-ni-m" class="res-px" min="0" step="1" value="0" oninput="_resPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+                  <td id="res-tot-ni" style="padding:2px 6px;text-align:center;color:#5A6472">0</td></tr>
+                <tr><td style="padding:2px 8px 2px 0">Infantes <span style="color:#9aa0a6;font-size:11px">0–1</span></td>
+                  <td style="padding:2px 6px"><input type="number" id="res-px-if-h" class="res-px" min="0" step="1" value="0" oninput="_resPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+                  <td style="padding:2px 6px"><input type="number" id="res-px-if-m" class="res-px" min="0" step="1" value="0" oninput="_resPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+                  <td id="res-tot-if" style="padding:2px 6px;text-align:center;color:#5A6472">0</td></tr>
+                <tr style="border-top:1px solid var(--gris-b)"><td style="padding:5px 8px 2px 0;font-weight:700">Total personas</td>
+                  <td id="res-tot-h" style="padding:5px 6px 2px;text-align:center;font-weight:700">1</td>
+                  <td id="res-tot-m" style="padding:5px 6px 2px;text-align:center;font-weight:700">0</td>
+                  <td id="res-tot-gral" style="padding:5px 6px 2px;text-align:center;font-weight:700;color:#1D3461">1</td></tr>
+              </tbody>
+            </table>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Niños</label>
-            <input type="number" id="res-pax-me" min="0" step="1" value="0" placeholder="0" oninput="_resPaxSum()">
-          </div>
-          <div class="form-group">
-            <label>Infantes</label>
-            <input type="number" id="res-pax-in" min="0" step="1" value="0" placeholder="0" oninput="_resPaxSum()">
-          </div>
+          <!-- Se conservan como campos calculados para no romper lo que ya los consume
+               (informes, confirmacion de reserva, precheck-in). Ya no se digitan a mano. -->
+          <input type="hidden" id="res-pax-ad" value="1">
+          <input type="hidden" id="res-pax-me" value="0">
+          <input type="hidden" id="res-pax-in" value="0">
           <input type="hidden" id="res-personas" value="1 adulto">
           <input type="hidden" id="res-pax" value="1">
         </div>
@@ -7317,6 +7418,25 @@ function renderNochesTarifa(){
   }
   list.innerHTML = html;
 }
+
+// ── Seguro de despliegue de la columna composicion ──────────────────────────────────────────
+// La composicion por rango de edad y sexo (Sol. Santiago, 19-ago-2026) vive en una columna nueva
+// que se agrega con un SQL aparte. Si este archivo se despliega ANTES de correr ese SQL, una
+// reserva no se puede perder por eso: si la base responde que la columna no existe, se reintenta
+// sin ella, la reserva queda guardada y se avisa en pantalla que falta correr el SQL.
+window._rvEsErrorComposicion = function(e){ return !!(e && String(e.message||e).toLowerCase().indexOf('composicion')>-1); };
+window._rvSinComposicion = function(row){ var r=Object.assign({},row); delete r.composicion; return r; };
+window._rvAvisoSQL = function(){ try{ showToast('La composición de huéspedes no se guardó: falta correr el SQL que agrega la columna. El resto de la reserva sí quedó registrado.','error'); }catch(_){} };
+window._rvInsert = async function(row){
+  var r = await sb.from('reservas').insert(row).select('id').single();
+  if(r && r.error && window._rvEsErrorComposicion(r.error)){ window._rvAvisoSQL(); r = await sb.from('reservas').insert(window._rvSinComposicion(row)).select('id').single(); }
+  return r;
+};
+window._rvUpdate = async function(row, id){
+  var r = await sb.from('reservas').update(row).eq('id', id);
+  if(r && r.error && window._rvEsErrorComposicion(r.error)){ window._rvAvisoSQL(); r = await sb.from('reservas').update(window._rvSinComposicion(row)).eq('id', id); }
+  return r;
+};
 
 async function guardarReserva() {
   const apto    = document.getElementById('res-apto').value;
@@ -7568,6 +7688,8 @@ async function guardarReserva() {
     cxcTipo: document.getElementById('res-cxc-tipo')?.value || 'CxC Full',
     cxcRazon: document.getElementById('res-cxc-razon')?.value || (((EB&&EB().nombre)||'').indexOf('8010')>-1 ? '80|10 S.A.S' : '8i8 Operadora SAS'),
     personas: document.getElementById('res-personas')?.value || '1 adulto', pax: document.getElementById('res-pax')?.value || '1',
+    // Sol. Santiago (19-ago-2026): composicion por rango de edad y sexo, en lugar del parentesco.
+    composicion: (typeof window._resComposicion==='function') ? window._resComposicion() : null,
     obs: document.getElementById('res-obs').value,
     firmante: document.getElementById('res-firmante').value || currentProfile?.nombre || 'Fabio Malaver',
     cargo: document.getElementById('res-cargo').value || 'Gerencia Operativa',
@@ -7588,7 +7710,7 @@ async function guardarReserva() {
     tarifa: (_esUSDr ? Math.round((Number(resData.tarifa)||0) * (_trmR||0)) : Number(resData.tarifa))||null,
     // Uso de dia = 0 noches: se guarda 0, no null. El 0||null de JavaScript convertia el cero en
     // null y la reserva quedaba sin el dato de noches.
-    noches: (Number.isFinite(Number(resData.noches)) && Number(resData.noches)>=0) ? Number(resData.noches) : null, nombre: resData.nombre, huespedes_extra: _he2, numero: resData.numero, empresa: resData.empresa, pagador: resData.pagador, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, desayuno: (document.getElementById('res-desayuno')?.value || 'No'), user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await sb.from('reservas').update(_rvRow).eq('id', window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',pagador:'Quién paga',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insR=await sb.from('reservas').insert(_rvRow).select('id').single(); if(_insR.error){ showToast('⚠️ Quedó en el rack pero NO se guardó en Reservas: '+_insR.error.message,'error'); } var _insH=(_insR.data)||{}; if(_insH.id){ try{ await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); }catch(_eh){} } } } catch(_e){ showToast('⚠️ Reserva en el rack, pero falló el registro en Reservas: '+(_e&&_e.message||_e),'error'); }
+    noches: (Number.isFinite(Number(resData.noches)) && Number(resData.noches)>=0) ? Number(resData.noches) : null, nombre: resData.nombre, huespedes_extra: _he2, numero: resData.numero, empresa: resData.empresa, pagador: resData.pagador, num_reserva: resData.numReserva, personas: resData.personas, tipo_tarifa: resData.tipoTarifa, checkin: resData.checkin||null, checkout: resData.checkout||null, canal: resData.canal, pago: resData.pago, cxc_tipo: resData.cxcTipo, cxc_razon: resData.cxcRazon, estado_pago: resData.estadoPago, obs: resData.obs, firmante: resData.firmante, cargo: resData.cargo, tel: resData.tel, email: resData.email, desayuno: (document.getElementById('res-desayuno')?.value || 'No'), composicion: resData.composicion || null, user_id: currentUser.id }; var _usrH=(currentProfile&&currentProfile.nombre)||(currentUser&&currentUser.email)||''; if (window._reservaEditId) { var _oldH=((await sb.from('reservas').select('*').eq('id',window._reservaEditId).single()).data)||{}; await window._rvUpdate(_rvRow, window._reservaEditId); var _cmpH={apto:'Apto',nombre:'Huesped',checkin:'Check-in',checkout:'Check-out',noches:'Noches',tarifa:'Tarifa',canal:'Canal',moneda:'Moneda',iva:'IVA',pago:'Pago',estado_pago:'Estado pago',empresa:'Empresa',pagador:'Quién paga',num_reserva:'N Reserva',personas:'PAX',cxc_razon:'Razon social',obs:'Obs'}; var _difH=Object.keys(_cmpH).filter(function(k){return String(_oldH[k]==null?'':_oldH[k])!==String(_rvRow[k]==null?'':_rvRow[k]);}).map(function(k){return _cmpH[k]+': "'+(_oldH[k]==null?'':_oldH[k])+'" -> "'+(_rvRow[k]==null?'':_rvRow[k])+'"';}); await sb.from('reservas_historial').insert({reserva_id:window._reservaEditId,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Modificada',detalle:_difH.length?_difH.join('\n'):'Sin cambios en campos clave',usuario:_usrH}); window._reservaEditId = null; } else { var _insR=await window._rvInsert(_rvRow); if(_insR.error){ showToast('⚠️ Quedó en el rack pero NO se guardó en Reservas: '+_insR.error.message,'error'); } var _insH=(_insR.data)||{}; if(_insH.id){ try{ await sb.from('reservas_historial').insert({reserva_id:_insH.id,edificio:EDIFICIO_ACTIVO,apto:_rvRow.apto,accion:'Creada',detalle:'Reserva creada para '+_rvRow.nombre+' (apto '+_rvRow.apto+', '+_rvRow.checkin+' a '+_rvRow.checkout+')',usuario:_usrH}); }catch(_eh){} } } } catch(_e){ showToast('⚠️ Reserva en el rack, pero falló el registro en Reservas: '+(_e&&_e.message||_e),'error'); }
   setTimeout(() => {
     if(confirm('¿Deseas generar la Confirmación de Reserva ahora?')) {
       generarConfirmacion(resData);
@@ -7624,6 +7746,8 @@ async function previsualizarConfirmacion() {
     cxcTipo: document.getElementById('res-cxc-tipo')?.value || 'CxC Full',
     cxcRazon: document.getElementById('res-cxc-razon')?.value || (((EB&&EB().nombre)||'').indexOf('8010')>-1 ? '80|10 S.A.S' : '8i8 Operadora SAS'),
     personas: document.getElementById('res-personas')?.value || '1 adulto', pax: document.getElementById('res-pax')?.value || '1',
+    // Sol. Santiago (19-ago-2026): composicion por rango de edad y sexo, en lugar del parentesco.
+    composicion: (typeof window._resComposicion==='function') ? window._resComposicion() : null,
     obs: document.getElementById('res-obs').value,
     email: document.getElementById('res-email').value.trim(),
     tel: window._telFull('res-tel'),
@@ -9383,6 +9507,7 @@ window.editarReserva = async function(id){
     set('res-personas',r.personas); set('res-obs',r.obs); set('res-firmante',r.firmante);
     set('res-cargo',r.cargo); set('res-email',r.email); window._telSet('res-tel', r.tel); set('res-empresa',r.empresa); set('res-pagador',r.pagador); set('res-pax',r.pax);
     set('res-nf',r.nombre); set('res-ap1',''); set('res-ap2','');
+    try{ if(typeof window._resCompCargar==='function') window._resCompCargar(r); }catch(_){}
     if(r.tipo_tarifa==='TxM' && Number(r.tarifa)>0){ set('res-tarifa', Math.round(Number(r.tarifa)*30)); } // mostrar el canon mensual
     if(typeof calcReserva==='function') try{ calcReserva(); }catch(e){}
     if(typeof combinarNombreReserva==='function') combinarNombreReserva();
@@ -19080,9 +19205,7 @@ function _pregUsar(id){
   var set = function(elid,val){ var e=document.getElementById(elid); if(e && val!=null && val!=='') e.value=val; };
   set('res-nf', x.nombre); set('res-ap1', x.apellido1); set('res-ap2', x.apellido2);
   set('res-doc', x.documento); window._telSet('res-tel', x.telefono); set('res-email', x.email); set('res-empresa', x.empresa);
-  if(x.pax_adultos!=null) set('res-pax-ad', x.pax_adultos);
-  if(x.pax_menores!=null) set('res-pax-me', x.pax_menores);
-  if(x.pax_infantes!=null) set('res-pax-in', x.pax_infantes);
+  try{ if(typeof window._resCompCargar==='function') window._resCompCargar(x); }catch(_){}
   try{ if(typeof combinarNombreReserva==='function') combinarNombreReserva(); }catch(_){}
   try{ if(typeof _resPaxSum==='function') _resPaxSum(); }catch(_){}
   try{ sb.from('prereg').update({estado:'importado'}).eq('id', id).then(function(){}); }catch(_){}
