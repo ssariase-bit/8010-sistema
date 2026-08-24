@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-24-cerrar-matriz-v34';
+const APP_VERSION = '2026-08-24-directorio-kubik-v35';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-24', version:'2026-08-24-directorio-kubik-v35', titulo:'Directorio de Kubik al día y recepción en copia de todos los informes (Sol. Fabio Malaver)',
+    afecta:'listas para dirigir solicitudes y comentarios en Kubik, y listas de distribución de informes en ambos edificios',
+    detalle:'Sol. Fabio Malaver (24-ago-2026), dos solicitudes. (1) El directorio de Kubik seguia con personas que ya no estan en la operacion — Carlos Jimenez, Nancy Medina y Yeisson Rodriguez — y no incluia a quienes si estan, Camila Cuartas y Andres Leguizamon, por lo que no se les podia dirigir una solicitud ni un comentario de gerencia. Se actualiza el directorio y se agregan tambien Fabio Malaver, Cristina Cervino, Zareth Varela y Recepcion. Ojo con una confusion que venia de antes: los logins admin1 a admin4 son compartidos de recepcion, y el directorio tenia admin4 a nombre de Carlos Jimenez cuando hoy lo usa Camila Cuartas; si cambia el titular de un login hay que actualizarlo aqui, no solo en el perfil. El login admin3 sale de las listas mientras no tenga titular asignado. (2) La encuesta de satisfaccion no le llegaba a recepcion@8i8op.com. La causa no era la encuesta: cada informe tiene su lista de distribucion segun el titulo, y el que no coincide con ninguna cae en una lista de respaldo que no incluia a recepcion. Se agrega recepcion a esa lista de respaldo en los dos edificios, de modo que un informe nuevo nunca vuelva a quedar sin copia por el solo hecho de no estar en la lista, y ademas a los informes de fin de semana, saldos, carpetas y semana en curso de Kubik, y a camareras y control de personal de 8010, donde tampoco estaba.' },
   { fecha:'2026-08-24', version:'2026-08-24-cerrar-matriz-v34', titulo:'La Matriz de Uso se puede cerrar por persona, para no seguir editando a quien ya terminó (Sol. Santiago)',
     afecta:'Matriz de Uso por Persona — nueva marca "cerrados" dentro de matriz_uso_8010 / matriz_uso_kubik',
     detalle:'Sol. Santiago (24-ago-2026): la matriz la llena todo el equipo a la vez sobre la misma fila, y hasta ahora cualquiera podia seguir tocando la columna de alguien que ya habia terminado. Se agrega un cierre por columna: quien termina se marca "🔒 Cerrar" y esa columna queda de solo lectura (casillas deshabilitadas, con aviso si se intenta tocar por la API directamente) hasta que alguien la reabra con "🔓 Reabrir". Las columnas sin cerrar se ven marcadas "🔴 Pendiente" para que no se pierdan de vista. No borra ni recalcula nada — es una marca adicional (cerrados) dentro del mismo objeto que ya se guardaba.' },
@@ -8752,9 +8755,14 @@ function _informeTextoDOM(){
   return out.join('\n');
 }
 function _tituloInforme(){ const mc=document.getElementById('main-content'); return (mc&&mc.querySelector('.page-title')?.textContent||'Informe').trim(); }
+// Lista de respaldo: la usa TODO informe cuyo titulo no coincida con ninguna lista especifica de
+// abajo (encuesta de satisfaccion, y cualquier informe nuevo que se agregue). Sol. Fabio Malaver
+// (24-ago-2026): la encuesta de satisfaccion no le llegaba a recepcion porque caia justamente aqui
+// y esta lista no la incluia. Se agrega recepcion en ambos edificios, para que un informe nuevo
+// nunca vuelva a quedar sin copia a recepcion por el solo hecho de no estar en la lista.
 const _DEST_INFORME = {
-  '8010':  { to:['sa@8010ul.com'],     cc:['fabio.malaver@8010urbanliving.com'] },
-  'kubik': { to:['sariase@8i8op.com'], cc:['operativo@8i8op.com'] }
+  '8010':  { to:['sa@8010ul.com'],     cc:['fabio.malaver@8010urbanliving.com','recepcion@8010urbanliving.com'] },
+  'kubik': { to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','recepcion@8i8op.com'] }
 };
 // Listas de distribucion por reporte (Kubik). Primero = Para; resto = CC.
 // Fix (Sol. Juanita Noguera, hallazgo 8a0386ab): desde la migración de correos de 8i8, a Recepción
@@ -8762,21 +8770,21 @@ const _DEST_INFORME = {
 // Salida de Personal — comparado con la lista de 8010 (donde recepción sí está en cc), en Kubik nunca
 // se agregó. Se agrega aquí a los mismos reportes que en 8010.
 const _DEST_KUBIK_REPORTES = [
-  { match:/novedad/i,           to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com','recepcion@8i8op.com'] },
+  { match:/novedad/i,           to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com','recepcion@8i8op.com'] },
   { match:/ingreso.*personal|control de personal/i, to:['rrhh@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','recepcion@8i8op.com'] },
-  { match:/rack/i,              to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com','recepcion@8i8op.com'] },
+  { match:/rack/i,              to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com','recepcion@8i8op.com'] },
   { match:/camareras/i,         to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','recepcion@8i8op.com'] },
-  { match:/fin de semana/i,     to:['operativo@8i8op.com'], cc:['operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com'] },
-  { match:/saldos/i,            to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com'] },
-  { match:/carpeta/i,           to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com'] },
-  { match:/semana en curso/i,   to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com'] },
+  { match:/fin de semana/i,     to:['operativo@8i8op.com'], cc:['operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com','recepcion@8i8op.com'] },
+  { match:/saldos/i,            to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com','recepcion@8i8op.com'] },
+  { match:/carpeta/i,           to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com','recepcion@8i8op.com'] },
+  { match:/semana en curso/i,   to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com','recepcion@8i8op.com'] },
 ];
 // Listas de distribucion por reporte (8010). Primero = Para; resto = CC.
 const _DEST_8010_REPORTES = [
   { match:/novedad/i,           to:['santiago.arias@8010urbanliving.com'], cc:['natalia.munoz@8010urbanliving.com','zareth.varela@8010urbanliving.com','mantenimiento@8010urbanliving.com','operativo.compras@8i8op.com','fernando.herrera@8010urbanliving.com','cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','maria.tosta@8010urbanliving.com','recepcion@8010urbanliving.com'] },
   { match:/rack/i,              to:['santiago.arias@8010urbanliving.com'], cc:['natalia.munoz@8010urbanliving.com','zareth.varela@8010urbanliving.com','mantenimiento@8010urbanliving.com','operativo.compras@8i8op.com','fernando.herrera@8010urbanliving.com','cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','maria.tosta@8010urbanliving.com','recepcion@8010urbanliving.com'] },
-  { match:/ingreso.*personal|control de personal/i, to:['fabio.malaver@8010urbanliving.com'], cc:['zareth.varela@8010urbanliving.com'] },
-  { match:/camareras/i,         to:['santiago.arias@8010urbanliving.com'], cc:['fabio.malaver@8010urbanliving.com'] },
+  { match:/ingreso.*personal|control de personal/i, to:['fabio.malaver@8010urbanliving.com'], cc:['zareth.varela@8010urbanliving.com','recepcion@8010urbanliving.com'] },
+  { match:/camareras/i,         to:['santiago.arias@8010urbanliving.com'], cc:['fabio.malaver@8010urbanliving.com','recepcion@8010urbanliving.com'] },
   { match:/fin de semana/i,     to:['fabio.malaver@8010urbanliving.com'], cc:['mantenimiento@8010urbanliving.com','natalia.munoz@8010urbanliving.com','recepcion@8010urbanliving.com'] },
   { match:/saldos/i,            to:['santiago.arias@8010urbanliving.com'], cc:['adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','recepcion@8010urbanliving.com','cristina.cervino@8010urbanliving.com','compras@8010urbanliving.com'] },
   { match:/carpeta/i,           to:['santiago.arias@8010urbanliving.com'], cc:['cristina.cervino@8010urbanliving.com','adriana.bernal@8010urbanliving.com','administrativo@8010urbanliving.com','recepcion@8010urbanliving.com','fabio.malaver@8010urbanliving.com','zareth.varela@8010urbanliving.com','compras@8010urbanliving.com'] },
@@ -11844,13 +11852,20 @@ const _DIRECTORIO = {
     {n:'ZARETH VARELA', e:'zareth.varela@8010urbanliving.com'},
     {n:'NATALIA MUÑOZ (EVENTOS)', e:'natalia.munoz@8010urbanliving.com'}
   ],
+  // Actualizado 24-ago-2026 (Sol. Fabio Malaver): salieron Carlos Jimenez, Nancy Medina y Yeisson
+  // Rodriguez; entraron Camila Cuartas (admin4) y Andres Leguizamon. Los admin1..admin4 son logins
+  // compartidos de recepcion: el nombre corresponde a quien lo tiene asignado hoy, no a la persona
+  // que lo creo. Si cambia el titular hay que actualizar aqui tambien, no solo en profiles.
   'kubik': [
     {n:'SANTIAGO ARIAS (GERENCIA GENERAL)', e:'sariase@8i8op.com'},
-    {n:'GERENCIA OPERATIVA', e:'operativo@8i8op.com'},
-    {n:'CARLOS ANDRÉS JIMÉNEZ', e:'admin4@8i8op.com'},
-    {n:'RICARDO VALLEJO', e:'admin2@8i8op.com'},
-    {n:'NANCY MEDINA PABÓN', e:'admin3@8i8op.com'},
+    {n:'FABIO MALAVER (GERENCIA OPERATIVA)', e:'operativo@8i8op.com'},
     {n:'JUANITA NOGUERA', e:'admin1@8i8op.com'},
+    {n:'RICARDO VALLEJO', e:'admin2@8i8op.com'},
+    {n:'CAMILA CUARTAS', e:'admin4@8i8op.com'},
+    {n:'ANDRÉS LEGUIZAMÓN (COMPRAS)', e:'operativo.compras@8i8op.com'},
+    {n:'CRISTINA CERVIÑO', e:'cristina.cervino@8010urbanliving.com'},
+    {n:'ZARETH VARELA', e:'zareth.varela@8010urbanliving.com'},
+    {n:'RECEPCIÓN', e:'recepcion@8i8op.com'},
     {n:'ANGÉLICA OLAYA', e:'aolaya@kubiklab.com'}
   ]
 };
@@ -11864,10 +11879,12 @@ const _GRUPOS_CORREO = {
     'Sistemas': ['fernando.herrera@8010urbanliving.com','mantenimiento@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
     'Compras': ['operativo.compras@8i8op.com']
   },
+  // 24-ago-2026: se retira admin3@8i8op.com de los grupos — su titular ya no esta en la operacion.
+  // Cuando se reasigne ese login, volver a incluirlo aqui.
   'kubik': {
-    'Administradores': ['admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com'],
+    'Administradores': ['admin1@8i8op.com','admin2@8i8op.com','admin4@8i8op.com'],
     'Administrativo': ['admin.fin@8i8op.com','rrhh@8i8op.com'],
-    'Operativo': ['recepcion@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','operativo@8i8op.com','operativo.compras@8i8op.com'],
+    'Operativo': ['recepcion@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin4@8i8op.com','operativo@8i8op.com','operativo.compras@8i8op.com'],
     'Mantenimiento': ['admin2@8i8op.com','dir.mantenimiento@8i8op.com'],
     'Financiero': ['admin.fin@8i8op.com','aolaya@kubiklab.com'],
     'Contable': ['contador@8i8op.com','asist.con@8i8op.com','radicacionfacturas@8i8op.com'],
@@ -11888,7 +11905,7 @@ function _destinos(){
     var adminE=['andres.parga@8010urbanliving.com','juan.martinez@8010urbanliving.com','sebastian.martinez@8010urbanliving.com','fernando.herrera@8010urbanliving.com','cristina.cervino@8010urbanliving.com','zareth.varela@8010urbanliving.com'];
     groups=[{n:'🏢 Administradores (todos)', emails:adminE},{n:'🏢 Todo el equipo 8010', emails:people.map(function(p){return p.e;})}];
   } else if(ed==='kubik'){
-    var adminK=['admin1@8i8op.com','admin2@8i8op.com','admin3@8i8op.com','admin4@8i8op.com'];
+    var adminK=['admin1@8i8op.com','admin2@8i8op.com','admin4@8i8op.com'];
     groups=[{n:'🏢 Administradores Kubik (todos)', emails:adminK},{n:'🏢 Todo el equipo Kubik', emails:people.map(function(p){return p.e;})}];
   }
   return { people:people, groups:groups };
