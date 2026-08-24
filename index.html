@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-24-directorio-kubik-v35';
+const APP_VERSION = '2026-08-24-comentarios-mantenimiento-v36';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-24', version:'2026-08-24-comentarios-mantenimiento-v36', titulo:'Las respuestas a comentarios de gerencia ahora sí avisan a quien corresponde, y el seguimiento de una novedad llega a Mantenimiento (Sol. Andrés Parga)',
+    afecta:'_addComNov() (avisos de comentarios en Novedades) y _novToMantTask() (orden de mantenimiento derivada de una novedad)',
+    detalle:'Sol. Andres Parga (24-ago-2026), dos reportes del mismo dia. (1) Decia que no habia opcion para contestar los comentarios de gerencia y que no tenia certeza de que su respuesta llegara. La opcion si existia — el modulo Comentarios permite responder — pero el aviso por correo estaba mal dirigido: solo se le avisaba al autor del PRIMER comentario del hilo. Si gerencia comentaba de segunda en adelante, la respuesta le llegaba por correo a quien hubiera abierto el hilo y no a quien pregunto, de modo que la respuesta se perdia. Ademas, dirigir un comentario a una persona no le mandaba ningun correo: solo pintaba un aviso dentro del sistema, que hay que estar mirando para verlo. Ahora se avisa a quien va dirigido el comentario y al autor del comentario anterior, que es a quien se le esta respondiendo; nunca a uno mismo y nunca dos veces al mismo correo. El correo incluye el texto al que se responde y la novedad relacionada. (2) Reportaba que el seguimiento hecho en una novedad no quedaba registrado en el modulo de Mantenimiento — caso del congelador del 702. La orden si existia, pero al editar la novedad el sistema volvia a INSERTAR en vez de actualizar: quedaban dos ordenes, la original enlazada con el texto viejo y una copia sin enlace con el seguimiento pegado, y ninguna completa. Ahora se actualiza la orden que ya existe y solo se crea una nueva cuando de verdad no hay ninguna; si encuentra una orden suelta de la misma fecha y apartamento, la re-enlaza en vez de duplicarla. Se limpiaron los datos historicos: 4 ordenes duplicadas consolidadas conservando el texto mas completo, y 7 novedades de mantenimiento de junio y julio que nunca habian generado su orden quedaron enlazadas. Hoy no queda ninguna novedad de mantenimiento sin su orden.' },
   { fecha:'2026-08-24', version:'2026-08-24-directorio-kubik-v35', titulo:'Directorio de Kubik al día y recepción en copia de todos los informes (Sol. Fabio Malaver)',
     afecta:'listas para dirigir solicitudes y comentarios en Kubik, y listas de distribución de informes en ambos edificios',
     detalle:'Sol. Fabio Malaver (24-ago-2026), dos solicitudes. (1) El directorio de Kubik seguia con personas que ya no estan en la operacion — Carlos Jimenez, Nancy Medina y Yeisson Rodriguez — y no incluia a quienes si estan, Camila Cuartas y Andres Leguizamon, por lo que no se les podia dirigir una solicitud ni un comentario de gerencia. Se actualiza el directorio y se agregan tambien Fabio Malaver, Cristina Cervino, Zareth Varela y Recepcion. Ojo con una confusion que venia de antes: los logins admin1 a admin4 son compartidos de recepcion, y el directorio tenia admin4 a nombre de Carlos Jimenez cuando hoy lo usa Camila Cuartas; si cambia el titular de un login hay que actualizarlo aqui, no solo en el perfil. El login admin3 sale de las listas mientras no tenga titular asignado. (2) La encuesta de satisfaccion no le llegaba a recepcion@8i8op.com. La causa no era la encuesta: cada informe tiene su lista de distribucion segun el titulo, y el que no coincide con ninguna cae en una lista de respaldo que no incluia a recepcion. Se agrega recepcion a esa lista de respaldo en los dos edificios, de modo que un informe nuevo nunca vuelva a quedar sin copia por el solo hecho de no estar en la lista, y ademas a los informes de fin de semana, saldos, carpetas y semana en curso de Kubik, y a camareras y control de personal de 8010, donde tampoco estaba.' },
@@ -5748,6 +5751,7 @@ async function enviarNovedad() {
   if(_payload.area==='Mantenimiento' && _row){
     var _okM = await window._novToMantTask(_row);
     if(_okM===true) showToast('🔧 Enviada a Órdenes de Mantenimiento (apto '+(_row.apto||'—')+')','success');
+    else if(_okM==='act') showToast('🔧 Orden de Mantenimiento actualizada (apto '+(_row.apto||'—')+')','success');
   }
   var descFinal = desc + (accion ? `\n\n✅ Acción tomada: ${accion}` : '');
   window._novedadEdit = null;
@@ -6349,14 +6353,54 @@ window._renderTrazabilidadNov = function(n){
 };
 // Crea una tarea de Mantenimiento por apartamento a partir de una novedad (alimenta el historial del apto).
 // Resiliente a columnas faltantes (novedad_id, solicitado_por) y evita duplicar si ya existe el enlace.
+// Sol. Andres Parga (24-ago-2026): reportó que el seguimiento que hacía en una novedad no
+// quedaba registrado en el módulo de Mantenimiento — caso del congelador del 702. Al revisar,
+// el registro sí existía, pero al editar la novedad esta función volvía a INSERTAR: si la
+// consulta de deduplicación fallaba, o si la fila enlazada se había creado sin novedad_id, se
+// creaba una copia nueva con el seguimiento pegado y sin vínculo, y el registro original se
+// quedaba con el texto viejo. Quedaban los dos y ninguno completo. Ahora la función ACTUALIZA
+// el registro que ya existe en vez de crear otro, así el seguimiento de la novedad se refleja
+// en la orden de mantenimiento, y sólo inserta cuando de verdad no hay ninguno.
 window._novToMantTask = async function(nov){
   try{
     var base = { fecha: nov.fecha||TODAY, area_apto: nov.apto || 'General', descripcion: nov.descripcion||'',
       prioridad: (nov.prioridad==='Alta'?'Urgente':'Normal'), estado:(/(resuelt|cerrad)/i.test(nov.estado||'')?'Resuelto':'Pendiente'),
       solicitado_por: nov.reportado_por||null, user_id: currentUser.id };
     if(nov.tratamiento){ var ai=window._accionInicialNov(nov.tratamiento); if(ai) base.descripcion += '\nAcción: '+ai; }
-    try{ var ex = await sb.from('mantenimiento').select('id').eq('novedad_id', nov.id).limit(1);
-      if(ex && !ex.error && ex.data && ex.data.length) return 'dup'; if(ex && !ex.error) base.novedad_id = nov.id; }catch(e){}
+
+    // 1) ¿Ya hay una orden enlazada a esta novedad?
+    var _idExistente = null, _hayColumna = false;
+    try{
+      var ex = await sb.from('mantenimiento').select('id').eq('novedad_id', nov.id).limit(1);
+      if(ex && !ex.error){ _hayColumna = true; if(ex.data && ex.data.length) _idExistente = ex.data[0].id; }
+    }catch(e){}
+
+    // 2) Si no la hay por enlace, buscar por fecha + apto (ordenes viejas creadas sin novedad_id,
+    //    o creadas por una version anterior de esta funcion). Evita duplicar y las re-enlaza.
+    if(!_idExistente){
+      try{
+        var ex2 = await sb.from('mantenimiento').select('id,novedad_id')
+          .eq('fecha', base.fecha).eq('area_apto', base.area_apto).limit(5);
+        if(ex2 && !ex2.error && ex2.data && ex2.data.length){
+          var _libre = ex2.data.filter(function(x){ return !x.novedad_id; })[0];
+          if(_libre) _idExistente = _libre.id;
+        }
+      }catch(e){}
+    }
+
+    // 3) Actualizar la que existe (así el seguimiento de la novedad sí llega a Mantenimiento)
+    if(_idExistente){
+      var upd = { descripcion: base.descripcion, estado: base.estado, prioridad: base.prioridad };
+      if(_hayColumna) upd.novedad_id = nov.id;
+      var ru = await sb.from('mantenimiento').update(upd).eq('id', _idExistente);
+      if(ru && ru.error && /novedad_id/.test(ru.error.message||'')){
+        delete upd.novedad_id; ru = await sb.from('mantenimiento').update(upd).eq('id', _idExistente);
+      }
+      return (ru && ru.error) ? false : 'act';
+    }
+
+    // 4) No existe ninguna: crearla
+    if(_hayColumna) base.novedad_id = nov.id;
     var r = await sb.from('mantenimiento').insert(base);
     if(r.error && /novedad_id/.test(r.error.message||'')){ delete base.novedad_id; r = await sb.from('mantenimiento').insert(base); }
     if(r.error && /solicitado_por/.test(r.error.message||'')){ delete base.solicitado_por; base.descripcion='Solicita: '+(nov.reportado_por||'')+'\n'+base.descripcion; r = await sb.from('mantenimiento').insert(base); }
@@ -11757,14 +11801,52 @@ window._addComNov = async function(id, texto, dir, adjunto){
   arr.push({ autor:(typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||'—', autor_email:(currentUser&&currentUser.email)||null, fecha:new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:true}), texto:texto, dirigido_a:String(dir||'').trim()||null, adjunto:adjunto||null, ts:Date.now() });
   var u=await sb.from('novedades').update({ comentarios:arr }).eq('id',id);
   if(u.error){ if(typeof showToast==='function') showToast('Error: '+u.error.message,'error'); return false; }
-  // Avisar por correo al autor de la pregunta cuando alguien MÁS responde
+  // ── Aviso por correo de un comentario nuevo ───────────────────────────────────────────────
+  // Sol. Andres Parga (24-ago-2026): decia que no habia forma de contestar un comentario de
+  // gerencia y que no tenia certeza de que su respuesta llegara. Si habia forma, pero el aviso
+  // estaba mal dirigido: solo se le avisaba al autor del PRIMER comentario del hilo (arr[0]).
+  // Si gerencia comentaba de segunda en adelante, la respuesta le llegaba por correo a quien
+  // hubiera abierto el hilo y NO a quien pregunto. Ademas, dirigir un comentario a alguien no
+  // le mandaba ningun correo: solo pintaba un aviso dentro del sistema, que hay que estar
+  // mirando. Ahora se avisa a: (1) la persona a quien se dirige el comentario, si se dirigio a
+  // alguien, y (2) el autor del comentario ANTERIOR, que es a quien se le esta respondiendo.
+  // Nunca se avisa a uno mismo y nunca se manda dos veces al mismo correo.
   try{
-    var _q=arr[0]||{}; var _new=arr[arr.length-1]||{};
-    if(_q.autor_email && _new.autor && _q.autor && String(_new.autor)!==String(_q.autor) && typeof _comEnviarCorreo==='function'){
-      var _e2=function(s){return String(s==null?'':s).replace(/</g,'&lt;');};
-      var _h2='<div style="font-family:Arial,sans-serif;max-width:560px;color:#222"><div style="background:#1D3461;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0"><div style="font-weight:700;font-size:16px">Respondieron tu pregunta</div></div><div style="border:1px solid #e3e6ea;border-top:none;border-radius:0 0 8px 8px;padding:18px"><p><strong>'+_e2(_new.autor)+'</strong> respondió:</p><div style="background:#f8f9fa;border-left:3px solid #1E7E34;padding:10px 14px;margin:10px 0;border-radius:0 6px 6px 0">'+_e2(_new.texto)+'</div><p style="color:#666;font-size:13px">Tu pregunta: '+_e2(_q.texto)+'</p><p style="color:#888;font-size:12px;margin-top:14px">Mensaje automático del Sistema Operativo.</p></div></div>';
-      _comEnviarCorreo(_q.autor_email, 'Respondieron tu pregunta — '+((typeof EB==='function'&&EB().nombre)||''), _h2);
+    var _new = arr[arr.length-1] || {};
+    var _prev = arr.length>1 ? (arr[arr.length-2]||{}) : {};
+    var _e2=function(s){return String(s==null?'':s).replace(/</g,'&lt;');};
+    var _yo = String((currentUser&&currentUser.email)||'').toLowerCase();
+    var _dest = [];
+
+    // (1) a quien va dirigido el comentario
+    if(_new.dirigido_a){
+      var _toDir = (typeof _dirEmail==='function'?_dirEmail(_new.dirigido_a):null)
+                || (typeof _depEmail==='function'?_depEmail(_new.dirigido_a):null);
+      if(_toDir) _dest.push({correo:_toDir, motivo:'dirigido'});
     }
+    // (2) a quien se le esta respondiendo
+    if(_prev.autor_email && String(_prev.autor||'')!==String(_new.autor||'')){
+      _dest.push({correo:_prev.autor_email, motivo:'respuesta', texto:_prev.texto});
+    }
+
+    var _vistos = {};
+    _dest.forEach(function(d){
+      var c=String(d.correo||'').toLowerCase();
+      if(!c || c===_yo || _vistos[c]) return;   // ni a mi mismo ni repetido
+      _vistos[c]=true;
+      if(typeof _comEnviarCorreo!=='function') return;
+      var _nv = window._novActual||{};
+      var _tit = (d.motivo==='dirigido') ? 'Un comentario de gerencia va dirigido a ti' : 'Respondieron tu comentario';
+      var _h2='<div style="font-family:Arial,sans-serif;max-width:560px;color:#222">'
+        +'<div style="background:#1D3461;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0"><div style="font-weight:700;font-size:16px">'+_tit+'</div></div>'
+        +'<div style="border:1px solid #e3e6ea;border-top:none;border-radius:0 0 8px 8px;padding:18px">'
+        +'<p><strong>'+_e2(_new.autor)+'</strong> escribió:</p>'
+        +'<div style="background:#f8f9fa;border-left:3px solid #1E7E34;padding:10px 14px;margin:10px 0;border-radius:0 6px 6px 0">'+_e2(_new.texto)+'</div>'
+        +(d.texto?('<p style="color:#666;font-size:13px">En respuesta a: '+_e2(d.texto)+'</p>'):'')
+        +(_nv.descripcion?('<p style="color:#666;font-size:13px">Novedad: '+_e2(String(_nv.descripcion).split('\n')[0])+(_nv.apto?(' · Apto '+_e2(_nv.apto)):'')+'</p>'):'')
+        +'<p style="color:#888;font-size:12px;margin-top:14px">Entra al Sistema Operativo, módulo Comentarios, para responder. Mensaje automático.</p></div></div>';
+      _comEnviarCorreo(d.correo, _tit+' — '+((typeof EB==='function'&&EB().nombre)||''), _h2);
+    });
   }catch(e){}
   return true;
 };
