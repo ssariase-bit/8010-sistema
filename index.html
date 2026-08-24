@@ -477,10 +477,19 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-20-composicion-huespedes-v31';
+const APP_VERSION = '2026-08-24-cerrar-matriz-v34';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-24', version:'2026-08-24-cerrar-matriz-v34', titulo:'La Matriz de Uso se puede cerrar por persona, para no seguir editando a quien ya terminó (Sol. Santiago)',
+    afecta:'Matriz de Uso por Persona — nueva marca "cerrados" dentro de matriz_uso_8010 / matriz_uso_kubik',
+    detalle:'Sol. Santiago (24-ago-2026): la matriz la llena todo el equipo a la vez sobre la misma fila, y hasta ahora cualquiera podia seguir tocando la columna de alguien que ya habia terminado. Se agrega un cierre por columna: quien termina se marca "🔒 Cerrar" y esa columna queda de solo lectura (casillas deshabilitadas, con aviso si se intenta tocar por la API directamente) hasta que alguien la reabra con "🔓 Reabrir". Las columnas sin cerrar se ven marcadas "🔴 Pendiente" para que no se pierdan de vista. No borra ni recalcula nada — es una marca adicional (cerrados) dentro del mismo objeto que ya se guardaba.' },
+  { fecha:'2026-08-24', version:'2026-08-24-composicion-cki-v33', titulo:'La composición objetiva (edad/sexo) llega por fin al Check-In — el v31 solo la había puesto en Reservas (Sol. Santiago)',
+    afecta:'formulario de Informe de Check-In (cki-comp-tab), reservas.composicion, rack.pax_adultos/pax_menores/pax_infantes',
+    detalle:'Sol. Santiago (24-ago-2026): el cambio del 19-ago (v31) reemplazo el parentesco subjetivo por la composicion objetiva, pero solo quedo en el formulario de Nueva Reserva — el Informe de Check-In, que es el momento real donde recepcion confirma quien esta ingresando, siguio con el campo libre "Acompañantes (si ingresa con esposa, pareja, hijos...)". El changelog del v31 decia que afectaba tambien al check-in y no era cierto. Ahora el CKI trae la misma tabla de Adultos / Adolescentes / Ninos / Infantes por sexo: si la reserva ya trae composicion la precarga, si no queda en blanco para que se registre con lo que se ve al recibir al huesped, nunca se inventa. Al generar el informe, la composicion queda en el mensaje del CKI, se guarda en rack.pax_adultos/pax_menores/pax_infantes (columnas que ya existian sin usarse) y se actualiza tambien reservas.composicion de la reserva vinculada, para que quede como dato unico y no se desincronice. El campo de texto libre se conserva pero como nota adicional opcional, no como el dato oficial. El Check-Out (CKO) todavia no se toco — sigue con el campo libre, queda pendiente evaluarlo aparte.' },
+  { fecha:'2026-08-20', version:'2026-08-20-avisos-dispositivo-v32', titulo:'Aviso al celular cuando se genera un informe, sin depender de WhatsApp (Sol. Santiago)',
+    afecta:'nuevo modulo Avisos en este dispositivo, service worker sw.js y funcion avisar-push',
+    detalle:'Sol. Santiago (19-ago-2026): los informes salian unicamente por correo y no habia forma de saber en que momento se generaban para entrar a revisarlos. La primera via evaluada fue WhatsApp: el sistema tenia 18 botones wa.me, pero todos abren la aplicacion con el mensaje escrito y alguien tiene que oprimir Enviar, no envian solos. Se intento con CallMeBot y el servicio no respondio; la via oficial de Meta exige numero de WhatsApp Business, verificacion del negocio y plantilla aprobada, entre 3 y 10 dias de tramite. Se resolvio con notificaciones del propio sistema, que no dependen de terceros ni de llaves publicadas: el Sistema Operativo manda el aviso directo al celular como cualquier aplicacion, aunque este cerrado. Se activa una vez por dispositivo desde el modulo Avisos en este dispositivo y llega con el tipo de informe, quien lo genero y la hora. El aviso se dispara despues de que el correo salio y nunca puede tumbarlo: si el aviso falla, el informe ya se envio igual. Las suscripciones se guardan en la tabla config (id push_suscripciones) para no crear tablas nuevas, y la llave privada de firma vive en la funcion del servidor, nunca en el index.html, que es publico. Los avisos no contienen cifras ni datos de huespedes. En iPhone las notificaciones web solo funcionan si el sistema se abre desde un icono agregado a la pantalla de inicio; el modulo lo detecta y lo explica en pantalla.' },
   { fecha:'2026-08-20', version:'2026-08-20-composicion-huespedes-v31', titulo:'La composicion del grupo se registra por rango de edad y sexo, y deja de depender del criterio de cada administrador (Sol. Santiago)',
     afecta:'formulario de reserva y check-in, campos pax_* y nueva columna composicion en reservas',
     detalle:'Sol. Santiago (19-ago-2026): hasta hoy cada administrador describia a los acompanantes como le parecia — esposa, novia, lo que considerara. Es un dato subjetivo, no comparable entre registros y que no sirve para medir la ocupacion real. Se reemplaza por una composicion objetiva: cuatro rangos de edad (Adulto 18+, Adolescente 12-17, Nino 2-11, Infante 0-1) y en cada uno cuantos hombres y cuantas mujeres. El total de personas se calcula solo y deja de digitarse a mano, con lo que desaparece la diferencia frecuente entre el numero de PAX escrito y las personas realmente listadas. Los campos historicos pax_adultos, pax_menores y pax_infantes se siguen alimentando de forma calculada para no romper los informes, la confirmacion de reserva ni el precheck-in que ya los consumen; los menores agrupan adolescentes mas ninos, que es lo que ese campo significaba antes. Las reservas anteriores al cambio no traen composicion: al abrirlas se reparten los valores viejos dejando el sexo sin definir, para que quien haga el check-in complete el dato en vez de que el sistema se lo invente. El detalle completo se guarda en una columna nueva llamada composicion, que se agrega con un SQL aparte; mientras ese SQL no se corra el sistema guarda la reserva igual y avisa en pantalla que falta, de modo que ninguna reserva se pierde por el orden en que se despliegue.' },
@@ -1656,6 +1665,7 @@ const MENU_COMPLETO = [
   { id: 'semana-resumen', icon: '📅', label: 'Semana en Curso' },
   { section: 'Sistema' },
   { id: 'mi-firma', icon: '✍️', label: 'Mi Firma' },
+  { id: 'avisos-push', icon: '🔔', label: 'Avisos en este dispositivo' },
   { id: 'import-rack', icon: '🔄', label: 'Importar Rack 2026' },
   { id: 'changelog', icon: '🛠️', label: 'Registro de Cambios' },
 ];
@@ -1706,7 +1716,7 @@ window._ITEMS_COMPRAS_FIN_8010 = ['inventario-list','compras-orden-form','carter
 // Sol. Santiago (19-ago-2026): "Ya TODOS lo deberian ver" — la Matriz de Uso sale de esta lista para
 // que todo el equipo pueda marcar su propia columna. El levantamiento lo hace cada persona, no el
 // gerente transcribiendo respuestas de WhatsApp. Sigue siendo un modulo temporal.
-window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma'];
+window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma','avisos-push'];
 // Módulos construidos sobre el presupuesto 2026 y las entidades 80-10 / LTM3 / PH (solo 8010): no se muestran en Kubik
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
 // Sol Santiago: procesos que son ÚNICAMENTE de Kubik. En 8010 no existen y no deben aparecer:
@@ -3125,6 +3135,7 @@ window.renderFlujoSemanal=async function(){
     case 'inventario-form':     window._invForm(); break;
     // ── FIRMA DIGITAL DE GERENCIA GENERAL ──
     case 'mi-firma':            await window._frmPanel(); break;
+    case 'avisos-push':         await window._pushPanel(); break;
 
     default:
       // Sol Sebastián: evitar la "pantalla en blanco/Vista no encontrada" tras guardar.
@@ -4825,6 +4836,39 @@ function _resPaxSum(){
   st('res-personas', parts.join(', ') || '1 adulto');
   st('res-pax', t||1);
 }
+// Sol. Santiago (24-ago-2026): mismo esquema de composición, ahora en el CKI — es el momento real
+// donde se confirma quién ingresa, reemplazando el "esposa/pareja/hijos" subjetivo de ese formulario.
+window._ckiComposicion = function(){
+  var g=function(id){ var e=document.getElementById(id); return (e && e.value!=='') ? Math.max(0, Number(e.value)||0) : 0; };
+  var o={};
+  window._RES_COMP.forEach(function(r){ o[r.k]={h:g('cki-px-'+r.k+'-h'), m:g('cki-px-'+r.k+'-m')}; });
+  return o;
+};
+function _ckiPaxSum(){
+  var c=window._ckiComposicion(), th=0, tm=0;
+  window._RES_COMP.forEach(function(r){
+    var s=c[r.k].h+c[r.k].m; th+=c[r.k].h; tm+=c[r.k].m;
+    var td=document.getElementById('cki-tot-'+r.k); if(td) td.textContent=s;
+  });
+  var sh=document.getElementById('cki-tot-h'); if(sh) sh.textContent=th;
+  var sm=document.getElementById('cki-tot-m'); if(sm) sm.textContent=tm;
+  var sg=document.getElementById('cki-tot-gral'); if(sg) sg.textContent=th+tm;
+}
+// Precarga la composición del CKI desde la reserva (si ya la trae) o la deja en blanco (0) para
+// que recepción la registre con lo que ve al momento de recibir al huésped — nunca se inventa.
+window._ckiCompCargar = function(c){
+  var st=function(id,v){ var e=document.getElementById(id); if(e) e.value=v; };
+  try{ if(typeof c==='string') c=JSON.parse(c); }catch(e){ c=null; }
+  if(c && typeof c==='object'){
+    window._RES_COMP.forEach(function(r){
+      st('cki-px-'+r.k+'-h', Number((c[r.k]||{}).h)||0);
+      st('cki-px-'+r.k+'-m', Number((c[r.k]||{}).m)||0);
+    });
+  } else {
+    window._RES_COMP.forEach(function(r){ st('cki-px-'+r.k+'-h',0); st('cki-px-'+r.k+'-m',0); });
+  }
+  if(typeof _ckiPaxSum==='function') _ckiPaxSum();
+};
 // Texto legible de la composicion, para informes y para la confirmacion al huesped.
 window._resCompTexto = function(c){
   if(!c) return '';
@@ -8868,6 +8912,9 @@ async function enviarInformeCorreo(titulo, texto, btn, htmlOverride, destOverrid
     if(error) throw error;
     if(!data || !data.ok) throw new Error((data&&data.error)||'No se pudo enviar');
     showToast('✅ Informe enviado a '+d.to.join(', '),'success');
+    // Sol. Santiago (19-ago-2026): ademas del correo, aviso al celular de quien lo tenga activado.
+    // Va despues del envio y sin await bloqueante: si el aviso falla, el informe ya salio igual.
+    try{ if(typeof window._pushAvisarInforme==='function') window._pushAvisarInforme(_tipoLimpio); }catch(_){}
     return true;
   }catch(e){
     showToast('❌ No se pudo enviar: '+(e&&e.message?e.message:e),'error');
@@ -17090,7 +17137,46 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
         <div class="form-group"><label>Primer apellido</label><input type="text" id="cki-apellido1" value="${_q(_hp.apellido1)}" placeholder="Primer apellido"></div>
         <div class="form-group"><label>Segundo apellido</label><input type="text" id="cki-apellido2" value="${_q(_hp.apellido2)}" placeholder="Segundo apellido"></div>
       </div>
-      <div class="form-group"><label>Acompañantes (si ingresa con esposa, pareja, hijos…)</label><input type="text" id="cki-acomp" placeholder="Ej: esposa e hijo / pareja — dejar vacío si ingresa solo"></div>
+      <!-- Sol. Santiago (24-ago-2026): el check-in es el momento real de confirmar quién se hospeda —
+           se completa aquí la composición objetiva (edad y sexo) en vez del "esposa/pareja/hijos"
+           subjetivo. Se precarga desde la reserva si ya trae el dato; si no, queda en blanco para
+           que recepción lo registre con lo que ve al ingresar el huésped. -->
+      <div class="form-group" style="flex:1 1 100%;min-width:0">
+        <label>Composición del grupo que ingresa</label>
+        <div style="overflow-x:auto">
+        <table id="cki-comp-tab" style="border-collapse:collapse;font-size:12.5px;min-width:430px">
+          <thead><tr>
+            <th style="text-align:left;padding:3px 8px 3px 0;font-weight:600;color:#5A6472">Rango</th>
+            <th style="padding:3px 6px;font-weight:600;color:#5A6472">Hombres</th>
+            <th style="padding:3px 6px;font-weight:600;color:#5A6472">Mujeres</th>
+            <th style="padding:3px 6px;font-weight:600;color:#5A6472">Total</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="padding:2px 8px 2px 0">Adultos <span style="color:#9aa0a6;font-size:11px">18+</span></td>
+              <td style="padding:2px 6px"><input type="number" id="cki-px-ad-h" class="cki-px" min="0" step="1" value="1" oninput="_ckiPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+              <td style="padding:2px 6px"><input type="number" id="cki-px-ad-m" class="cki-px" min="0" step="1" value="0" oninput="_ckiPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+              <td id="cki-tot-ad" style="padding:2px 6px;text-align:center;color:#5A6472">1</td></tr>
+            <tr><td style="padding:2px 8px 2px 0">Adolescentes <span style="color:#9aa0a6;font-size:11px">12–17</span></td>
+              <td style="padding:2px 6px"><input type="number" id="cki-px-ao-h" class="cki-px" min="0" step="1" value="0" oninput="_ckiPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+              <td style="padding:2px 6px"><input type="number" id="cki-px-ao-m" class="cki-px" min="0" step="1" value="0" oninput="_ckiPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+              <td id="cki-tot-ao" style="padding:2px 6px;text-align:center;color:#5A6472">0</td></tr>
+            <tr><td style="padding:2px 8px 2px 0">Niños <span style="color:#9aa0a6;font-size:11px">2–11</span></td>
+              <td style="padding:2px 6px"><input type="number" id="cki-px-ni-h" class="cki-px" min="0" step="1" value="0" oninput="_ckiPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+              <td style="padding:2px 6px"><input type="number" id="cki-px-ni-m" class="cki-px" min="0" step="1" value="0" oninput="_ckiPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+              <td id="cki-tot-ni" style="padding:2px 6px;text-align:center;color:#5A6472">0</td></tr>
+            <tr><td style="padding:2px 8px 2px 0">Infantes <span style="color:#9aa0a6;font-size:11px">0–1</span></td>
+              <td style="padding:2px 6px"><input type="number" id="cki-px-if-h" class="cki-px" min="0" step="1" value="0" oninput="_ckiPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+              <td style="padding:2px 6px"><input type="number" id="cki-px-if-m" class="cki-px" min="0" step="1" value="0" oninput="_ckiPaxSum()" style="width:66px;padding:5px;text-align:center"></td>
+              <td id="cki-tot-if" style="padding:2px 6px;text-align:center;color:#5A6472">0</td></tr>
+            <tr style="border-top:1px solid var(--gris-b)"><td style="padding:5px 8px 2px 0;font-weight:700">Total personas</td>
+              <td id="cki-tot-h" style="padding:5px 6px 2px;text-align:center;font-weight:700">1</td>
+              <td id="cki-tot-m" style="padding:5px 6px 2px;text-align:center;font-weight:700">0</td>
+              <td id="cki-tot-gral" style="padding:5px 6px 2px;text-align:center;font-weight:700;color:#1D3461">1</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+      <div class="form-group"><label>Notas adicionales sobre acompañantes (opcional)</label><input type="text" id="cki-acomp" placeholder="Cualquier detalle extra — la composición de arriba es el dato oficial"></div>
       <div class="form-row">
         <div class="form-group"><label>Empresa / Razón social</label><input type="text" id="cki-empresa" value="${empresa||''}" placeholder="Dejar vacío si es particular"></div>
         <div class="form-group"><label>Tratamiento</label>
@@ -17239,6 +17325,15 @@ async function ckiAutollenar(){
     // 2) fallback: reserva cuyo rango incluya la fecha
     if(!d){ var rv=await sb.from('reservas').select('nombre,checkin,checkout,canal,tarifa,tarifa_usd,moneda,empresa').eq('edificio',EDIFICIO_ACTIVO).eq('apto',apto).lte('checkin',fecha).gte('checkout',fecha).order('checkin',{ascending:false}).limit(1); if(rv.data&&rv.data[0]){ d=rv.data[0]; d.huesped=d.nombre; } }
     if(!d) return; // no hay reserva: no toca nada
+    // Sol. Santiago (24-ago-2026): traer la composición ya registrada en la reserva (si la trae) para
+    // que recepción solo la confirme en vez de repetir el trabajo; si no hay reserva o no la trae,
+    // queda en blanco para que se registre con lo que ve al recibir al huésped.
+    window._ckiResId = null;
+    try{
+      var _rc = await sb.from('reservas').select('id,composicion').eq('edificio',EDIFICIO_ACTIVO).eq('apto',apto).lte('checkin',fecha).gte('checkout',fecha).order('checkin',{ascending:false}).limit(1);
+      if(_rc.data && _rc.data[0]){ window._ckiResId = _rc.data[0].id; if(typeof window._ckiCompCargar==='function') window._ckiCompCargar(_rc.data[0].composicion); }
+      else if(typeof window._ckiCompCargar==='function'){ window._ckiCompCargar(null); }
+    }catch(_rce){}
     var partes;
     if(d.nombre!=null && (d.apellido1!==undefined)){ partes={nombre:d.nombre||'',apellido1:d.apellido1||'',apellido2:d.apellido2||''}; }
     else { partes=(window._splitNombre? window._splitNombre(d.huesped||d.nombre||'') : {nombre:d.huesped||d.nombre||'',apellido1:'',apellido2:''}); }
@@ -17329,7 +17424,11 @@ function generarMsgCKI() {
   const quien = document.getElementById('cki-quien').value.trim();
   const obs = document.getElementById('cki-obs').value.trim();
   const _acomp = (document.getElementById('cki-acomp')?.value||'').trim();
-  const acompStr = _acomp ? ', ingresa acompañado de '+_acomp : '';
+  // Sol. Santiago (24-ago-2026): la composición objetiva (edad/sexo) es el dato oficial del informe;
+  // la nota de texto libre queda como detalle adicional, no como el dato principal.
+  const _ckiComp = (typeof window._ckiComposicion==='function') ? window._ckiComposicion() : null;
+  const _ckiCompTxt = (_ckiComp && typeof window._resCompTexto==='function') ? window._resCompTexto(_ckiComp) : '';
+  const acompStr = (_ckiCompTxt ? ', ingresa: '+_ckiCompTxt : '') + (_acomp ? ' ('+_acomp+')' : '');
   // Cortesías / mínimos dejados en el apartamento
   const _am=[];
   if(document.getElementById('cki-am-fruta')?.checked) _am.push('cortesía de fruta');
@@ -17407,7 +17506,7 @@ R/${quien}`;
       let f = fi;
       for (let i = 0; i < 400; i++) {
         const estado = f === fi ? 'Check-in hoy' : (f === ff_rack ? 'Check-out hoy' : 'Ocupado');
-        rows.push({ fecha: f, apto, estado, huesped, nombre: _ckiNom||null, apellido1: _ckiAp1||null, apellido2: _ckiAp2||null, telefono: window._telFull('cki-tel') || null, tarifa: _tarCOP || null, tarifa_usd: _tarUsd, moneda: moneda, canal, empresa: (document.getElementById('cki-empresa')?.value.trim() || null), tratamiento: (document.getElementById('cki-tratamiento')?.value || null), acompanantes: _acomp||null, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
+        rows.push({ fecha: f, apto, estado, huesped, nombre: _ckiNom||null, apellido1: _ckiAp1||null, apellido2: _ckiAp2||null, telefono: window._telFull('cki-tel') || null, tarifa: _tarCOP || null, tarifa_usd: _tarUsd, moneda: moneda, canal, empresa: (document.getElementById('cki-empresa')?.value.trim() || null), tratamiento: (document.getElementById('cki-tratamiento')?.value || null), acompanantes: _acomp||null, pax_adultos: _ckiComp?(_ckiComp.ad.h+_ckiComp.ad.m):null, pax_menores: _ckiComp?(_ckiComp.ao.h+_ckiComp.ao.m+_ckiComp.ni.h+_ckiComp.ni.m):null, pax_infantes: _ckiComp?(_ckiComp.if.h+_ckiComp.if.m):null, edificio: EDIFICIO_ACTIVO, updated_by: currentUser.id });
         if (f === ff_rack) break;
         f = addDay(f);
       }
@@ -17426,6 +17525,13 @@ R/${quien}`;
         const _ridPrev = _prev.data && _prev.data[0] && _prev.data[0].reserva_id;
         if (_ridPrev) rows.forEach(function(rr){ rr.reserva_id = _ridPrev; });
       } catch(_rp){}
+      // Sol. Santiago (24-ago-2026): confirmar en la reserva la composición registrada en el CKI —
+      // así queda el dato oficial en Reservas, no solo en el informe. No bloquea el CKI si falla.
+      try {
+        if (window._ckiResId && _ckiComp) {
+          await sb.from('reservas').update({ composicion: _ckiComp }).eq('id', window._ckiResId);
+        }
+      } catch(_cc){}
       const { error } = await sb.from('rack').upsert(rows, { onConflict: 'fecha,apto,edificio' });
       if (error) showToast('Informe generado, pero el rack NO se actualizó: ' + error.message, 'error');
       else {
@@ -17882,6 +17988,7 @@ window._mtxCargar = async function(){
   try{ st.datos = v ? JSON.parse(v) : {cargos:{},celdas:{}}; }catch(e){ st.datos={cargos:{},celdas:{}}; }
   if(!st.datos.cargos) st.datos.cargos={};
   if(!st.datos.celdas) st.datos.celdas={};
+  if(!st.datos.cerrados) st.datos.cerrados={};
   var p = await window._sbFromRaw('profiles').select('id,nombre,rol,edificios').order('nombre');
   st.personas = ((p && p.data)||[]).filter(function(x){
     var e = x.edificios || [];
@@ -17893,28 +18000,42 @@ window._mtxCargar = async function(){
 // tiempo. Guardar el objeto local completo haria que el ultimo en grabar pisara lo que marcaron los
 // demas en los ultimos minutos. Por eso se registra en _mtxPend solo lo que ESTA persona toco, y al
 // guardar se relee la fila, se aplican unicamente esos cambios y se reescribe. Nadie borra a nadie.
-window._mtxPend = { celdas:{}, cargos:{} };
+window._mtxPend = { celdas:{}, cargos:{}, cerrados:{} };
 
 window._mtxGuardar = async function(){
   var st=window._mtxState, P=window._mtxPend;
-  if(!Object.keys(P.celdas).length && !Object.keys(P.cargos).length) return true;
-  var base = {cargos:{}, celdas:{}};
+  if(!Object.keys(P.celdas).length && !Object.keys(P.cargos).length && !Object.keys(P.cerrados).length) return true;
+  var base = {cargos:{}, celdas:{}, cerrados:{}};
   var q = await window._sbFromRaw('config').select('valor').eq('id','matriz_uso_'+st.ed).maybeSingle();
-  try{ var v=(q && q.data && q.data.valor)||''; if(v) base=JSON.parse(v); }catch(e){ base={cargos:{},celdas:{}}; }
+  try{ var v=(q && q.data && q.data.valor)||''; if(v) base=JSON.parse(v); }catch(e){ base={cargos:{},celdas:{},cerrados:{}}; }
   if(!base.cargos) base.cargos={};
   if(!base.celdas) base.celdas={};
+  if(!base.cerrados) base.cerrados={};
   Object.keys(P.celdas).forEach(function(k){ var x=P.celdas[k]; if(x) base.celdas[k]=x; else delete base.celdas[k]; });
   Object.keys(P.cargos).forEach(function(p){ var x=P.cargos[p]; if(x) base.cargos[p]=x; else delete base.cargos[p]; });
+  Object.keys(P.cerrados).forEach(function(p){ if(P.cerrados[p]) base.cerrados[p]=true; else delete base.cerrados[p]; });
   var r = await window._sbFromRaw('config').upsert({id:'matriz_uso_'+st.ed, valor:JSON.stringify(base), updated_at:new Date().toISOString()});
   if(r && r.error){ showToast('No se pudo guardar: '+r.error.message,'error'); return false; }
   st.datos = base;
-  window._mtxPend = { celdas:{}, cargos:{} };
+  window._mtxPend = { celdas:{}, cargos:{}, cerrados:{} };
   return true;
+};
+// Sol. Santiago (24-ago-2026): cerrar la columna de quien ya terminó — no se pierde nada, solo deja
+// de aceptar clics por accidente. Los pendientes quedan sin tocar, abiertos, para que se note que
+// todavia falta que las completen.
+window._mtxCerrar = async function(persona, val){
+  var st=window._mtxState;
+  if(val) st.datos.cerrados[persona]=true; else delete st.datos.cerrados[persona];
+  window._mtxPend.cerrados[persona]=!!val;
+  await window._mtxGuardar();
+  renderMatrizUso();
 };
 
 // Casillas independientes: marcar SI apaga NO y viceversa; volver a hacer clic desmarca.
 window._mtxChk = async function(persona, clave, valor, el){
-  var st=window._mtxState, k=persona+'|'+clave;
+  var st=window._mtxState;
+  if(st.datos.cerrados && st.datos.cerrados[persona]){ showToast('Esa columna está cerrada — reábrela primero para editarla', 'error'); return; }
+  var k=persona+'|'+clave;
   var actual = st.datos.celdas[k] || '';
   var nuevo = (actual===valor) ? '' : valor;
   if(nuevo==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=nuevo;
@@ -17942,6 +18063,7 @@ window._mtxFila = async function(clave, valor){
 
 window._mtxColumna = async function(persona, valor){
   var st=window._mtxState;
+  if(st.datos.cerrados && st.datos.cerrados[persona]){ showToast('Esa columna está cerrada — reábrela primero para editarla', 'error'); return; }
   window._mtxModulos().forEach(function(m){
     var k=persona+'|'+m.id;
     if(valor==='') delete st.datos.celdas[k]; else st.datos.celdas[k]=valor;
@@ -17956,6 +18078,8 @@ window._mtxColumna = async function(persona, valor){
 };
 
 window._mtxCargo = async function(persona, val){
+  var st0=window._mtxState;
+  if(st0.datos.cerrados && st0.datos.cerrados[persona]){ showToast('Esa columna está cerrada — reábrela primero para editarla', 'error'); return; }
   var v = String(val||'').trim();
   window._mtxState.datos.cargos[persona] = v;
   window._mtxPend.cargos[persona] = v;
@@ -18050,13 +18174,15 @@ window._mtxCSV = function(){
 
 function _mtxCelda(persona, clave){
   var st=window._mtxState, v=st.datos.celdas[persona+'|'+clave]||'';
-  var bg = v==='S'?'#E7F3EA':(v==='N'?'#FBE9EA':'');
+  var bloqueado = !!(st.datos.cerrados && st.datos.cerrados[persona]);
+  var bg = bloqueado ? '#F3F4F6' : (v==='S'?'#E7F3EA':(v==='N'?'#FBE9EA':''));
   var e=function(x){ return String(x).replace(/'/g,"\\'"); };
+  var dis = bloqueado ? ' disabled' : '';
   return '<td style="padding:4px 2px;text-align:center;background:'+bg+'">'
-    + '<label style="display:inline-flex;align-items:center;gap:2px;cursor:pointer;font-size:9.5px;color:#1A5C2E;font-weight:700;margin-right:5px">'
-    +   '<input type="checkbox" data-v="S" '+(v==='S'?'checked':'')+' onclick="window._mtxChk(\''+e(persona)+'\',\''+e(clave)+'\',\'S\',this)" style="width:13px;height:13px;accent-color:#1A5C2E;cursor:pointer">SI</label>'
-    + '<label style="display:inline-flex;align-items:center;gap:2px;cursor:pointer;font-size:9.5px;color:#9B2226;font-weight:700">'
-    +   '<input type="checkbox" data-v="N" '+(v==='N'?'checked':'')+' onclick="window._mtxChk(\''+e(persona)+'\',\''+e(clave)+'\',\'N\',this)" style="width:13px;height:13px;accent-color:#9B2226;cursor:pointer">NO</label>'
+    + '<label style="display:inline-flex;align-items:center;gap:2px;cursor:'+(bloqueado?'not-allowed':'pointer')+';font-size:9.5px;color:'+(bloqueado?'#9aa0a6':'#1A5C2E')+';font-weight:700;margin-right:5px">'
+    +   '<input type="checkbox" data-v="S" '+(v==='S'?'checked':'')+dis+' onclick="window._mtxChk(\''+e(persona)+'\',\''+e(clave)+'\',\'S\',this)" style="width:13px;height:13px;accent-color:#1A5C2E;cursor:'+(bloqueado?'not-allowed':'pointer')+'">SI</label>'
+    + '<label style="display:inline-flex;align-items:center;gap:2px;cursor:'+(bloqueado?'not-allowed':'pointer')+';font-size:9.5px;color:'+(bloqueado?'#9aa0a6':'#9B2226')+';font-weight:700">'
+    +   '<input type="checkbox" data-v="N" '+(v==='N'?'checked':'')+dis+' onclick="window._mtxChk(\''+e(persona)+'\',\''+e(clave)+'\',\'N\',this)" style="width:13px;height:13px;accent-color:#9B2226;cursor:'+(bloqueado?'not-allowed':'pointer')+'">NO</label>'
     + '</td>';
 }
 
@@ -18085,15 +18211,21 @@ async function renderMatrizUso(){
 
   var th='<th style="position:sticky;left:0;top:0;background:#1D3461;color:#fff;text-align:left;min-width:270px;z-index:6">Módulo / acción</th>';
   st.personas.forEach(function(p){
-    th+='<th style="position:sticky;top:0;background:#1D3461;color:#fff;min-width:128px;z-index:5;vertical-align:top;padding:8px 6px">'
+    var bloqueado = !!(st.datos.cerrados && st.datos.cerrados[p.nombre]);
+    th+='<th style="position:sticky;top:0;background:'+(bloqueado?'#274023':'#1D3461')+';color:#fff;min-width:128px;z-index:5;vertical-align:top;padding:8px 6px">'
       +'<div style="font-size:11.5px;font-weight:700;line-height:1.25">'+esc(p.nombre)+'</div>'
       +'<div style="font-size:9.5px;opacity:.75">'+esc(p.rol||'')+'</div>'
-      +'<input value="'+esc(st.datos.cargos[p.nombre]||'')+'" placeholder="cargo…" onchange="window._mtxCargo(\''+esc(p.nombre)+'\',this.value)" style="width:100%;margin-top:5px;border:none;border-radius:5px;padding:3px 5px;font-size:10.5px;text-align:center">'
-      +'<div style="margin-top:4px;display:flex;gap:3px;justify-content:center">'
-      +'<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'S\')" title="SI a todo" style="cursor:pointer;background:#1A5C2E;border-radius:4px;padding:1px 6px;font-size:9.5px">SI</span>'
-      +'<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'N\')" title="NO a todo" style="cursor:pointer;background:#9B2226;border-radius:4px;padding:1px 6px;font-size:9.5px">NO</span>'
-      +'<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'\')" title="Limpiar" style="cursor:pointer;background:#5A6472;border-radius:4px;padding:1px 6px;font-size:9.5px">·</span>'
-      +'</div><div id="mtx-tot-'+_mtxSlug(p.nombre)+'" style="margin-top:5px;font-size:11px;background:#fff;color:#1D3461;border-radius:5px;padding:2px 4px"></div></th>';
+      + (bloqueado
+        ? '<div style="margin-top:5px;background:#1A5C2E;border-radius:5px;padding:3px 5px;font-size:10px;font-weight:700">✓ Cerrado — '+esc(st.datos.cargos[p.nombre]||'sin cargo')+'</div>'
+          +'<div style="margin-top:4px;text-align:center"><span onclick="window._mtxCerrar(\''+esc(p.nombre)+'\',false)" title="Reabrir para editar" style="cursor:pointer;background:#5A6472;border-radius:4px;padding:1px 6px;font-size:9.5px">🔓 Reabrir</span></div>'
+        : '<input value="'+esc(st.datos.cargos[p.nombre]||'')+'" placeholder="cargo…" onchange="window._mtxCargo(\''+esc(p.nombre)+'\',this.value)" style="width:100%;margin-top:5px;border:none;border-radius:5px;padding:3px 5px;font-size:10.5px;text-align:center">'
+          +'<div style="margin-top:4px;display:flex;gap:3px;justify-content:center;flex-wrap:wrap">'
+          +'<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'S\')" title="SI a todo" style="cursor:pointer;background:#1A5C2E;border-radius:4px;padding:1px 6px;font-size:9.5px">SI</span>'
+          +'<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'N\')" title="NO a todo" style="cursor:pointer;background:#9B2226;border-radius:4px;padding:1px 6px;font-size:9.5px">NO</span>'
+          +'<span onclick="window._mtxColumna(\''+esc(p.nombre)+'\',\'\')" title="Limpiar" style="cursor:pointer;background:#5A6472;border-radius:4px;padding:1px 6px;font-size:9.5px">·</span>'
+          +'<span onclick="window._mtxCerrar(\''+esc(p.nombre)+'\',true)" title="Cerrar columna" style="cursor:pointer;background:#B3801A;border-radius:4px;padding:1px 6px;font-size:9.5px">🔒 Cerrar</span>'
+          +'</div><div style="margin-top:4px;font-size:9.5px;color:#FBE9C9;font-weight:700">🔴 Pendiente</div>')
+      +'<div id="mtx-tot-'+_mtxSlug(p.nombre)+'" style="margin-top:5px;font-size:11px;background:#fff;color:#1D3461;border-radius:5px;padding:2px 4px"></div></th>';
   });
 
   var body='', secAct=null;
@@ -18145,6 +18277,154 @@ async function renderMatrizUso(){
     +'<table style="border-collapse:separate;border-spacing:0;width:max-content;min-width:100%"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>';
   _mtxTotales();
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AVISOS EN EL DISPOSITIVO  (Sol. Santiago Arias, 19-ago-2026)
+// Cuando alguien genera un informe, llega una notificacion al celular con el
+// tipo de informe, quien lo genero y la hora, aunque el Sistema Operativo este
+// cerrado. Sustituye al aviso por WhatsApp: CallMeBot no funciono y la via
+// oficial de Meta exige verificacion del negocio y plantilla aprobada.
+// La suscripcion de cada dispositivo se guarda en la tabla config (id
+// push_suscripciones) para no crear tablas nuevas.
+// ═══════════════════════════════════════════════════════════════════════════
+window._VAPID_PUB = 'BL3sC3b8Q5zkZEn2Tn8fkFGqjUgZX6NWy8ofsyEnHPIh8fAcH98Edb_XzZnGGlxyWNdE_rkBms8RtjpM4gN6zu0';
+
+window._pushSoportado = function(){
+  return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+};
+window._b64aBytes = function(b64){
+  var pad='='.repeat((4 - b64.length % 4) % 4);
+  var s=(b64+pad).replace(/-/g,'+').replace(/_/g,'/');
+  var raw=atob(s), arr=new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++) arr[i]=raw.charCodeAt(i);
+  return arr;
+};
+window._pushSubActual = async function(){
+  if(!window._pushSoportado()) return null;
+  try{
+    var reg = await navigator.serviceWorker.getRegistration();
+    if(!reg) return null;
+    return await reg.pushManager.getSubscription();
+  }catch(e){ return null; }
+};
+window._pushLeerRegistro = async function(){
+  var q = await window._sbFromRaw('config').select('valor').eq('id','push_suscripciones').maybeSingle();
+  var v=(q && q.data && q.data.valor)||'';
+  try{ return v ? JSON.parse(v) : {}; }catch(e){ return {}; }
+};
+window._pushGuardarRegistro = async function(mapa){
+  return await window._sbFromRaw('config').upsert({id:'push_suscripciones', valor:JSON.stringify(mapa), updated_at:new Date().toISOString()});
+};
+window._pushClave = function(){
+  var em=(typeof window._miEmail==='function' && window._miEmail()) || (currentUser && currentUser.email) || 'sin-correo';
+  return String(em).toLowerCase();
+};
+
+window._pushActivar = async function(btn){
+  if(!window._pushSoportado()){ showToast('Este navegador no permite avisos. En iPhone hay que abrir el sistema desde el ícono de la pantalla de inicio.','error'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Activando…'; }
+  try{
+    var permiso = await Notification.requestPermission();
+    if(permiso!=='granted'){ showToast('No se concedió el permiso de notificaciones','error'); return; }
+    var reg = await navigator.serviceWorker.register('sw.js');
+    await navigator.serviceWorker.ready;
+    var sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: window._b64aBytes(window._VAPID_PUB) });
+    }
+    var mapa = await window._pushLeerRegistro();
+    var k = window._pushClave();
+    mapa[k] = mapa[k] || { nombre:(currentProfile&&currentProfile.nombre)||'', disp:[] };
+    var json = JSON.parse(JSON.stringify(sub));
+    var ya = (mapa[k].disp||[]).some(function(d){ return d.endpoint===json.endpoint; });
+    if(!ya) mapa[k].disp.push({ endpoint:json.endpoint, keys:json.keys, alta:new Date().toISOString(), ua:(navigator.userAgent||'').slice(0,120) });
+    var r = await window._pushGuardarRegistro(mapa);
+    if(r && r.error){ showToast('No se pudo guardar el dispositivo: '+r.error.message,'error'); return; }
+    new Notification('Avisos activados', { body:'Este dispositivo va a recibir el aviso cuando se genere un informe.' });
+    showToast('✅ Avisos activados en este dispositivo','success');
+  }catch(e){
+    showToast('No se pudo activar: '+(e&&e.message?e.message:e),'error');
+  }finally{ await window._pushPanel(); }
+};
+
+window._pushDesactivar = async function(){
+  try{
+    var sub = await window._pushSubActual();
+    var mapa = await window._pushLeerRegistro();
+    var k = window._pushClave();
+    if(sub && mapa[k]){
+      var ep=JSON.parse(JSON.stringify(sub)).endpoint;
+      mapa[k].disp=(mapa[k].disp||[]).filter(function(d){ return d.endpoint!==ep; });
+      if(!mapa[k].disp.length) delete mapa[k];
+      await window._pushGuardarRegistro(mapa);
+    }
+    if(sub) await sub.unsubscribe();
+    showToast('Avisos desactivados en este dispositivo','success');
+  }catch(e){ showToast('No se pudo desactivar: '+(e&&e.message?e.message:e),'error'); }
+  finally{ await window._pushPanel(); }
+};
+
+// Se llama despues de enviar un informe. Si algo falla NO interrumpe nada: el informe ya salio.
+window._pushAvisarInforme = async function(titulo){
+  try{
+    if(!window._sbFromRaw) return;
+    var _nb = (typeof EB==='function' && EB() && EB().nombre) || '';
+    var _ed = _nb.indexOf('8010')>-1 ? '8010' : 'Kubik';
+    var _tp = String(titulo||'Informe').replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{2BFF}️]/gu,'').replace(/\s+/g,' ').trim();
+    var _qn = (currentProfile&&currentProfile.nombre) || (currentUser&&currentUser.email) || '';
+    var _hr = (new Date()).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',timeZone:'America/Bogota'});
+    await sb.functions.invoke('avisar-push', { body:{ titulo:_ed+' · '+_tp, cuerpo:'Generado por '+_qn+' · '+_hr, tag:'informe-'+_ed } });
+  }catch(e){ /* el aviso nunca puede tumbar el envio del informe */ }
+};
+
+window._pushPanel = async function(){
+  var mc=document.getElementById('main-content');
+  var sop=window._pushSoportado();
+  var perm=(typeof Notification!=='undefined') ? Notification.permission : 'default';
+  var sub=await window._pushSubActual();
+  var activo=!!sub;
+  var esIOS=/iPad|iPhone|iPod/.test(navigator.userAgent||'');
+  var enPantalla=(window.navigator.standalone===true) || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  var mapa={}; try{ mapa=await window._pushLeerRegistro(); }catch(e){}
+  var mios=(mapa[window._pushClave()]||{}).disp||[];
+  var estado = activo
+    ? '<span style="background:#E7F3EA;color:#1A5C2E;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700">ACTIVO EN ESTE DISPOSITIVO</span>'
+    : '<span style="background:#FBE9EA;color:#9B2226;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700">NO ACTIVO AQUÍ</span>';
+  var aviso='';
+  if(!sop){
+    aviso='<div style="background:#FEF9E7;border:1px solid #F1D89B;border-radius:9px;padding:12px 15px;font-size:13px;color:#6b5a1e;margin-bottom:14px">'
+      +(esIOS&&!enPantalla
+        ? 'En iPhone los avisos solo funcionan si el Sistema Operativo se abre desde un ícono en la pantalla de inicio. Abrir en Safari, tocar <strong>Compartir</strong>, luego <strong>Agregar a inicio</strong>, y entrar desde ese ícono.'
+        : 'Este navegador no permite avisos. Se requiere Chrome, Edge o Safari actualizado.')
+      +'</div>';
+  } else if(perm==='denied'){
+    aviso='<div style="background:#FBE9EA;border:1px solid #f0cdcf;border-radius:9px;padding:12px 15px;font-size:13px;color:#9B2226;margin-bottom:14px">Las notificaciones están bloqueadas para este sitio. Hay que habilitarlas en la configuración del navegador y volver a intentar.</div>';
+  }
+  var lista = mios.length
+    ? '<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px"><thead><tr>'
+      +'<th style="text-align:left;padding:6px 8px;background:#1D3461;color:#fff;font-size:11px">Dispositivo</th>'
+      +'<th style="text-align:left;padding:6px 8px;background:#1D3461;color:#fff;font-size:11px">Activado</th></tr></thead><tbody>'
+      +mios.map(function(d){
+        var ua=d.ua||''; var nom = /iPhone/.test(ua)?'iPhone' : (/iPad/.test(ua)?'iPad' : (/Android/.test(ua)?'Android' : (/Macintosh/.test(ua)?'Mac':'Computador')));
+        var f=(d.alta||'').slice(0,10);
+        return '<tr><td style="padding:6px 8px;border-bottom:1px solid #eef0f3">'+nom+'</td><td style="padding:6px 8px;border-bottom:1px solid #eef0f3">'+f+'</td></tr>';
+      }).join('')+'</tbody></table>'
+    : '<p style="font-size:13px;color:var(--gris-t);margin:10px 0 0">Todavía no hay ningún dispositivo registrado.</p>';
+
+  mc.innerHTML='<div class="page-title">🔔 Avisos en este dispositivo</div>'
+    +'<div class="card" style="max-width:640px">'
+    +'<p style="font-size:14px;margin-top:0">Cuando alguien genere un informe en el Sistema Operativo, llega una notificación al celular con el tipo de informe, quién lo generó y la hora — aunque el sistema esté cerrado.</p>'
+    +aviso
+    +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:16px 0 4px">'+estado
+    +(activo
+      ? '<button onclick="window._pushDesactivar()" style="background:#fff;color:#9B2226;border:1px solid #9B2226;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer">Desactivar aquí</button>'
+      : '<button onclick="window._pushActivar(this)" '+(sop&&perm!=='denied'?'':'disabled ')+'style="background:#1A5C2E;color:#fff;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer">Activar avisos</button>')
+    +'</div>'
+    +'<h3 style="font-size:14px;margin:22px 0 4px">Mis dispositivos</h3>'
+    +lista
+    +'<p style="font-size:12px;color:var(--gris-t);margin-top:16px">Hay que activarlo una vez en cada dispositivo donde se quiera recibir el aviso. Los avisos no contienen cifras ni datos de huéspedes: solo el tipo de informe, quién lo generó y la hora.</p>'
+    +'</div>';
+};
 
 function renderChangelog(){
   var _e = (typeof esc==='function') ? esc : function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
