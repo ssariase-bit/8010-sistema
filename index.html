@@ -477,10 +477,16 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-24-comentarios-mantenimiento-v36';
+const APP_VERSION = '2026-08-24-facturacion-contabilidad-v38';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-24', version:'2026-08-24-facturacion-contabilidad-v38', titulo:'El aviso de factura emitida en 8010 deja de llegarle a Talento Humano y pasa a Contabilidad (Sol. Santiago)',
+    afecta:'aviso de factura emitida en 8010, directorio de 8010 y grupos de correo',
+    detalle:'Sol. Santiago (24-ago-2026): pregunto por que le llegaban a Zareth Varela los avisos del correo de facturacion si ella no tiene ninguna relacion con facturacion. Al revisar, el aviso de "Nueva factura emitida" tenia un unico destino escrito a mano para 8010 y era el correo de Zareth, que es Direccion de Talento Humano — quedo puesto ahi cuando 8010 no tenia contadora definida y nunca se corrigio. En Kubik el mismo aviso si iba bien, al contador y a administracion financiera. Ahora en 8010 va a Adriana Bernal (Administracion) y a Nydia Pardo (Contadora). Se agrega ademas a Adriana y a Nydia al directorio de 8010, para poder dirigirles solicitudes y comentarios; se etiqueta a Zareth como Talento Humano para que no se vuelva a confundir su area; se crea el grupo de correo Contable en 8010, que antes solo existia en Kubik; y se agregan los departamentos contabilidad, sistemas y talento humano al directorio por area. Fernando Herrera queda registrado como Sistemas en los dos edificios. IMPORTANTE: el usuario de Nydia Pardo todavia no existe. El sistema exige que la cuenta de acceso se cree primero en Supabase (Authentication) y solo despues se le puede armar el perfil; mientras tanto el correo si recibe los avisos, pero ella no puede entrar al Sistema Operativo.' },
+  { fecha:'2026-08-24', version:'2026-08-24-borrador-ck-v37', titulo:'Los informes de Check-In y Check-Out ya no se pierden si la pantalla se recarga, y el desplegable de apartamentos muestra solo los que están en casa (Sol. Sebastián Martínez y Ricardo Vallejo)',
+    afecta:'Informe de Check-In, Informe de Check-Out, Check List Carpetas y Cuadro de Saldos',
+    detalle:'(1) Sol. Sebastian Martinez (24-ago-2026, dos reportes): estando en el informe de CKO la pantalla se le recargaba y perdia todo lo digitado, quedando en el rack o en el dashboard. La causa exacta no se pudo confirmar — puede ser la actualizacion automatica de version, una recarga del navegador, un cierre accidental de la pestana o que el equipo se suspenda — y ya existe desde el 14-ago un resguardo que evita recargar cuando hay campos con datos. En vez de seguir persiguiendo la causa se elimina la consecuencia: mientras se llena el informe, lo escrito se guarda solo cada medio segundo en el mismo equipo, y al volver a abrir el informe aparece una barra ofreciendo recuperarlo, con la hora en que quedo. Se puede recuperar o empezar de cero. El borrador vive UNICAMENTE en el navegador de quien lo escribe: no viaja a la base de datos, no lo ve nadie mas, se borra apenas el informe se genera y se descarta solo a las 12 horas para no ofrecer datos de otro turno. Aplica igual al Check-In, que es igual de largo y se pierde igual. (2) Sol. Ricardo Vallejo (24-ago-2026): pidio dejar unicamente los apartamentos que estan en casa en Check List Carpetas y Cuadro de Saldos. El desplegable traia las 42 unidades del edificio y habia que buscar el apto entre decenas de opciones vacias. Ahora arranca con los ocupados de hoy, mostrando al lado el nombre del huesped, y trae un "ver todos" porque en Carpetas si hay un caso legitimo con el apto vacio. Si el rack no se puede leer, se deja la lista completa: nunca se bloquea el registro.' },
   { fecha:'2026-08-24', version:'2026-08-24-comentarios-mantenimiento-v36', titulo:'Las respuestas a comentarios de gerencia ahora sí avisan a quien corresponde, y el seguimiento de una novedad llega a Mantenimiento (Sol. Andrés Parga)',
     afecta:'_addComNov() (avisos de comentarios en Novedades) y _novToMantTask() (orden de mantenimiento derivada de una novedad)',
     detalle:'Sol. Andres Parga (24-ago-2026), dos reportes del mismo dia. (1) Decia que no habia opcion para contestar los comentarios de gerencia y que no tenia certeza de que su respuesta llegara. La opcion si existia — el modulo Comentarios permite responder — pero el aviso por correo estaba mal dirigido: solo se le avisaba al autor del PRIMER comentario del hilo. Si gerencia comentaba de segunda en adelante, la respuesta le llegaba por correo a quien hubiera abierto el hilo y no a quien pregunto, de modo que la respuesta se perdia. Ademas, dirigir un comentario a una persona no le mandaba ningun correo: solo pintaba un aviso dentro del sistema, que hay que estar mirando para verlo. Ahora se avisa a quien va dirigido el comentario y al autor del comentario anterior, que es a quien se le esta respondiendo; nunca a uno mismo y nunca dos veces al mismo correo. El correo incluye el texto al que se responde y la novedad relacionada. (2) Reportaba que el seguimiento hecho en una novedad no quedaba registrado en el modulo de Mantenimiento — caso del congelador del 702. La orden si existia, pero al editar la novedad el sistema volvia a INSERTAR en vez de actualizar: quedaban dos ordenes, la original enlazada con el texto viejo y una copia sin enlace con el seguimiento pegado, y ninguna completa. Ahora se actualiza la orden que ya existe y solo se crea una nueva cuando de verdad no hay ninguna; si encuentra una orden suelta de la misma fecha y apartamento, la re-enlaza en vez de duplicarla. Se limpiaron los datos historicos: 4 ordenes duplicadas consolidadas conservando el texto mas completo, y 7 novedades de mantenimiento de junio y julio que nunca habian generado su orden quedaron enlazadas. Hoy no queda ninguna novedad de mantenimiento sin su orden.' },
@@ -8489,6 +8495,48 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
   // Sol Sebastián: al elegir el apartamento, arrastrar el arrendatario (nombre y apellidos) y la
   // empresa desde el Rack, igual que hace el informe de CKI/CKO. Evita redigitar y evita errores.
   // 14-jul-2026: se extiende a Check List Carpetas, que era donde faltaba.
+  // Sol. Ricardo Vallejo (24-ago-2026): "dejar únicamente los apartamentos que están en casa" en
+  // Check List Carpetas y Cuadro de Saldos. El desplegable traía las 42 unidades del edificio, y
+  // en la práctica solo se registran las que tienen huésped hoy — había que buscar el apto entre
+  // decenas de opciones vacías. Ahora el desplegable arranca con los ocupados de hoy y trae un
+  // "ver todos" al lado, porque en Carpetas sí hay un caso legítimo con el apto vacío. Si no se
+  // puede leer el rack, se deja la lista completa: nunca se bloquea el registro.
+  if (tabla === 'saldos_aptos' || tabla === 'check_carpetas') {
+    (async function(){
+      try{
+        var _sel = document.getElementById('gf-apto');
+        if(!_sel || _sel.tagName!=='SELECT') return;
+        var _todas = [].slice.call(_sel.options).map(function(o){ return {v:o.value, t:o.text}; });
+        var q = await sb.from('rack').select('apto,huesped')
+          .eq('edificio',EDIFICIO_ACTIVO).eq('fecha',TODAY)
+          .in('estado',['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje']);
+        if(q.error || !q.data || !q.data.length) return;   // sin datos: se deja la lista completa
+        var _ocup = {}; q.data.forEach(function(r){ if(r.apto) _ocup[String(r.apto).trim()] = r.huesped||''; });
+        var _enCasa = _todas.filter(function(o){ return o.v && _ocup[String(o.v).trim()]!=null; });
+        if(!_enCasa.length) return;
+
+        var _pintar = function(soloEnCasa){
+          var _prev = _sel.value;
+          var _lista = soloEnCasa ? _enCasa : _todas;
+          _sel.innerHTML = _lista.map(function(o){
+            var _h = soloEnCasa ? _ocup[String(o.v).trim()] : null;
+            var _txt = o.t + (_h ? ' · '+_h : '');
+            return '<option value="'+String(o.v).replace(/"/g,'&quot;')+'">'+String(_txt).replace(/</g,'&lt;')+'</option>';
+          }).join('');
+          if(_prev){ _sel.value=_prev; if(_sel.value!==_prev && soloEnCasa){ _pintar(false); var _c=document.getElementById('gf-apto-todos'); if(_c) _c.checked=true; return; } }
+        };
+        _pintar(true);
+
+        if(!document.getElementById('gf-apto-todos')){
+          var _lbl = document.createElement('label');
+          _lbl.style.cssText='display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--gris-t);cursor:pointer;margin-top:5px';
+          _lbl.innerHTML='<input type="checkbox" id="gf-apto-todos"> Ver todos los apartamentos ('+_todas.filter(function(o){return o.v;}).length+')';
+          (_sel.closest('.form-group')||_sel.parentNode).appendChild(_lbl);
+          document.getElementById('gf-apto-todos').addEventListener('change', function(){ _pintar(!this.checked); });
+        }
+      }catch(e){}
+    })();
+  }
   if (tabla === 'listado_cargos' || tabla === 'saldos_aptos' || tabla === 'check_carpetas') {
     var _apE = document.getElementById('gf-apto');
     if (_apE) _apE.addEventListener('change', async function(){
@@ -11931,8 +11979,10 @@ const _DIRECTORIO = {
     {n:'FERNANDO HERRERA', e:'fernando.herrera@8010urbanliving.com'},
     {n:'JUAN FERNANDO MARTÍNEZ', e:'juan.martinez@8010urbanliving.com'},
     {n:'ANDRÉS LEGUIZAMÓN (COMPRAS)', e:'operativo.compras@8i8op.com'},
-    {n:'ZARETH VARELA', e:'zareth.varela@8010urbanliving.com'},
-    {n:'NATALIA MUÑOZ (EVENTOS)', e:'natalia.munoz@8010urbanliving.com'}
+    {n:'ZARETH VARELA (TALENTO HUMANO)', e:'zareth.varela@8010urbanliving.com'},
+    {n:'NATALIA MUÑOZ (EVENTOS)', e:'natalia.munoz@8010urbanliving.com'},
+    {n:'ADRIANA BERNAL', e:'adriana.bernal@8010urbanliving.com'},
+    {n:'NYDIA PARDO (CONTABILIDAD)', e:'nydia.pardo@8010urbanliving.com'}
   ],
   // Actualizado 24-ago-2026 (Sol. Fabio Malaver): salieron Carlos Jimenez, Nancy Medina y Yeisson
   // Rodriguez; entraron Camila Cuartas (admin4) y Andres Leguizamon. Los admin1..admin4 son logins
@@ -11959,7 +12009,8 @@ const _GRUPOS_CORREO = {
     'Administrativo': ['adriana.bernal@8010urbanliving.com','zareth.varela@8010urbanliving.com','cristina.cervino@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
     'Mantenimiento': ['mantenimiento@8010urbanliving.com','fernando.herrera@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
     'Sistemas': ['fernando.herrera@8010urbanliving.com','mantenimiento@8010urbanliving.com','fabio.malaver@8010urbanliving.com'],
-    'Compras': ['operativo.compras@8i8op.com']
+    'Compras': ['operativo.compras@8i8op.com'],
+    'Contable': ['nydia.pardo@8010urbanliving.com','adriana.bernal@8010urbanliving.com']
   },
   // 24-ago-2026: se retira admin3@8i8op.com de los grupos — su titular ya no esta en la operacion.
   // Cuando se reasigne ese login, volver a incluirlo aqui.
@@ -11977,7 +12028,7 @@ function _normNom(s){ return String(s==null?'':s).toLowerCase().normalize('NFD')
 function _dirEmail(nombre){ var a=_DIRECTORIO[EDIFICIO_ACTIVO]||[]; var t=_normNom(nombre); if(!t) return null; var m=a.find(function(p){return _normNom(p.n)===t;}); if(m) return m.e; var tk=t.split(' ').filter(Boolean); var ap=tk[tk.length-1]; var byAp=a.filter(function(p){return _normNom(p.n).split(' ').indexOf(ap)>=0;}); if(byAp.length===1) return byAp[0].e; var byFn=a.filter(function(p){return _normNom(p.n).split(' ')[0]===tk[0];}); if(byFn.length===1) return byFn[0].e; return null; }
 // Departamento -> correo (direcciones confirmadas del ecosistema). Para dirigir solicitudes a un area.
 const _DEPTOS = {
-  '8010': { 'recepcion':'recepcion@8010urbanliving.com', 'mantenimiento':'mantenimiento@8010urbanliving.com', 'compras':'operativo.compras@8i8op.com', 'administracion':'administrativo@8010urbanliving.com', 'administrativo':'administrativo@8010urbanliving.com', 'gerencia':'santiago.arias@8010urbanliving.com', 'eventos':'natalia.munoz@8010urbanliving.com', 'comercial':'cristina.cervino@8010urbanliving.com' },
+  '8010': { 'recepcion':'recepcion@8010urbanliving.com', 'mantenimiento':'mantenimiento@8010urbanliving.com', 'compras':'operativo.compras@8i8op.com', 'administracion':'administrativo@8010urbanliving.com', 'administrativo':'administrativo@8010urbanliving.com', 'gerencia':'santiago.arias@8010urbanliving.com', 'eventos':'natalia.munoz@8010urbanliving.com', 'comercial':'cristina.cervino@8010urbanliving.com', 'contabilidad':'nydia.pardo@8010urbanliving.com', 'sistemas':'fernando.herrera@8010urbanliving.com', 'talento humano':'zareth.varela@8010urbanliving.com' },
   'kubik': { 'recepcion':'recepcion@8i8op.com', 'gerencia':'sariase@8i8op.com', 'compras':'operativo.compras@8i8op.com' }
 };
 function _depEmail(nombre){ var d=_DEPTOS[EDIFICIO_ACTIVO]||{}; var t=_normNom(nombre); return (t&&d[t])||null; }
@@ -14972,7 +15023,12 @@ function _facRecalc(){ var sub=0,imp=0; document.querySelectorAll('#fac-lineas t
   var f=function(n){return '$ '+Math.round(n).toLocaleString('es-CO');}; var tot=sub+imp; var ab=Number((document.getElementById('fac-abono')||{}).value)||0; var so=document.getElementById('fac-sub'),io=document.getElementById('fac-imp'),to=document.getElementById('fac-tot'),sa=document.getElementById('fac-saldo'); if(so)so.textContent=f(sub); if(io)io.textContent=f(imp); if(to)to.textContent=f(tot); if(sa)sa.textContent=f(tot-ab); }
 window._facAviso=function(f){ try{
   var edi=(f&&f.edificio)||EDIFICIO_ACTIVO;
-  var dest = edi==='kubik' ? ['contador@8i8op.com','admin.fin@8i8op.com'] : ['zareth.varela@8010urbanliving.com'];
+  // Sol. Santiago (24-ago-2026): el aviso de factura emitida en 8010 le llegaba a Zareth Varela,
+  // que es Direccion de Talento Humano y no tiene ninguna relacion con facturacion — quedo puesta
+  // ahi cuando 8010 no tenia contadora definida. El aviso de factura es de manejo contable, asi que
+  // en 8010 va a Adriana Bernal (Administracion) y a Nydia Pardo (Contadora). Kubik no cambia.
+  var dest = edi==='kubik' ? ['contador@8i8op.com','admin.fin@8i8op.com']
+                           : ['adriana.bernal@8010urbanliving.com','nydia.pardo@8010urbanliving.com'];
   var num=(f&&f.numero)||''; var cli=(f&&f.cliente)||''; var tot=(f&&f.total)||0; var emi=(f&&f.emitida_por)||'';
   var money='$'+Math.round(Number(tot)||0).toLocaleString('es-CO');
   var html='<div style="font-family:Arial,sans-serif;font-size:14px;color:#222"><h3 style="color:#1D3A5F">🧾 Nueva factura emitida</h3><p>Se emitió la factura <strong>'+num+'</strong>:</p><table style="border-collapse:collapse;font-size:14px"><tr><td style="padding:4px 12px;color:#666">Cliente</td><td style="padding:4px 12px"><strong>'+cli+'</strong></td></tr><tr><td style="padding:4px 12px;color:#666">Total</td><td style="padding:4px 12px"><strong>'+money+'</strong></td></tr><tr><td style="padding:4px 12px;color:#666">Emitida por</td><td style="padding:4px 12px">'+emi+'</td></tr><tr><td style="padding:4px 12px;color:#666">Apartamento</td><td style="padding:4px 12px">'+((f&&f.apto)||'-')+'</td></tr><tr><td style="padding:4px 12px;color:#666">Fecha</td><td style="padding:4px 12px">'+((f&&f.fecha)||'')+'</td></tr></table><p style="color:#888;font-size:12px;margin-top:14px">Aviso automático del Sistema Operativo — documento interno de control, no reemplaza la factura DIAN.</p></div>';
@@ -17370,6 +17426,8 @@ function renderInformeCKI(aptoPreload, huesped, canal, tarifa, empresa, tratamie
     </div>`;
   (async()=>{ try{ const a=document.getElementById('cki-apto')?.value; if(!a) return; const {data}=await sb.from('rack').select('telefono').eq('fecha',TODAY).eq('apto',a).eq('edificio',EDIFICIO_ACTIVO).limit(1); if(data&&data[0]&&data[0].telefono){ const el=document.getElementById('cki-tel'); if(el&&!el.value) window._telSet('cki-tel', data[0].telefono); } }catch(e){} })();
   if(aptoPreload){ setTimeout(function(){ try{ ckiAutollenar(); }catch(e){} }, 60); }
+  // Sol. Sebastián: mismo resguardo del CKO — el CKI es igual de largo y se pierde igual
+  try{ if(typeof window._bkActivar==='function') window._bkActivar('cki','cki-','informe de Check-In'); }catch(_){}
 }
 
 function _nochesCKI(fi, ff){
@@ -17663,6 +17721,8 @@ R/${quien}`;
       else if (r.error) console.error('novedad CKI:', r.error);
     });
   } catch(e) { console.error(e); }
+  // El informe ya salió: el borrador cumplió su función y se descarta
+  try{ if(typeof window._bkBorrar==='function') window._bkBorrar('cki'); }catch(_){}
   compartirInforme(`CKI — ${huesped} Apto ${apto}`, msg);
 }
 
@@ -17774,7 +17834,115 @@ function renderInformeCKO(aptoPreload, huesped, canal) {
     </div>`;
   const _selCKO=document.getElementById('cko-apto'); if(_selCKO) _selCKO.addEventListener('change', function(){ cargarTotalCKO(true); });
   cargarTotalCKO();
+  // Sol. Sebastián: guardar solo lo que se va escribiendo, para que una recarga no borre el informe
+  try{ if(typeof window._bkActivar==='function') window._bkActivar('cko','cko-','informe de Check-Out'); }catch(_){}
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BORRADOR AUTOMATICO DE LOS INFORMES DE CHECK-IN Y CHECK-OUT
+// Sol. Sebastian Martinez (24-ago-2026)
+//
+// Reportó dos veces que estando en el informe de CKO la pantalla se le recarga
+// y pierde todo lo digitado. La causa exacta no se pudo confirmar: puede ser la
+// actualizacion automatica de version, una recarga del navegador, un cierre
+// accidental de la pestaña o que el equipo se suspenda. En vez de perseguir una
+// sola causa, se elimina la consecuencia: mientras se llena el formulario, lo
+// escrito se guarda solo en el mismo equipo, y al volver a abrir el informe el
+// sistema ofrece recuperarlo.
+//
+// Vive UNICAMENTE en el navegador de quien lo escribe (localStorage). No viaja a
+// la base de datos, no lo ve nadie mas, y se borra al generar el informe. Dura 12
+// horas: pasado ese tiempo se descarta solo, para no ofrecer datos de otro turno.
+// ═══════════════════════════════════════════════════════════════════════════
+window._BORRADOR_HORAS = 12;
+window._bkKey = function(tipo){
+  var _u = '';
+  try{ _u = (currentUser && currentUser.id) ? String(currentUser.id).slice(0,8) : ''; }catch(_){}
+  return 'so_borrador_'+tipo+'_'+(typeof EDIFICIO_ACTIVO!=='undefined'?EDIFICIO_ACTIVO:'')+'_'+_u;
+};
+// Campos del formulario: todo input/select/textarea con id que empiece por el prefijo (cki- / cko-)
+window._bkCampos = function(prefijo){
+  var out=[];
+  try{
+    var mc=document.getElementById('main-content'); if(!mc) return out;
+    [].slice.call(mc.querySelectorAll('input,select,textarea')).forEach(function(el){
+      if(el.id && el.id.indexOf(prefijo)===0) out.push(el);
+    });
+  }catch(_){}
+  return out;
+};
+window._bkGuardar = function(tipo, prefijo){
+  try{
+    var campos=window._bkCampos(prefijo); if(!campos.length) return;
+    var datos={}, algo=false;
+    campos.forEach(function(el){
+      var v = (el.type==='checkbox'||el.type==='radio') ? !!el.checked : String(el.value==null?'':el.value);
+      datos[el.id]=v;
+      if(el.type==='checkbox'||el.type==='radio'){ if(v) algo=true; }
+      else if(String(v).trim()!=='') algo=true;
+    });
+    if(!algo){ localStorage.removeItem(window._bkKey(tipo)); return; }
+    localStorage.setItem(window._bkKey(tipo), JSON.stringify({ts:Date.now(), datos:datos}));
+  }catch(_){}
+};
+window._bkBorrar = function(tipo){ try{ localStorage.removeItem(window._bkKey(tipo)); }catch(_){} };
+window._bkLeer = function(tipo){
+  try{
+    var raw=localStorage.getItem(window._bkKey(tipo)); if(!raw) return null;
+    var o=JSON.parse(raw);
+    if(!o || !o.datos || !o.ts) return null;
+    if((Date.now()-o.ts) > window._BORRADOR_HORAS*3600*1000){ window._bkBorrar(tipo); return null; }
+    return o;
+  }catch(_){ return null; }
+};
+window._bkRestaurar = function(tipo, o){
+  try{
+    Object.keys(o.datos||{}).forEach(function(id){
+      var el=document.getElementById(id); if(!el) return;
+      var v=o.datos[id];
+      if(el.type==='checkbox'||el.type==='radio') el.checked=!!v; else el.value=v;
+      try{ el.dispatchEvent(new Event('change',{bubbles:true})); }catch(_){}
+    });
+    if(typeof showToast==='function') showToast('✅ Se recuperó lo que habías escrito','success');
+  }catch(_){}
+};
+// Aviso de recuperación: una barra arriba del formulario, no un modal — no interrumpe
+// a quien va a empezar de cero.
+window._bkOfrecer = function(tipo, prefijo, etiqueta){
+  var o=window._bkLeer(tipo); if(!o) return;
+  try{
+    var mc=document.getElementById('main-content'); if(!mc) return;
+    var min=Math.round((Date.now()-o.ts)/60000);
+    var cuando = min<1 ? 'hace menos de un minuto' : (min<60 ? ('hace '+min+' minuto'+(min>1?'s':'')) : ('hace '+Math.round(min/60)+' hora'+(min>=120?'s':'')));
+    var box=document.createElement('div');
+    box.id='bk-aviso';
+    box.style.cssText='background:#FEF9E7;border:1px solid #F1D89B;border-radius:9px;padding:11px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:13px;color:#6b5a1e';
+    box.innerHTML='<span style="flex:1;min-width:220px">Quedó un '+etiqueta+' sin terminar de '+cuando+'.</span>'
+      +'<button id="bk-si" style="background:#1A5C2E;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer">Recuperar lo escrito</button>'
+      +'<button id="bk-no" style="background:transparent;color:#8a7524;border:1px solid #E3CC8F;border-radius:7px;padding:7px 12px;font-size:12.5px;cursor:pointer">Empezar de cero</button>';
+    var t=mc.querySelector('.page-title');
+    if(t && t.nextSibling) mc.insertBefore(box, t.nextSibling); else mc.insertBefore(box, mc.firstChild);
+    document.getElementById('bk-si').onclick=function(){ window._bkRestaurar(tipo,o); box.remove(); };
+    document.getElementById('bk-no').onclick=function(){ window._bkBorrar(tipo); box.remove(); if(typeof showToast==='function') showToast('Borrador descartado','info'); };
+  }catch(_){}
+};
+// Engancha el guardado a cada tecla y cada cambio del formulario
+window._bkActivar = function(tipo, prefijo, etiqueta){
+  try{
+    setTimeout(function(){
+      window._bkOfrecer(tipo, prefijo, etiqueta);
+      var mc=document.getElementById('main-content'); if(!mc) return;
+      var guardar=function(){
+        clearTimeout(window['_bkT_'+tipo]);
+        window['_bkT_'+tipo]=setTimeout(function(){ window._bkGuardar(tipo, prefijo); }, 600);
+      };
+      mc.addEventListener('input', guardar, true);
+      mc.addEventListener('change', guardar, true);
+      // por si cierran la pestaña o el equipo se suspende antes de que corra el temporizador
+      window.addEventListener('beforeunload', function(){ try{ window._bkGuardar(tipo, prefijo); }catch(_){} });
+    }, 350);
+  }catch(_){}
+};
 
 async function cargarTotalCKO(force){
   try{
@@ -17983,6 +18151,8 @@ R/${quien}`;
       </div>
     </div>`;
   document.body.appendChild(modal);
+  // El informe ya salió: el borrador cumplió su función y se descarta
+  try{ if(typeof window._bkBorrar==='function') window._bkBorrar('cko'); }catch(_){}
   // Actualizar el rack automáticamente (el apto queda SUCIO / días futuros liberados) sin esperar clic
   _ckoAplicarRack(apto).then(function(lib){ showToast('📅 Rack actualizado: Apto '+apto+' marcado "Check-out realizado" (salida)'+(lib?' · '+lib+' día(s) liberados':''),'success'); if(window._currentView==='rack') renderRack(); if(window._currentView==='estado-huespedes') renderEstadoHuespedes(); else if(window._currentView==='ocupacion') renderOcupacion(); /* Sol. Juan Martinez (ba32fc51): refrescar también el Dashboard si está abierto */ if(window._currentView==='dashboard' && typeof loadView==='function') loadView('dashboard'); }).catch(function(){});
 }
