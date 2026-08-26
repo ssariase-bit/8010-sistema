@@ -1638,6 +1638,7 @@ const MENU_COMPLETO = [
     ] : []),
     ...(EDIFICIO_ACTIVO==='kubik' ? [
       { id: 'financiero-kl', icon: '💰', label: 'Financiero KL' },
+      { id: 'modelo-kl', icon: '🧮', label: 'Modelo Financiero KL' },
     ] : []),
   { id: 'indicadores', icon: '📊', label: 'Indicadores Ocup./Ventas' },
   { id: 'detalle-ventas', icon: '📈', label: 'Detalle de Ventas' },
@@ -1719,7 +1720,7 @@ window._puedeComprasFin8010 = function(){
 // protegido por _puedeConfidencial() al ABRIRLO (mostraba "Módulo confidencial"), pero el ítem del
 // menú nunca se agregó a esta lista — por eso seguía apareciendo en el sidebar de quien no tiene acceso,
 // y al entrar chocaba con el candado. Se agrega aquí para que ni siquiera se muestre en el menú.
-window._ITEMS_CONFID = ['ingresos','resumen-ventas','ventas-ppto','finanzas','financiero-kl','nomina','indicadores','ventas-linea','personal-list','fact-devengado'];
+window._ITEMS_CONFID = ['modelo-kl','ingresos','resumen-ventas','ventas-ppto','finanzas','financiero-kl','nomina','indicadores','ventas-linea','personal-list','fact-devengado'];
 // Fix (Sol. Sebastián, hallazgo c51f7cf6): "Retirar estos módulos ya que no son de nuestro uso" — el
 // equipo de Administración (rol administrador) no gestiona Cartera/CxP/Proveedores/Flujo de Caja. La
 // lista ya existía (Sol. Sebastián 23-jul-2026) pero le faltaban 4 ítems agregados al menú después:
@@ -1733,7 +1734,7 @@ window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma','avisos-push'];
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
 // Sol Santiago: procesos que son ÚNICAMENTE de Kubik. En 8010 no existen y no deben aparecer:
 // entrega de llaves/accesos, inventario de loza, check list de turnos y revistas nocturnas.
-window._ITEMS_SOLO_KUBIK = ['revistas-list','loza-list','entrega-llaves','checklist-turnos','financiero-kl','carta-bagatelle-list','atelier-list'];
+window._ITEMS_SOLO_KUBIK = ['modelo-kl','revistas-list','loza-list','entrega-llaves','checklist-turnos','financiero-kl','carta-bagatelle-list','atelier-list'];
 window._itemPermitido = function(it){
   var _rol = currentProfile && currentProfile.rol;
   if(it.roles && it.roles.indexOf(_rol)<0) return false;
@@ -3104,6 +3105,7 @@ window.renderFlujoSemanal=async function(){
     case 'ventas-ppto': await renderVentasPpto(); break;
     case 'finanzas': await renderFinanzas(); break;
     case 'financiero-kl': await renderFinanzasKL(); break;
+    case 'modelo-kl': await renderModeloKL(); break;
     case 'indicadores': await renderIndicadores(); break;
     case 'detalle-ventas': await renderDetalleVentas(); break;
     case 'ventas-linea': await renderVentasLinea(); break;
@@ -15710,6 +15712,870 @@ async function renderVentasPpto(){
     +'<tr style="background:#1A5C2E;color:#fff;font-weight:800"><td>AÑO CORRIDO</td><td style="text-align:right">'+fM(ytdRA)+'</td><td style="text-align:right">'+fM(ytdPA)+'</td><td style="text-align:center">'+(ytdPA?Math.round(ytdRA/ytdPA*100):0)+'%</td><td style="text-align:right">'+fM(ytdRE)+'</td><td style="text-align:right">'+fM(ytdPE)+'</td><td style="text-align:center">'+(ytdPE?Math.round(ytdRE/ytdPE*100):0)+'%</td><td style="text-align:right">'+fM(ytdRT)+'</td><td style="text-align:right">'+fM(ytdPT)+'</td><td style="text-align:center">'+pYtdT+'%</td></tr>'
     +'</tbody></table></div><p style="font-size:11px;color:var(--gris-t);margin-top:10px">Valores en millones COP. % = Real ÷ Presupuesto. Meses futuros sin % (presupuesto pendiente de ejecutar). El mes en curso es parcial. Tarifas en USD ya normalizadas a COP.</p></div>';
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ═══ MODELO FINANCIERO KL (8i8 Operadora) — drivers + real vs proyectado ═══
+// Reemplaza el PYG en Excel: la proyeccion se CALCULA desde supuestos y
+// drivers editables, no se digita. El real se carga del Excel contable.
+// Hallazgos del Excel original (25-ago-2026) que este modulo corrige:
+//   1. GOP mal calculado (=Ing.Habitaciones - Valla - celda vacia). Aqui es
+//      TOTAL INGRESOS - COSTOS OPERATIVOS.
+//   2. Celdas mensuales eran constantes digitadas, no formulas: el modelo no
+//      recalculaba al cambiar tarifa u ocupacion.
+//   3. Tres bases distintas llamadas "% Ing". Aqui la base es explicita por linea.
+// ═══════════════════════════════════════════════════════════════════════
+window._MKL_SEED = [{"cod":"4135","nom":"Ing Alojamiento","grp":"ING_HAB","dr":"aloj"},{"cod":"4136","nom":"Ing Atelier + Sala de junta","grp":"ING_HAB","dr":"fijo","v":4000000},{"cod":"4137","nom":"Ing Lavandería","grp":"ING_HAB","dr":"pct","v":0.004,"b":"ing_aloj"},{"cod":"4138","nom":"Upselling","grp":"ING_HAB","dr":"manual"},{"cod":"4139","nom":"Early Check In","grp":"ING_HAB","dr":"pct","v":0.008,"b":"ing_aloj"},{"cod":"4140","nom":"Late Check Out","grp":"ING_HAB","dr":"pct","v":0.0043136536,"b":"ing_aloj"},{"cod":"4141","nom":"Ing Alimentos Restaurante","grp":"ING_AB","dr":"manual"},{"cod":"4142","nom":"Ing Mini Bar","grp":"ING_AB","dr":"pct","v":0.01,"b":"ing_hab_su"},{"cod":"4143","nom":"Administración del Edificio","grp":"ING_NOP","dr":"fijo","v":0},{"cod":"4144","nom":"Seguro Hotelero","grp":"ING_NOP","dr":"fijo","v":0},{"cod":"4145","nom":"Alquiler Locales","grp":"ING_NOP","dr":"fijo","v":0},{"cod":"4146","nom":"Otros Ing no Operacionales","grp":"ING_NOP","dr":"fijo","v":0},{"cod":"5100","nom":"Nomina Hab","grp":"GAS_HAB","dr":"fijo","v":19495570},{"cod":"51001","nom":"Camarera_ Angela Patricia Diaz Diaz","grp":"GAS_HAB","dr":"manual"},{"cod":"51002","nom":"Camarera_ Yolimar manzanillo","grp":"GAS_HAB","dr":"manual"},{"cod":"51003","nom":"Camarera_","grp":"GAS_HAB","dr":"manual"},{"cod":"51004","nom":"Front desk _ Enrique Garcia","grp":"GAS_HAB","dr":"manual"},{"cod":"51005","nom":"Front desk _ Juana Milena Noguera","grp":"GAS_HAB","dr":"manual"},{"cod":"51006","nom":"Front desk _ Paulino Ernesto Oviedo","grp":"GAS_HAB","dr":"manual"},{"cod":"51007","nom":"Cuenta 51007","grp":"GAS_HAB","dr":"manual"},{"cod":"5101","nom":"Comisión","grp":"GAS_HAB","dr":"fijo","v":0},{"cod":"5102","nom":"Otros gastos personal Hab","grp":"GAS_HAB","dr":"fijo","v":2165626},{"cod":"5103","nom":"Kit de Bienvenida","grp":"GAS_HAB","dr":"x_entrada","v":15000},{"cod":"5104","nom":"Elementos de Aseo Hab","grp":"GAS_HAB","dr":"pct","v":0.007,"b":"ing_aloj"},{"cod":"5105","nom":"Serv Lavandería Hab","grp":"GAS_HAB","dr":"x_kg","v":4830},{"cod":"5106","nom":"Insumos Huespedes Hab","grp":"GAS_HAB","dr":"pct","v":0.005,"b":"ing_aloj"},{"cod":"5107","nom":"Papelería Hab","grp":"GAS_HAB","dr":"pct","v":0.0002,"b":"ing_aloj"},{"cod":"5108","nom":"Activos de operación Hab","grp":"GAS_HAB","dr":"pct","v":0.002,"b":"ing_aloj"},{"cod":"5109","nom":"Comisiones Plataformas","grp":"GAS_HAB","dr":"comision"},{"cod":"5110","nom":"Desayuno incluido","grp":"GAS_HAB","dr":"x_pax","v":0},{"cod":"5111","nom":"CMV Minibar","grp":"GAS_AB","dr":"pct","v":0.5,"b":"l:4142"},{"cod":"5112","nom":"Activos de operación A&B","grp":"GAS_AB","dr":"pct","v":0.015,"b":"ing_ab","fx":225000},{"cod":"5113","nom":"Nomina Adm","grp":"GAS_ADM","dr":"fijo","v":36317680},{"cod":"51131","nom":"Nomina Gerente _ Santiago Arias","grp":"GAS_ADM","dr":"manual"},{"cod":"51132","nom":"Nomina Dir Operativo_","grp":"GAS_ADM","dr":"manual"},{"cod":"51133","nom":"Nomina Lider mantenimiento_","grp":"GAS_ADM","dr":"manual"},{"cod":"51134","nom":"Nomina Técnico mantenimiento_","grp":"GAS_ADM","dr":"manual"},{"cod":"51135","nom":"Auxiliar contable_","grp":"GAS_ADM","dr":"manual"},{"cod":"51136","nom":"Cuenta 51136","grp":"GAS_ADM","dr":"manual"},{"cod":"51137","nom":"Cuenta 51137","grp":"GAS_ADM","dr":"manual"},{"cod":"51138","nom":"Cuenta 51138","grp":"GAS_ADM","dr":"manual"},{"cod":"51139","nom":"Cuenta 51139","grp":"GAS_ADM","dr":"manual"},{"cod":"5114","nom":"Comisiones","grp":"GAS_ADM","dr":"pct","v":0.01,"b":"ing_op"},{"cod":"5115","nom":"Otros gastos personal Adm","grp":"GAS_ADM","dr":"fijo","v":930809},{"cod":"5116","nom":"Revisor fiscal","grp":"HONOR","dr":"fijo","v":0},{"cod":"5117","nom":"Honorarios SST","grp":"HONOR","dr":"fijo","v":300000},{"cod":"5118","nom":"Abogados Laborales","grp":"HONOR","dr":"fijo","v":1000000},{"cod":"5119","nom":"Otros Honorarios","grp":"HONOR","dr":"fijo","v":100000},{"cod":"5120","nom":"Software","grp":"ARREND","dr":"fijo","v":1750000},{"cod":"5121","nom":"Herramientas tecnologicas","grp":"ARREND","dr":"fijo","v":0},{"cod":"5122","nom":"Otros arrendamientos","grp":"ARREND","dr":"fijo","v":0},{"cod":"5123","nom":"Suministros cafeteria","grp":"DIVERS","dr":"fijo","v":1000000},{"cod":"5124","nom":"Transporte Urbano Adm","grp":"DIVERS","dr":"fijo","v":200000},{"cod":"5125","nom":"Gastos de viaje Adm","grp":"DIVERS","dr":"fijo","v":0},{"cod":"5126","nom":"Afiliaciones Adm (SAICO y EGEDA)","grp":"DIVERS","dr":"fijo","v":500000},{"cod":"5127","nom":"Otros gastos Adm","grp":"DIVERS","dr":"fijo_anual","v":7000000},{"cod":"5128","nom":"Elementos de Aseo Adm","grp":"SERVIC","dr":"fijo","v":200000},{"cod":"5129","nom":"Telefonia e Internet","grp":"SERVIC","dr":"fijo","v":1900000},{"cod":"5130","nom":"Serv Seguridad","grp":"SERVIC","dr":"fijo","v":17712000},{"cod":"5131","nom":"Área Protegida (serv medico)","grp":"SERVIC","dr":"fijo","v":0},{"cod":"5132","nom":"Fletes & Acarreos","grp":"SERVIC","dr":"fijo","v":100000},{"cod":"5133","nom":"Energia","grp":"SERVIC","dr":"fijo","v":8000000},{"cod":"5134","nom":"Agua","grp":"SERVIC","dr":"fijo","v":3500000},{"cod":"5135","nom":"Gas","grp":"SERVIC","dr":"fijo","v":3000000},{"cod":"5136","nom":"Recoleccion Residuos","grp":"SERVIC","dr":"fijo","v":1000000},{"cod":"5137","nom":"Fumigacion","grp":"SERVIC","dr":"fijo","v":150000},{"cod":"5138","nom":"Costos Centralizados B-OFFICE","grp":"SERVIC","dr":"pct","v":0.017,"b":"ing_op"},{"cod":"5139","nom":"Mantenimiento Servicios","grp":"MANTEN","dr":"fijo","v":500000},{"cod":"5140","nom":"Mantenimiento Insumos","grp":"MANTEN","dr":"fijo","v":3000000},{"cod":"5141","nom":"Nomina Ventas","grp":"MERCAD","dr":"fijo","v":6008678},{"cod":"51411","nom":"Nomina Gerente comercial _ Cristina Cerviño","grp":"MERCAD","dr":"manual"},{"cod":"5142","nom":"Comisiones ventas","grp":"MERCAD","dr":"pct","v":0.01,"b":"ing_aloj"},{"cod":"5143","nom":"Otros gastos personal Ventas","grp":"MERCAD","dr":"fijo","v":395292},{"cod":"5144","nom":"Mercadeo","grp":"MERCAD","dr":"pct","v":0.007,"b":"ing_hab"},{"cod":"5145","nom":"Pauta y publicidad","grp":"MERCAD","dr":"fijo","v":1000000},{"cod":"5146","nom":"Valla","grp":"MERCAD","dr":"fijo","v":0},{"cod":"5147","nom":"Gastos de viaje Ventas","grp":"MERCAD","dr":"fijo","v":0},{"cod":"5148","nom":"Otros gastos Ventas","grp":"MERCAD","dr":"fijo","v":0},{"cod":"5149","nom":"Gastos Bancarios","grp":"BANCAR","dr":"pct","v":0.001,"b":"ing_op"},{"cod":"5150","nom":"Comisiones Bancarias","grp":"BANCAR","dr":"pct","v":0.01,"b":"ing_op"},{"cod":"5151","nom":"GMF (4x1000)","grp":"BANCAR","dr":"pct","v":0.004,"b":"ing_op"},{"cod":"5152","nom":"Contribucion al Turismo","grp":"IMPUES","dr":"pct","v":0.0025,"b":"ing_op"},{"cod":"5153","nom":"Retenciones","grp":"IMPUES","dr":"manual"},{"cod":"5154","nom":"Industria y Comercio","grp":"IMPUES","dr":"pct","v":0,"b":"ing_op"}];
+window._MKL_GRUPOS = [
+  {g:'ING_HAB', t:'INGRESOS HABITACIONES', tipo:'ing'},
+  {g:'ING_AB',  t:'INGRESOS A&B',          tipo:'ing'},
+  {g:'ING_NOP', t:'INGRESOS NO OPERACIONALES', tipo:'ing'},
+  {g:'GAS_HAB', t:'GASTO HABITACIONES',    tipo:'cos'},
+  {g:'GAS_AB',  t:'COSTOS Y GASTOS A&B',   tipo:'cos'},
+  {g:'GAS_ADM', t:'GASTO PERSONAL ADMINISTRATIVO', tipo:'cos'},
+  {g:'HONOR',   t:'HONORARIOS',            tipo:'cos'},
+  {g:'ARREND',  t:'ARRENDAMIENTOS',        tipo:'cos'},
+  {g:'DIVERS',  t:'DIVERSOS',              tipo:'cos'},
+  {g:'SERVIC',  t:'SERVICIOS',             tipo:'cos'},
+  {g:'MANTEN',  t:'MANTENIMIENTO Y REPARACIONES', tipo:'cos'},
+  {g:'MERCAD',  t:'MERCADEO Y VENTAS',     tipo:'cos'},
+  {g:'BANCAR',  t:'GASTOS BANCARIOS',      tipo:'cos'},
+  {g:'IMPUES',  t:'IMPUESTOS',             tipo:'cos'}
+];
+window._MKL_BASES = [
+  ['ing_aloj','Ing. Alojamiento'],['ing_hab','Ingresos Habitaciones'],
+  ['ing_hab_su','Ing. Habitaciones sin Upselling'],['ing_ab','Ingresos A&B'],
+  ['ing_op','Ingresos Operacionales'],['ing_nop','Ingresos No Operacionales'],
+  ['total_ing','Total Ingresos']
+];
+window._MKL_DRIVERS = [
+  ['aloj','Tarifa x Ocupacion x Unidades x Dias'],
+  ['fijo','Valor fijo mensual'],
+  ['fijo_anual','Valor anual / 12'],
+  ['pct','% sobre una base'],
+  ['x_entrada','Valor x entrada (llegada)'],
+  ['x_kg','Valor x Kg x entradas'],
+  ['x_pax','Valor x pax'],
+  ['comision','Comision por canal (mix x %)'],
+  ['manual','Manual (se digita mes a mes)']
+];
+window._MKL_MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+window._mklState = window._mklState || { tab:'proy', mes:0, editLinea:null };
+
+function _mklDefault(){
+  var sup={tarifa:[],ocupacion:[],estadia:[],mix_otas:[],mix_directo:[],mix_corp:[],mix_agen:[]};
+  for(var i=0;i<12;i++){
+    sup.tarifa.push(549143); sup.ocupacion.push(0.30); sup.estadia.push(2);
+    sup.mix_otas.push(0.4048); sup.mix_directo.push(0.5952); sup.mix_corp.push(0); sup.mix_agen.push(0);
+  }
+  return {
+    inicio:'2026-08', unidades:42, dias:30,
+    com:{otas:0.015, directo:0.05, corp:0, agen:0},
+    kg_lavado:2, pct_pax:0.8,
+    sup:sup,
+    lineas: JSON.parse(JSON.stringify(window._MKL_SEED)),
+    ov:{},          // overrides  "cod|m" -> valor
+    manual:{},      // valores de lineas driver=manual  "cod|m" -> valor
+    notas:{}
+  };
+}
+function _mklMesesLbl(mo){
+  var p=String(mo.inicio||'2026-08').split('-'); var y=parseInt(p[0],10), m=parseInt(p[1],10)-1; var out=[];
+  for(var i=0;i<12;i++){ out.push({lbl:window._MKL_MESES[m]+'-'+String(y).slice(2), per:y+'-'+('0'+(m+1)).slice(-2)}); m++; if(m>11){m=0;y++;} }
+  return out;
+}
+function _mklNum(n){ return Math.round(Number(n)||0).toLocaleString('es-CO'); }
+function _mklP(s){ var x=String(s==null?'':s).replace(/[^0-9.,-]/g,'').replace(/\./g,'').replace(',','.'); return parseFloat(x)||0; }
+
+// ── El motor de calculo ──────────────────────────────────────────────
+function _mklCalc(mo){
+  var L=mo.lineas||[], R={}, meses=_mklMesesLbl(mo), drv=[];
+  L.forEach(function(l){ R[l.cod]=new Array(12).fill(0); });
+  var sub={}, tot={ing_aloj:[],ing_hab:[],ing_hab_su:[],ing_ab:[],ing_op:[],ing_nop:[],total_ing:[],costos:[],gop:[]};
+  window._MKL_GRUPOS.forEach(function(G){ sub[G.g]=new Array(12).fill(0); });
+  var porGrp={}; window._MKL_GRUPOS.forEach(function(G){ porGrp[G.g]=L.filter(function(l){return l.grp===G.g;}); });
+
+  for(var m=0;m<12;m++){
+    var S=mo.sup||{}, gv=function(k,d){ var a=S[k]; return (a&&a[m]!=null)?Number(a[m]):d; };
+    var tarifa=gv('tarifa',0), ocup=gv('ocupacion',0), estadia=gv('estadia',0);
+    var unid=Number(mo.unidades)||0, dias=Number(mo.dias)||30;
+    var noches=unid*dias*ocup;
+    var entradas= estadia>0 ? noches/estadia : 0;
+    var pax=entradas*(Number(mo.pct_pax)||0);
+    var ctx={};
+    var ov=function(l){ var k=l.cod+'|'+m; return (mo.ov&&mo.ov[k]!=null)?Number(mo.ov[k]):null; };
+    var man=function(l){ var k=l.cod+'|'+m; return (mo.manual&&mo.manual[k]!=null)?Number(mo.manual[k]):0; };
+    var baseVal=function(b){
+      if(!b) return 0;
+      if(b.indexOf('l:')===0){ var c=b.slice(2); return R[c]?R[c][m]:0; }
+      return ctx[b]||0;
+    };
+    var calcLinea=function(l){
+      var o=ov(l); if(o!=null) return o;
+      var v=Number(l.v)||0, fx=Number(l.fx)||0;
+      switch(l.dr){
+        case 'aloj':       return tarifa*noches;
+        case 'fijo':       return v+fx;
+        case 'fijo_anual': return v/12+fx;
+        case 'pct':        return baseVal(l.b)*v+fx;
+        case 'x_entrada':  return v*entradas+fx;
+        case 'x_kg':       return v*(Number(mo.kg_lavado)||0)*entradas+fx;
+        case 'x_pax':      return v*pax+fx;
+        case 'comision':
+          var C=mo.com||{};
+          return (gv('mix_otas',0)*(C.otas||0) + gv('mix_directo',0)*(C.directo||0)
+                + gv('mix_corp',0)*(C.corp||0) + gv('mix_agen',0)*(C.agen||0)) * (ctx.ing_aloj||0) + fx;
+        default:           return man(l)+fx;
+      }
+    };
+    // paso 1 — alojamiento
+    porGrp.ING_HAB.forEach(function(l){ if(l.dr==='aloj'){ R[l.cod][m]=calcLinea(l); } });
+    ctx.ing_aloj = porGrp.ING_HAB.filter(function(l){return l.dr==='aloj';}).reduce(function(s,l){return s+R[l.cod][m];},0);
+    // paso 2 — resto de ingresos habitaciones
+    porGrp.ING_HAB.forEach(function(l){ if(l.dr!=='aloj'){ R[l.cod][m]=calcLinea(l); } });
+    ctx.ing_hab = porGrp.ING_HAB.reduce(function(s,l){return s+R[l.cod][m];},0);
+    ctx.ing_hab_su = ctx.ing_hab - (R['4138']?R['4138'][m]:0);
+    // paso 3 — A&B
+    porGrp.ING_AB.forEach(function(l){ R[l.cod][m]=calcLinea(l); });
+    ctx.ing_ab = porGrp.ING_AB.reduce(function(s,l){return s+R[l.cod][m];},0);
+    ctx.ing_op = ctx.ing_hab + ctx.ing_ab;
+    // paso 4 — no operacionales
+    porGrp.ING_NOP.forEach(function(l){ R[l.cod][m]=calcLinea(l); });
+    ctx.ing_nop = porGrp.ING_NOP.reduce(function(s,l){return s+R[l.cod][m];},0);
+    ctx.total_ing = ctx.ing_op + ctx.ing_nop;
+    // paso 5 — costos
+    var costos=0;
+    window._MKL_GRUPOS.forEach(function(G){
+      if(G.tipo!=='cos') return;
+      porGrp[G.g].forEach(function(l){ R[l.cod][m]=calcLinea(l); });
+      sub[G.g][m]=porGrp[G.g].reduce(function(s,l){return s+R[l.cod][m];},0);
+      costos+=sub[G.g][m];
+    });
+    sub.ING_HAB[m]=ctx.ing_hab; sub.ING_AB[m]=ctx.ing_ab; sub.ING_NOP[m]=ctx.ing_nop;
+    ['ing_aloj','ing_hab','ing_hab_su','ing_ab','ing_op','ing_nop','total_ing'].forEach(function(k){ tot[k][m]=ctx[k]; });
+    tot.costos[m]=costos;
+    tot.gop[m]=ctx.total_ing-costos;   // ← corregido respecto del Excel
+    drv.push({noches:noches, entradas:entradas, pax:pax, tarifa:tarifa, ocup:ocup});
+  }
+  return {R:R, sub:sub, tot:tot, meses:meses, drv:drv};
+}
+
+// ── Graficas en SVG puro (sin librerias externas) ────────────────────
+window._MKL_COL={azul:'#2a78d6', naranja:'#eb6834', verde:'#1baf7a', gris:'#9AA3AD', rojo:'#C0392B'};
+function _mklKm(n){
+  n=Number(n)||0; var a=Math.abs(n);
+  if(a>=1e9) return (n/1e9).toFixed(1).replace('.',',')+' MM';
+  if(a>=1e6) return Math.round(n/1e6)+' M';
+  if(a>=1e3) return Math.round(n/1e3)+' k';
+  return String(Math.round(n));
+}
+// series = [{nom, datos:[], color, tipo:'bar'|'line'}]
+function _mklGrafico(titulo, labels, series, alto){
+  alto=alto||230;
+  var W=Math.max(560, labels.length*74), H=alto, PL=64, PR=14, PT=20, PB=34;
+  var iw=W-PL-PR, ih=H-PT-PB;
+  var vals=[]; series.forEach(function(s){ s.datos.forEach(function(v){ vals.push(Number(v)||0); }); });
+  var mx=Math.max.apply(null,vals.concat([0])), mn=Math.min.apply(null,vals.concat([0]));
+  if(mx===mn){ mx=mx||1; mn=Math.min(0,mn); }
+  var rango=mx-mn||1;
+  var y=function(v){ return PT+ih-((Number(v)||0)-mn)/rango*ih; };
+  var n=labels.length, paso=iw/n;
+  var bars=series.filter(function(s){return s.tipo!=='line';});
+  var bw=Math.max(6,(paso*0.62)/Math.max(1,bars.length));
+  var g='';
+  // grilla
+  for(var i=0;i<=4;i++){
+    var vv=mn+rango*i/4, yy=y(vv);
+    g+='<line x1="'+PL+'" y1="'+yy.toFixed(1)+'" x2="'+(W-PR)+'" y2="'+yy.toFixed(1)+'" stroke="#E6EAEF" stroke-width="1"/>'
+     + '<text x="'+(PL-7)+'" y="'+(yy+3.5).toFixed(1)+'" text-anchor="end" font-size="9.5" fill="#8A93A0">'+_mklKm(vv)+'</text>';
+  }
+  if(mn<0){ g+='<line x1="'+PL+'" y1="'+y(0).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+y(0).toFixed(1)+'" stroke="#B0B6BD" stroke-width="1.2"/>'; }
+  // barras
+  bars.forEach(function(s,si){
+    s.datos.forEach(function(v,i){
+      var cx=PL+paso*i+paso/2, x0=cx-(bars.length*bw)/2+si*bw;
+      var yv=y(v), y0=y(0), top=Math.min(yv,y0), h=Math.max(1,Math.abs(yv-y0));
+      g+='<rect x="'+x0.toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+(bw-2).toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2" fill="'+s.color+'"><title>'+s.nom+' · '+labels[i]+': '+_mklNum(v)+'</title></rect>';
+    });
+  });
+  // lineas
+  series.filter(function(s){return s.tipo==='line';}).forEach(function(s){
+    var pts=s.datos.map(function(v,i){ return (PL+paso*i+paso/2).toFixed(1)+','+y(v).toFixed(1); }).join(' ');
+    g+='<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="2.4" stroke-linejoin="round"/>';
+    s.datos.forEach(function(v,i){ g+='<circle cx="'+(PL+paso*i+paso/2).toFixed(1)+'" cy="'+y(v).toFixed(1)+'" r="3.2" fill="#fff" stroke="'+s.color+'" stroke-width="2"><title>'+s.nom+' · '+labels[i]+': '+_mklNum(v)+'</title></circle>'; });
+  });
+  labels.forEach(function(l,i){ g+='<text x="'+(PL+paso*i+paso/2).toFixed(1)+'" y="'+(H-12)+'" text-anchor="middle" font-size="10" fill="#5A6472">'+l+'</text>'; });
+  var leg=series.map(function(s){ return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:11.5px;color:#4A5568"><span style="width:11px;height:11px;border-radius:'+(s.tipo==='line'?'50%':'2px')+';background:'+s.color+';display:inline-block"></span>'+s.nom+'</span>'; }).join('');
+  return '<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:4px">'+titulo+'</div>'
+    +'<div style="margin-bottom:8px">'+leg+'</div>'
+    +'<div style="overflow-x:auto"><svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" style="max-width:100%;height:auto;min-width:'+Math.min(W,560)+'px" role="img">'+g+'</svg></div></div>';
+}
+
+// ── Carga / guardado ─────────────────────────────────────────────────
+window._MKL_KEY='fin_modelo_kubik';
+async function _mklCargar(force){
+  if(window._mklModelo && !force) return window._mklModelo;
+  var mo=null;
+  try{
+    var r=await sb.from('config').select('valor').eq('id',window._MKL_KEY).maybeSingle();
+    if(r&&r.data&&r.data.valor) mo=JSON.parse(r.data.valor);
+  }catch(e){}
+  if(!mo || !mo.lineas || !mo.lineas.length) mo=_mklDefault();
+  // Migracion suave: si aparecen lineas nuevas en el seed, se agregan sin tocar lo editado
+  try{
+    var have={}; mo.lineas.forEach(function(l){ have[l.cod]=1; });
+    window._MKL_SEED.forEach(function(s){ if(!have[s.cod]) mo.lineas.push(JSON.parse(JSON.stringify(s))); });
+  }catch(e){}
+  mo.ov=mo.ov||{}; mo.manual=mo.manual||{}; mo.notas=mo.notas||{}; mo.com=mo.com||{otas:0.015,directo:0.05,corp:0,agen:0};
+  window._mklModelo=mo; return mo;
+}
+window._mklGuardar=function(){
+  clearTimeout(window._mklSaveT);
+  window._mklSaveT=setTimeout(async function(){
+    try{
+      var r=await sb.from('config').upsert({id:window._MKL_KEY,valor:JSON.stringify(window._mklModelo),updated_at:new Date().toISOString()});
+      if(r&&r.error){ showToast('No se pudo guardar: '+r.error.message,'error'); return; }
+      var el=document.getElementById('mkl-saved'); if(el){ el.textContent='✓ guardado '+new Date().toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'}); }
+    }catch(e){ showToast('No se pudo guardar: '+e.message,'error'); }
+  },600);
+};
+function _mklEditable(){ return !!(currentProfile && (currentProfile.rol==='gerente_general')); }
+
+// ── Setters ──────────────────────────────────────────────────────────
+window._mklSetSup=function(k,m,val){ var mo=window._mklModelo; mo.sup[k]=mo.sup[k]||new Array(12).fill(0); mo.sup[k][m]=val; window._mklGuardar(); renderModeloKL(); };
+window._mklSetGlobal=function(k,val){ var mo=window._mklModelo; if(k.indexOf('com.')===0) mo.com[k.slice(4)]=val; else mo[k]=val; window._mklGuardar(); renderModeloKL(); };
+window._mklSetLinea=function(cod,campo,val){
+  var mo=window._mklModelo, l=mo.lineas.filter(function(x){return x.cod===cod;})[0]; if(!l) return;
+  if(campo==='v'||campo==='fx') l[campo]=val; else l[campo]=val;
+  if(campo==='dr'&&val!=='pct') delete l.b;
+  if(campo==='dr'&&val==='pct'&&!l.b) l.b='ing_aloj';
+  window._mklGuardar(); renderModeloKL();
+};
+window._mklSetCelda=function(cod,m,raw){
+  var mo=window._mklModelo, k=cod+'|'+m, l=mo.lineas.filter(function(x){return x.cod===cod;})[0];
+  var s=String(raw==null?'':raw).trim();
+  var store=(l&&l.dr==='manual')?mo.manual:mo.ov;
+  if(s===''){ delete store[k]; } else { store[k]=_mklP(s); }
+  window._mklGuardar(); renderModeloKL();
+};
+window._mklLimpiarOv=function(){
+  if(!confirm('Quitar TODOS los valores forzados a mano y volver a lo que calculan los drivers?')) return;
+  window._mklModelo.ov={}; window._mklGuardar(); renderModeloKL(); showToast('Overrides eliminados','success');
+};
+window._mklAddLinea=function(){
+  var cod=prompt('Codigo de la cuenta nueva (ej: 5155):'); if(!cod) return; cod=String(cod).trim();
+  if(window._mklModelo.lineas.some(function(l){return l.cod===cod;})){ showToast('Ese codigo ya existe','error'); return; }
+  var nom=prompt('Nombre de la cuenta:'); if(!nom) return;
+  var grps=window._MKL_GRUPOS.map(function(g,i){return (i+1)+') '+g.t;}).join('\n');
+  var gi=prompt('Grupo:\n'+grps,'10'); gi=parseInt(gi,10);
+  var G=window._MKL_GRUPOS[(gi||1)-1]; if(!G){ showToast('Grupo invalido','error'); return; }
+  window._mklModelo.lineas.push({cod:cod,nom:String(nom).trim(),grp:G.g,dr:'fijo',v:0});
+  window._mklGuardar(); renderModeloKL(); showToast('Cuenta agregada','success');
+};
+window._mklDelLinea=function(cod){
+  var l=window._mklModelo.lineas.filter(function(x){return x.cod===cod;})[0]; if(!l) return;
+  if(!confirm('Eliminar la cuenta "'+l.nom+'" ('+cod+') del modelo?')) return;
+  window._mklModelo.lineas=window._mklModelo.lineas.filter(function(x){return x.cod!==cod;});
+  window._mklGuardar(); renderModeloKL(); showToast('Cuenta eliminada','success');
+};
+window._mklReset=function(){
+  if(!confirm('Restaurar el plan de cuentas y los drivers a los valores del Excel 8i8?\n\nSe conservan los supuestos y los valores manuales.')) return;
+  window._mklModelo.lineas=JSON.parse(JSON.stringify(window._MKL_SEED));
+  window._mklGuardar(); renderModeloKL(); showToast('Plan restaurado','success');
+};
+
+// ── Router del modulo ────────────────────────────────────────────────
+async function renderModeloKL(){
+  if(typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO!=='kubik'){
+    document.getElementById('main-content').innerHTML='<div class="page-title">🧮 Modelo Financiero KL</div><div class="card" style="max-width:620px"><p>Este modulo es exclusivo de Kubik Living (8i8 Operadora). Cambia de edificio para usarlo.</p></div>';
+    return;
+  }
+  var mo=await _mklCargar();
+  var st=window._mklState; st.tab=st.tab||'proy';
+  if(st.tab==='sup')    return _mklTabSupuestos(mo);
+  if(st.tab==='plan')   return _mklTabPlan(mo);
+  if(st.tab==='real')   return _mklTabReal(mo);
+  if(st.tab==='cargue') return _mklTabCargue(mo);
+  return _mklTabProy(mo);
+}
+function _mklBar(){
+  var st=window._mklState;
+  var tabs=[['proy','Proyeccion'],['sup','Supuestos'],['plan','Plan y Drivers'],['real','Real vs Proy'],['cargue','Cargue contable']];
+  return '<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden;flex-wrap:wrap">'
+    +tabs.map(function(t){ return '<button onclick="window._mklState.tab=\''+t[0]+'\';renderModeloKL()" style="border:none;padding:7px 13px;font-size:12px;cursor:pointer;font-weight:700;background:'+(t[0]===st.tab?'#1D3461':'#fff')+';color:'+(t[0]===st.tab?'#fff':'#1D3461')+'">'+t[1]+'</button>'; }).join('')
+    +'</div>';
+}
+function _mklHead(sub){
+  return '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">'
+    +'<div class="page-title" style="margin-bottom:0">🧮 Modelo Financiero KL</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+_mklBar()
+    +'<span id="mkl-saved" style="font-size:11px;color:#1A7D3C"></span></div></div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">8i8 Operadora SAS · '+sub+'</div>';
+}
+
+// ── TAB: Proyeccion ──────────────────────────────────────────────────
+function _mklTabProy(mo){
+  var C=_mklCalc(mo), ed=_mklEditable(), M=C.meses;
+  var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:250px;z-index:2">Cuenta</th>'
+    + M.map(function(m){ return '<th style="text-align:right;min-width:86px">'+m.lbl+'</th>'; }).join('')
+    + '<th style="text-align:right;min-width:104px;background:#16284a">Año 1</th>';
+  var f=_mklNum;
+  var fila=function(nom,serie,estilo,bg,extra){
+    var t=serie.reduce(function(s,v){return s+v;},0);
+    return '<tr style="'+(estilo||'')+'">'
+      +'<td style="position:sticky;left:0;background:'+(bg||'#fff')+';text-align:left;font-size:12px">'+nom+(extra||'')+'</td>'
+      + serie.map(function(v){ return '<td style="text-align:right;font-size:11px">'+(v?f(v):'·')+'</td>'; }).join('')
+      +'<td style="text-align:right;font-weight:700;background:'+(bg==='#fff'||!bg?'#f3f6fb':bg)+'">'+f(t)+'</td></tr>';
+  };
+  var body='';
+  window._MKL_GRUPOS.forEach(function(G){
+    var ls=mo.lineas.filter(function(l){return l.grp===G.g;});
+    if(!ls.length) return;
+    ls.forEach(function(l){
+      var serie=C.R[l.cod]||new Array(12).fill(0);
+      var cells='';
+      for(var m=0;m<12;m++){
+        var k=l.cod+'|'+m;
+        var esOv=(mo.ov&&mo.ov[k]!=null), esMan=(l.dr==='manual');
+        var v=serie[m];
+        if(ed){
+          var val=(esOv||esMan)?(v?f(v):''):'';
+          var ph=(esOv||esMan)?'':(v?f(v):'·');
+          cells+='<td style="padding:1px"><input type="text" value="'+val+'" placeholder="'+ph+'" '
+            +'onchange="window._mklSetCelda(\''+l.cod+'\','+m+',this.value)" title="'+(esOv?'Valor forzado a mano — borra la celda para volver al driver':(esMan?'Linea manual':'Calculado por el driver — escribe para forzar'))+'" '
+            +'style="width:84px;border:1px solid '+(esOv?'#B8860B':'#e3e6ea')+';border-radius:5px;padding:4px;font-size:11px;text-align:right;background:'+(esOv?'#FFF8E1':(esMan?'#F5F7FA':'#fff'))+'"></td>';
+        } else {
+          cells+='<td style="text-align:right;font-size:11px;background:'+(esOv?'#FFF8E1':'')+'">'+(v?f(v):'·')+'</td>';
+        }
+      }
+      var tot=serie.reduce(function(s,x){return s+x;},0);
+      body+='<tr><td style="position:sticky;left:0;background:#fff;text-align:left;font-size:12px">'
+        +'<span style="color:#8a93a0;font-size:10px">'+l.cod+'</span> '+l.nom
+        +'<span style="font-size:9.5px;color:#6B7280;background:#EEF2F7;border-radius:4px;padding:1px 5px;margin-left:5px">'+_mklDrvLbl(l)+'</span>'
+        +'</td>'+cells+'<td style="text-align:right;font-weight:700;background:#f3f6fb">'+f(tot)+'</td></tr>';
+    });
+    var bgS=(G.tipo==='ing')?'#eef3fb':'#f6f6f7';
+    body+=fila('<b>'+G.t+'</b>',C.sub[G.g],'background:'+bgS+';font-weight:700',bgS);
+    if(G.g==='ING_AB')  body+=fila('<b>INGRESOS OPERACIONALES</b>',C.tot.ing_op,'background:#e2ecfa;font-weight:800','#e2ecfa');
+    if(G.g==='ING_NOP') body+=fila('<b>TOTAL INGRESOS</b>',C.tot.total_ing,'background:#d8e6f9;font-weight:800','#d8e6f9');
+  });
+  body+=fila('<b>COSTOS OPERATIVOS</b>',C.tot.costos,'background:#f0e6e6;font-weight:800','#f0e6e6');
+  body+=fila('<b>UTILIDAD OPERATIVA (GOP)</b>',C.tot.gop,'background:#eefbf2;font-weight:800','#eefbf2');
+  // margen
+  var marg=C.tot.gop.map(function(v,i){ return C.tot.total_ing[i]?Math.round(v/C.tot.total_ing[i]*1000)/10:0; });
+  var totIng=C.tot.total_ing.reduce(function(s,v){return s+v;},0), totGop=C.tot.gop.reduce(function(s,v){return s+v;},0);
+  body+='<tr style="background:#eefbf2"><td style="position:sticky;left:0;background:#eefbf2;text-align:left;font-size:12px"><b>Margen GOP %</b></td>'
+    + marg.map(function(v){ return '<td style="text-align:right;font-size:11px;font-weight:700;color:'+(v>=30?'#1A7D3C':(v>=15?'#B8860B':'#C0392B'))+'">'+v+'%</td>'; }).join('')
+    + '<td style="text-align:right;font-weight:800;background:#dff3e6">'+(totIng?Math.round(totGop/totIng*1000)/10:0)+'%</td></tr>';
+
+  var nOv=Object.keys(mo.ov||{}).length;
+  var kpi=function(t,v,c,s){ return '<div style="flex:1;min-width:170px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:14px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div><div style="font-size:19px;font-weight:800;color:'+(c||'var(--azul)')+';white-space:nowrap">'+v+'</div>'+(s?'<div style="font-size:11px;color:var(--gris-t)">'+s+'</div>':'')+'</div>'; };
+  var nochesAno=C.drv.reduce(function(s,d){return s+d.noches;},0);
+  document.getElementById('main-content').innerHTML=
+    _mklHead('Proyeccion calculada desde los supuestos y los drivers. Ventana de 12 meses desde '+M[0].lbl+'. Las celdas se pueden forzar a mano: quedan en <span style="background:#FFF8E1;border:1px solid #B8860B;border-radius:3px;padding:0 4px">amarillo</span> y se borran dejando la celda vacia.')
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
+    + kpi('Total ingresos año 1','$'+_mklNum(totIng),'var(--azul)')
+    + kpi('Costos operativos','$'+_mklNum(C.tot.costos.reduce(function(s,v){return s+v;},0)),'#C0392B')
+    + kpi('GOP año 1','$'+_mklNum(totGop),'#1A5C2E','Margen '+(totIng?Math.round(totGop/totIng*1000)/10:0)+'%')
+    + kpi('Noches vendidas','' +_mklNum(nochesAno),'var(--azul)','Entradas: '+_mklNum(C.drv.reduce(function(s,d){return s+d.entradas;},0)))
+    +'</div>'
+    + (function(){ var CL=window._MKL_COL, lb=M.map(function(m){return m.lbl;});
+        return _mklGrafico('Ingresos, costos y GOP proyectados', lb, [
+                 {nom:'Total ingresos', datos:C.tot.total_ing, color:CL.azul},
+                 {nom:'Costos operativos', datos:C.tot.costos, color:CL.naranja},
+                 {nom:'GOP', datos:C.tot.gop, color:CL.verde, tipo:'line'}])
+             + _mklGrafico('Composicion del ingreso', lb, [
+                 {nom:'Alojamiento', datos:C.tot.ing_aloj, color:CL.azul},
+                 {nom:'Otros ing. habitaciones', datos:C.tot.ing_hab.map(function(v,i){return v-C.tot.ing_aloj[i];}), color:'#7FB1EA'},
+                 {nom:'A&B', datos:C.tot.ing_ab, color:CL.naranja},
+                 {nom:'No operacionales', datos:C.tot.ing_nop, color:CL.gris}]);
+      })()
+    +(nOv?'<div style="background:#FFF8E1;border:1px solid #E0C068;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:12px">⚠️ Hay <b>'+nOv+'</b> celda(s) forzadas a mano que no obedecen al driver. <button onclick="window._mklLimpiarOv()" style="margin-left:8px;background:#B8860B;color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px;font-weight:700">Quitar todas</button></div>':'')
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px"><b>GOP = Total Ingresos − Costos Operativos.</b> El Excel original lo calculaba como Ingresos Habitaciones menos la cuenta Valla, lo que inflaba el resultado. Valores en pesos.</p></div>';
+}
+function _mklDrvLbl(l){
+  var b=(window._MKL_BASES.filter(function(x){return x[0]===l.b;})[0]||[])[1];
+  switch(l.dr){
+    case 'aloj': return 'tarifa x ocup.';
+    case 'fijo': return 'fijo $'+_mklNum(l.v||0);
+    case 'fijo_anual': return 'anual $'+_mklNum(l.v||0)+' /12';
+    case 'pct': return (Math.round((l.v||0)*100000)/1000)+'% de '+(l.b&&l.b.indexOf('l:')===0?('cta '+l.b.slice(2)):(b||'?'));
+    case 'x_entrada': return '$'+_mklNum(l.v||0)+' x entrada';
+    case 'x_kg': return '$'+_mklNum(l.v||0)+' x kg';
+    case 'x_pax': return '$'+_mklNum(l.v||0)+' x pax';
+    case 'comision': return 'comision x canal';
+    default: return 'manual';
+  }
+}
+
+// ── TAB: Supuestos ───────────────────────────────────────────────────
+function _mklTabSupuestos(mo){
+  var C=_mklCalc(mo), M=C.meses, ed=_mklEditable();
+  var inp=function(k,m,v,tipo){
+    if(!ed) return (tipo==='pct'?(Math.round(v*10000)/100)+'%':_mklNum(v));
+    var val=(tipo==='pct')?(Math.round(v*10000)/100):(tipo==='dec'?v:Math.round(v));
+    return '<input type="text" value="'+val+'" onchange="window._mklSetSup(\''+k+'\','+m+','+(tipo==='pct'?'(_mklP(this.value)/100)':(tipo==='dec'?'parseFloat(String(this.value).replace(\',\',\'.\'))||0':'_mklP(this.value)'))+')" style="width:74px;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:11px;text-align:right">';
+  };
+  var filas=[
+    ['tarifa','Tarifa promedio (COP)','num'],
+    ['ocupacion','Ocupacion','pct'],
+    ['estadia','Estadia promedio (noches)','dec'],
+    ['mix_otas','Mix OTAs','pct'],
+    ['mix_directo','Mix Directo','pct'],
+    ['mix_corp','Mix Corporativo','pct'],
+    ['mix_agen','Mix Agencias','pct']
+  ].map(function(f){
+    return '<tr><td style="position:sticky;left:0;background:#fff;text-align:left;font-size:12px;font-weight:600">'+f[1]+'</td>'
+      + M.map(function(m,i){ return '<td style="padding:1px;text-align:right">'+inp(f[0],i,(mo.sup[f[0]]&&mo.sup[f[0]][i])||0,f[2])+'</td>'; }).join('')+'</tr>';
+  }).join('');
+  // derivados
+  var der=function(nom,fn,fmt){
+    return '<tr style="background:#f6f8fb"><td style="position:sticky;left:0;background:#f6f8fb;text-align:left;font-size:12px;font-style:italic;color:#4A5568">'+nom+'</td>'
+      + C.drv.map(function(d){ return '<td style="text-align:right;font-size:11px;font-weight:700">'+(fmt?fmt(fn(d)):_mklNum(fn(d)))+'</td>'; }).join('')+'</tr>';
+  };
+  var mixAlerta='';
+  for(var i=0;i<12;i++){
+    var s=(mo.sup.mix_otas[i]||0)+(mo.sup.mix_directo[i]||0)+(mo.sup.mix_corp[i]||0)+(mo.sup.mix_agen[i]||0);
+    if(Math.abs(s-1)>0.005){ mixAlerta='<div style="background:#FDECEA;border:1px solid #E8A9A0;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:12px">⚠️ El mix de canales de <b>'+M[i].lbl+'</b> suma '+(Math.round(s*1000)/10)+'%, no 100%. Las comisiones de ese mes quedan mal calculadas.</div>'; break; }
+  }
+  var gInp=function(k,v,tipo){
+    if(!ed) return '<b>'+(tipo==='pct'?(Math.round(v*10000)/100)+'%':_mklNum(v))+'</b>';
+    var val=(tipo==='pct')?(Math.round(v*10000)/100):v;
+    return '<input type="text" value="'+val+'" onchange="window._mklSetGlobal(\''+k+'\','+(tipo==='pct'?'(_mklP(this.value)/100)':'_mklP(this.value)')+')" style="width:88px;border:1px solid #e3e6ea;border-radius:5px;padding:5px;font-size:12px;text-align:right">';
+  };
+  var glob='<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Parametros generales</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:18px;font-size:12px">'
+    +'<label>Unidades<br>'+gInp('unidades',mo.unidades,'num')+'</label>'
+    +'<label>Dias por mes<br>'+gInp('dias',mo.dias,'num')+'</label>'
+    +'<label>Kg por lavado<br>'+gInp('kg_lavado',mo.kg_lavado,'num')+'</label>'
+    +'<label>% Pax con desayuno<br>'+gInp('pct_pax',mo.pct_pax,'pct')+'</label>'
+    +'<label>Comision OTAs<br>'+gInp('com.otas',mo.com.otas,'pct')+'</label>'
+    +'<label>Comision Directo<br>'+gInp('com.directo',mo.com.directo,'pct')+'</label>'
+    +'<label>Comision Corporativo<br>'+gInp('com.corp',mo.com.corp,'pct')+'</label>'
+    +'<label>Comision Agencias<br>'+gInp('com.agen',mo.com.agen,'pct')+'</label>'
+    +'<label>Mes inicial<br><input type="month" value="'+(mo.inicio||'2026-08')+'" '+(ed?'':'disabled')+' onchange="window._mklSetGlobal(\'inicio\',this.value)" style="border:1px solid #e3e6ea;border-radius:5px;padding:5px;font-size:12px"></label>'
+    +'</div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">El modelo del Excel usa <b>meses de 30 dias</b> (no calendario). Si lo cambias a 365/12 o a dias reales, toda la proyeccion se mueve.</p></div>';
+  var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:210px;z-index:2">Supuesto</th>'
+    + M.map(function(m){ return '<th style="text-align:right;min-width:80px">'+m.lbl+'</th>'; }).join('');
+  document.getElementById('main-content').innerHTML=
+    _mklHead('Supuestos del modelo. Todo lo demas se calcula a partir de aqui.')
+    + mixAlerta + glob
+    + (function(){ var CL=window._MKL_COL, lb=M.map(function(m){return m.lbl;});
+        return _mklGrafico('Tarifa promedio y noches vendidas', lb, [
+                 {nom:'Noches vendidas', datos:C.drv.map(function(x){return x.noches;}), color:CL.gris},
+                 {nom:'Tarifa promedio (COP)', datos:C.drv.map(function(x){return x.tarifa;}), color:CL.azul, tipo:'line'}])
+             + _mklGrafico('Ocupacion proyectada (%)', lb, [
+                 {nom:'Ocupacion %', datos:C.drv.map(function(x){return Math.round(x.ocup*1000)/10;}), color:CL.verde}]);
+      })()
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'
+    + filas
+    + der('→ Noches vendidas', function(d){return d.noches;})
+    + der('→ Entradas (llegadas)', function(d){return d.entradas;})
+    + der('→ Pax con desayuno', function(d){return d.pax;})
+    + '<tr style="background:#f6f8fb"><td style="position:sticky;left:0;background:#f6f8fb;text-align:left;font-size:12px;font-style:italic;color:#4A5568">→ Ing. Alojamiento</td>'
+      + C.tot.ing_aloj.map(function(v){ return '<td style="text-align:right;font-size:11px;font-weight:700">$'+_mklNum(v)+'</td>'; }).join('') + '</tr>'
+    +'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Las filas en gris se calculan: Noches = Unidades x Dias x Ocupacion · Entradas = Noches ÷ Estadia promedio · Ing. Alojamiento = Tarifa x Noches.</p></div>';
+}
+
+// ── TAB: Plan y drivers ──────────────────────────────────────────────
+function _mklTabPlan(mo){
+  var ed=_mklEditable();
+  var body='';
+  window._MKL_GRUPOS.forEach(function(G){
+    var ls=mo.lineas.filter(function(l){return l.grp===G.g;});
+    if(!ls.length) return;
+    body+='<tr style="background:'+(G.tipo==='ing'?'#eef3fb':'#f6f6f7')+';font-weight:700"><td colspan="6" style="text-align:left;font-size:12px">'+G.t+'</td></tr>';
+    ls.forEach(function(l){
+      var drSel= ed
+        ? '<select onchange="window._mklSetLinea(\''+l.cod+'\',\'dr\',this.value)" style="font-size:11px;padding:3px;border:1px solid #e3e6ea;border-radius:5px">'
+          + window._MKL_DRIVERS.map(function(d){ return '<option value="'+d[0]+'" '+(d[0]===l.dr?'selected':'')+'>'+d[1]+'</option>'; }).join('')+'</select>'
+        : _mklDrvLbl(l);
+      var bSel = (l.dr==='pct')
+        ? (ed ? '<select onchange="window._mklSetLinea(\''+l.cod+'\',\'b\',this.value)" style="font-size:11px;padding:3px;border:1px solid #e3e6ea;border-radius:5px">'
+            + window._MKL_BASES.map(function(b){ return '<option value="'+b[0]+'" '+(b[0]===l.b?'selected':'')+'>'+b[1]+'</option>'; }).join('')
+            + (l.b&&l.b.indexOf('l:')===0?'<option value="'+l.b+'" selected>Cuenta '+l.b.slice(2)+'</option>':'')
+            + '</select>'
+          : (l.b||'—'))
+        : '<span style="color:#b0b6bd">—</span>';
+      var esPct=(l.dr==='pct');
+      var vInp = ed
+        ? '<input type="text" value="'+(esPct?(Math.round((l.v||0)*100000)/1000):(l.v||0))+'" onchange="window._mklSetLinea(\''+l.cod+'\',\'v\','+(esPct?'(_mklP(this.value)/100)':'_mklP(this.value)')+')" style="width:92px;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:11px;text-align:right">'+(esPct?' %':'')
+        : (esPct?(Math.round((l.v||0)*100000)/1000)+'%':_mklNum(l.v||0));
+      var fxInp = ed
+        ? '<input type="text" value="'+(l.fx||0)+'" onchange="window._mklSetLinea(\''+l.cod+'\',\'fx\',_mklP(this.value))" style="width:88px;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:11px;text-align:right">'
+        : _mklNum(l.fx||0);
+      body+='<tr><td style="text-align:left;font-size:12px"><span style="color:#8a93a0;font-size:10px">'+l.cod+'</span> '+l.nom+'</td>'
+        +'<td>'+drSel+'</td><td>'+bSel+'</td><td style="text-align:right">'+vInp+'</td><td style="text-align:right">'+fxInp+'</td>'
+        +'<td style="text-align:center">'+(ed?'<button onclick="window._mklDelLinea(\''+l.cod+'\')" title="Eliminar" style="background:none;border:none;cursor:pointer;font-size:13px;opacity:.5">🗑</button>':'')+'</td></tr>';
+    });
+  });
+  document.getElementById('main-content').innerHTML=
+    _mklHead('Plan de cuentas y regla de calculo de cada linea. Todo editable.')
+    +(ed?'<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="window._mklAddLinea()" style="background:var(--azul-m);color:#fff">➕ Agregar cuenta</button><button class="btn" onclick="window._mklReset()" style="background:#6B7280;color:#fff">↺ Restaurar drivers del Excel</button></div>':'')
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px"><thead><tr>'
+    +'<th style="text-align:left;min-width:270px">Cuenta</th><th style="min-width:200px">Driver</th><th style="min-width:190px">Base (si es %)</th><th style="text-align:right;min-width:110px">Valor</th><th style="text-align:right;min-width:110px">Fijo adicional</th><th style="width:40px"></th>'
+    +'</tr></thead><tbody>'+body+'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px"><b>Fijo adicional</b> se suma a lo que dé el driver. Se usa donde el Excel tenía un monto escondido dentro de un porcentaje — por ejemplo Activos de operación A&B, que era 1,5% <i>más</i> $225.000 fijos sin documentar.</p></div>';
+}
+
+// ── TAB: Real vs Proyectado ──────────────────────────────────────────
+// Normaliza el signo de un movimiento. La exportacion contable trae casos con
+// el mismo valor en DEBIDO y en CREDITO con signo opuesto (p.ej. Devoluciones
+// en ventas de julio-2026): sumarlos ingenuamente cuenta el movimiento dos veces.
+function _mklNeto(deb,cre,esIngreso){
+  var d=Number(deb)||0, c=Number(cre)||0;
+  if(d!==0 && Math.abs(d+c)<0.01) c=0;      // credito espejo negativo
+  else if(c!==0 && Math.abs(d+c)<0.01) d=0;
+  return esIngreso ? (c-d) : (d-c);
+}
+function _mklPerLbl(per){
+  var p=String(per).split('-'); return window._MKL_MESES[(parseInt(p[1],10)||1)-1]+'-'+String(p[0]).slice(2);
+}
+async function _mklTabReal(mo){
+  var mc=document.getElementById('main-content');
+  var sub='Real contable contra la proyeccion del modelo. El real sale de lo cargado en <b>Cargue contable</b>.';
+  mc.innerHTML=_mklHead(sub)+'<div class="card"><p style="color:var(--gris-t)">Cargando movimientos…</p></div>';
+  var C=_mklCalc(mo), MW=C.meses;
+  var q=await window._sbFromRaw('fin_real').select('periodo,codigo_pyg,debito,credito').eq('edificio','kubik');
+  if(q.error){
+    mc.innerHTML=_mklHead(sub)
+      +'<div class="card" style="max-width:660px"><p style="font-size:14px">⚠️ No se pudo leer <code>fin_real</code>: '+(q.error.message||'')+'</p>'
+      +'<p style="font-size:12.5px;color:var(--gris-t)">Si la tabla no existe todavia, hay que crearla en Supabase.</p></div>';
+    return;
+  }
+  var rows=q.data||[];
+  // Eje de meses = TODOS los periodos con contabilidad, unidos a la ventana de proyeccion.
+  var setPer={}; MW.forEach(function(m){ setPer[m.per]=1; });
+  rows.forEach(function(r){ var p=String(r.periodo||'').slice(0,7); if(p) setPer[p]=1; });
+  var PER=Object.keys(setPer).sort();
+  var idx={}; PER.forEach(function(p,i){ idx[p]=i; });
+  var proyIdx={}; MW.forEach(function(m,i){ proyIdx[m.per]=i; });
+  var N=PER.length;
+  var real={}, sinMapear=new Array(N).fill(0), codsDesc={}, conDatos={};
+  var codSet={}; mo.lineas.forEach(function(l){ codSet[l.cod]=1; });
+  rows.forEach(function(r){
+    var per=String(r.periodo||'').slice(0,7), i=idx[per]; if(i==null) return;
+    conDatos[i]=true;
+    var cod=String(r.codigo_pyg||'').trim();
+    var v=_mklNeto(r.debito,r.credito, cod.charAt(0)==='4');
+    if(!cod || !codSet[cod]){ sinMapear[i]+=v; if(cod) codsDesc[cod]=(codsDesc[cod]||0)+1; return; }
+    real[cod]=real[cod]||new Array(N).fill(0);
+    real[cod][i]+=v;
+  });
+  var f=_mklNum;
+  var sR=function(cod){ return real[cod]||new Array(N).fill(0); };
+  // proyeccion reindexada al eje PER (0 donde el mes no esta en la ventana)
+  var pLinea=function(cod){ return PER.map(function(p){ var j=proyIdx[p]; return (j==null)?0:((C.R[cod]||[])[j]||0); }); };
+  var pGrupo=function(g){ return PER.map(function(p){ var j=proyIdx[p]; return (j==null)?0:(C.sub[g][j]||0); }); };
+  var sumG=function(g){ var a=new Array(N).fill(0); mo.lineas.filter(function(l){return l.grp===g;}).forEach(function(l){ var s=sR(l.cod); for(var i=0;i<N;i++)a[i]+=s[i]; }); return a; };
+
+  // series agregadas para las graficas
+  var ingR=new Array(N).fill(0), ingP=new Array(N).fill(0), cosR=new Array(N).fill(0), cosP=new Array(N).fill(0);
+  window._MKL_GRUPOS.forEach(function(G){
+    var gr=sumG(G.g), gp=pGrupo(G.g);
+    for(var i=0;i<N;i++){ if(G.tipo==='ing'){ ingR[i]+=gr[i]; ingP[i]+=gp[i]; } else { cosR[i]+=gr[i]; cosP[i]+=gp[i]; } }
+  });
+  var gopR=ingR.map(function(v,i){return v-cosR[i];}), gopP=ingP.map(function(v,i){return v-cosP[i];});
+  var labels=PER.map(_mklPerLbl);
+
+  var st=window._mklState;
+  var mi=(st.per!=null && idx[st.per]!=null) ? idx[st.per] : (function(){ for(var i=N-1;i>=0;i--) if(conDatos[i]) return i; return 0; })();
+  st.per=PER[mi];
+  var mesSel='<select onchange="window._mklState.per=this.value;renderModeloKL()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px;font-weight:700">'
+    + PER.map(function(p,i){ return '<option value="'+p+'" '+(i===mi?'selected':'')+'>'+_mklPerLbl(p)+(conDatos[i]?'':' (sin datos)')+(proyIdx[p]==null?' · fuera de proyeccion':'')+'</option>'; }).join('')+'</select>';
+
+  var filaCmp=function(nom,rv,pv,esCosto,estilo,sangria){
+    var dif=rv-pv, pct=pv?Math.round(rv/pv*1000)/10:null;
+    var bien = esCosto ? (dif<=0) : (dif>=0);
+    var col = (Math.abs(dif)<1) ? '#6B7280' : (bien?'#1A7D3C':'#C0392B');
+    return '<tr style="'+(estilo||'')+'">'
+      +'<td style="text-align:left;font-size:12px;'+(sangria?'padding-left:18px':'')+'">'+nom+'</td>'
+      +'<td style="text-align:right;font-size:11.5px">'+f(rv)+'</td>'
+      +'<td style="text-align:right;font-size:11.5px;color:#6B7280">'+f(pv)+'</td>'
+      +'<td style="text-align:right;font-size:11.5px;font-weight:700;color:'+col+'">'+(dif>0?'+':'')+f(dif)+'</td>'
+      +'<td style="text-align:right;font-size:11.5px;color:'+col+'">'+(pct==null?'—':pct+'%')+'</td></tr>';
+  };
+  var body='';
+  window._MKL_GRUPOS.forEach(function(G){
+    var ls=mo.lineas.filter(function(l){return l.grp===G.g;});
+    if(!ls.length) return;
+    var esCosto=(G.tipo==='cos');
+    var bgS=(G.tipo==='ing')?'#eef3fb':'#f6f6f7';
+    body+=filaCmp('<b>'+G.t+'</b>',sumG(G.g)[mi],pGrupo(G.g)[mi],esCosto,'background:'+bgS+';font-weight:700');
+    ls.forEach(function(l){
+      var rv=sR(l.cod)[mi], pv=pLinea(l.cod)[mi];
+      if(Math.abs(rv)<1 && Math.abs(pv)<1) return;
+      body+=filaCmp('<span style="color:#8a93a0;font-size:10px">'+l.cod+'</span> '+l.nom, rv, pv, esCosto, '', true);
+    });
+  });
+  if(Math.abs(sinMapear[mi])>=1){
+    body+='<tr style="background:#FDECEA"><td style="text-align:left;font-size:12px;font-weight:700">⚠️ Sin mapear a una cuenta del modelo</td>'
+      +'<td style="text-align:right;font-weight:700">'+f(sinMapear[mi])+'</td><td style="text-align:right;color:#6B7280">—</td>'
+      +'<td colspan="2" style="text-align:left;font-size:11px;color:#C0392B">no entran a ningun subtotal</td></tr>';
+  }
+  body+=filaCmp('<b>UTILIDAD OPERATIVA (GOP)</b>',gopR[mi],gopP[mi],false,'background:#eefbf2;font-weight:800');
+
+  var kpi=function(t,rv,pv,esCosto){
+    var dif=rv-pv, bien=esCosto?(dif<=0):(dif>=0);
+    return '<div style="flex:1;min-width:180px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:14px">'
+      +'<div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div>'
+      +'<div style="font-size:19px;font-weight:800;white-space:nowrap">$'+f(rv)+'</div>'
+      +'<div style="font-size:11px;color:var(--gris-t)">Proy: $'+f(pv)+' · <span style="color:'+(bien?'#1A7D3C':'#C0392B')+';font-weight:700">'+(dif>0?'+':'')+f(dif)+'</span></div></div>';
+  };
+  var CL=window._MKL_COL;
+  var graficas =
+      _mklGrafico('Ingresos — real vs proyectado', labels, [
+        {nom:'Real', datos:ingR, color:CL.azul},
+        {nom:'Proyectado', datos:ingP, color:CL.gris}
+      ])
+    + _mklGrafico('Costos operativos — real vs proyectado', labels, [
+        {nom:'Real', datos:cosR, color:CL.naranja},
+        {nom:'Proyectado', datos:cosP, color:CL.gris}
+      ])
+    + _mklGrafico('Utilidad operativa (GOP)', labels, [
+        {nom:'GOP real', datos:gopR, color:CL.verde},
+        {nom:'GOP proyectado', datos:gopP, color:CL.gris, tipo:'line'}
+      ]);
+  var avisoCods=Object.keys(codsDesc);
+  var mesesVacios=PER.filter(function(p,i){ return !conDatos[i] && proyIdx[p]==null; });
+  var sinConta=PER.filter(function(p,i){ return !conDatos[i]; }).map(_mklPerLbl);
+  mc.innerHTML=
+    _mklHead(sub)
+    + graficas
+    +'<div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13px">Detalle del mes:</b> '+mesSel
+    +(conDatos[mi]?'':'<span style="font-size:12px;color:#C0392B;font-weight:600">Sin movimientos cargados para este mes</span>')+'</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
+    + kpi('Ingresos '+_mklPerLbl(PER[mi]), ingR[mi], ingP[mi], false)
+    + kpi('Costos '+_mklPerLbl(PER[mi]), cosR[mi], cosP[mi], true)
+    + kpi('GOP '+_mklPerLbl(PER[mi]), gopR[mi], gopP[mi], false)
+    +'</div>'
+    +(sinConta.length?'<div style="background:#FFF8E1;border:1px solid #E0C068;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:12px">ℹ️ Meses del eje sin contabilidad cargada: <b>'+sinConta.join(', ')+'</b>.</div>':'')
+    +(avisoCods.length?'<div style="background:#FDECEA;border:1px solid #E8A9A0;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:12px">⚠️ Codigos de mapeo que no existen en el plan de cuentas: <b>'+avisoCods.slice(0,12).join(', ')+'</b>'+(avisoCods.length>12?' y '+(avisoCods.length-12)+' mas':'')+'. Esos movimientos quedan fuera de los subtotales.</div>':'')
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px"><thead><tr>'
+    +'<th style="text-align:left;min-width:300px">Cuenta</th><th style="text-align:right;min-width:110px">Real</th><th style="text-align:right;min-width:110px">Proyectado</th><th style="text-align:right;min-width:110px">Diferencia</th><th style="text-align:right;min-width:80px">Cumpl.</th>'
+    +'</tr></thead><tbody>'+body+'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">El eje incluye <b>todos</b> los meses con contabilidad cargada, aunque queden fuera de la ventana de proyeccion (esos muestran proyectado en cero). Solo se listan cuentas con movimiento real o proyeccion distinta de cero.</p></div>';
+}
+
+// ── TAB: Cargue contable ─────────────────────────────────────────────
+window._mklSheetJS=function(){
+  return new Promise(function(res,rej){
+    if(window.XLSX) return res(window.XLSX);
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload=function(){ res(window.XLSX); };
+    s.onerror=function(){ rej(new Error('No se pudo cargar el lector de Excel. Guarda la hoja COSTO como CSV y subela asi.')); };
+    document.head.appendChild(s);
+  });
+};
+window._MKL_COLS={
+  anio:['AÑO','ANO','ANIO','AÑO '],
+  mes:['MES'],
+  cuenta:['CUENTA'],
+  nombre_cuenta:['NOMBRE CUENTA','NOMBRE DE CUENTA'],
+  nit:['NIT TERCERO','NIT'],
+  tercero:['TERCERO','NOMBRE'],
+  concepto:['CONCEPTO'],
+  debito:['DEBIDO','DEBITO','DÉBITO'],
+  credito:['CREDITO','CRÉDITO'],
+  mapeo:['ACTIVIDAD'],
+  fecha:['FECHA'],
+  documento:['DOCUMENTO']
+};
+function _mklNorm(s){ return String(s==null?'':s).trim().toUpperCase().replace(/\s+/g,' '); }
+function _mklMapCols(header){
+  // header: array de nombres. La hoja COSTO repite 'CUENTA' y 'ACTIVIDAD': la 1a CUENTA es el PUC,
+  // la 2a es la auxiliar; la 2a ACTIVIDAD (columna L) es el codigo de mapeo al PYG.
+  var H=header.map(_mklNorm), m={}, vistos={};
+  H.forEach(function(h,i){ vistos[h]=(vistos[h]||0)+1;
+    if(h==='CUENTA'){ if(vistos[h]===1) m.cuenta=i; else if(vistos[h]===2) m.cuenta_aux=i; return; }
+    if(h==='ACTIVIDAD'){ if(vistos[h]===2) m.mapeo=i; else if(m.mapeo==null) m._act1=i; return; }
+    Object.keys(window._MKL_COLS).forEach(function(k){
+      if(k==='cuenta'||k==='mapeo') return;
+      if(m[k]==null && window._MKL_COLS[k].indexOf(h)>-1) m[k]=i;
+    });
+  });
+  if(m.mapeo==null && m._act1!=null) m.mapeo=m._act1;
+  return m;
+}
+function _mklTabCargue(mo){
+  var ed=_mklEditable();
+  document.getElementById('main-content').innerHTML=
+    _mklHead('Cargue mensual del Excel contable (hoja <b>COSTO</b>). Cada cargue queda como un lote reversible.')
+    +(ed?'':'<div class="card"><p>Solo Gerencia General puede cargar contabilidad.</p></div>')
+    +(ed?
+      '<div class="card" style="margin-bottom:14px">'
+      +'<div style="font-weight:700;color:var(--azul);margin-bottom:8px">1 · Escoge el archivo</div>'
+      +'<p style="font-size:12.5px;color:var(--gris-t);line-height:1.6;margin-bottom:12px">Sube el <b>.xlsx</b> del informe contable (se lee la hoja <code>COSTO</code>) o un <b>.csv</b> con esas mismas columnas. Se esperan: AÑO, MES, CUENTA, NOMBRE CUENTA, CUENTA (auxiliar), NIT TERCERO, CONCEPTO, DEBIDO, CREDITO, ACTIVIDAD (codigo de mapeo al PYG), FECHA, TERCERO, DOCUMENTO.</p>'
+      +'<input type="file" id="mkl-file" accept=".xlsx,.xls,.csv" onchange="window._mklLeerArchivo(this)" style="font-size:13px">'
+      +'<div id="mkl-prev" style="margin-top:16px"></div>'
+      +'</div>'
+      +'<div class="card"><div style="font-weight:700;color:var(--azul);margin-bottom:8px">Lotes cargados</div><div id="mkl-lotes" style="font-size:12.5px;color:var(--gris-t)">Cargando…</div></div>'
+      :'');
+  if(ed) _mklListarLotes();
+}
+async function _mklListarLotes(){
+  var el=document.getElementById('mkl-lotes'); if(!el) return;
+  var q=await window._sbFromRaw('fin_real').select('lote_id,periodo,created_at').eq('edificio','kubik');
+  if(q.error){ el.innerHTML='<span style="color:#C0392B">No se pudo leer: '+(q.error.message||'')+'</span>'; return; }
+  var rows=q.data||[]; if(!rows.length){ el.innerHTML='Todavia no hay contabilidad cargada.'; return; }
+  var L={};
+  rows.forEach(function(r){
+    var k=r.lote_id||'—';
+    L[k]=L[k]||{n:0,per:{},fecha:r.created_at};
+    L[k].n++; L[k].per[String(r.periodo||'').slice(0,7)]=1;
+    if(r.created_at && r.created_at<L[k].fecha) L[k].fecha=r.created_at;
+  });
+  el.innerHTML='<table class="tabla" style="font-size:12px"><thead><tr><th style="text-align:left">Lote</th><th style="text-align:left">Periodos</th><th style="text-align:right">Movimientos</th><th style="text-align:left">Cargado</th><th></th></tr></thead><tbody>'
+    + Object.keys(L).sort().map(function(k){
+        var v=L[k];
+        return '<tr><td style="text-align:left;font-family:monospace;font-size:11px">'+k+'</td>'
+          +'<td style="text-align:left">'+Object.keys(v.per).sort().map(_mklPerLbl).join(', ')+'</td>'
+          +'<td style="text-align:right">'+v.n+'</td>'
+          +'<td style="text-align:left;font-size:11px">'+(v.fecha?new Date(v.fecha).toLocaleDateString('es-CO'):'—')+'</td>'
+          +'<td style="text-align:center"><button onclick="window._mklBorrarLote(\''+k+'\')" style="background:#C0392B;color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px;font-weight:700">Revertir</button></td></tr>';
+      }).join('')+'</tbody></table>';
+}
+window._mklBorrarLote=async function(lote){
+  if(!confirm('Revertir el lote "'+lote+'"?\n\nSe eliminan TODOS sus movimientos de la contabilidad real. La proyeccion no se toca.')) return;
+  var r=await window._sbFromRaw('fin_real').delete().eq('edificio','kubik').eq('lote_id',lote);
+  if(r&&r.error){ showToast('No se pudo revertir: '+r.error.message,'error'); return; }
+  showToast('Lote revertido','success'); _mklListarLotes();
+};
+window._mklLeerArchivo=async function(inp){
+  var file=inp.files&&inp.files[0]; if(!file) return;
+  var prev=document.getElementById('mkl-prev');
+  prev.innerHTML='<p style="color:var(--gris-t);font-size:12.5px">Leyendo '+file.name+'…</p>';
+  try{
+    var matriz;
+    if(/\.csv$/i.test(file.name)){
+      var txt=await file.text();
+      var sep=(txt.split('\n')[0].split(';').length > txt.split('\n')[0].split(',').length)?';':',';
+      matriz=txt.split(/\r?\n/).filter(function(l){return l.trim();}).map(function(l){
+        var out=[],cur='',q=false;
+        for(var i=0;i<l.length;i++){ var ch=l[i];
+          if(ch==='"'){ if(q&&l[i+1]==='"'){cur+='"';i++;} else q=!q; }
+          else if(ch===sep&&!q){ out.push(cur); cur=''; }
+          else cur+=ch; }
+        out.push(cur); return out;
+      });
+    } else {
+      var XLSX=await window._mklSheetJS();
+      var buf=await file.arrayBuffer();
+      var wb=XLSX.read(buf,{type:'array',cellDates:true});
+      var hoja = wb.SheetNames.filter(function(n){ return _mklNorm(n)==='COSTO'; })[0] || wb.SheetNames[0];
+      matriz=XLSX.utils.sheet_to_json(wb.Sheets[hoja],{header:1,raw:true,defval:null});
+    }
+    window._mklPrepararCargue(matriz, file.name);
+  }catch(e){
+    prev.innerHTML='<div style="background:#FDECEA;border:1px solid #E8A9A0;border-radius:8px;padding:10px 12px;font-size:12.5px">⚠️ '+(e.message||e)+'</div>';
+  }
+};
+window._mklPrepararCargue=function(matriz, nombreArchivo){
+  var prev=document.getElementById('mkl-prev');
+  // localizar la fila de encabezado (la que traiga DEBIDO o DEBITO)
+  var hi=-1;
+  for(var i=0;i<Math.min(matriz.length,15);i++){
+    var fila=(matriz[i]||[]).map(_mklNorm);
+    if(fila.indexOf('DEBIDO')>-1||fila.indexOf('DEBITO')>-1){ hi=i; break; }
+  }
+  if(hi<0){ prev.innerHTML='<div style="background:#FDECEA;border:1px solid #E8A9A0;border-radius:8px;padding:10px 12px;font-size:12.5px">⚠️ No encontre la fila de encabezados. Debe traer una columna DEBIDO (o DEBITO) y una CREDITO.</div>'; return; }
+  var M=_mklMapCols(matriz[hi]||[]);
+  var faltan=['anio','mes','debito','credito'].filter(function(k){ return M[k]==null; });
+  if(faltan.length){ prev.innerHTML='<div style="background:#FDECEA;border:1px solid #E8A9A0;border-radius:8px;padding:10px 12px;font-size:12.5px">⚠️ Faltan columnas obligatorias: <b>'+faltan.join(', ')+'</b>.</div>'; return; }
+  var mo=window._mklModelo, codSet={}; (mo.lineas||[]).forEach(function(l){ codSet[l.cod]=1; });
+  var N=function(v){ var x=Number(String(v==null?0:v).replace(/[^0-9.,-]/g,'').replace(/\.(?=\d{3}\b)/g,'').replace(',','.')); return isNaN(x)?0:x; };
+  var filas=[], per={}, sinMapeo=0, sinCod=0, espejo=0, malFecha=0, desconocidos={};
+  for(var r=hi+1;r<matriz.length;r++){
+    var f=matriz[r]||[];
+    var a=f[M.anio], m=f[M.mes];
+    if(a==null||m==null||String(a).trim()===''||String(m).trim()==='') continue;
+    var ai=parseInt(String(a).replace(/[^0-9]/g,''),10), mi=parseInt(String(m).replace(/[^0-9]/g,''),10);
+    if(!ai||!mi||mi<1||mi>12){ malFecha++; continue; }
+    var periodo=ai+'-'+('0'+mi).slice(-2)+'-01';
+    var deb=N(f[M.debito]), cre=N(f[M.credito]);
+    if(deb===0&&cre===0) continue;
+    if(deb!==0 && Math.abs(deb+cre)<0.01){ cre=0; espejo++; }
+    else if(cre!==0 && Math.abs(deb+cre)<0.01){ deb=0; espejo++; }
+    var cod=(M.mapeo!=null && f[M.mapeo]!=null)?String(f[M.mapeo]).trim():'';
+    if(!cod) sinMapeo++;
+    else if(!codSet[cod]){ sinCod++; desconocidos[cod]=(desconocidos[cod]||0)+1; }
+    var fch=null;
+    if(M.fecha!=null && f[M.fecha]){
+      var fv=f[M.fecha];
+      if(fv instanceof Date && !isNaN(fv)) fch=fv.toISOString().slice(0,10);
+      else { var s=String(fv).trim(); var mm=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+             if(mm) fch=mm[3]+'-'+('0'+mm[1]).slice(-2)+'-'+('0'+mm[2]).slice(-2);
+             else if(/^\d{4}-\d{2}-\d{2}/.test(s)) fch=s.slice(0,10); }
+    }
+    per[periodo.slice(0,7)]=(per[periodo.slice(0,7)]||0)+1;
+    filas.push({ edificio:'kubik', periodo:periodo,
+      cuenta_puc: M.cuenta!=null&&f[M.cuenta]!=null?String(f[M.cuenta]).trim():null,
+      nombre_cuenta: M.nombre_cuenta!=null&&f[M.nombre_cuenta]!=null?String(f[M.nombre_cuenta]).trim():null,
+      cuenta_aux: M.cuenta_aux!=null&&f[M.cuenta_aux]!=null?String(f[M.cuenta_aux]).trim():null,
+      codigo_pyg: cod||null,
+      nit: M.nit!=null&&f[M.nit]!=null?String(f[M.nit]).trim():null,
+      tercero: M.tercero!=null&&f[M.tercero]!=null?String(f[M.tercero]).trim():null,
+      concepto: M.concepto!=null&&f[M.concepto]!=null?String(f[M.concepto]).trim():null,
+      documento: M.documento!=null&&f[M.documento]!=null?String(f[M.documento]).trim():null,
+      fecha: fch, debito:deb, credito:cre });
+  }
+  window._mklPend={filas:filas, archivo:nombreArchivo};
+  if(!filas.length){ prev.innerHTML='<div style="background:#FDECEA;border:1px solid #E8A9A0;border-radius:8px;padding:10px 12px;font-size:12.5px">⚠️ No encontre movimientos con valor en DEBIDO o CREDITO.</div>'; return; }
+  var ing=0,cos=0;
+  filas.forEach(function(x){ var c=String(x.codigo_pyg||''); var esI=c.charAt(0)==='4' || String(x.cuenta_puc||'').charAt(0)==='4';
+    var v=_mklNeto(x.debito,x.credito,esI); if(esI) ing+=v; else cos+=v; });
+  var pers=Object.keys(per).sort();
+  var dk=Object.keys(desconocidos);
+  prev.innerHTML=
+    '<div style="font-weight:700;color:var(--azul);margin-bottom:8px">2 · Revisa antes de cargar</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+    +'<div style="flex:1;min-width:150px;background:#F6F8FB;border-radius:10px;padding:12px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Movimientos</div><div style="font-size:20px;font-weight:800">'+filas.length+'</div></div>'
+    +'<div style="flex:1;min-width:150px;background:#F6F8FB;border-radius:10px;padding:12px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Ingresos</div><div style="font-size:20px;font-weight:800;color:#1A5C2E">$'+_mklNum(ing)+'</div></div>'
+    +'<div style="flex:1;min-width:150px;background:#F6F8FB;border-radius:10px;padding:12px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Costos</div><div style="font-size:20px;font-weight:800;color:#C0392B">$'+_mklNum(cos)+'</div></div>'
+    +'<div style="flex:1;min-width:150px;background:#F6F8FB;border-radius:10px;padding:12px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase">Resultado</div><div style="font-size:20px;font-weight:800">$'+_mklNum(ing-cos)+'</div></div>'
+    +'</div>'
+    +'<p style="font-size:12.5px;margin-bottom:8px">Periodos detectados: <b>'+pers.map(_mklPerLbl).join(', ')+'</b></p>'
+    +(espejo?'<div style="background:#FFF8E1;border:1px solid #E0C068;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:8px">⚠️ <b>'+espejo+'</b> movimiento(s) traian el mismo valor en DEBIDO y en CREDITO con signo opuesto (el caso de Devoluciones en Ventas). Se normalizaron para no contarlos dos veces.</div>':'')
+    +(sinMapeo?'<div style="background:#FFF8E1;border:1px solid #E0C068;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:8px">⚠️ <b>'+sinMapeo+'</b> movimiento(s) sin codigo de mapeo. Se cargan igual pero no entran a ningun subtotal del PYG.</div>':'')
+    +(dk.length?'<div style="background:#FDECEA;border:1px solid #E8A9A0;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:8px">⚠️ <b>'+sinCod+'</b> movimiento(s) con codigos que no existen en el plan de cuentas: <b>'+dk.slice(0,15).join(', ')+'</b>'+(dk.length>15?' y '+(dk.length-15)+' mas':'')+'.</div>':'')
+    +(malFecha?'<div style="background:#FDECEA;border:1px solid #E8A9A0;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:8px">⚠️ <b>'+malFecha+'</b> fila(s) descartadas por año o mes invalido.</div>':'')
+    +'<div style="background:#EAF2FB;border:1px solid #9EC5F0;border-radius:8px;padding:10px 12px;font-size:12.5px;margin:12px 0">Si ya habias cargado alguno de estos periodos, el cargue nuevo <b>reemplaza</b> lo anterior de esos mismos meses.</div>'
+    +'<button class="btn btn-success" onclick="window._mklConfirmarCargue()" id="mkl-go">▶ Cargar '+filas.length+' movimientos</button>'
+    +'<div id="mkl-log" style="margin-top:12px;background:var(--gris);border-radius:8px;padding:10px;max-height:180px;overflow-y:auto;font-size:11px;font-family:monospace;display:none"></div>';
+};
+window._mklConfirmarCargue=async function(){
+  var P=window._mklPend; if(!P||!P.filas.length) return;
+  var btn=document.getElementById('mkl-go'); btn.disabled=true; btn.textContent='Cargando…';
+  var log=document.getElementById('mkl-log'); log.style.display='block';
+  var put=function(t,c){ var d=document.createElement('div'); d.style.color=c||'#555'; d.textContent=t; log.appendChild(d); log.scrollTop=log.scrollHeight; };
+  var lote='L'+new Date().toISOString().slice(0,19).replace(/[-:T]/g,'');
+  var pers={}; P.filas.forEach(function(f){ pers[f.periodo]=1; });
+  var uid=null; try{ uid=(window._uid&&window._uid())||(currentUser&&currentUser.id)||null; }catch(e){}
+  for(var p in pers){
+    var d=await window._sbFromRaw('fin_real').delete().eq('edificio','kubik').eq('periodo',p);
+    put((d&&d.error)?('Aviso al limpiar '+p+': '+d.error.message):('✓ Limpio '+p), (d&&d.error)?'#C0392B':'#1A7D3C');
+  }
+  var ok=0, err=0;
+  for(var i=0;i<P.filas.length;i+=200){
+    var lote2=P.filas.slice(i,i+200).map(function(f){ var o=Object.assign({},f); o.lote_id=lote; o.user_id=uid; return o; });
+    var r=await window._sbFromRaw('fin_real').insert(lote2);
+    if(r&&r.error){ err++; if(err<=3) put('Error bloque '+(i/200+1)+': '+r.error.message,'#C0392B'); }
+    else ok+=lote2.length;
+    put('Bloque '+(Math.floor(i/200)+1)+' — '+ok+'/'+P.filas.length,'#2B4A8A');
+  }
+  if(err===0){
+    put('✅ Listo — '+ok+' movimientos cargados en el lote '+lote,'#1A7D3C');
+    btn.textContent='✅ Cargado'; showToast('Contabilidad cargada','success');
+    window._mklPend=null; _mklListarLotes();
+  } else {
+    put('Terminado con '+err+' error(es). '+ok+' cargados.','#C0392B');
+    btn.disabled=false; btn.textContent='Reintentar';
+  }
+};
+
 // ═══════════════════════════════════════════════════════════
 // ═══ MÓDULO FINANCIERO — Estado de Resultados editable (gemelo del Excel) ═══
 // ═══ Financiero KL (Kubik / 8i8 Operadora) — PYG mensual editable (Sol. Santiago) ═══
