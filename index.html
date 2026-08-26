@@ -17353,7 +17353,12 @@ async function _klPYG(){
   var mi = (_ultReal>=0?_ultReal : (_ultPpto>=0?_ultPpto : Math.min(hoyM,12)-1));
   hoyM = mi+1;
   var pcol=function(p){ return p>=100?'#1A7D3C':(p>=80?'#B8860B':'#C0392B'); };
-  var kpi=function(t,rv,pv,col){ var p=pv?Math.round(rv/pv*100):0; return '<div style="flex:1;min-width:180px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:14px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div><div style="font-size:19px;font-weight:800;color:'+(col||'var(--azul)')+';white-space:nowrap">'+f$(rv)+'</div><div style="font-size:11px;color:var(--gris-t)">Proy: '+f$(pv)+' · <span style="color:'+pcol(p)+';font-weight:700">'+p+'%</span></div></div>'; };
+  var kpi=function(t,rv,pv,col,nota){
+    var pie;
+    if(!pv){ pie='<span style="color:#8a93a0">'+(nota||'Sin presupuesto — etapa preoperativa')+'</span>'; }
+    else { var p=Math.round(rv/pv*100); pie='Proy: '+f$(pv)+' · <span style="color:'+pcol(p)+';font-weight:700">'+p+'%</span>'; }
+    return '<div style="flex:1;min-width:180px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:14px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div><div style="font-size:19px;font-weight:800;color:'+(col||'var(--azul)')+';white-space:nowrap">'+f$(rv)+'</div><div style="font-size:11px;color:var(--gris-t)">'+pie+'</div></div>';
+  };
   var anioSel='<select onchange="window._finKLState.anio=parseInt(this.value,10);renderFinanzasKL()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px;font-weight:700">'+[2026,2027].map(function(y){ return '<option value="'+y+'" '+(y===st.anio?'selected':'')+'>'+y+'</option>'; }).join('')+'</select>';
   var vistas=[['real','Real'],['ppto','Proyección'],['var','Variación']];
   var vSel='<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden">'+vistas.map(function(v){ return '<button onclick="window._finKLState.vista=\''+v[0]+'\';renderFinanzasKL()" style="border:none;padding:7px 12px;font-size:12px;cursor:pointer;background:'+(v[0]===st.vista?'var(--azul)':'#fff')+';color:'+(v[0]===st.vista?'#fff':'var(--azul)')+'">'+v[1]+'</button>'; }).join('')+'</div>';
@@ -17410,6 +17415,15 @@ async function _klPYG(){
     + kpi('Resultado — '+KL_MC[mi], resR[mi], resP[mi],'#1A5C2E')
     + kpi('Ingresos ene–'+KL_MC[mi], sum(ingR,hoyM), sum(ingP,hoyM),'var(--azul)')
     + kpi('Resultado ene–'+KL_MC[mi], sum(resR,hoyM), sum(resP,hoyM),'#1A5C2E')
+    + (function(){
+        if(_ultPpto<0) return '';
+        var _i0=-1; for(var _q=0;_q<12;_q++){ if(_mesP[_q]){ _i0=_q; break; } }
+        var _si=0,_sr=0; for(var _q=_i0;_q<=_ultPpto;_q++){ _si+=ingP[_q]; _sr+=resP[_q]; }
+        return '<div style="flex:1;min-width:180px;background:#fff;border:1px dashed var(--gris-b);border-radius:12px;padding:14px">'
+          +'<div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">Presupuesto '+KL_MC[_i0]+'–'+KL_MC[_ultPpto]+'</div>'
+          +'<div style="font-size:19px;font-weight:800;color:#6B7280;white-space:nowrap">'+f$(_si)+'</div>'
+          +'<div style="font-size:11px;color:var(--gris-t)">Resultado proyectado '+f$(_sr)+'</div></div>';
+      })()
     +'</div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
     +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px"><b>Acumulado</b> = suma de enero al último mes con movimiento. <b>Total Año</b> = los doce meses. Columna naranja = último mes con dato. En <b>Variación</b> los meses marcados con — no se comparan: o no están contabilizados todavía, o no tienen presupuesto (la preoperación no lo tiene), y no entran a ningún total. Variación = Real − Proyección (verde a favor). Este módulo es exclusivo de KL (8i8): no contiene datos de 8010/LTM3.</p></div>';
