@@ -482,7 +482,7 @@ const APP_VERSION = '2026-08-24-facturacion-contabilidad-v38';
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
   { fecha:'2026-08-26', version:'2026-08-26-modelo-informes-kl', titulo:'Modelo Financiero KL + Informes KL (Sol. Santiago)',
-    detalle:'Dos modulos nuevos, solo Kubik. (1) MODELO FINANCIERO KL: reemplaza el PYG en Excel de 8i8. Trae las 84 cuentas del plan con su regla de calculo, los supuestos mes a mes (tarifa, ocupacion, estadia, mix de canales) y la proyeccion a 12 meses. Funciona en dos modos: "Cifras del Excel", que muestra el PYG tal como esta pegado en el archivo (verificado: las 84 cuentas x 12 meses coinciden al peso), y "Calculado por drivers", que recalcula desde los supuestos. La pestaña Cuadre lista las 9 cuentas donde el archivo no obedece su propia regla. Incluye cargue mensual del Excel contable (hoja COSTO) con vista previa, normalizacion de signos y lote reversible, y el comparativo Real vs Proyectado por cuenta y mes. (2) INFORMES KL: vista de junta con indicadores y ocho graficas de ejecutado contra presupuestado, informe de ocupacion y ventas desde el rack (ocupacion, ADR, RevPAR, canal, tipo de apartamento) y un generador donde se escogen las secciones y el periodo. Las graficas muestran la cifra sobre cada barra y, al tocar una columna, el detalle exacto del mes con la diferencia. HALLAZGOS sobre el archivo de 8i8 que motivaron el modulo: el GOP del PYG estaba mal calculado (restaba la cuenta Valla en lugar de los costos operativos, sobreestimando el año 1 en 1.914.752.656); las celdas mensuales eran valores digitados y no formulas, de modo que el modelo no recalculaba; tres bases distintas se llamaban "% Ing"; y la linea de Upselling suma cero en el año (+160.000.000 en los tres primeros meses, -160.000.000 en los cuatro ultimos). Se cargaron los 1.052 movimientos contables de abril a julio de 2026. PERMISOS: Cristina Cerviño entra a los modulos financieros y confidenciales en los dos edificios (Sol. Santiago: "esta en todo, lo unico que no puede hacer es aprobar"); la aprobacion sigue restringida a Gerencia General.' },
+    detalle:'Dos modulos nuevos, solo Kubik. (1) MODELO FINANCIERO KL: reemplaza el PYG en Excel de 8i8. Trae las 84 cuentas del plan con su regla de calculo, los supuestos mes a mes (tarifa, ocupacion, estadia, mix de canales) y la proyeccion a 12 meses. Dos modos: "Cifras del Excel", que muestra el PYG tal como esta pegado en el archivo (verificado: las 84 cuentas x 12 meses coinciden al peso), y "Calculado por drivers", que recalcula desde los supuestos. La pestaña Cuadre lista las 9 cuentas donde el archivo no obedece su propia regla. Incluye cargue mensual del Excel contable (hoja COSTO) con vista previa, normalizacion de signos y lote reversible, y el comparativo Real vs Proyectado por cuenta y mes. (2) INFORMES KL: vista de junta con indicadores y ocho graficas de ejecutado contra presupuestado, informe de ocupacion y ventas desde el rack (ocupacion, ADR, RevPAR, canal, tipo de apartamento) y un generador donde se escogen las secciones y el periodo. Las graficas llevan la cifra escrita sobre cada barra y, al tocar una columna, muestran el detalle exacto del mes con la diferencia. CRITERIOS DE OCUPACION: noche ocupada = estado Ocupado, Check-in hoy o Sale de viaje. "Check-out hoy" es el dia de salida y no cuenta. "Completo" marca una unidad reformada o unida a otra, no una noche vendida, y se excluye (se avisa cuantas hay). El tipo de apartamento se deduce del codigo de la unidad, porque el campo tipo viene vacio en el 98% del rack. HALLAZGOS sobre el archivo de 8i8 que motivaron el modulo: el GOP del PYG estaba mal calculado (restaba la cuenta Valla en lugar de los costos operativos, sobreestimando el año 1 en 1.914.752.656); las celdas mensuales eran valores digitados y no formulas, de modo que el modelo no recalculaba; tres bases distintas se llamaban "% Ing"; y la linea de Upselling suma cero en el año (+160.000.000 en los tres primeros meses, -160.000.000 en los cuatro ultimos). Se cargaron los 1.052 movimientos contables de abril a julio de 2026. PERMISOS: Cristina Cerviño entra a los modulos financieros y confidenciales en los dos edificios (Sol. Santiago: "esta en todo, lo unico que no puede hacer es aprobar"); la aprobacion sigue restringida a Gerencia General.' },
   { fecha:'2026-08-24', version:'2026-08-24-facturacion-contabilidad-v38', titulo:'El aviso de factura emitida en 8010 deja de llegarle a Talento Humano y pasa a Contabilidad (Sol. Santiago)',
     afecta:'aviso de factura emitida en 8010, directorio de 8010 y grupos de correo',
     detalle:'Sol. Santiago (24-ago-2026): pregunto por que le llegaban a Zareth Varela los avisos del correo de facturacion si ella no tiene ninguna relacion con facturacion. Al revisar, el aviso de "Nueva factura emitida" tenia un unico destino escrito a mano para 8010 y era el correo de Zareth, que es Direccion de Talento Humano — quedo puesto ahi cuando 8010 no tenia contadora definida y nunca se corrigio. En Kubik el mismo aviso si iba bien, al contador y a administracion financiera. Ahora en 8010 va a Adriana Bernal (Administracion) y a Nydia Pardo (Contadora). Se agrega ademas a Adriana y a Nydia al directorio de 8010, para poder dirigirles solicitudes y comentarios; se etiqueta a Zareth como Talento Humano para que no se vuelva a confundir su area; se crea el grupo de correo Contable en 8010, que antes solo existia en Kubik; y se agregan los departamentos contabilidad, sistemas y talento humano al directorio por area. Fernando Herrera queda registrado como Sistemas en los dos edificios. IMPORTANTE: el usuario de Nydia Pardo todavia no existe. El sistema exige que la cuenta de acceso se cree primero en Supabase (Authentication) y solo despues se le puede armar el perfil; mientras tanto el correo si recibe los avisos, pero ella no puede entrar al Sistema Operativo.' },
@@ -16741,18 +16741,37 @@ async function _infCargarRack(desde,hasta){
   }
   return {data:todas};
 }
+// El rack sí trae el canal en casi todas las noches vendidas. Se respeta el valor
+// registrado y solo se agrupan las OTAs; lo que no se reconoce se muestra tal cual.
 function _infCanal(r){
-  var c=String(r.canal||'').toLowerCase(), e=String(r.empresa||'').trim(), tv=String(r.tipo_venta||'').toLowerCase();
-  if(/booking|expedia|airbnb|despegar|ota|hotelbeds|agoda/.test(c)) return 'OTAs';
-  if(/corporat|empresa/.test(c)||/corporat/.test(tv)) return 'Corporativo';
-  if(/agencia|operador/.test(c)) return 'Agencias';
-  if(/walk|directo|mostrador/.test(c)) return 'Directo';
-  return e ? 'Corporativo' : 'Directo';
+  var c=String(r.canal||'').trim();
+  if(!c) return String(r.empresa||'').trim() ? 'Corporativo' : 'Sin canal';
+  var l=c.toLowerCase();
+  if(/booking|expedia|airbnb|despegar|hotelbeds|agoda|trivago|ota/.test(l)) return 'OTAs';
+  if(/corporat|empresa/.test(l)) return 'Corporativo';
+  if(/agencia|operador|secuoya|mayorista/.test(l)) return 'Agencias';
+  if(/directo|particular|walk|mostrador/.test(l)) return 'Directo';
+  return c.charAt(0).toUpperCase()+c.slice(1);
 }
+// Noche ocupada = la unidad estuvo tomada esa noche.
+// "Check-out hoy" es el dia de salida (el rack lo trae sin tarifa) y no cuenta.
+// "Completo" marca una unidad reformada/unida a otra: no es una noche vendida, es
+// inventario fuera de servicio, y contarla inflaba la ocupacion.
+window._INF_EST_OCUPA = ['ocupado','check-in hoy','sale de viaje'];
 function _infOcupado(r){
-  var e=String(r.estado||'').toLowerCase();
-  if(!e) return false;
-  return !/libre|bloquead|mantenimi|limpiez|sucio|no show/.test(e);
+  var e=String(r.estado||'').trim().toLowerCase();
+  return window._INF_EST_OCUPA.indexOf(e)>-1;
+}
+function _infTipo(r){
+  var a=String(r.apto||'').trim();
+  try{
+    var c=/^(FR|TR|SD)(\d+)$/.exec(a);
+    if(c && typeof _KUBIK_COMBOS!=='undefined' && _KUBIK_COMBOS[c[1]]) return _KUBIK_COMBOS[c[1]].n;
+    if(a==='AH') return 'Air House';
+    if(typeof _kubikUnidad==='function'){ var u=_kubikUnidad(a); if(u&&u.n) return u.n; }
+  }catch(e){}
+  var t=String(r.tipo||'').trim();
+  return t || (a||'—');
 }
 
 async function renderInformesKL(){
@@ -16796,16 +16815,17 @@ async function renderInformesKL(){
   var qk=await _infCargarRack(st.desde, st.hasta);
   var rk=(qk.error?[]:qk.data);
   var vta=new Array(N).fill(0), noc=new Array(N).fill(0), ocupN=new Array(N).fill(0), hayRack={};
-  var canal={}, tipoV={}, tipoApto={};
+  var canal={}, tipoApto={}, nComp=0;
   rk.forEach(function(r){
     var per=String(r.fecha||'').slice(0,7), i=idx[per]; if(i==null) return;
     hayRack[i]=true;
     var t=Number(r.tarifa)||0;
     if(t>0){ vta[i]+=t; noc[i]++; }
     if(_infOcupado(r)) ocupN[i]++;
+    if(String(r.estado||'').trim().toLowerCase()==='completo') nComp++;
     if(t>0){
       var cn=_infCanal(r); canal[cn]=canal[cn]||{v:0,n:0}; canal[cn].v+=t; canal[cn].n++;
-      var ta=String(r.tipo||'—').trim()||'—'; tipoApto[ta]=tipoApto[ta]||{v:0,n:0}; tipoApto[ta].v+=t; tipoApto[ta].n++;
+      var ta=_infTipo(r); tipoApto[ta]=tipoApto[ta]||{v:0,n:0}; tipoApto[ta].v+=t; tipoApto[ta].n++;
     }
   });
   var ocupPct=MESES.map(function(p,i){ var d=_infDiasMes(p)*window._INF_UNID; return d?Math.round(ocupN[i]/d*1000)/10:0; });
@@ -16814,7 +16834,7 @@ async function renderInformesKL(){
 
   window._infDatos={MESES:MESES,idx:idx,pIng:pIng,pCos:pCos,pGop:pGop,pAloj:pAloj,pOcup:pOcup,pTar:pTar,
     rIng:rIng,rCos:rCos,rGop:rGop,rGrp:rGrp,vta:vta,noc:noc,ocupPct:ocupPct,adr:adr,revpar:revpar,
-    canal:canal,tipoApto:tipoApto,hayConta:hayConta,hayRack:hayRack,C:C,mo:mo,rk:rk};
+    canal:canal,tipoApto:tipoApto,hayConta:hayConta,hayRack:hayRack,C:C,mo:mo,rk:rk,nComp:nComp};
 
   if(st.tab==='ocup') return _infTabOcup();
   if(st.tab==='gen')  return _infTabGen();
@@ -16971,6 +16991,7 @@ function _infTabOcup(){
     +'<td style="text-align:right;font-weight:700">'+f(x[1])+'</td><td style="text-align:right">'+(totT?Math.round(x[1]/totT*1000)/10:0)+'%</td></tr>'; }).join('');
   document.getElementById('main-content').innerHTML=
     _infHead('Ocupacion y ventas · fuente: rack del sistema operativo')
+    +(D.nComp?'<div style="background:#FFF8E1;border:1px solid #E0C068;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:12px">ℹ️ <b>'+_mklNum(D.nComp)+'</b> noches del periodo estan marcadas como <b>Completo</b> (unidad reformada o unida a otra). No se cuentan como noches ocupadas — se rentan bajo el codigo de la unidad resultante. El inventario se mantiene en '+window._INF_UNID+' unidades.</div>':'')
     + _mklGrafico('Ocupacion mensual', L, [
         {nom:'Real', datos:D.ocupPct, color:CL.azul},
         {nom:'Presupuestada', datos:D.pOcup.map(function(v){return v||0;}), color:CL.gris, tipo:'line'}], 240, {pct:true})
