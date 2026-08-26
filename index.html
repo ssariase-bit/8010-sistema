@@ -16875,6 +16875,8 @@ async function renderInformesKL(){
   var mc=document.getElementById('main-content');
   mc.innerHTML='<div class="page-title">📑 Informes KL</div><div class="card"><p style="color:var(--gris-t)">Cargando datos…</p></div>';
   var mo=await _mklCargar();
+  // El inventario sale del modelo (Supuestos → Unidades), para no tenerlo en dos partes.
+  try{ if(Number(mo.unidades)>0) window._INF_UNID=Number(mo.unidades); }catch(e){}
   var MESES=_infRango(st.desde, st.hasta);
   var idx={}; MESES.forEach(function(p,i){ idx[p]=i; });
   var N=MESES.length;
@@ -17330,9 +17332,6 @@ async function _klPYG(){
   var ingR=_klSum(mapR,KL_ING), ingP=_klSum(mapP,KL_ING);
   var resR=_klSerie(mapR,{k:'sub',calc:'net'}), resP=_klSerie(mapP,{k:'sub',calc:'net'});
   var sum=function(a,n){ var s=0; for(var i=0;i<n;i++)s+=a[i]; return s; };
-  // Fix (Sol. Santiago, 26-ago-2026): el KPI del mes se anclaba al mes del calendario y
-  // salia en $0 cuando ese mes todavia no estaba contabilizado. Ahora usa el ultimo mes
-  // con movimiento real (o con presupuesto, si no hay real), y el acumulado llega hasta ahi.
   var _ultReal=-1, _ultPpto=-1;
   for(var _k=0;_k<12;_k++){
     var _hayR=false,_hayP=false;
@@ -17350,7 +17349,6 @@ async function _klPYG(){
   var anioSel='<select onchange="window._finKLState.anio=parseInt(this.value,10);renderFinanzasKL()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px;font-weight:700">'+[2026,2027].map(function(y){ return '<option value="'+y+'" '+(y===st.anio?'selected':'')+'>'+y+'</option>'; }).join('')+'</select>';
   var vistas=[['real','Real'],['ppto','Proyección'],['var','Variación']];
   var vSel='<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden">'+vistas.map(function(v){ return '<button onclick="window._finKLState.vista=\''+v[0]+'\';renderFinanzasKL()" style="border:none;padding:7px 12px;font-size:12px;cursor:pointer;background:'+(v[0]===st.vista?'var(--azul)':'#fff')+';color:'+(v[0]===st.vista?'#fff':'var(--azul)')+'">'+v[1]+'</button>'; }).join('')+'</div>';
-  // Sol. Santiago (26-ago-2026): columna de acumulado hasta el ultimo mes con dato.
   var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:230px;z-index:2">Cuenta</th>'
     +KL_MC.map(function(m){ return '<th style="text-align:right;min-width:84px">'+m+'</th>'; }).join('')
     +'<th style="text-align:right;min-width:112px;background:#16284a">Acumulado<br><span style="font-weight:400;font-size:9.5px;opacity:.85">ene–'+KL_MC[mi]+'</span></th>'
