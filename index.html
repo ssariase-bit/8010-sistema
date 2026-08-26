@@ -17072,7 +17072,7 @@ function _infTabJunta(){
     + kpi('Diferencia contable vs SO','$'+f(ingEj-vtaEj), (vtaEj?((ingEj-vtaEj)>=0?'+':'')+Math.round((ingEj-vtaEj)/vtaEj*1000)/10+'%':'—'), Math.abs(ingEj-vtaEj)>vtaEj*0.05?'#C0392B':'#1A5C2E')
     +'</div>'
     +(faltanConta.length?'<div style="background:#FFF8E1;border:1px solid #E0C068;border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px">⚠️ La contabilidad cargada llega hasta <b>'+mConta+'</b>. Falta cargar <b>'+faltanConta.join(', ')+'</b>, de modo que en esos meses la barra azul de ingresos y de costos sale en cero. Lo vendido si aparece, en naranja, porque sale del rack. Se carga en <b>Modelo Financiero KL → Cargue contable</b>.</div>':'')
-    + g1 + g2 + g9 + g3 + g4 + g5 + g6 + g7 + g8
+    + g1 + g2 + g9 + g3 + _infGrafOcupacion(D) + g5 + g6 + g7 + g8
     + _infTablaOTB(D, hoy)
     +'<div class="card"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Estado de resultados — estructura del PYG</div>'
     +'<div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr>'
@@ -17108,9 +17108,7 @@ function _infTabOcup(){
   document.getElementById('main-content').innerHTML=
     _infHead('Ocupacion y ventas · fuente: rack del sistema operativo')
     +(D.nComp?'<div style="background:#FFF8E1;border:1px solid #E0C068;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:12px">ℹ️ <b>'+_mklNum(D.nComp)+'</b> noches del periodo estan marcadas como <b>Completo</b> (unidad reformada o unida a otra). No se cuentan como noches ocupadas — se rentan bajo el codigo de la unidad resultante. El inventario se mantiene en '+window._INF_UNID+' unidades.</div>':'')
-    + _mklGrafico('Ocupacion mensual', L, [
-        {nom:'Real', datos:D.ocupPct, color:CL.azul},
-        {nom:'Presupuestada', datos:D.pOcup.map(function(v){return v||0;}), color:CL.gris, tipo:'line'}], 240, {pct:true})
+    + _infGrafOcupacion(D)
     + _mklGrafico('Venta de alojamiento', L, [
         {nom:'Vendido', datos:D.vta, color:CL.naranja},
         {nom:'Presupuestado', datos:D.pAloj.map(function(v){return v||0;}), color:CL.gris}], 230)
@@ -17166,7 +17164,7 @@ window._infGenerar=function(){
   if(S.ing) out+=_mklGrafico('Ingresos — ejecutado vs presupuestado', L, [{nom:'Ejecutado',datos:D.rIng,color:CL.azul},{nom:'Presupuestado',datos:D.pIng.map(function(v){return v||0;}),color:CL.gris}],240);
   if(S.gop) out+=_mklGrafico('Utilidad operativa (GOP)', L, [{nom:'Ejecutado',datos:D.rGop,color:CL.verde},{nom:'Presupuestado',datos:D.pGop.map(function(v){return v||0;}),color:CL.gris,tipo:'line'}],240);
   if(S.aloj)out+=_mklGrafico('Venta de alojamiento', L, [{nom:'Vendido (rack)',datos:D.vta,color:CL.naranja},{nom:'Presupuestado',datos:D.pAloj.map(function(v){return v||0;}),color:CL.gris}],240);
-  if(S.ocup)out+=_mklGrafico('Ocupacion', L, [{nom:'Real',datos:D.ocupPct,color:CL.azul},{nom:'Presupuestada',datos:D.pOcup.map(function(v){return v||0;}),color:CL.gris,tipo:'line'}],230,{pct:true});
+  if(S.ocup)out+=_infGrafOcupacion(D);
   if(S.adr) out+=_mklGrafico('ADR y RevPAR', L, [{nom:'ADR',datos:D.adr,color:CL.azul},{nom:'RevPAR',datos:D.revpar,color:CL.verde}],220);
   if(S.cos){
     var gn=[],gv=[];
@@ -17230,6 +17228,60 @@ function _infTablaOTB(D, hoy){
     +'<th style="text-align:right;min-width:130px">Faltante</th><th style="text-align:right;min-width:150px">Ocupacion</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
 }
 
+// ── Ocupación proyectada vs ejecutada (formato del informe de junta) ──
+// Preoperación en verde, proyección en gris, ejecutado en verde claro, con la
+// tabla de cumplimiento debajo. Replica la lámina que se presenta a la junta.
+window._INF_OCU_COL={preop:'#7CB342', proy:'#55585A', ejec:'#AED581'};
+function _infGrafOcupacion(D){
+  var C=D.C, pIdx={}; C.meses.forEach(function(m,i){ pIdx[m.per]=i; });
+  var L=[], preop=[], proy=[], ejec=[];
+  D.MESES.forEach(function(p,i){
+    var enVentana = pIdx[p]!=null;
+    var real = D.hayRack[i] ? (D.ocupPct[i]||0) : null;
+    // meses sin operación ni reservas no entran al eje
+    var pv = enVentana ? (D.pOcup[i]||0) : 0;
+    if(!enVentana && !real) return;
+    if(enVentana && !pv && !real) return;
+    L.push(_infMesLbl(p));
+    preop.push(enVentana ? 0 : (real||0));
+    proy.push(enVentana ? pv : 0);
+    ejec.push(enVentana ? (real||0) : 0);
+  });
+  if(!L.length) return '';
+  var CO=window._INF_OCU_COL;
+  var graf=_mklGrafico('Ocupación · proyectada contra ejecutada', L, [
+    {nom:'Preoperación', datos:preop, color:CO.preop},
+    {nom:'Proyectada',   datos:proy,  color:CO.proy},
+    {nom:'Ejecutada',    datos:ejec,  color:CO.ejec}
+  ], 250, {pct:true, ancho:66});
+
+  // tabla de cumplimiento
+  var f1=function(v){ return (v==null||v===0)?'':(Math.round(v*10)/10)+'%'; };
+  var celdas=function(arr,fmt){ return arr.map(function(v,i){
+      var pre = preop[i]>0;
+      return '<td style="text-align:right;'+(pre?'background:#F1F8E9;':'')+'">'+(fmt?fmt(v):f1(v))+'</td>';
+    }).join(''); };
+  var real=L.map(function(_,i){ return preop[i]>0?preop[i]:(ejec[i]||0); });
+  var cump=L.map(function(_,i){ return proy[i]>0 && ejec[i]>0 ? (ejec[i]/proy[i]*100) : null; });
+  var prom=function(a){ var v=a.filter(function(x){return x>0;}); return v.length? v.reduce(function(s,x){return s+x;},0)/v.length : 0; };
+  var promC=(function(){ var v=cump.filter(function(x){return x!=null;}); return v.length? v.reduce(function(s,x){return s+x;},0)/v.length : null; })();
+  var th='<th style="text-align:left;min-width:190px">Descripción</th>'
+    + L.map(function(l,i){ return '<th style="text-align:right;min-width:66px;'+(preop[i]>0?'background:#7CB342;color:#fff;':'')+'">'+l+'</th>'; }).join('')
+    + '<th style="text-align:right;min-width:80px;background:#16284a">Promedio</th>';
+  var filas=
+     '<tr><td style="text-align:left;font-weight:600">Ocupación proyectada</td>'+celdas(proy)+'<td style="text-align:right;font-weight:800;background:#eef3fb">'+f1(prom(proy))+'</td></tr>'
+    +'<tr><td style="text-align:left;font-weight:600">Ocupación ejecutada</td>'+celdas(real)+'<td style="text-align:right;font-weight:800;background:#eef3fb">'+f1(prom(real))+'</td></tr>'
+    +'<tr style="background:#f6f6f7"><td style="text-align:left;font-weight:700">% de cumplimiento</td>'
+      + cump.map(function(v,i){
+          var col = v==null?'' : ';color:'+(v>=100?'#1A7D3C':(v>=80?'#B8860B':'#C0392B'))+';font-weight:700';
+          return '<td style="text-align:right'+col+'">'+(v==null?'':Math.round(v)+'%')+'</td>';
+        }).join('')
+      +'<td style="text-align:right;font-weight:800;background:#eaf0ea'+(promC==null?'':';color:'+(promC>=100?'#1A7D3C':(promC>=80?'#B8860B':'#C0392B')))+'">'+(promC==null?'':Math.round(promC)+'%')+'</td></tr>';
+  return graf
+    +'<div class="card" style="margin-bottom:14px"><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr>'+th+'</tr></thead><tbody>'+filas+'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:9px">Las columnas en verde son de <b>preoperación</b>: no tienen presupuesto contra el cual medirse. El cumplimiento se calcula solo donde hay proyección y ejecución. Ocupación = noches ocupadas sobre '+window._INF_UNID+' unidades por los días del mes.</p></div>';
+}
+
 // ═══════════════════════════════════════════════════════════
 // ═══ MÓDULO FINANCIERO — Estado de Resultados editable (gemelo del Excel) ═══
 // ═══ Financiero KL (Kubik / 8i8 Operadora) — PYG mensual editable (Sol. Santiago) ═══
@@ -17280,7 +17332,7 @@ async function _klPYG(){
   var sum=function(a,n){ var s=0; for(var i=0;i<n;i++)s+=a[i]; return s; };
   // Fix (Sol. Santiago, 26-ago-2026): el KPI del mes se anclaba al mes del calendario y
   // salia en $0 cuando ese mes todavia no estaba contabilizado. Ahora usa el ultimo mes
-  // con movimiento real (o con presupuesto, si no hay real), y el YTD llega hasta ahi.
+  // con movimiento real (o con presupuesto, si no hay real), y el acumulado llega hasta ahi.
   var _ultReal=-1, _ultPpto=-1;
   for(var _k=0;_k<12;_k++){
     var _hayR=false,_hayP=false;
@@ -17298,7 +17350,11 @@ async function _klPYG(){
   var anioSel='<select onchange="window._finKLState.anio=parseInt(this.value,10);renderFinanzasKL()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px;font-weight:700">'+[2026,2027].map(function(y){ return '<option value="'+y+'" '+(y===st.anio?'selected':'')+'>'+y+'</option>'; }).join('')+'</select>';
   var vistas=[['real','Real'],['ppto','Proyección'],['var','Variación']];
   var vSel='<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden">'+vistas.map(function(v){ return '<button onclick="window._finKLState.vista=\''+v[0]+'\';renderFinanzasKL()" style="border:none;padding:7px 12px;font-size:12px;cursor:pointer;background:'+(v[0]===st.vista?'var(--azul)':'#fff')+';color:'+(v[0]===st.vista?'#fff':'var(--azul)')+'">'+v[1]+'</button>'; }).join('')+'</div>';
-  var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:230px;z-index:2">Cuenta</th>'+KL_MC.map(function(m){ return '<th style="text-align:right;min-width:84px">'+m+'</th>'; }).join('')+'<th style="text-align:right;min-width:100px;background:#16284a">Total Año</th>';
+  // Sol. Santiago (26-ago-2026): columna de acumulado hasta el ultimo mes con dato.
+  var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:230px;z-index:2">Cuenta</th>'
+    +KL_MC.map(function(m){ return '<th style="text-align:right;min-width:84px">'+m+'</th>'; }).join('')
+    +'<th style="text-align:right;min-width:112px;background:#16284a">Acumulado<br><span style="font-weight:400;font-size:9.5px;opacity:.85">ene–'+KL_MC[mi]+'</span></th>'
+    +'<th style="text-align:right;min-width:100px;background:#16284a">Total Año</th>';
   var body='';
   KL_LINEAS.forEach(function(def){
     var isSub=def.k==='sub';
@@ -17322,7 +17378,12 @@ async function _klPYG(){
         cells+='<td style="padding:1px"><input type="text" value="'+(raw?_klNum(raw):'')+'" data-c="'+encodeURIComponent(def.c)+'" data-t="'+st.vista+'" data-m="'+(m+1)+'" onchange="finKLSet(this)" style="width:80px;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:11px;text-align:right'+((m+1===hoyM)?';background:#fff7e6':'')+'"></td>';
       }
     }
-    body+='<tr style="'+rowStyle+'">'+nameCell+cells+'<td style="text-align:right;font-weight:700;background:'+(isSub?'#eaf0ea':'#f3f6fb')+'">'+_klNum(totA)+'</td></tr>';
+    var acum=0; for(var _a=0;_a<hoyM&&_a<12;_a++) acum+=serie[_a];
+    var _colAc='';
+    if(st.vista==='var'){ var _g=(def.grp==='COS'||def.grp==='NOP'||def.grp==='DEU')?(acum<=0):(acum>=0); _colAc=';color:'+(acum===0?'#9aa':(_g?'#1A7D3C':'#C0392B')); }
+    body+='<tr style="'+rowStyle+'">'+nameCell+cells
+      +'<td style="text-align:right;font-weight:800;background:'+(isSub?'#dfe8f5':'#eaf1fa')+_colAc+'">'+_klNum(acum)+'</td>'
+      +'<td style="text-align:right;font-weight:700;background:'+(isSub?'#eaf0ea':'#f3f6fb')+'">'+_klNum(totA)+'</td></tr>';
   });
   mc.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💰 Financiero KL — PYG '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+_klTabBar(st)+anioSel+vSel+'</div></div>'
@@ -17334,7 +17395,7 @@ async function _klPYG(){
     + kpi('Resultado ene–'+KL_MC[mi], sum(resR,hoyM), sum(resP,hoyM),'#1A5C2E')
     +'</div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
-    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Columna naranja = mes en curso. Variación = Real − Proyección (verde a favor). Este módulo es exclusivo de KL (8i8): no contiene datos de 8010/LTM3.</p></div>';
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px"><b>Acumulado</b> = suma de enero al ultimo mes con movimiento. <b>Total Año</b> = los doce meses. Columna naranja = ultimo mes con dato. Variación = Real − Proyección (verde a favor). Este módulo es exclusivo de KL (8i8): no contiene datos de 8010/LTM3.</p></div>';
 }
 async function finKLSet(inp){
   var cuenta=decodeURIComponent(inp.getAttribute('data-c')), tipo=inp.getAttribute('data-t'), m=inp.getAttribute('data-m');
