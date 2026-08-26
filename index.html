@@ -482,7 +482,7 @@ const APP_VERSION = '2026-08-24-facturacion-contabilidad-v38';
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
   { fecha:'2026-08-26', version:'2026-08-26-modelo-informes-kl', titulo:'Modelo Financiero KL + Informes KL (Sol. Santiago)',
-    detalle:'Dos modulos nuevos, solo Kubik. (1) MODELO FINANCIERO KL: reemplaza el PYG en Excel de 8i8. Trae las 84 cuentas del plan con su regla de calculo, los supuestos mes a mes (tarifa, ocupacion, estadia, mix de canales) y la proyeccion a 12 meses. Dos modos: "Cifras del Excel", que muestra el PYG tal como esta pegado en el archivo (verificado: las 84 cuentas x 12 meses coinciden al peso), y "Calculado por drivers", que recalcula desde los supuestos. La pestaña Cuadre lista las 9 cuentas donde el archivo no obedece su propia regla. Incluye cargue mensual del Excel contable (hoja COSTO) con vista previa, normalizacion de signos y lote reversible, y el comparativo Real vs Proyectado por cuenta y mes. (2) INFORMES KL: vista de junta con indicadores y graficas de contabilizado, reservas en libros y presupuesto; tabla de reservas en libros contra presupuesto con el faltante por vender mes a mes; informe de ocupacion y ventas desde el rack (ocupacion, ADR, RevPAR, canal, tipo de apartamento) y un generador donde se escogen las secciones y el periodo. Las graficas llevan la cifra escrita sobre cada barra y, al tocar una columna, muestran el detalle exacto del mes con la diferencia. Se avisa hasta que mes llega la contabilidad cargada, para que no se lea como cero lo que solo falta por contabilizar. CRITERIOS DE OCUPACION: noche ocupada = estado Ocupado, Check-in hoy o Sale de viaje. "Check-out hoy" es el dia de salida y no cuenta. "Completo" marca una unidad reformada o unida a otra, no una noche vendida, y se excluye (se avisa cuantas hay). El tipo de apartamento se deduce del codigo de la unidad, porque el campo tipo viene vacio en el 98% del rack. HALLAZGOS sobre el archivo de 8i8 que motivaron el modulo: el GOP del PYG estaba mal calculado (restaba la cuenta Valla en lugar de los costos operativos, sobreestimando el año 1 en 1.914.752.656); las celdas mensuales eran valores digitados y no formulas, de modo que el modelo no recalculaba; tres bases distintas se llamaban "% Ing"; y la linea de Upselling suma cero en el año (+160.000.000 en los tres primeros meses, -160.000.000 en los cuatro ultimos). Se cargaron los 1.052 movimientos contables de abril a julio de 2026. PERMISOS: Cristina Cervino entra a los modulos financieros y confidenciales en los dos edificios (Sol. Santiago: "esta en todo, lo unico que no puede hacer es aprobar"); la aprobacion sigue restringida a Gerencia General.' },
+    detalle:'Dos modulos nuevos, solo Kubik. (1) MODELO FINANCIERO KL: reemplaza el PYG en Excel de 8i8. Las 84 cuentas del plan con su regla de calculo, los supuestos mes a mes y la proyeccion a 12 meses. Dos modos: "Cifras del Excel", que muestra el PYG tal como esta pegado en el archivo (verificado: las 84 cuentas x 12 meses coinciden al peso), y "Calculado por drivers". La pestaña Cuadre lista las 9 cuentas donde el archivo no obedece su propia regla. La pestaña EQUILIBRIO Y DEUDA separa el costo en fijo y variable por el driver de cada linea (no por regresion) y calcula cuanto hay que vender al mes para cubrir costos, cuanto para cubrir costos mas la cuota del credito, y la cobertura mes a mes; la cuota y un ajuste al costo fijo son editables. Incluye cargue mensual del Excel contable con vista previa, normalizacion de signos y lote reversible, y el comparativo Real vs Proyectado por cuenta y mes. (2) INFORMES KL: vista de junta con indicadores, umbral de cobertura, y graficas de contabilizado, reservas en libros, presupuesto y GOP contra la cuota; informe de ocupacion y ventas desde el rack; y un generador por secciones. Las graficas llevan la cifra sobre cada barra y muestran el detalle del mes al tocar una columna. CRITERIOS DE OCUPACION: noche ocupada = Ocupado, Check-in hoy o Sale de viaje; "Check-out hoy" es el dia de salida y no cuenta; "Completo" marca una unidad reformada y se excluye. El tipo de apartamento se deduce del codigo de la unidad porque el campo viene vacio en el 98% del rack. HALLAZGOS: el GOP del PYG restaba la cuenta Valla en lugar de los costos operativos, sobreestimando el año 1 en 1.914.752.656; las celdas mensuales eran valores digitados y no formulas; tres bases distintas se llamaban "% Ing"; la linea de Upselling suma cero en el año; la nomina de recepcion va 62% sobre presupuesto (31,6 contra 19,5 millones en julio, ocho personas donde el modelo previo cuatro); energia, agua, residuos y fumigacion nunca se causaron en preoperacion y aparecen por primera vez en agosto por 15,7 millones al mes; y el archivo del PYG no trae las hojas FLUJO PREOPERATIVO ni DATA que su propia portada describe. Se cargaron los 1.052 movimientos contables de abril a julio de 2026. PERMISOS: Cristina Cervino entra a los modulos financieros y confidenciales en los dos edificios; la aprobacion sigue restringida a Gerencia General.' },
   { fecha:'2026-08-24', version:'2026-08-24-facturacion-contabilidad-v38', titulo:'El aviso de factura emitida en 8010 deja de llegarle a Talento Humano y pasa a Contabilidad (Sol. Santiago)',
     afecta:'aviso de factura emitida en 8010, directorio de 8010 y grupos de correo',
     detalle:'Sol. Santiago (24-ago-2026): pregunto por que le llegaban a Zareth Varela los avisos del correo de facturacion si ella no tiene ninguna relacion con facturacion. Al revisar, el aviso de "Nueva factura emitida" tenia un unico destino escrito a mano para 8010 y era el correo de Zareth, que es Direccion de Talento Humano — quedo puesto ahi cuando 8010 no tenia contadora definida y nunca se corrigio. En Kubik el mismo aviso si iba bien, al contador y a administracion financiera. Ahora en 8010 va a Adriana Bernal (Administracion) y a Nydia Pardo (Contadora). Se agrega ademas a Adriana y a Nydia al directorio de 8010, para poder dirigirles solicitudes y comentarios; se etiqueta a Zareth como Talento Humano para que no se vuelva a confundir su area; se crea el grupo de correo Contable en 8010, que antes solo existia en Kubik; y se agregan los departamentos contabilidad, sistemas y talento humano al directorio por area. Fernando Herrera queda registrado como Sistemas en los dos edificios. IMPORTANTE: el usuario de Nydia Pardo todavia no existe. El sistema exige que la cuenta de acceso se cree primero en Supabase (Authentication) y solo despues se le puede armar el perfil; mientras tanto el correo si recibe los avisos, pero ella no puede entrar al Sistema Operativo.' },
@@ -15774,7 +15774,7 @@ function _mklDefault(){
     sup.mix_otas.push(0.4048); sup.mix_directo.push(0.5952); sup.mix_corp.push(0); sup.mix_agen.push(0);
   }
   return {
-    inicio:'2026-08', unidades:42, dias:30, modo:'base', ajuste_base:15000000,
+    inicio:'2026-08', unidades:42, dias:30, modo:'base', ajuste_base:15000000, cuota:100000000, ajuste_fijo:0,
     com:{otas:0.015, directo:0.05, corp:0, agen:0},
     kg_lavado:2, pct_pax:0.8,
     sup:sup,
@@ -15797,7 +15797,8 @@ function _mklP(s){ var x=String(s==null?'':s).replace(/[^0-9.,-]/g,'').replace(/
 function _mklCalc(mo){
   var L=mo.lineas||[], R={}, meses=_mklMesesLbl(mo), drv=[];
   L.forEach(function(l){ R[l.cod]=new Array(12).fill(0); });
-  var sub={}, tot={ing_aloj:[],ing_hab:[],ing_hab_su:[],ing_ab:[],ing_op:[],ing_nop:[],total_ing:[],base_ex_a:[],costos:[],gop:[]};
+  var sub={}, tot={ing_aloj:[],ing_hab:[],ing_hab_su:[],ing_ab:[],ing_op:[],ing_nop:[],total_ing:[],base_ex_a:[],costos:[],gop:[],
+    fijo:[],varia:[],vpct:[],eq_op:[],eq_cuota:[],eq_130:[],dscr:[],noches_eq:[]};
   window._MKL_GRUPOS.forEach(function(G){ sub[G.g]=new Array(12).fill(0); });
   var porGrp={}; window._MKL_GRUPOS.forEach(function(G){ porGrp[G.g]=L.filter(function(l){return l.grp===G.g;}); });
 
@@ -15869,6 +15870,26 @@ function _mklCalc(mo){
     ['ing_aloj','ing_hab','ing_hab_su','ing_ab','ing_op','ing_nop','total_ing','base_ex_a'].forEach(function(k){ tot[k][m]=ctx[k]; });
     tot.costos[m]=costos;
     tot.gop[m]=ctx.total_ing-costos;   // ← corregido respecto del Excel
+    // Separacion fijo / variable por el DRIVER de cada linea, no por regresion.
+    // Variable = lo que se mueve con la venta; fijo = lo demas.
+    var _DRVAR={pct:1,comision:1,x_entrada:1,x_kg:1,x_pax:1};
+    var _fijo=0,_var=0;
+    window._MKL_GRUPOS.forEach(function(G){
+      if(G.tipo!=='cos') return;
+      porGrp[G.g].forEach(function(l){
+        var v=R[l.cod][m];
+        if(_DRVAR[l.dr]) _var+=v; else _fijo+=v;
+      });
+    });
+    _fijo += (Number(mo.ajuste_fijo)||0);
+    var _vp = ctx.total_ing ? (_var/ctx.total_ing) : 0;
+    var _cuota = Number(mo.cuota)||0;
+    tot.fijo[m]=_fijo; tot.varia[m]=_var; tot.vpct[m]=_vp;
+    tot.eq_op[m]    = (_vp<1) ? _fijo/(1-_vp) : 0;
+    tot.eq_cuota[m] = (_vp<1) ? (_fijo+_cuota)/(1-_vp) : 0;
+    tot.eq_130[m]   = (_vp<1) ? (_fijo+_cuota*1.30)/(1-_vp) : 0;
+    tot.dscr[m]     = _cuota ? (ctx.total_ing-costos-(Number(mo.ajuste_fijo)||0))/_cuota : null;
+    tot.noches_eq[m]= tarifa ? tot.eq_cuota[m]/tarifa : 0;
     drv.push({noches:noches, entradas:entradas, pax:pax, tarifa:tarifa, ocup:ocup});
   }
   return {R:R, sub:sub, tot:tot, meses:meses, drv:drv};
@@ -16080,12 +16101,13 @@ async function renderModeloKL(){
   if(st.tab==='plan')   return _mklTabPlan(mo);
   if(st.tab==='real')   return _mklTabReal(mo);
   if(st.tab==='cuadre')  return _mklTabCuadre(mo);
+  if(st.tab==='equil')   return _mklTabEquilibrio(mo);
   if(st.tab==='cargue') return _mklTabCargue(mo);
   return _mklTabProy(mo);
 }
 function _mklBar(){
   var st=window._mklState;
-  var tabs=[['proy','Proyeccion'],['sup','Supuestos'],['plan','Plan y Drivers'],['real','Real vs Proy'],['cuadre','Cuadre'],['cargue','Cargue contable']];
+  var tabs=[['proy','Proyeccion'],['sup','Supuestos'],['plan','Plan y Drivers'],['real','Real vs Proy'],['equil','Equilibrio y deuda'],['cuadre','Cuadre'],['cargue','Cargue contable']];
   return '<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden;flex-wrap:wrap">'
     +tabs.map(function(t){ return '<button onclick="window._mklState.tab=\''+t[0]+'\';renderModeloKL()" style="border:none;padding:7px 13px;font-size:12px;cursor:pointer;font-weight:700;background:'+(t[0]===st.tab?'#1D3461':'#fff')+';color:'+(t[0]===st.tab?'#fff':'#1D3461')+'">'+t[1]+'</button>'; }).join('')
     +'</div>';
@@ -16145,6 +16167,76 @@ function _mklTabCuadre(mo){
       +'</tr></thead><tbody>'+body+'</tbody></table></div>'
       +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Totales del año 1. Diferencia positiva = el driver arroja mas que el archivo. Si una linea deberia seguir su regla, hay que corregir el archivo; si el archivo esta bien, hay que corregir la regla en <b>Plan y Drivers</b>.</p></div>'
       :'<div class="card"><p>Todas las cuentas con regla reproducen su driver.</p></div>');
+}
+
+// ── TAB: Equilibrio y servicio a la deuda ────────────────────────────
+// Separa el costo en fijo y variable POR EL DRIVER de cada linea, no por
+// regresion, y con eso responde: cuanto hay que vender al mes para cubrir
+// costos, y cuanto para cubrir costos mas la cuota del credito.
+function _mklTabEquilibrio(mo){
+  var C=_mklCalc(mo), M=C.meses, f=_mklNum, ed=_mklEditable();
+  var CL=window._MKL_COL;
+  var cuota=Number(mo.cuota)||0;
+  var gInp=function(k,v){
+    if(!ed) return '<b class="m">$'+f(v)+'</b>';
+    return '<input type="text" value="'+f(v)+'" onchange="window._mklSetGlobal(\''+k+'\',_mklP(this.value))" style="width:130px;border:1px solid #e3e6ea;border-radius:5px;padding:6px;font-size:13px;text-align:right;font-weight:700">';
+  };
+  var cab='<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Servicio a la deuda</div>'
+    +'<div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end;font-size:12.5px">'
+    +'<label>Cuota mensual del credito<br>'+gInp('cuota',cuota)+'</label>'
+    +'<label>Ajuste al costo fijo mensual<br>'+gInp('ajuste_fijo',Number(mo.ajuste_fijo)||0)+'</label>'
+    +'<div style="font-size:12px;color:var(--gris-t);max-width:44ch;line-height:1.6">El ajuste suma al costo fijo lo que la operacion esta gastando por encima del presupuesto. Sirve para ver el umbral con la planta real y no con la presupuestada.</div>'
+    +'</div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin:10px 0 0">El PYG termina en GOP: no incluye management fee, comision fiduciaria, predial, ICA, seguros ni dotacion de activos. Si alguno se activa, la cobertura baja.</p></div>';
+
+  var th='<th style="text-align:left;min-width:90px">Mes</th>'
+    +['Ingresos','Costo fijo','Costo variable','% variable','Costos','GOP','Equilibrio operativo','Equilibrio con cuota','Cobertura']
+      .map(function(t){ return '<th style="text-align:right;min-width:104px">'+t+'</th>'; }).join('');
+  var body=M.map(function(m,i){
+    var d=C.tot.dscr[i];
+    var col = d==null?'#6B7280' : (d>=1.3?'#1A7D3C':(d>=1?'#B8860B':'#C0392B'));
+    return '<tr><td style="text-align:left;font-weight:600">'+m.lbl+'</td>'
+      +'<td style="text-align:right">'+f(C.tot.total_ing[i])+'</td>'
+      +'<td style="text-align:right">'+f(C.tot.fijo[i])+'</td>'
+      +'<td style="text-align:right">'+f(C.tot.varia[i])+'</td>'
+      +'<td style="text-align:right;color:#6B7280">'+(Math.round(C.tot.vpct[i]*1000)/10)+'%</td>'
+      +'<td style="text-align:right">'+f(C.tot.costos[i])+'</td>'
+      +'<td style="text-align:right;font-weight:700">'+f(C.tot.gop[i])+'</td>'
+      +'<td style="text-align:right;color:#6B7280">'+f(C.tot.eq_op[i])+'</td>'
+      +'<td style="text-align:right;font-weight:700">'+f(C.tot.eq_cuota[i])+'</td>'
+      +'<td style="text-align:right;font-weight:800;color:'+col+'">'+(d==null?'—':(Math.round(d*100)/100)+'x')+'</td></tr>';
+  }).join('');
+
+  var s=function(a){ return a.reduce(function(x,y){return x+(Number(y)||0);},0); };
+  var dscrA = cuota ? s(C.tot.gop)/(cuota*12) : null;
+  var kpi=function(t,v,sub,col){ return '<div style="flex:1;min-width:180px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:14px">'
+    +'<div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div>'
+    +'<div style="font-size:20px;font-weight:800;color:'+(col||'var(--azul)')+';white-space:nowrap">'+v+'</div>'
+    +(sub?'<div style="font-size:11px;color:var(--gris-t)">'+sub+'</div>':'')+'</div>'; };
+  var tarifa0=(mo.sup&&mo.sup.tarifa&&mo.sup.tarifa[0])||0;
+  var lb=M.map(function(m){return m.lbl;});
+  var graf=_mklGrafico('GOP contra la cuota del credito', lb, [
+      {nom:'GOP proyectado', datos:C.tot.gop, color:CL.verde},
+      {nom:'Cuota mensual', datos:M.map(function(){return cuota;}), color:CL.rojo, tipo:'line'}
+    ], 240)
+   + _mklGrafico('Venta necesaria contra venta proyectada', lb, [
+      {nom:'Ingresos proyectados', datos:C.tot.total_ing, color:CL.azul},
+      {nom:'Equilibrio con la cuota', datos:C.tot.eq_cuota, color:CL.naranja, tipo:'line'},
+      {nom:'Equilibrio operativo', datos:C.tot.eq_op, color:CL.gris, tipo:'line'}
+    ], 240);
+
+  document.getElementById('main-content').innerHTML=
+    _mklHead('Cuanto hay que vender al mes para cubrir costos y la cuota del credito.')
+    + cab
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
+    + kpi('Costo fijo mensual','$'+f(C.tot.fijo[0]), 'mes 1 · mas '+(Math.round(C.tot.vpct[0]*1000)/10)+'% de la venta','var(--azul)')
+    + kpi('Equilibrio operativo','$'+f(C.tot.eq_op[0]), tarifa0?(Math.round(C.tot.eq_op[0]/tarifa0)+' noches al mes'):'', '#6B7280')
+    + kpi('Equilibrio con la cuota','$'+f(C.tot.eq_cuota[0]), tarifa0?(Math.round(C.tot.eq_cuota[0]/tarifa0)+' noches al mes'):'', '#eb6834')
+    + kpi('Cobertura del año','' +(dscrA==null?'—':(Math.round(dscrA*100)/100)+'x'), 'GOP $'+f(s(C.tot.gop))+' sobre deuda $'+f(cuota*12), dscrA>=1.3?'#1A5C2E':(dscrA>=1?'#B8860B':'#C0392B'))
+    +'</div>'
+    + graf
+    +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px"><b>Costo variable</b> = las lineas cuyo driver depende de la venta (porcentajes, comisiones, costo por entrada, por kilo y por pax). <b>Costo fijo</b> = todo lo demas, mas el ajuste manual. <b>Equilibrio</b> = costo fijo dividido por uno menos el porcentaje variable. <b>Cobertura</b> = GOP dividido por la cuota; por debajo de 1,00x el mes no paga la cuota.</p></div>';
 }
 
 // ── TAB: Proyeccion ──────────────────────────────────────────────────
@@ -16895,6 +16987,16 @@ function _infTabJunta(){
     {nom:'GOP ejecutado', datos:D.rGop, color:CL.verde},
     {nom:'GOP presupuestado', datos:D.pGop.map(function(v){return v||0;}), color:CL.gris, tipo:'line'}
   ], 250);
+  var _cu=Number(D.mo.cuota)||0;
+  var _gopRack=D.MESES.map(function(p,i){
+    if(!D.hayRack[i]||!D.vta[i]) return 0;
+    return D.vta[i]-((D.C.tot.fijo[0]||0)+(D.C.tot.vpct[0]||0)*D.vta[i]);
+  });
+  var g9=_cu?_mklGrafico('Utilidad operativa contra la cuota del credito', L, [
+    {nom:'GOP sobre la venta registrada', datos:_gopRack, color:CL.verde},
+    {nom:'GOP presupuestado', datos:D.pGop.map(function(v){return v||0;}), color:CL.gris},
+    {nom:'Cuota mensual', datos:L.map(function(){return _cu;}), color:CL.rojo, tipo:'line'}
+  ], 250):'';
   var g3=_mklGrafico('Venta de alojamiento — sistema operativo contra presupuesto', L, [
     {nom:'Vendido (rack)', datos:D.vta, color:CL.naranja},
     {nom:'Presupuestado', datos:D.pAloj.map(function(v){return v||0;}), color:CL.gris}
@@ -16957,13 +17059,20 @@ function _infTabJunta(){
     + kpi('ADR','$'+f(adrEj),'RevPAR $'+f(revparEj),'#1A5C2E')
     +'</div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">'
-    + kpi('Ingresos presupuestados','$'+f(ingPr), mPr,'#6B7280')
-    + kpi('GOP presupuestado','$'+f(gopPr), (ingPr?Math.round(gopPr/ingPr*1000)/10:0)+'% de margen','#6B7280')
+    + kpi('Equilibrio con la cuota','$'+f((D.C.tot.eq_cuota||[])[0]||0), 'venta mensual que exige la deuda','#eb6834')
+    + (function(){
+        var cu=Number(D.mo.cuota)||0, fj=(D.C.tot.fijo||[])[0]||0, vp=(D.C.tot.vpct||[])[0]||0;
+        var ult=-1; Object.keys(D.hayRack).forEach(function(k){ var n=parseInt(k,10); if(D.hayRack[k]&&n>ult) ult=n; });
+        var vt=ult>=0?D.vta[ult]:0, co=fj+vp*vt, gp=vt-co, dc=cu?gp/cu:null;
+        return kpi('Cobertura del ultimo mes', (dc==null?'—':(Math.round(dc*100)/100)+'x'),
+          (ult>=0?_infMesLbl(D.MESES[ult]):'')+' · GOP $'+f(gp)+' sobre cuota $'+f(cu),
+          dc>=1.3?'#1A5C2E':(dc>=1?'#B8860B':'#C0392B'));
+      })()
     + kpi('Venta registrada en el SO','$'+f(vtaEj), mEj+' · incluye lo no contabilizado','#eb6834')
     + kpi('Diferencia contable vs SO','$'+f(ingEj-vtaEj), (vtaEj?((ingEj-vtaEj)>=0?'+':'')+Math.round((ingEj-vtaEj)/vtaEj*1000)/10+'%':'—'), Math.abs(ingEj-vtaEj)>vtaEj*0.05?'#C0392B':'#1A5C2E')
     +'</div>'
     +(faltanConta.length?'<div style="background:#FFF8E1;border:1px solid #E0C068;border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px">⚠️ La contabilidad cargada llega hasta <b>'+mConta+'</b>. Falta cargar <b>'+faltanConta.join(', ')+'</b>, de modo que en esos meses la barra azul de ingresos y de costos sale en cero. Lo vendido si aparece, en naranja, porque sale del rack. Se carga en <b>Modelo Financiero KL → Cargue contable</b>.</div>':'')
-    + g1 + g2 + g3 + g4 + g5 + g6 + g7 + g8
+    + g1 + g2 + g9 + g3 + g4 + g5 + g6 + g7 + g8
     + _infTablaOTB(D, hoy)
     +'<div class="card"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Estado de resultados — estructura del PYG</div>'
     +'<div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr>'
