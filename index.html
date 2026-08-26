@@ -482,7 +482,7 @@ const APP_VERSION = '2026-08-24-facturacion-contabilidad-v38';
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
   { fecha:'2026-08-26', version:'2026-08-26-modelo-informes-kl', titulo:'Modelo Financiero KL + Informes KL (Sol. Santiago)',
-    detalle:'Dos modulos nuevos, solo Kubik. (1) MODELO FINANCIERO KL: reemplaza el PYG en Excel de 8i8. Trae las 84 cuentas del plan con su regla de calculo, los supuestos mes a mes (tarifa, ocupacion, estadia, mix de canales) y la proyeccion a 12 meses. Funciona en dos modos: "Cifras del Excel", que muestra el PYG tal como esta pegado en el archivo (verificado: las 84 cuentas x 12 meses coinciden al peso), y "Calculado por drivers", que recalcula todo desde los supuestos. La pestaña Cuadre lista las 9 cuentas donde el archivo no obedece su propia regla. Incluye cargue mensual del Excel contable (hoja COSTO) con vista previa, normalizacion de signos y lote reversible, y el comparativo Real vs Proyectado por cuenta y mes. (2) INFORMES KL: vista de junta con indicadores y ocho graficas de ejecutado contra presupuestado, informe de ocupacion y ventas desde el rack (ocupacion, ADR, RevPAR, canal, tipo de apartamento) y un generador donde se escogen las secciones y el periodo. HALLAZGOS sobre el archivo de 8i8 que motivaron el modulo: el GOP del PYG estaba mal calculado (restaba la cuenta Valla en lugar de los costos operativos, sobreestimando el año 1 en 1.914.752.656); las celdas mensuales eran valores digitados y no formulas, de modo que el modelo no recalculaba; tres bases distintas se llamaban "% Ing"; y la linea de Upselling suma cero en el año (+160.000.000 en los tres primeros meses, -160.000.000 en los cuatro ultimos). Se cargaron los 1.052 movimientos contables de abril a julio de 2026. PERMISOS: Cristina Cerviño entra a los modulos financieros y confidenciales en los dos edificios (Sol. Santiago: "esta en todo, lo unico que no puede hacer es aprobar"); la aprobacion sigue restringida a Gerencia General.' },
+    detalle:'Dos modulos nuevos, solo Kubik. (1) MODELO FINANCIERO KL: reemplaza el PYG en Excel de 8i8. Trae las 84 cuentas del plan con su regla de calculo, los supuestos mes a mes (tarifa, ocupacion, estadia, mix de canales) y la proyeccion a 12 meses. Funciona en dos modos: "Cifras del Excel", que muestra el PYG tal como esta pegado en el archivo (verificado: las 84 cuentas x 12 meses coinciden al peso), y "Calculado por drivers", que recalcula desde los supuestos. La pestaña Cuadre lista las 9 cuentas donde el archivo no obedece su propia regla. Incluye cargue mensual del Excel contable (hoja COSTO) con vista previa, normalizacion de signos y lote reversible, y el comparativo Real vs Proyectado por cuenta y mes. (2) INFORMES KL: vista de junta con indicadores y ocho graficas de ejecutado contra presupuestado, informe de ocupacion y ventas desde el rack (ocupacion, ADR, RevPAR, canal, tipo de apartamento) y un generador donde se escogen las secciones y el periodo. Las graficas muestran la cifra sobre cada barra y, al tocar una columna, el detalle exacto del mes con la diferencia. HALLAZGOS sobre el archivo de 8i8 que motivaron el modulo: el GOP del PYG estaba mal calculado (restaba la cuenta Valla en lugar de los costos operativos, sobreestimando el año 1 en 1.914.752.656); las celdas mensuales eran valores digitados y no formulas, de modo que el modelo no recalculaba; tres bases distintas se llamaban "% Ing"; y la linea de Upselling suma cero en el año (+160.000.000 en los tres primeros meses, -160.000.000 en los cuatro ultimos). Se cargaron los 1.052 movimientos contables de abril a julio de 2026. PERMISOS: Cristina Cerviño entra a los modulos financieros y confidenciales en los dos edificios (Sol. Santiago: "esta en todo, lo unico que no puede hacer es aprobar"); la aprobacion sigue restringida a Gerencia General.' },
   { fecha:'2026-08-24', version:'2026-08-24-facturacion-contabilidad-v38', titulo:'El aviso de factura emitida en 8010 deja de llegarle a Talento Humano y pasa a Contabilidad (Sol. Santiago)',
     afecta:'aviso de factura emitida en 8010, directorio de 8010 y grupos de correo',
     detalle:'Sol. Santiago (24-ago-2026): pregunto por que le llegaban a Zareth Varela los avisos del correo de facturacion si ella no tiene ninguna relacion con facturacion. Al revisar, el aviso de "Nueva factura emitida" tenia un unico destino escrito a mano para 8010 y era el correo de Zareth, que es Direccion de Talento Humano — quedo puesto ahi cuando 8010 no tenia contadora definida y nunca se corrigio. En Kubik el mismo aviso si iba bien, al contador y a administracion financiera. Ahora en 8010 va a Adriana Bernal (Administracion) y a Nydia Pardo (Contadora). Se agrega ademas a Adriana y a Nydia al directorio de 8010, para poder dirigirles solicitudes y comentarios; se etiqueta a Zareth como Talento Humano para que no se vuelva a confundir su area; se crea el grupo de correo Contable en 8010, que antes solo existia en Kubik; y se agregan los departamentos contabilidad, sistemas y talento humano al directorio por area. Fernando Herrera queda registrado como Sistemas en los dos edificios. IMPORTANTE: el usuario de Nydia Pardo todavia no existe. El sistema exige que la cuenta de acceso se cree primero en Supabase (Authentication) y solo despues se le puede armar el perfil; mientras tanto el correo si recibe los avisos, pero ella no puede entrar al Sistema Operativo.' },
@@ -15876,6 +15876,8 @@ function _mklCalc(mo){
 
 // ── Graficas en SVG puro (sin librerias externas) ────────────────────
 window._MKL_COL={azul:'#2a78d6', naranja:'#eb6834', verde:'#1baf7a', gris:'#9AA3AD', rojo:'#C0392B'};
+window._MKL_CH = window._MKL_CH || {};
+window._MKL_CHN = window._MKL_CHN || 0;
 function _mklKm(n){
   n=Number(n)||0; var a=Math.abs(n);
   if(a>=1e9) return (n/1e9).toFixed(1).replace('.',',')+' MM';
@@ -15883,10 +15885,50 @@ function _mklKm(n){
   if(a>=1e3) return Math.round(n/1e3)+' k';
   return String(Math.round(n));
 }
+function _mklEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// Muestra el detalle del mes/categoria sobre el que se toca o se pasa el mouse.
+window._mklTip=function(id,i,ev){
+  var C=window._MKL_CH[id]; if(!C) return;
+  var box=document.getElementById('tip-'+id), wrap=document.getElementById('wrap-'+id);
+  if(!box||!wrap) return;
+  var f=function(n){ return Math.round(Number(n)||0).toLocaleString('es-CO'); };
+  var filas=C.series.map(function(s){
+    var v=Number(s.datos[i])||0;
+    return '<div style="display:flex;align-items:center;gap:7px;justify-content:space-between;gap:14px;white-space:nowrap">'
+      +'<span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:'+(s.tipo==='line'?'50%':'2px')+';background:'+s.color+';display:inline-block;flex:none"></span>'+_mklEsc(s.nom)+'</span>'
+      +'<b style="font-variant-numeric:tabular-nums">'+(C.pct?(Math.round(v*10)/10+'%'):f(v))+'</b></div>';
+  }).join('');
+  var extra='';
+  if(C.series.length===2 && !C.pct && (Number(C.series[0].datos[i])||0)!==0 && (Number(C.series[1].datos[i])||0)!==0){
+    var a=Number(C.series[0].datos[i])||0, b=Number(C.series[1].datos[i])||0, d=a-b;
+    var p=b?Math.round(a/b*1000)/10:null;
+    extra='<div style="border-top:1px solid #E6EAEF;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;gap:14px;white-space:nowrap">'
+      +'<span>Diferencia</span><b style="color:'+(d>=0?'#1A7D3C':'#C0392B')+';font-variant-numeric:tabular-nums">'+(d>0?'+':'')+f(d)+(p!=null?' · '+p+'%':'')+'</b></div>';
+  }
+  box.innerHTML='<div style="font-weight:700;margin-bottom:5px;font-size:12px">'+_mklEsc(C.labels[i])+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:3px;font-size:11.5px">'+filas+extra+'</div>';
+  box.style.display='block';
+  // posicionar dentro del contenedor
+  var wr=wrap.getBoundingClientRect();
+  var x=(ev&&ev.clientX!=null)?(ev.clientX-wr.left):(wr.width/2);
+  var bw=box.offsetWidth||190;
+  var left=Math.max(6,Math.min(x+14, wr.width-bw-6));
+  box.style.left=left+'px';
+  box.style.top=Math.max(6,((ev&&ev.clientY!=null)?(ev.clientY-wr.top-10):20))+'px';
+  var hl=document.getElementById('hl-'+id);
+  if(hl){ hl.setAttribute('x', C.px(i)); hl.setAttribute('width', C.paso); hl.style.display='block'; }
+};
+window._mklTipOff=function(id){
+  var b=document.getElementById('tip-'+id); if(b) b.style.display='none';
+  var h=document.getElementById('hl-'+id); if(h) h.style.display='none';
+};
+
 // series = [{nom, datos:[], color, tipo:'bar'|'line'}]
-function _mklGrafico(titulo, labels, series, alto){
-  alto=alto||230;
-  var W=Math.max(560, labels.length*74), H=alto, PL=64, PR=14, PT=20, PB=34;
+function _mklGrafico(titulo, labels, series, alto, opts){
+  opts=opts||{}; alto=alto||230;
+  var id='g'+(++window._MKL_CHN);
+  var W=Math.max(560, labels.length*(opts.ancho||78)), H=alto, PL=64, PR=14, PT=26, PB=34;
   var iw=W-PL-PR, ih=H-PT-PB;
   var vals=[]; series.forEach(function(s){ s.datos.forEach(function(v){ vals.push(Number(v)||0); }); });
   var mx=Math.max.apply(null,vals.concat([0])), mn=Math.min.apply(null,vals.concat([0]));
@@ -15896,33 +15938,60 @@ function _mklGrafico(titulo, labels, series, alto){
   var n=labels.length, paso=iw/n;
   var bars=series.filter(function(s){return s.tipo!=='line';});
   var bw=Math.max(6,(paso*0.62)/Math.max(1,bars.length));
+  var fmt=opts.pct?function(v){return (Math.round(v*10)/10)+'%';}:_mklKm;
   var g='';
-  // grilla
+  // franja resaltada del mes activo
+  g+='<rect id="hl-'+id+'" x="0" y="'+PT+'" width="0" height="'+ih+'" fill="#1D3461" opacity="0.07" style="display:none;pointer-events:none"/>';
   for(var i=0;i<=4;i++){
     var vv=mn+rango*i/4, yy=y(vv);
     g+='<line x1="'+PL+'" y1="'+yy.toFixed(1)+'" x2="'+(W-PR)+'" y2="'+yy.toFixed(1)+'" stroke="#E6EAEF" stroke-width="1"/>'
-     + '<text x="'+(PL-7)+'" y="'+(yy+3.5).toFixed(1)+'" text-anchor="end" font-size="9.5" fill="#8A93A0">'+_mklKm(vv)+'</text>';
+     + '<text x="'+(PL-7)+'" y="'+(yy+3.5).toFixed(1)+'" text-anchor="end" font-size="9.5" fill="#8A93A0">'+fmt(vv)+'</text>';
   }
   if(mn<0){ g+='<line x1="'+PL+'" y1="'+y(0).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+y(0).toFixed(1)+'" stroke="#B0B6BD" stroke-width="1.2"/>'; }
-  // barras
+  // tamaño de la etiqueta segun cuanto espacio hay por barra
+  var fsz = bw>=30?9.5 : (bw>=22?8.6 : (bw>=16?7.8 : 7));
+  var verEtq = (opts.etiquetas!==false) && (bw>=13);
   bars.forEach(function(s,si){
     s.datos.forEach(function(v,i){
       var cx=PL+paso*i+paso/2, x0=cx-(bars.length*bw)/2+si*bw;
       var yv=y(v), y0=y(0), top=Math.min(yv,y0), h=Math.max(1,Math.abs(yv-y0));
-      g+='<rect x="'+x0.toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+(bw-2).toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2" fill="'+s.color+'"><title>'+s.nom+' · '+labels[i]+': '+_mklNum(v)+'</title></rect>';
+      g+='<rect x="'+x0.toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+(bw-2).toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2" fill="'+s.color+'" style="pointer-events:none"/>';
+      if(verEtq && Math.abs(Number(v)||0)>0.0001){
+        var ty=(yv<=y0)?(top-4):(top+h+fsz+1);
+        if(ty<PT+8) ty=PT+8;
+        g+='<text x="'+(x0+(bw-2)/2).toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="middle" font-size="'+fsz+'" font-weight="600" fill="'+s.color+'" style="pointer-events:none">'+fmt(v)+'</text>';
+      }
     });
   });
-  // lineas
   series.filter(function(s){return s.tipo==='line';}).forEach(function(s){
     var pts=s.datos.map(function(v,i){ return (PL+paso*i+paso/2).toFixed(1)+','+y(v).toFixed(1); }).join(' ');
-    g+='<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="2.4" stroke-linejoin="round"/>';
-    s.datos.forEach(function(v,i){ g+='<circle cx="'+(PL+paso*i+paso/2).toFixed(1)+'" cy="'+y(v).toFixed(1)+'" r="3.2" fill="#fff" stroke="'+s.color+'" stroke-width="2"><title>'+s.nom+' · '+labels[i]+': '+_mklNum(v)+'</title></circle>'; });
+    g+='<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="2.4" stroke-linejoin="round" style="pointer-events:none"/>';
+    s.datos.forEach(function(v,i){
+      var cx=PL+paso*i+paso/2, cy=y(v);
+      g+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="3.2" fill="#fff" stroke="'+s.color+'" stroke-width="2" style="pointer-events:none"/>';
+      if(verEtq && Math.abs(Number(v)||0)>0.0001){
+        var ly=Math.max(PT+8, cy-7);
+        g+='<text x="'+cx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="middle" font-size="'+fsz+'" font-weight="700" fill="'+s.color+'" style="pointer-events:none;paint-order:stroke" stroke="#fff" stroke-width="2.6">'+fmt(v)+'</text>';
+      }
+    });
   });
-  labels.forEach(function(l,i){ g+='<text x="'+(PL+paso*i+paso/2).toFixed(1)+'" y="'+(H-12)+'" text-anchor="middle" font-size="10" fill="#5A6472">'+l+'</text>'; });
-  var leg=series.map(function(s){ return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:11.5px;color:#4A5568"><span style="width:11px;height:11px;border-radius:'+(s.tipo==='line'?'50%':'2px')+';background:'+s.color+';display:inline-block"></span>'+s.nom+'</span>'; }).join('');
-  return '<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:4px">'+titulo+'</div>'
-    +'<div style="margin-bottom:8px">'+leg+'</div>'
-    +'<div style="overflow-x:auto"><svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" style="max-width:100%;height:auto;min-width:'+Math.min(W,560)+'px" role="img">'+g+'</svg></div></div>';
+  labels.forEach(function(l,i){ g+='<text x="'+(PL+paso*i+paso/2).toFixed(1)+'" y="'+(H-12)+'" text-anchor="middle" font-size="10" fill="#5A6472" style="pointer-events:none">'+_mklEsc(l)+'</text>'; });
+  // zonas sensibles: una por columna, cubren todo el alto
+  labels.forEach(function(l,i){
+    var x0=PL+paso*i;
+    g+='<rect x="'+x0.toFixed(1)+'" y="'+PT+'" width="'+paso.toFixed(1)+'" height="'+ih+'" fill="transparent" style="cursor:pointer"'
+      +' onmousemove="window._mklTip(\''+id+'\','+i+',event)"'
+      +' onmouseleave="window._mklTipOff(\''+id+'\')"'
+      +' onclick="window._mklTip(\''+id+'\','+i+',event)"></rect>';
+  });
+  window._MKL_CH[id]={labels:labels, series:series, pct:!!opts.pct, paso:paso, px:function(i){ return PL+paso*i; }};
+  var leg=series.map(function(s){ return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:11.5px;color:#4A5568"><span style="width:11px;height:11px;border-radius:'+(s.tipo==='line'?'50%':'2px')+';background:'+s.color+';display:inline-block"></span>'+_mklEsc(s.nom)+'</span>'; }).join('');
+  return '<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:4px">'+_mklEsc(titulo)+'</div>'
+    +'<div style="margin-bottom:8px">'+leg+'<span style="font-size:11px;color:#8A93A0">· toca una columna para ver el detalle</span></div>'
+    +'<div id="wrap-'+id+'" style="position:relative;overflow-x:auto">'
+    +'<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" style="max-width:100%;height:auto;min-width:'+Math.min(W,560)+'px" role="img">'+g+'</svg>'
+    +'<div id="tip-'+id+'" style="display:none;position:absolute;z-index:20;background:#fff;border:1px solid #C9D2DC;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.16);padding:9px 11px;pointer-events:none;min-width:170px;color:#16202E"></div>'
+    +'</div></div>';
 }
 
 // ── Carga / guardado ─────────────────────────────────────────────────
@@ -16231,8 +16300,8 @@ function _mklTabSupuestos(mo){
         return _mklGrafico('Tarifa promedio y noches vendidas', lb, [
                  {nom:'Noches vendidas', datos:C.drv.map(function(x){return x.noches;}), color:CL.gris},
                  {nom:'Tarifa promedio (COP)', datos:C.drv.map(function(x){return x.tarifa;}), color:CL.azul, tipo:'line'}])
-             + _mklGrafico('Ocupacion proyectada (%)', lb, [
-                 {nom:'Ocupacion %', datos:C.drv.map(function(x){return Math.round(x.ocup*1000)/10;}), color:CL.verde}]);
+             + _mklGrafico('Ocupacion proyectada', lb, [
+                 {nom:'Ocupacion', datos:C.drv.map(function(x){return Math.round(x.ocup*1000)/10;}), color:CL.verde}], 220, {pct:true});
       })()
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'
     + filas
@@ -16809,10 +16878,10 @@ function _infTabJunta(){
     {nom:'Vendido (rack)', datos:D.vta, color:CL.naranja},
     {nom:'Presupuestado', datos:D.pAloj.map(function(v){return v||0;}), color:CL.gris}
   ], 250);
-  var g4=_mklGrafico('Ocupacion % — real contra presupuesto', L, [
+  var g4=_mklGrafico('Ocupacion — real contra presupuesto', L, [
     {nom:'Ocupacion real', datos:D.ocupPct, color:CL.azul},
     {nom:'Ocupacion presupuestada', datos:D.pOcup.map(function(v){return v||0;}), color:CL.gris, tipo:'line'}
-  ], 220);
+  ], 230, {pct:true});
   var g5=_mklGrafico('Tarifa promedio (ADR) y RevPAR', L, [
     {nom:'ADR real', datos:D.adr, color:CL.azul},
     {nom:'RevPAR real', datos:D.revpar, color:CL.verde},
@@ -16902,9 +16971,9 @@ function _infTabOcup(){
     +'<td style="text-align:right;font-weight:700">'+f(x[1])+'</td><td style="text-align:right">'+(totT?Math.round(x[1]/totT*1000)/10:0)+'%</td></tr>'; }).join('');
   document.getElementById('main-content').innerHTML=
     _infHead('Ocupacion y ventas · fuente: rack del sistema operativo')
-    + _mklGrafico('Ocupacion mensual (%)', L, [
+    + _mklGrafico('Ocupacion mensual', L, [
         {nom:'Real', datos:D.ocupPct, color:CL.azul},
-        {nom:'Presupuestada', datos:D.pOcup.map(function(v){return v||0;}), color:CL.gris, tipo:'line'}], 230)
+        {nom:'Presupuestada', datos:D.pOcup.map(function(v){return v||0;}), color:CL.gris, tipo:'line'}], 240, {pct:true})
     + _mklGrafico('Venta de alojamiento', L, [
         {nom:'Vendido', datos:D.vta, color:CL.naranja},
         {nom:'Presupuestado', datos:D.pAloj.map(function(v){return v||0;}), color:CL.gris}], 230)
@@ -16960,7 +17029,7 @@ window._infGenerar=function(){
   if(S.ing) out+=_mklGrafico('Ingresos — ejecutado vs presupuestado', L, [{nom:'Ejecutado',datos:D.rIng,color:CL.azul},{nom:'Presupuestado',datos:D.pIng.map(function(v){return v||0;}),color:CL.gris}],240);
   if(S.gop) out+=_mklGrafico('Utilidad operativa (GOP)', L, [{nom:'Ejecutado',datos:D.rGop,color:CL.verde},{nom:'Presupuestado',datos:D.pGop.map(function(v){return v||0;}),color:CL.gris,tipo:'line'}],240);
   if(S.aloj)out+=_mklGrafico('Venta de alojamiento', L, [{nom:'Vendido (rack)',datos:D.vta,color:CL.naranja},{nom:'Presupuestado',datos:D.pAloj.map(function(v){return v||0;}),color:CL.gris}],240);
-  if(S.ocup)out+=_mklGrafico('Ocupacion (%)', L, [{nom:'Real',datos:D.ocupPct,color:CL.azul},{nom:'Presupuestada',datos:D.pOcup.map(function(v){return v||0;}),color:CL.gris,tipo:'line'}],220);
+  if(S.ocup)out+=_mklGrafico('Ocupacion', L, [{nom:'Real',datos:D.ocupPct,color:CL.azul},{nom:'Presupuestada',datos:D.pOcup.map(function(v){return v||0;}),color:CL.gris,tipo:'line'}],230,{pct:true});
   if(S.adr) out+=_mklGrafico('ADR y RevPAR', L, [{nom:'ADR',datos:D.adr,color:CL.azul},{nom:'RevPAR',datos:D.revpar,color:CL.verde}],220);
   if(S.cos){
     var gn=[],gv=[];
