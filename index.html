@@ -482,7 +482,7 @@ const APP_VERSION = '2026-08-24-facturacion-contabilidad-v38';
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
   { fecha:'2026-08-26', version:'2026-08-26-modelo-informes-kl', titulo:'Modelo Financiero KL + Informes KL (Sol. Santiago)',
-    detalle:'Dos modulos nuevos, solo Kubik. (1) MODELO FINANCIERO KL: reemplaza el PYG en Excel de 8i8. Trae las 84 cuentas del plan con su regla de calculo, los supuestos mes a mes (tarifa, ocupacion, estadia, mix de canales) y la proyeccion a 12 meses. Dos modos: "Cifras del Excel", que muestra el PYG tal como esta pegado en el archivo (verificado: las 84 cuentas x 12 meses coinciden al peso), y "Calculado por drivers", que recalcula desde los supuestos. La pestaña Cuadre lista las 9 cuentas donde el archivo no obedece su propia regla. Incluye cargue mensual del Excel contable (hoja COSTO) con vista previa, normalizacion de signos y lote reversible, y el comparativo Real vs Proyectado por cuenta y mes. (2) INFORMES KL: vista de junta con indicadores y ocho graficas de ejecutado contra presupuestado, informe de ocupacion y ventas desde el rack (ocupacion, ADR, RevPAR, canal, tipo de apartamento) y un generador donde se escogen las secciones y el periodo. Las graficas llevan la cifra escrita sobre cada barra y, al tocar una columna, muestran el detalle exacto del mes con la diferencia. CRITERIOS DE OCUPACION: noche ocupada = estado Ocupado, Check-in hoy o Sale de viaje. "Check-out hoy" es el dia de salida y no cuenta. "Completo" marca una unidad reformada o unida a otra, no una noche vendida, y se excluye (se avisa cuantas hay). El tipo de apartamento se deduce del codigo de la unidad, porque el campo tipo viene vacio en el 98% del rack. HALLAZGOS sobre el archivo de 8i8 que motivaron el modulo: el GOP del PYG estaba mal calculado (restaba la cuenta Valla en lugar de los costos operativos, sobreestimando el año 1 en 1.914.752.656); las celdas mensuales eran valores digitados y no formulas, de modo que el modelo no recalculaba; tres bases distintas se llamaban "% Ing"; y la linea de Upselling suma cero en el año (+160.000.000 en los tres primeros meses, -160.000.000 en los cuatro ultimos). Se cargaron los 1.052 movimientos contables de abril a julio de 2026. PERMISOS: Cristina Cerviño entra a los modulos financieros y confidenciales en los dos edificios (Sol. Santiago: "esta en todo, lo unico que no puede hacer es aprobar"); la aprobacion sigue restringida a Gerencia General.' },
+    detalle:'Dos modulos nuevos, solo Kubik. (1) MODELO FINANCIERO KL: reemplaza el PYG en Excel de 8i8. Trae las 84 cuentas del plan con su regla de calculo, los supuestos mes a mes (tarifa, ocupacion, estadia, mix de canales) y la proyeccion a 12 meses. Dos modos: "Cifras del Excel", que muestra el PYG tal como esta pegado en el archivo (verificado: las 84 cuentas x 12 meses coinciden al peso), y "Calculado por drivers", que recalcula desde los supuestos. La pestaña Cuadre lista las 9 cuentas donde el archivo no obedece su propia regla. Incluye cargue mensual del Excel contable (hoja COSTO) con vista previa, normalizacion de signos y lote reversible, y el comparativo Real vs Proyectado por cuenta y mes. (2) INFORMES KL: vista de junta con indicadores y graficas de contabilizado, reservas en libros y presupuesto; tabla de reservas en libros contra presupuesto con el faltante por vender mes a mes; informe de ocupacion y ventas desde el rack (ocupacion, ADR, RevPAR, canal, tipo de apartamento) y un generador donde se escogen las secciones y el periodo. Las graficas llevan la cifra escrita sobre cada barra y, al tocar una columna, muestran el detalle exacto del mes con la diferencia. Se avisa hasta que mes llega la contabilidad cargada, para que no se lea como cero lo que solo falta por contabilizar. CRITERIOS DE OCUPACION: noche ocupada = estado Ocupado, Check-in hoy o Sale de viaje. "Check-out hoy" es el dia de salida y no cuenta. "Completo" marca una unidad reformada o unida a otra, no una noche vendida, y se excluye (se avisa cuantas hay). El tipo de apartamento se deduce del codigo de la unidad, porque el campo tipo viene vacio en el 98% del rack. HALLAZGOS sobre el archivo de 8i8 que motivaron el modulo: el GOP del PYG estaba mal calculado (restaba la cuenta Valla en lugar de los costos operativos, sobreestimando el año 1 en 1.914.752.656); las celdas mensuales eran valores digitados y no formulas, de modo que el modelo no recalculaba; tres bases distintas se llamaban "% Ing"; y la linea de Upselling suma cero en el año (+160.000.000 en los tres primeros meses, -160.000.000 en los cuatro ultimos). Se cargaron los 1.052 movimientos contables de abril a julio de 2026. PERMISOS: Cristina Cervino entra a los modulos financieros y confidenciales en los dos edificios (Sol. Santiago: "esta en todo, lo unico que no puede hacer es aprobar"); la aprobacion sigue restringida a Gerencia General.' },
   { fecha:'2026-08-24', version:'2026-08-24-facturacion-contabilidad-v38', titulo:'El aviso de factura emitida en 8010 deja de llegarle a Talento Humano y pasa a Contabilidad (Sol. Santiago)',
     afecta:'aviso de factura emitida en 8010, directorio de 8010 y grupos de correo',
     detalle:'Sol. Santiago (24-ago-2026): pregunto por que le llegaban a Zareth Varela los avisos del correo de facturacion si ella no tiene ninguna relacion con facturacion. Al revisar, el aviso de "Nueva factura emitida" tenia un unico destino escrito a mano para 8010 y era el correo de Zareth, que es Direccion de Talento Humano — quedo puesto ahi cuando 8010 no tenia contadora definida y nunca se corrigio. En Kubik el mismo aviso si iba bien, al contador y a administracion financiera. Ahora en 8010 va a Adriana Bernal (Administracion) y a Nydia Pardo (Contadora). Se agrega ademas a Adriana y a Nydia al directorio de 8010, para poder dirigirles solicitudes y comentarios; se etiqueta a Zareth como Talento Humano para que no se vuelva a confundir su area; se crea el grupo de correo Contable en 8010, que antes solo existia en Kubik; y se agregan los departamentos contabilidad, sistemas y talento humano al directorio por area. Fernando Herrera queda registrado como Sistemas en los dos edificios. IMPORTANTE: el usuario de Nydia Pardo todavia no existe. El sistema exige que la cuenta de acceso se cree primero en Supabase (Authentication) y solo despues se le puede armar el perfil; mientras tanto el correo si recibe los avisos, pero ella no puede entrar al Sistema Operativo.' },
@@ -16886,10 +16886,11 @@ function _infTabJunta(){
     +(sub?'<div style="font-size:11px;color:var(--gris-t);margin-top:2px">'+sub+'</div>':'')+'</div>'; };
 
   // series mixtas: real donde hay, presupuesto donde hay
-  var g1=_mklGrafico('Ingresos — ejecutado contra presupuestado', L, [
-    {nom:'Ejecutado (contabilidad)', datos:D.rIng, color:CL.azul},
+  var g1=_mklGrafico('Ingresos — contabilidad, reservas en libros y presupuesto', L, [
+    {nom:'Contabilizado', datos:D.rIng, color:CL.azul},
+    {nom:'En libros (rack)', datos:D.vta, color:CL.naranja},
     {nom:'Presupuestado', datos:D.pIng.map(function(v){return v||0;}), color:CL.gris}
-  ], 250);
+  ], 260);
   var g2=_mklGrafico('Utilidad operativa (GOP)', L, [
     {nom:'GOP ejecutado', datos:D.rGop, color:CL.verde},
     {nom:'GOP presupuestado', datos:D.pGop.map(function(v){return v||0;}), color:CL.gris, tipo:'line'}
@@ -16940,13 +16941,17 @@ function _infTabJunta(){
     +'<tr style="background:#f0e6e6;font-weight:800"><td style="text-align:left">COSTOS OPERATIVOS</td><td style="text-align:right">'+f(cosEj)+'</td><td style="text-align:right">'+f(pvCos)+'</td></tr>'
     +'<tr style="background:#eefbf2;font-weight:800"><td style="text-align:left">UTILIDAD OPERATIVA (GOP)</td><td style="text-align:right">'+f(gopEj)+'</td><td style="text-align:right">'+f(pvIng-pvCos)+'</td></tr>';
 
+  // hasta donde llega la contabilidad cargada (no siempre alcanza al mes en curso)
+  var ultConta=-1; Object.keys(D.hayConta).forEach(function(k){ var n=parseInt(k,10); if(D.hayConta[k]&&n>ultConta) ultConta=n; });
+  var mConta = ultConta>=0 ? _infMesLbl(D.MESES[ultConta]) : 'sin cargar';
+  var faltanConta = D.MESES.filter(function(p,i){ return i>ultConta && p<=hoy; }).map(_infMesLbl);
   var mEj=ejec.length?(_infMesLbl(D.MESES[ejec[0]])+' a '+_infMesLbl(D.MESES[ejec[ejec.length-1]])):'—';
   var mPr=proy.length?(_infMesLbl(D.MESES[proy[0]])+' a '+_infMesLbl(D.MESES[proy[proy.length-1]])):'—';
 
   document.getElementById('main-content').innerHTML=
     _infHead('Vista de junta · Ejecutado '+mEj+' · Presupuestado '+mPr)
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-    + kpi('Ingresos ejecutados','$'+f(ingEj), mEj,'var(--azul)')
+    + kpi('Ingresos contabilizados','$'+f(ingEj), 'hasta '+mConta,'var(--azul)')
     + kpi('GOP ejecutado','$'+f(gopEj), (ingEj?Math.round(gopEj/ingEj*1000)/10:0)+'% de margen', gopEj>=0?'#1A5C2E':'#C0392B')
     + kpi('Ocupacion promedio', ocupEj+'%', nocEj+' noches vendidas','var(--azul)')
     + kpi('ADR','$'+f(adrEj),'RevPAR $'+f(revparEj),'#1A5C2E')
@@ -16954,10 +16959,12 @@ function _infTabJunta(){
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">'
     + kpi('Ingresos presupuestados','$'+f(ingPr), mPr,'#6B7280')
     + kpi('GOP presupuestado','$'+f(gopPr), (ingPr?Math.round(gopPr/ingPr*1000)/10:0)+'% de margen','#6B7280')
-    + kpi('Venta registrada en el SO','$'+f(vtaEj), mEj,'#eb6834')
+    + kpi('Venta registrada en el SO','$'+f(vtaEj), mEj+' · incluye lo no contabilizado','#eb6834')
     + kpi('Diferencia contable vs SO','$'+f(ingEj-vtaEj), (vtaEj?((ingEj-vtaEj)>=0?'+':'')+Math.round((ingEj-vtaEj)/vtaEj*1000)/10+'%':'—'), Math.abs(ingEj-vtaEj)>vtaEj*0.05?'#C0392B':'#1A5C2E')
     +'</div>'
+    +(faltanConta.length?'<div style="background:#FFF8E1;border:1px solid #E0C068;border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px">⚠️ La contabilidad cargada llega hasta <b>'+mConta+'</b>. Falta cargar <b>'+faltanConta.join(', ')+'</b>, de modo que en esos meses la barra azul de ingresos y de costos sale en cero. Lo vendido si aparece, en naranja, porque sale del rack. Se carga en <b>Modelo Financiero KL → Cargue contable</b>.</div>':'')
     + g1 + g2 + g3 + g4 + g5 + g6 + g7 + g8
+    + _infTablaOTB(D, hoy)
     +'<div class="card"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Estado de resultados — estructura del PYG</div>'
     +'<div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr>'
     +'<th style="text-align:left;min-width:280px">Concepto</th><th style="text-align:right;min-width:140px">Ejecutado<br><span style="font-weight:400;font-size:10px">'+mEj+'</span></th>'
@@ -17079,6 +17086,40 @@ window._infGenerar=function(){
   }
   document.getElementById('inf-out').innerHTML=out||'<div class="card"><p>No seleccionaste ninguna seccion.</p></div>';
 };
+
+// ── Reservas en libros (OTB) contra presupuesto ──────────────────────
+// Para los meses que aun no cierran, lo que existe no es "real" sino lo que ya
+// esta reservado. Compararlo contra el presupuesto muestra cuanto falta por vender.
+function _infTablaOTB(D, hoy){
+  var f=_mklNum, filas='', tp=0, tl=0, hay=false;
+  D.MESES.forEach(function(p,i){
+    var pv=D.pAloj[i]; if(pv==null) return;
+    var lv=D.vta[i]||0;
+    if(pv<=0 && lv<=0) return;
+    hay=true; tp+=pv; tl+=lv;
+    var c=pv?Math.round(lv/pv*100):null;
+    var col = c==null?'#6B7280' : (c>=100?'#1A7D3C':(c>=60?'#B8860B':'#C0392B'));
+    var cerrado = p < hoy;
+    filas+='<tr><td style="text-align:left;font-weight:600">'+_infMesLbl(p)+(cerrado?'':' <span style="font-size:10px;color:#6B7280;font-weight:400">en curso / futuro</span>')+'</td>'
+      +'<td style="text-align:right">'+f(pv)+'</td>'
+      +'<td style="text-align:right;font-weight:700">'+f(lv)+'</td>'
+      +'<td style="text-align:right;font-weight:700;color:'+col+'">'+(c==null?'—':c+'%')+'</td>'
+      +'<td style="text-align:right;color:'+(lv>=pv?'#1A7D3C':'#C0392B')+'">'+(lv-pv>0?'+':'')+f(lv-pv)+'</td>'
+      +'<td style="text-align:right">'+(D.ocupPct[i]||0)+'% <span style="color:#6B7280;font-size:11px">vs '+(D.pOcup[i]==null?'—':D.pOcup[i]+'%')+'</span></td></tr>';
+  });
+  if(!hay) return '';
+  var ct=tp?Math.round(tl/tp*100):0;
+  filas+='<tr style="background:#eef3fb;font-weight:800"><td style="text-align:left">TOTAL</td>'
+    +'<td style="text-align:right">'+f(tp)+'</td><td style="text-align:right">'+f(tl)+'</td>'
+    +'<td style="text-align:right;color:'+(ct>=100?'#1A7D3C':(ct>=60?'#B8860B':'#C0392B'))+'">'+ct+'%</td>'
+    +'<td style="text-align:right;color:'+(tl>=tp?'#1A7D3C':'#C0392B')+'">'+(tl-tp>0?'+':'')+f(tl-tp)+'</td><td></td></tr>';
+  return '<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:6px">Reservas en libros contra presupuesto</div>'
+    +'<p style="font-size:12px;color:var(--gris-t);margin:0 0 10px">Alojamiento. Para los meses que aun no cierran, la columna "En libros" es lo ya reservado a hoy, no una proyeccion: lo que falta para llegar al presupuesto es lo que hay que vender.</p>'
+    +'<div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr>'
+    +'<th style="text-align:left;min-width:170px">Mes</th><th style="text-align:right;min-width:130px">Presupuesto</th>'
+    +'<th style="text-align:right;min-width:130px">En libros</th><th style="text-align:right;min-width:80px">Cumpl.</th>'
+    +'<th style="text-align:right;min-width:130px">Faltante</th><th style="text-align:right;min-width:150px">Ocupacion</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
+}
 
 // ═══════════════════════════════════════════════════════════
 // ═══ MÓDULO FINANCIERO — Estado de Resultados editable (gemelo del Excel) ═══
