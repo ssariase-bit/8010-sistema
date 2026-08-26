@@ -16198,7 +16198,7 @@ function _mklTabEquilibrio(mo){
     +'<label>Ajuste al costo fijo mensual<br>'+gInp('ajuste_fijo',Number(mo.ajuste_fijo)||0)+'</label>'
     +'<div style="font-size:12px;color:var(--gris-t);max-width:44ch;line-height:1.6">El ajuste suma al costo fijo lo que la operacion esta gastando por encima del presupuesto. Sirve para ver el umbral con la planta real y no con la presupuestada.</div>'
     +'</div>'
-    +'<p style="font-size:11px;color:var(--gris-t);margin:10px 0 0">El PYG termina en GOP: no incluye management fee, comision fiduciaria, predial, ICA, seguros ni dotacion de activos. Si alguno se activa, la cobertura baja.</p></div>';
+    +'<p style="font-size:11px;color:var(--gris-t);margin:10px 0 0">El PYG del operador <b>cierra en GOP</b>: management fee, comision fiduciaria, predial, ICA, seguros y dotacion de activos son del propietario y no entran aqui. La cuota del credito se atiende con el GOP que entrega la operacion.</p></div>';
 
   var th='<th style="text-align:left;min-width:90px">Mes</th>'
     +['Ingresos','Costo fijo','Costo variable','% variable','Costos','GOP','Equilibrio operativo','Equilibrio con cuota','Cobertura']
