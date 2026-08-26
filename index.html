@@ -16043,7 +16043,18 @@ window._mklGuardar=function(){
     }catch(e){ showToast('No se pudo guardar: '+e.message,'error'); }
   },600);
 };
-function _mklEditable(){ return !!(currentProfile && (currentProfile.rol==='gerente_general')); }
+// Quien puede editar el financiero de Kubik: Gerencia General siempre, mas la lista
+// blanca de KL (Sol. Santiago 26-ago-2026: Angelica Olaya arma y mantiene el modelo).
+// Aprobar reembolsos sigue siendo exclusivo de Gerencia General.
+window._WL_EDITA_FIN_KL = ['aolaya@kubiklab.com','contador@8i8op.com','admin.fin@8i8op.com'];
+function _mklEditable(){
+  try{
+    if(currentProfile && currentProfile.rol==='gerente_general') return true;
+    if(typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO!=='kubik') return false;
+    var em=(typeof window._miEmail==='function')?window._miEmail():'';
+    return window._WL_EDITA_FIN_KL.map(function(x){return x.toLowerCase();}).indexOf(em)>-1;
+  }catch(e){ return false; }
+}
 
 // ── Setters ──────────────────────────────────────────────────────────
 window._mklSetSup=function(k,m,val){ var mo=window._mklModelo; mo.sup[k]=mo.sup[k]||new Array(12).fill(0); mo.sup[k][m]=val; window._mklGuardar(); renderModeloKL(); };
@@ -17319,7 +17330,7 @@ function _klSerie(map,def){
 async function renderFinanzasKL(){ var st=window._finKLState; st.tab=st.tab||'pyg'; if(st.tab==='flujo') return _klFlujo(); if(st.tab==='check') return _klCheck(); if(st.tab==='cruce') return _klCruce(); return _klPYG(); }
 async function _klPYG(){
   var mc=document.getElementById('main-content');
-  var editable=(currentProfile&&currentProfile.rol==='gerente_general');
+  var editable=(typeof _mklEditable==='function') ? _mklEditable() : (currentProfile&&currentProfile.rol==='gerente_general');
   var st=window._finKLState;
   mc.innerHTML='<div class="page-title">💰 Financiero KL — PYG</div><p style="color:var(--gris-t)">Cargando…</p>';
   var q=await window._sbFromRaw('finanzas_pyg').select('*').eq('edificio','kubik').eq('entidad','8I8').eq('anio',st.anio);
@@ -17409,7 +17420,7 @@ async function _klPYG(){
   });
   mc.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💰 Financiero KL — PYG '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+_klTabBar(st)+anioSel+vSel+'</div></div>'
-    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">8i8 Operadora SAS · NIT 902026873-8 · <b>Preoperación ejecutada abr–jul 2026</b> (cuadrada con el PYG preoperativo: ingresos $585.750.056, costos $549.683.377, GOP +$36.066.679). <b>La operación arranca en agosto de 2026</b>; de ahí en adelante la columna Proyección trae el PYG operativo. Edita cualquier celda en Real o Proyección y se guarda solo; los subtotales y el NOI se calculan solos. Valores en pesos.'+(editable?'':' <b>(solo lectura — edición: Gerencia General)</b>')+'</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">8i8 Operadora SAS · NIT 902026873-8 · <b>Preoperación ejecutada abr–jul 2026</b> (cuadrada con el PYG preoperativo: ingresos $585.750.056, costos $549.683.377, GOP +$36.066.679). <b>La operación arranca en agosto de 2026</b>; de ahí en adelante la columna Proyección trae el PYG operativo. Edita cualquier celda en Real o Proyección y se guarda solo; los subtotales y el NOI se calculan solos. Valores en pesos.'+(editable?'':' <b>(solo lectura — edición: Gerencia General y el equipo financiero de KL)</b>')+'</div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
     + kpi('Ingresos — '+KL_MC[mi], ingR[mi], ingP[mi],'var(--azul)')
     + kpi('Resultado — '+KL_MC[mi], resR[mi], resP[mi],'#1A5C2E')
@@ -17479,7 +17490,7 @@ async function finKLFlujoSet(inp){
 }
 async function _klFlujo(){
   var mc=document.getElementById('main-content');
-  var editable=(currentProfile&&currentProfile.rol==='gerente_general');
+  var editable=(typeof _mklEditable==='function') ? _mklEditable() : (currentProfile&&currentProfile.rol==='gerente_general');
   var st=window._finKLState;
   mc.innerHTML='<div class="page-title">💰 Financiero KL — Flujo de Caja</div><p style="color:var(--gris-t)">Cargando…</p>';
   var q=await window._sbFromRaw('finanzas_pyg').select('*').eq('edificio','kubik').eq('entidad','FLUJO').eq('anio',st.anio);
@@ -17529,14 +17540,14 @@ async function _klFlujo(){
   });
   mc.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💰 Financiero KL — Flujo de Caja '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+_klTabBar(st)+anioSel+vSel+'</div></div>'
-    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">8i8 Operadora SAS · Banco de Occidente. Recaudos, pagos y aportes son inputs; el flujo del mes, la caja acumulada, la diferencia de conciliación y la posición neta se calculan solos. El <b>saldo de extracto</b> y las <b>CxP</b> (del aging) se digitan. Diferencia en verde = conciliado. Valores en pesos.'+(editable?'':' <b>(solo lectura — edición: Gerencia General)</b>')+'</div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">8i8 Operadora SAS · Banco de Occidente. Recaudos, pagos y aportes son inputs; el flujo del mes, la caja acumulada, la diferencia de conciliación y la posición neta se calculan solos. El <b>saldo de extracto</b> y las <b>CxP</b> (del aging) se digitan. Diferencia en verde = conciliado. Valores en pesos.'+(editable?'':' <b>(solo lectura — edición: Gerencia General y el equipo financiero de KL)</b>')+'</div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
     +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Caja inicial = caja final del mes anterior. Posición neta = caja disponible + CxC − CxP. Columna Año: para saldos (caja, extracto, CxP, posición) muestra el último mes con datos; para flujos, la suma del año.</p></div>';
 }
 
 async function _klCheck(){
   var mc=document.getElementById('main-content');
-  var editable=(currentProfile&&currentProfile.rol==='gerente_general');
+  var editable=(typeof _mklEditable==='function') ? _mklEditable() : (currentProfile&&currentProfile.rol==='gerente_general');
   var st=window._finKLState;
   mc.innerHTML='<div class="page-title">💰 Financiero KL — Check</div><p style="color:var(--gris-t)">Cargando…</p>';
   var q=await window._sbFromRaw('finanzas_pyg').select('*').eq('edificio','kubik').eq('anio',st.anio);
