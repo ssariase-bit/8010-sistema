@@ -17382,7 +17382,10 @@ async function _klPYG(){
   var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:230px;z-index:2">Cuenta</th>'
     +KL_MC.map(function(m){ return '<th style="text-align:right;min-width:84px'+((st.vista==='var'&&!_comparable(m))?';opacity:.55':(_serieBase[m]?'':';opacity:.5'))+'">'+m+'</th>'; }).join('')
     +'<th style="text-align:right;min-width:126px;background:#16284a">'+_tituloTot+'<br><span style="font-weight:400;font-size:9.5px;opacity:.85">'+_subTot+'</span></th>'
+    +'<th style="text-align:right;min-width:70px;background:#16284a">%</th>'
     +'<th style="text-align:right;min-width:100px;background:#16284a">Total Año</th>';
+  var _baseIng=0;
+  for(var _q=0;_q<12;_q++){ if(st.vista==='var'? _comparable(_q) : _serieBase[_q]) _baseIng+=(st.vista==='ppto'?ingP:ingR)[_q]; }
   var body='';
   KL_LINEAS.forEach(function(def){
     var isSub=def.k==='sub';
@@ -17421,26 +17424,45 @@ async function _klPYG(){
     if(st.vista==='var'){ var _g=(def.grp==='COS'||def.grp==='NOP'||def.grp==='DEU')?(acum<=0):(acum>=0); _colAc=';color:'+(acum===0?'#9aa':(_g?'#1A7D3C':'#C0392B')); }
     body+='<tr style="'+rowStyle+'">'+nameCell+cells
       +'<td style="text-align:right;font-weight:800;background:'+(isSub?'#dfe8f5':'#eaf1fa')+_colAc+'">'+_klNum(acum)+'</td>'
+      +'<td style="text-align:right;font-weight:700;background:#eef3fb;color:var(--gris-t)">'+(_baseIng?(Math.round(acum/_baseIng*1000)/10)+'%':'')+'</td>'
       +'<td style="text-align:right;font-weight:700;background:'+(isSub?'#eaf0ea':'#f3f6fb')+'">'+_klNum(totMostrar)+'</td></tr>';
   });
   mc.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💰 Financiero KL — PYG '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+_klTabBar(st)+anioSel+vSel+'</div></div>'
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">8i8 Operadora SAS · NIT 902026873-8 · <b>Preoperación ejecutada abr–jul 2026</b> (cuadrada con el PYG preoperativo: ingresos $585.750.056, costos $549.683.377, GOP +$36.066.679). <b>La operación arranca en agosto de 2026</b>; de ahí en adelante la columna Proyección trae el PYG operativo. Edita cualquier celda en Real o Proyección y se guarda solo; los subtotales y el NOI se calculan solos. Valores en pesos.'+(editable?'':' <b>(solo lectura — edición: Gerencia General y el equipo financiero de KL)</b>')+'</div>'
-    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
-    + kpi('Ingresos — '+KL_MC[mi], ingR[mi], ingP[mi],'var(--azul)')
-    + kpi('Resultado — '+KL_MC[mi], resR[mi], resP[mi],'#1A5C2E')
-    + kpi('Ingresos ene–'+KL_MC[mi], sum(ingR,hoyM), sum(ingP,hoyM),'var(--azul)')
-    + kpi('Resultado ene–'+KL_MC[mi], sum(resR,hoyM), sum(resP,hoyM),'#1A5C2E')
     + (function(){
-        if(_ultPpto<0) return '';
-        var _i0=-1; for(var _q=0;_q<12;_q++){ if(_mesP[_q]){ _i0=_q; break; } }
-        var _si=0,_sr=0; for(var _q=_i0;_q<=_ultPpto;_q++){ _si+=ingP[_q]; _sr+=resP[_q]; }
-        return '<div style="flex:1;min-width:180px;background:#fff;border:1px dashed var(--gris-b);border-radius:12px;padding:14px">'
-          +'<div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">Presupuesto '+KL_MC[_i0]+'–'+KL_MC[_ultPpto]+'</div>'
-          +'<div style="font-size:19px;font-weight:800;color:#6B7280;white-space:nowrap">'+f$(_si)+'</div>'
-          +'<div style="font-size:11px;color:var(--gris-t)">Resultado proyectado '+f$(_sr)+'</div></div>';
+        var _b=_serieBase, _i1=-1,_i2=-1;
+        for(var _q=0;_q<12;_q++){ if(_b[_q]){ if(_i1<0)_i1=_q; _i2=_q; } }
+        var _ing=0,_cos=0;
+        for(var _q=0;_q<12;_q++){ if(!_b[_q]) continue; _ing+=(st.vista==='ppto'?ingP:ingR)[_q]; }
+        var _cosArr=_klSum(st.vista==='ppto'?mapP:mapR, KL_COS.concat(KL_NOP,KL_DEU));
+        for(var _q=0;_q<12;_q++){ if(_b[_q]) _cos+=_cosArr[_q]; }
+        var _res=_ing-_cos;
+        var _pct=function(v){ return _ing? (Math.round(v/_ing*1000)/10)+'% de los ingresos' : '—'; };
+        var _rango = (_i1<0)?'—':(KL_MC[_i1]+' a '+KL_MC[_i2]+' de '+st.anio);
+        var _preop = (_i2>=0 && st.anio===2026 && _i2<=6 && st.vista!=='ppto');
+        var _etapa = st.vista==='ppto' ? 'PRESUPUESTO OPERATIVO'
+                   : (st.vista==='var' ? 'VARIACIÓN — REAL CONTRA PRESUPUESTO'
+                   : (_preop ? 'EJECUTADO PREOPERACIÓN' : 'EJECUTADO OPERACIÓN'));
+        var _bandaCol = st.vista==='ppto' ? '#5A6472' : (_preop ? '#6E9B3E' : '#1D3461');
+        var _lblCos = _preop ? 'COSTOS PREOPERATIVOS' : 'COSTOS OPERATIVOS';
+        var _tile=function(t,v,sub,col,extra){
+          return '<div style="flex:1;min-width:200px;background:#fff;border:1px solid var(--gris-b);border-top:3px solid '+_bandaCol+';border-radius:0 0 10px 10px;padding:15px 18px">'
+            +'<div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:5px">'+t+'</div>'
+            +'<div style="font-size:26px;font-weight:800;color:'+(col||'var(--azul)')+';white-space:nowrap;letter-spacing:-.5px">'+f$(v)+'</div>'
+            +'<div style="font-size:11.5px;color:var(--gris-t);margin-top:3px">'+sub+'</div>'
+            +(extra?'<div style="font-size:11.5px;color:var(--gris-t);margin-top:2px">'+extra+'</div>':'')+'</div>';
+        };
+        var _mesIng=(st.vista==='ppto'?ingP:ingR)[mi], _mesCos=_cosArr[mi], _mesRes=_mesIng-_mesCos;
+        return '<div style="background:'+_bandaCol+';color:#fff;border-radius:10px 10px 0 0;padding:10px 18px;margin-bottom:0">'
+          +'<div style="font-size:13px;font-weight:800;letter-spacing:.5px">'+_etapa+'</div>'
+          +'<div style="font-size:11.5px;opacity:.9">'+_rango+'</div></div>'
+          +'<div style="display:flex;gap:1px;flex-wrap:wrap;margin-bottom:16px;background:var(--gris-b);border-radius:0 0 10px 10px;overflow:hidden">'
+          + _tile('Ingresos acumulados', _ing, _pct(_ing), 'var(--azul)', 'En '+KL_MC[mi]+': '+f$(_mesIng))
+          + _tile(_lblCos, _cos, _pct(_cos), '#C0392B', 'En '+KL_MC[mi]+': '+f$(_mesCos))
+          + _tile('Utilidad operativa (GOP)', _res, _pct(_res), _res>=0?'#1A5C2E':'#C0392B', 'En '+KL_MC[mi]+': '+f$(_mesRes))
+          +'</div>';
       })()
-    +'</div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
     +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px"><b>Total ejecutado / presupuestado</b> = suma de los meses que tienen dato en la vista elegida (el rango va en el encabezado). <b>Total Año</b> = los doce meses. Columna naranja = último mes con dato. En <b>Variación</b> los meses marcados con — no se comparan: o no están contabilizados todavía, o no tienen presupuesto (la preoperación no lo tiene), y no entran a ningún total. Variación = Real − Proyección (verde a favor). Este módulo es exclusivo de KL (8i8): no contiene datos de 8010/LTM3.</p></div>';
 }
