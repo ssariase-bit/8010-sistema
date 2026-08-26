@@ -17332,16 +17332,24 @@ async function _klPYG(){
   var ingR=_klSum(mapR,KL_ING), ingP=_klSum(mapP,KL_ING);
   var resR=_klSerie(mapR,{k:'sub',calc:'net'}), resP=_klSerie(mapP,{k:'sub',calc:'net'});
   var sum=function(a,n){ var s=0; for(var i=0;i<n;i++)s+=a[i]; return s; };
-  var _ultReal=-1, _ultPpto=-1;
+  // Fix (Sol. Santiago, 26-ago-2026). Dos cosas:
+  //  a) el KPI del mes se anclaba al mes del calendario y salia en $0 cuando ese mes
+  //     todavia no estaba contabilizado. Ahora usa el ultimo mes con movimiento real.
+  //  b) la vista de Variacion restaba el presupuesto completo de los meses sin contabilizar
+  //     y los mostraba como incumplimiento. Ahora solo compara donde hay real Y presupuesto.
+  var _mesR=[], _mesP=[], _ultReal=-1, _ultPpto=-1;
+  var _TODAS=KL_ING.concat(KL_COS,KL_NOP,KL_DEU);
   for(var _k=0;_k<12;_k++){
     var _hayR=false,_hayP=false;
-    KL_ING.concat(KL_COS,KL_NOP,KL_DEU).forEach(function(c){
+    _TODAS.forEach(function(c){
       if(mapR[c]&&Math.abs(mapR[c][_k])>0.5) _hayR=true;
       if(mapP[c]&&Math.abs(mapP[c][_k])>0.5) _hayP=true;
     });
+    _mesR.push(_hayR); _mesP.push(_hayP);
     if(_hayR) _ultReal=_k;
     if(_hayP) _ultPpto=_k;
   }
+  var _comparable=function(m){ return _mesR[m] && _mesP[m]; };
   var mi = (_ultReal>=0?_ultReal : (_ultPpto>=0?_ultPpto : Math.min(hoyM,12)-1));
   hoyM = mi+1;
   var pcol=function(p){ return p>=100?'#1A7D3C':(p>=80?'#B8860B':'#C0392B'); };
@@ -17350,8 +17358,8 @@ async function _klPYG(){
   var vistas=[['real','Real'],['ppto','Proyección'],['var','Variación']];
   var vSel='<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden">'+vistas.map(function(v){ return '<button onclick="window._finKLState.vista=\''+v[0]+'\';renderFinanzasKL()" style="border:none;padding:7px 12px;font-size:12px;cursor:pointer;background:'+(v[0]===st.vista?'var(--azul)':'#fff')+';color:'+(v[0]===st.vista?'#fff':'var(--azul)')+'">'+v[1]+'</button>'; }).join('')+'</div>';
   var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:230px;z-index:2">Cuenta</th>'
-    +KL_MC.map(function(m){ return '<th style="text-align:right;min-width:84px">'+m+'</th>'; }).join('')
-    +'<th style="text-align:right;min-width:112px;background:#16284a">Acumulado<br><span style="font-weight:400;font-size:9.5px;opacity:.85">ene–'+KL_MC[mi]+'</span></th>'
+    +KL_MC.map(function(m){ return '<th style="text-align:right;min-width:84px'+((st.vista==='var'&&!_comparable(m))?';opacity:.55':'')+'">'+m+'</th>'; }).join('')
+    +'<th style="text-align:right;min-width:112px;background:#16284a">Acumulado<br><span style="font-weight:400;font-size:9.5px;opacity:.85">'+(st.vista==='var'?'meses comparables':('ene–'+KL_MC[mi]))+'</span></th>'
     +'<th style="text-align:right;min-width:100px;background:#16284a">Total Año</th>';
   var body='';
   KL_LINEAS.forEach(function(def){
@@ -17369,6 +17377,11 @@ async function _klPYG(){
     for(var m=0;m<12;m++){
       if(isSub||st.vista==='var'||!editable){
         var v=serie[m]; var col='';
+        if(st.vista==='var' && !_comparable(m)){
+          var _por = _mesP[m] ? 'sin contabilizar' : 'sin presupuesto';
+          cells+='<td style="text-align:right;font-size:11px;color:#b0b6bd" title="'+_por+'">—</td>';
+          continue;
+        }
         if(st.vista==='var'){ var good=(def.grp==='COS'||def.grp==='NOP'||def.grp==='DEU')?(v<=0):(v>=0); col=';color:'+(v===0?'#9aa':(good?'#1A7D3C':'#C0392B')); }
         cells+='<td style="text-align:right;font-size:11px'+col+((m+1===hoyM)?';background:#fff7e6':'')+'">'+((v===0&&!isSub)?'·':_klNum(v))+'</td>';
       } else {
@@ -17376,12 +17389,18 @@ async function _klPYG(){
         cells+='<td style="padding:1px"><input type="text" value="'+(raw?_klNum(raw):'')+'" data-c="'+encodeURIComponent(def.c)+'" data-t="'+st.vista+'" data-m="'+(m+1)+'" onchange="finKLSet(this)" style="width:80px;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:11px;text-align:right'+((m+1===hoyM)?';background:#fff7e6':'')+'"></td>';
       }
     }
-    var acum=0; for(var _a=0;_a<hoyM&&_a<12;_a++) acum+=serie[_a];
+    var acum=0, totMostrar=0;
+    for(var _a=0;_a<12;_a++){
+      if(st.vista==='var' && !_comparable(_a)) continue;
+      totMostrar+=serie[_a];
+      if(_a<hoyM) acum+=serie[_a];
+    }
+    if(st.vista==='var') acum=totMostrar;
     var _colAc='';
     if(st.vista==='var'){ var _g=(def.grp==='COS'||def.grp==='NOP'||def.grp==='DEU')?(acum<=0):(acum>=0); _colAc=';color:'+(acum===0?'#9aa':(_g?'#1A7D3C':'#C0392B')); }
     body+='<tr style="'+rowStyle+'">'+nameCell+cells
       +'<td style="text-align:right;font-weight:800;background:'+(isSub?'#dfe8f5':'#eaf1fa')+_colAc+'">'+_klNum(acum)+'</td>'
-      +'<td style="text-align:right;font-weight:700;background:'+(isSub?'#eaf0ea':'#f3f6fb')+'">'+_klNum(totA)+'</td></tr>';
+      +'<td style="text-align:right;font-weight:700;background:'+(isSub?'#eaf0ea':'#f3f6fb')+'">'+_klNum(totMostrar)+'</td></tr>';
   });
   mc.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">💰 Financiero KL — PYG '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+_klTabBar(st)+anioSel+vSel+'</div></div>'
@@ -17393,7 +17412,7 @@ async function _klPYG(){
     + kpi('Resultado ene–'+KL_MC[mi], sum(resR,hoyM), sum(resP,hoyM),'#1A5C2E')
     +'</div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
-    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px"><b>Acumulado</b> = suma de enero al ultimo mes con movimiento. <b>Total Año</b> = los doce meses. Columna naranja = ultimo mes con dato. Variación = Real − Proyección (verde a favor). Este módulo es exclusivo de KL (8i8): no contiene datos de 8010/LTM3.</p></div>';
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px"><b>Acumulado</b> = suma de enero al último mes con movimiento. <b>Total Año</b> = los doce meses. Columna naranja = último mes con dato. En <b>Variación</b> los meses marcados con — no se comparan: o no están contabilizados todavía, o no tienen presupuesto (la preoperación no lo tiene), y no entran a ningún total. Variación = Real − Proyección (verde a favor). Este módulo es exclusivo de KL (8i8): no contiene datos de 8010/LTM3.</p></div>';
 }
 async function finKLSet(inp){
   var cuenta=decodeURIComponent(inp.getAttribute('data-c')), tipo=inp.getAttribute('data-t'), m=inp.getAttribute('data-m');
