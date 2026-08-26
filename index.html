@@ -1639,6 +1639,7 @@ const MENU_COMPLETO = [
     ...(EDIFICIO_ACTIVO==='kubik' ? [
       { id: 'financiero-kl', icon: '💰', label: 'Financiero KL' },
       { id: 'modelo-kl', icon: '🧮', label: 'Modelo Financiero KL' },
+      { id: 'informes-kl', icon: '📑', label: 'Informes KL' },
     ] : []),
   { id: 'indicadores', icon: '📊', label: 'Indicadores Ocup./Ventas' },
   { id: 'detalle-ventas', icon: '📈', label: 'Detalle de Ventas' },
@@ -1720,7 +1721,7 @@ window._puedeComprasFin8010 = function(){
 // protegido por _puedeConfidencial() al ABRIRLO (mostraba "Módulo confidencial"), pero el ítem del
 // menú nunca se agregó a esta lista — por eso seguía apareciendo en el sidebar de quien no tiene acceso,
 // y al entrar chocaba con el candado. Se agrega aquí para que ni siquiera se muestre en el menú.
-window._ITEMS_CONFID = ['modelo-kl','ingresos','resumen-ventas','ventas-ppto','finanzas','financiero-kl','nomina','indicadores','ventas-linea','personal-list','fact-devengado'];
+window._ITEMS_CONFID = ['modelo-kl','informes-kl','ingresos','resumen-ventas','ventas-ppto','finanzas','financiero-kl','nomina','indicadores','ventas-linea','personal-list','fact-devengado'];
 // Fix (Sol. Sebastián, hallazgo c51f7cf6): "Retirar estos módulos ya que no son de nuestro uso" — el
 // equipo de Administración (rol administrador) no gestiona Cartera/CxP/Proveedores/Flujo de Caja. La
 // lista ya existía (Sol. Sebastián 23-jul-2026) pero le faltaban 4 ítems agregados al menú después:
@@ -1734,7 +1735,7 @@ window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma','avisos-push'];
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
 // Sol Santiago: procesos que son ÚNICAMENTE de Kubik. En 8010 no existen y no deben aparecer:
 // entrega de llaves/accesos, inventario de loza, check list de turnos y revistas nocturnas.
-window._ITEMS_SOLO_KUBIK = ['modelo-kl','revistas-list','loza-list','entrega-llaves','checklist-turnos','financiero-kl','carta-bagatelle-list','atelier-list'];
+window._ITEMS_SOLO_KUBIK = ['modelo-kl','informes-kl','revistas-list','loza-list','entrega-llaves','checklist-turnos','financiero-kl','carta-bagatelle-list','atelier-list'];
 window._itemPermitido = function(it){
   var _rol = currentProfile && currentProfile.rol;
   if(it.roles && it.roles.indexOf(_rol)<0) return false;
@@ -3106,6 +3107,7 @@ window.renderFlujoSemanal=async function(){
     case 'finanzas': await renderFinanzas(); break;
     case 'financiero-kl': await renderFinanzasKL(); break;
     case 'modelo-kl': await renderModeloKL(); break;
+    case 'informes-kl': await renderInformesKL(); break;
     case 'indicadores': await renderIndicadores(); break;
     case 'detalle-ventas': await renderDetalleVentas(); break;
     case 'ventas-linea': await renderVentasLinea(); break;
@@ -15745,7 +15747,8 @@ window._MKL_BASES = [
   ['ing_aloj','Ing. Alojamiento'],['ing_hab','Ingresos Habitaciones'],
   ['ing_hab_su','Ing. Habitaciones sin Upselling'],['ing_ab','Ingresos A&B'],
   ['ing_op','Ingresos Operacionales'],['ing_nop','Ingresos No Operacionales'],
-  ['total_ing','Total Ingresos']
+  ['total_ing','Total Ingresos'],
+  ['base_ex_a','Base Excel (ing. op. - upselling + ajuste)']
 ];
 window._MKL_DRIVERS = [
   ['aloj','Tarifa x Ocupacion x Unidades x Dias'],
@@ -15756,6 +15759,7 @@ window._MKL_DRIVERS = [
   ['x_kg','Valor x Kg x entradas'],
   ['x_pax','Valor x pax'],
   ['comision','Comision por canal (mix x %)'],
+  ['serie','Serie mensual (valor por mes)'],
   ['manual','Manual (se digita mes a mes)']
 ];
 window._MKL_MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -15768,12 +15772,13 @@ function _mklDefault(){
     sup.mix_otas.push(0.4048); sup.mix_directo.push(0.5952); sup.mix_corp.push(0); sup.mix_agen.push(0);
   }
   return {
-    inicio:'2026-08', unidades:42, dias:30,
+    inicio:'2026-08', unidades:42, dias:30, modo:'base', ajuste_base:15000000,
     com:{otas:0.015, directo:0.05, corp:0, agen:0},
     kg_lavado:2, pct_pax:0.8,
     sup:sup,
     lineas: JSON.parse(JSON.stringify(window._MKL_SEED)),
     ov:{},          // overrides  "cod|m" -> valor
+    base:{},        // serie base del Excel  cod -> [12]
     manual:{},      // valores de lineas driver=manual  "cod|m" -> valor
     notas:{}
   };
@@ -15790,7 +15795,7 @@ function _mklP(s){ var x=String(s==null?'':s).replace(/[^0-9.,-]/g,'').replace(/
 function _mklCalc(mo){
   var L=mo.lineas||[], R={}, meses=_mklMesesLbl(mo), drv=[];
   L.forEach(function(l){ R[l.cod]=new Array(12).fill(0); });
-  var sub={}, tot={ing_aloj:[],ing_hab:[],ing_hab_su:[],ing_ab:[],ing_op:[],ing_nop:[],total_ing:[],costos:[],gop:[]};
+  var sub={}, tot={ing_aloj:[],ing_hab:[],ing_hab_su:[],ing_ab:[],ing_op:[],ing_nop:[],total_ing:[],base_ex_a:[],costos:[],gop:[]};
   window._MKL_GRUPOS.forEach(function(G){ sub[G.g]=new Array(12).fill(0); });
   var porGrp={}; window._MKL_GRUPOS.forEach(function(G){ porGrp[G.g]=L.filter(function(l){return l.grp===G.g;}); });
 
@@ -15809,10 +15814,17 @@ function _mklCalc(mo){
       if(b.indexOf('l:')===0){ var c=b.slice(2); return R[c]?R[c][m]:0; }
       return ctx[b]||0;
     };
+    var serieBase=function(l){
+      var b=mo.base&&mo.base[l.cod];
+      return (b&&b[m]!=null)?Number(b[m]):null;
+    };
     var calcLinea=function(l){
       var o=ov(l); if(o!=null) return o;
+      // Modo "base": se muestra la serie del Excel tal cual, sin recalcular.
+      if(mo.modo!=='driver'){ var sb=serieBase(l); if(sb!=null) return sb; }
       var v=Number(l.v)||0, fx=Number(l.fx)||0;
       switch(l.dr){
+        case 'serie': var s2=serieBase(l); return (s2!=null?s2:man(l))+fx;
         case 'aloj':       return tarifa*noches;
         case 'fijo':       return v+fx;
         case 'fijo_anual': return v/12+fx;
@@ -15842,6 +15854,7 @@ function _mklCalc(mo){
     porGrp.ING_NOP.forEach(function(l){ R[l.cod][m]=calcLinea(l); });
     ctx.ing_nop = porGrp.ING_NOP.reduce(function(s,l){return s+R[l.cod][m];},0);
     ctx.total_ing = ctx.ing_op + ctx.ing_nop;
+    ctx.base_ex_a = ctx.ing_op - (R['4138']?R['4138'][m]:0) + (Number(mo.ajuste_base)||0);
     // paso 5 — costos
     var costos=0;
     window._MKL_GRUPOS.forEach(function(G){
@@ -15851,7 +15864,7 @@ function _mklCalc(mo){
       costos+=sub[G.g][m];
     });
     sub.ING_HAB[m]=ctx.ing_hab; sub.ING_AB[m]=ctx.ing_ab; sub.ING_NOP[m]=ctx.ing_nop;
-    ['ing_aloj','ing_hab','ing_hab_su','ing_ab','ing_op','ing_nop','total_ing'].forEach(function(k){ tot[k][m]=ctx[k]; });
+    ['ing_aloj','ing_hab','ing_hab_su','ing_ab','ing_op','ing_nop','total_ing','base_ex_a'].forEach(function(k){ tot[k][m]=ctx[k]; });
     tot.costos[m]=costos;
     tot.gop[m]=ctx.total_ing-costos;   // ← corregido respecto del Excel
     drv.push({noches:noches, entradas:entradas, pax:pax, tarifa:tarifa, ocup:ocup});
@@ -15942,6 +15955,7 @@ function _mklEditable(){ return !!(currentProfile && (currentProfile.rol==='gere
 
 // ── Setters ──────────────────────────────────────────────────────────
 window._mklSetSup=function(k,m,val){ var mo=window._mklModelo; mo.sup[k]=mo.sup[k]||new Array(12).fill(0); mo.sup[k][m]=val; window._mklGuardar(); renderModeloKL(); };
+window._mklModo=function(v){ window._mklModelo.modo=v; window._mklGuardar(); renderModeloKL(); };
 window._mklSetGlobal=function(k,val){ var mo=window._mklModelo; if(k.indexOf('com.')===0) mo.com[k.slice(4)]=val; else mo[k]=val; window._mklGuardar(); renderModeloKL(); };
 window._mklSetLinea=function(cod,campo,val){
   var mo=window._mklModelo, l=mo.lineas.filter(function(x){return x.cod===cod;})[0]; if(!l) return;
@@ -15994,12 +16008,13 @@ async function renderModeloKL(){
   if(st.tab==='sup')    return _mklTabSupuestos(mo);
   if(st.tab==='plan')   return _mklTabPlan(mo);
   if(st.tab==='real')   return _mklTabReal(mo);
+  if(st.tab==='cuadre')  return _mklTabCuadre(mo);
   if(st.tab==='cargue') return _mklTabCargue(mo);
   return _mklTabProy(mo);
 }
 function _mklBar(){
   var st=window._mklState;
-  var tabs=[['proy','Proyeccion'],['sup','Supuestos'],['plan','Plan y Drivers'],['real','Real vs Proy'],['cargue','Cargue contable']];
+  var tabs=[['proy','Proyeccion'],['sup','Supuestos'],['plan','Plan y Drivers'],['real','Real vs Proy'],['cuadre','Cuadre'],['cargue','Cargue contable']];
   return '<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden;flex-wrap:wrap">'
     +tabs.map(function(t){ return '<button onclick="window._mklState.tab=\''+t[0]+'\';renderModeloKL()" style="border:none;padding:7px 13px;font-size:12px;cursor:pointer;font-weight:700;background:'+(t[0]===st.tab?'#1D3461':'#fff')+';color:'+(t[0]===st.tab?'#fff':'#1D3461')+'">'+t[1]+'</button>'; }).join('')
     +'</div>';
@@ -16009,7 +16024,56 @@ function _mklHead(sub){
     +'<div class="page-title" style="margin-bottom:0">🧮 Modelo Financiero KL</div>'
     +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+_mklBar()
     +'<span id="mkl-saved" style="font-size:11px;color:#1A7D3C"></span></div></div>'
+    +_mklModoBar()
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">8i8 Operadora SAS · '+sub+'</div>';
+}
+
+function _mklModoBar(){
+  var mo=window._mklModelo||{}, esB=(mo.modo!=='driver');
+  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:'+(esB?'#EAF2FB':'#FFF8E1')+';border:1px solid '+(esB?'#9EC5F0':'#E0C068')+';border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px">'
+    +'<b>Modo:</b>'
+    +'<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:7px;overflow:hidden;background:#fff">'
+    +'<button onclick="window._mklModo(\'base\')" style="border:none;padding:5px 12px;font-size:11.5px;font-weight:700;cursor:pointer;background:'+(esB?'#1D3461':'#fff')+';color:'+(esB?'#fff':'#1D3461')+'">Cifras del Excel</button>'
+    +'<button onclick="window._mklModo(\'driver\')" style="border:none;padding:5px 12px;font-size:11.5px;font-weight:700;cursor:pointer;background:'+(!esB?'#1D3461':'#fff')+';color:'+(!esB?'#fff':'#1D3461')+'">Calculado por drivers</button>'
+    +'</div>'
+    +'<span style="color:var(--gris-t)">'+(esB
+      ? 'Se muestran las cifras del PYG tal como estan en el archivo. Las 84 cuentas x 12 meses coinciden al peso.'
+      : 'Se recalcula todo desde los supuestos y los drivers. Las diferencias contra el archivo estan en la pestaña <b>Cuadre</b>.')+'</span></div>';
+}
+
+// ── TAB: Cuadre (base del Excel vs lo que dictan los drivers) ────────
+function _mklTabCuadre(mo){
+  var m2=JSON.parse(JSON.stringify(mo));
+  m2.modo='base';  var B=_mklCalc(m2);
+  m2.modo='driver';var D=_mklCalc(m2);
+  var f=_mklNum, filas=[], totB=0, totD=0;
+  mo.lineas.forEach(function(l){
+    if(l.dr==='serie'||l.dr==='manual') return;
+    var sb=0,sd=0;
+    for(var m=0;m<12;m++){ sb+=(B.R[l.cod]||[])[m]||0; sd+=(D.R[l.cod]||[])[m]||0; }
+    totB+=sb; totD+=sd;
+    if(Math.abs(sd-sb)>1) filas.push({l:l,b:sb,d:sd});
+  });
+  filas.sort(function(a,b){ return Math.abs(b.d-b.b)-Math.abs(a.d-a.b); });
+  var sinDr=mo.lineas.filter(function(l){ return l.dr==='serie'||l.dr==='manual'; }).length;
+  var body=filas.map(function(x){
+    var dif=x.d-x.b;
+    return '<tr><td style="text-align:left;font-size:12px"><span style="color:#8a93a0;font-size:10px">'+x.l.cod+'</span> '+x.l.nom+'</td>'
+      +'<td style="text-align:left;font-size:11px;color:#6B7280">'+_mklDrvLbl(x.l)+'</td>'
+      +'<td class="n" style="text-align:right">'+f(x.b)+'</td>'
+      +'<td class="n" style="text-align:right">'+f(x.d)+'</td>'
+      +'<td style="text-align:right;font-weight:700;color:'+(dif>0?'#C0392B':'#1A7D3C')+'">'+(dif>0?'+':'')+f(dif)+'</td></tr>';
+  }).join('');
+  document.getElementById('main-content').innerHTML=
+    _mklHead('Donde el archivo del PYG se aparta de la regla que el mismo declara.')
+    +'<div class="card" style="margin-bottom:14px"><p style="font-size:13px;margin:0">De las <b>'+mo.lineas.length+'</b> cuentas del plan, <b>'+(mo.lineas.length-sinDr)+'</b> tienen una regla de calculo declarada y <b>'+sinDr+'</b> vienen como serie mensual digitada (nomina, honorarios, servicios y el ajuste de upselling).</p>'
+    +'<p style="font-size:13px;margin:8px 0 0">De las que tienen regla, <b>'+filas.length+'</b> no reproducen su propio driver. Diferencia neta del año: <b style="color:'+((totD-totB)>0?'#C0392B':'#1A7D3C')+'">'+((totD-totB)>0?'+':'')+f(totD-totB)+'</b>.</p></div>'
+    +(filas.length?'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px"><thead><tr>'
+      +'<th style="text-align:left;min-width:280px">Cuenta</th><th style="text-align:left;min-width:200px">Regla declarada</th>'
+      +'<th style="text-align:right;min-width:120px">Cifra del Excel</th><th style="text-align:right;min-width:120px">Segun el driver</th><th style="text-align:right;min-width:120px">Diferencia</th>'
+      +'</tr></thead><tbody>'+body+'</tbody></table></div>'
+      +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Totales del año 1. Diferencia positiva = el driver arroja mas que el archivo. Si una linea deberia seguir su regla, hay que corregir el archivo; si el archivo esta bien, hay que corregir la regla en <b>Plan y Drivers</b>.</p></div>'
+      :'<div class="card"><p>Todas las cuentas con regla reproducen su driver.</p></div>');
 }
 
 // ── TAB: Proyeccion ──────────────────────────────────────────────────
@@ -16574,6 +16638,354 @@ window._mklConfirmarCargue=async function(){
     put('Terminado con '+err+' error(es). '+ok+' cargados.','#C0392B');
     btn.disabled=false; btn.textContent='Reintentar';
   }
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// ═══ INFORMES KL — vista de junta (grafica) + ocupacion y ventas ═══════
+// ═══════════════════════════════════════════════════════════════════════
+window._infState = window._infState || { tab:'junta', desde:'2026-04', hasta:'2027-07' };
+window._INF_UNID = 42;
+
+function _infMesLbl(per){ var p=String(per).split('-'); return window._MKL_MESES[(parseInt(p[1],10)||1)-1]+'-'+String(p[0]).slice(2); }
+function _infRango(d,h){
+  var out=[], p=d.split('-'), y=+p[0], m=+p[1]-1, q=h.split('-'), ey=+q[0], em=+q[1]-1;
+  var guard=0;
+  while((y<ey||(y===ey&&m<=em)) && guard++<80){ out.push(y+'-'+('0'+(m+1)).slice(-2)); m++; if(m>11){m=0;y++;} }
+  return out;
+}
+function _infDiasMes(per){ var p=per.split('-'); return new Date(+p[0], +p[1], 0).getDate(); }
+
+async function _infCargarRack(desde,hasta){
+  var d=desde+'-01', h=hasta+'-'+_infDiasMes(hasta);
+  var todas=[], off=0;
+  for(var i=0;i<20;i++){
+    var q=await window._sbFromRaw('rack')
+      .select('fecha,apto,tarifa,estado,huesped,canal,empresa,tipo_venta,tipo')
+      .eq('edificio','kubik').gte('fecha',d).lte('fecha',h)
+      .order('fecha').range(off,off+999);
+    if(q.error) return {error:q.error};
+    todas=todas.concat(q.data||[]);
+    if(!q.data || q.data.length<1000) break;
+    off+=1000;
+  }
+  return {data:todas};
+}
+function _infCanal(r){
+  var c=String(r.canal||'').toLowerCase(), e=String(r.empresa||'').trim(), tv=String(r.tipo_venta||'').toLowerCase();
+  if(/booking|expedia|airbnb|despegar|ota|hotelbeds|agoda/.test(c)) return 'OTAs';
+  if(/corporat|empresa/.test(c)||/corporat/.test(tv)) return 'Corporativo';
+  if(/agencia|operador/.test(c)) return 'Agencias';
+  if(/walk|directo|mostrador/.test(c)) return 'Directo';
+  return e ? 'Corporativo' : 'Directo';
+}
+function _infOcupado(r){
+  var e=String(r.estado||'').toLowerCase();
+  if(!e) return false;
+  return !/libre|bloquead|mantenimi|limpiez|sucio|no show/.test(e);
+}
+
+async function renderInformesKL(){
+  if(typeof EDIFICIO_ACTIVO!=='undefined' && EDIFICIO_ACTIVO!=='kubik'){
+    document.getElementById('main-content').innerHTML='<div class="page-title">📑 Informes KL</div><div class="card" style="max-width:620px"><p>Modulo exclusivo de Kubik Living.</p></div>';
+    return;
+  }
+  var st=window._infState; st.tab=st.tab||'junta';
+  var mc=document.getElementById('main-content');
+  mc.innerHTML='<div class="page-title">📑 Informes KL</div><div class="card"><p style="color:var(--gris-t)">Cargando datos…</p></div>';
+  var mo=await _mklCargar();
+  var MESES=_infRango(st.desde, st.hasta);
+  var idx={}; MESES.forEach(function(p,i){ idx[p]=i; });
+  var N=MESES.length;
+
+  // ── presupuesto (modelo) reindexado ──
+  var C=_mklCalc(mo), pIdx={}; C.meses.forEach(function(m,i){ pIdx[m.per]=i; });
+  var pSerie=function(arr){ return MESES.map(function(p){ var j=pIdx[p]; return j==null?null:arr[j]; }); };
+  var pIng=pSerie(C.tot.total_ing), pCos=pSerie(C.tot.costos), pGop=pSerie(C.tot.gop), pAloj=pSerie(C.tot.ing_aloj);
+  var pOcup=MESES.map(function(p){ var j=pIdx[p]; return j==null?null:Math.round((C.drv[j].ocup)*1000)/10; });
+  var pTar =MESES.map(function(p){ var j=pIdx[p]; return j==null?null:C.drv[j].tarifa; });
+
+  // ── real contable ──
+  var qr=await window._sbFromRaw('fin_real').select('periodo,cuenta_puc,codigo_pyg,debito,credito').eq('edificio','kubik');
+  var rIng=new Array(N).fill(0), rCos=new Array(N).fill(0), rGrp={}, hayConta={};
+  window._MKL_GRUPOS.forEach(function(G){ rGrp[G.g]=new Array(N).fill(0); });
+  var codGrp={}; mo.lineas.forEach(function(l){ codGrp[l.cod]=l.grp; });
+  if(!qr.error){
+    (qr.data||[]).forEach(function(x){
+      var i=idx[String(x.periodo||'').slice(0,7)]; if(i==null) return;
+      hayConta[i]=true;
+      var cod=String(x.codigo_pyg||'').trim();
+      var esI = cod.charAt(0)==='4' || String(x.cuenta_puc||'').charAt(0)==='4';
+      var v=_mklNeto(x.debito,x.credito,esI);
+      if(esI) rIng[i]+=v; else { rCos[i]+=v; var g=codGrp[cod]; if(g&&rGrp[g]) rGrp[g][i]+=v; }
+    });
+  }
+  var rGop=rIng.map(function(v,i){ return v-rCos[i]; });
+
+  // ── real operativo (rack) ──
+  var qk=await _infCargarRack(st.desde, st.hasta);
+  var rk=(qk.error?[]:qk.data);
+  var vta=new Array(N).fill(0), noc=new Array(N).fill(0), ocupN=new Array(N).fill(0), hayRack={};
+  var canal={}, tipoV={}, tipoApto={};
+  rk.forEach(function(r){
+    var per=String(r.fecha||'').slice(0,7), i=idx[per]; if(i==null) return;
+    hayRack[i]=true;
+    var t=Number(r.tarifa)||0;
+    if(t>0){ vta[i]+=t; noc[i]++; }
+    if(_infOcupado(r)) ocupN[i]++;
+    if(t>0){
+      var cn=_infCanal(r); canal[cn]=canal[cn]||{v:0,n:0}; canal[cn].v+=t; canal[cn].n++;
+      var ta=String(r.tipo||'—').trim()||'—'; tipoApto[ta]=tipoApto[ta]||{v:0,n:0}; tipoApto[ta].v+=t; tipoApto[ta].n++;
+    }
+  });
+  var ocupPct=MESES.map(function(p,i){ var d=_infDiasMes(p)*window._INF_UNID; return d?Math.round(ocupN[i]/d*1000)/10:0; });
+  var adr=MESES.map(function(p,i){ return noc[i]?Math.round(vta[i]/noc[i]):0; });
+  var revpar=MESES.map(function(p,i){ var d=_infDiasMes(p)*window._INF_UNID; return d?Math.round(vta[i]/d):0; });
+
+  window._infDatos={MESES:MESES,idx:idx,pIng:pIng,pCos:pCos,pGop:pGop,pAloj:pAloj,pOcup:pOcup,pTar:pTar,
+    rIng:rIng,rCos:rCos,rGop:rGop,rGrp:rGrp,vta:vta,noc:noc,ocupPct:ocupPct,adr:adr,revpar:revpar,
+    canal:canal,tipoApto:tipoApto,hayConta:hayConta,hayRack:hayRack,C:C,mo:mo,rk:rk};
+
+  if(st.tab==='ocup') return _infTabOcup();
+  if(st.tab==='gen')  return _infTabGen();
+  return _infTabJunta();
+}
+function _infBar(){
+  var st=window._infState;
+  var tabs=[['junta','Vista de Junta'],['ocup','Ocupacion y Ventas'],['gen','Generador']];
+  return '<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden;flex-wrap:wrap">'
+    +tabs.map(function(t){ return '<button onclick="window._infState.tab=\''+t[0]+'\';renderInformesKL()" style="border:none;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:700;background:'+(t[0]===st.tab?'#1D3461':'#fff')+';color:'+(t[0]===st.tab?'#fff':'#1D3461')+'">'+t[1]+'</button>'; }).join('')+'</div>';
+}
+function _infHead(sub){
+  var st=window._infState;
+  var sel=function(k,v){ return '<input type="month" value="'+v+'" onchange="window._infState.'+k+'=this.value;renderInformesKL()" style="border:1px solid var(--gris-b);border-radius:7px;padding:5px 8px;font-size:12px">'; };
+  return '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">'
+    +'<div class="page-title" style="margin-bottom:0">📑 Informes KL</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+_infBar()
+    +'<span style="font-size:11.5px;color:var(--gris-t)">Periodo</span>'+sel('desde',st.desde)+'<span style="color:var(--gris-t)">→</span>'+sel('hasta',st.hasta)
+    +'<button class="btn" onclick="window.print()" style="background:#1D3461;color:#fff;padding:6px 12px;font-size:12px">🖨️ Imprimir / PDF</button>'
+    +'</div></div>'
+    +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:14px">Kubik Living · 8i8 Operadora S.A.S. · '+sub+'</div>';
+}
+
+// ── VISTA DE JUNTA ───────────────────────────────────────────────────
+function _infTabJunta(){
+  var D=window._infDatos, CL=window._MKL_COL, f=_mklNum;
+  var L=D.MESES.map(_infMesLbl);
+  var hoy=(typeof TODAY!=='undefined'?TODAY:'2026-08-26').slice(0,7);
+  var iHoy=D.idx[hoy]; if(iHoy==null) iHoy=D.MESES.length-1;
+  var ejec=[], proy=[];
+  D.MESES.forEach(function(p,i){ (p<=hoy?ejec:proy).push(i); });
+  var s=function(a,ix){ var t=0; (ix||a.map(function(_,i){return i;})).forEach(function(i){ t+=Number(a[i])||0; }); return t; };
+  var sIx=function(a,ix){ var t=0; ix.forEach(function(i){ t+=Number(a[i])||0; }); return t; };
+
+  // KPIs de lo ejecutado
+  var ingEj=sIx(D.rIng,ejec), cosEj=sIx(D.rCos,ejec), gopEj=ingEj-cosEj;
+  var vtaEj=sIx(D.vta,ejec), nocEj=sIx(D.noc,ejec);
+  var adrEj=nocEj?Math.round(vtaEj/nocEj):0;
+  var diasEj=ejec.reduce(function(t,i){ return t+_infDiasMes(D.MESES[i])*window._INF_UNID; },0);
+  var ocupEj=diasEj?Math.round(ejec.reduce(function(t,i){ return t+D.ocupPct[i]*_infDiasMes(D.MESES[i])*window._INF_UNID/100; },0)/diasEj*1000)/10:0;
+  var revparEj=diasEj?Math.round(vtaEj/diasEj):0;
+  // presupuesto del horizonte proyectado
+  var ingPr=proy.reduce(function(t,i){ return t+(D.pIng[i]||0); },0);
+  var gopPr=proy.reduce(function(t,i){ return t+(D.pGop[i]||0); },0);
+
+  var kpi=function(t,v,sub,col){ return '<div style="flex:1;min-width:168px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:15px">'
+    +'<div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div>'
+    +'<div style="font-size:21px;font-weight:800;color:'+(col||'var(--azul)')+';white-space:nowrap;letter-spacing:-.3px">'+v+'</div>'
+    +(sub?'<div style="font-size:11px;color:var(--gris-t);margin-top:2px">'+sub+'</div>':'')+'</div>'; };
+
+  // series mixtas: real donde hay, presupuesto donde hay
+  var g1=_mklGrafico('Ingresos — ejecutado contra presupuestado', L, [
+    {nom:'Ejecutado (contabilidad)', datos:D.rIng, color:CL.azul},
+    {nom:'Presupuestado', datos:D.pIng.map(function(v){return v||0;}), color:CL.gris}
+  ], 250);
+  var g2=_mklGrafico('Utilidad operativa (GOP)', L, [
+    {nom:'GOP ejecutado', datos:D.rGop, color:CL.verde},
+    {nom:'GOP presupuestado', datos:D.pGop.map(function(v){return v||0;}), color:CL.gris, tipo:'line'}
+  ], 250);
+  var g3=_mklGrafico('Venta de alojamiento — sistema operativo contra presupuesto', L, [
+    {nom:'Vendido (rack)', datos:D.vta, color:CL.naranja},
+    {nom:'Presupuestado', datos:D.pAloj.map(function(v){return v||0;}), color:CL.gris}
+  ], 250);
+  var g4=_mklGrafico('Ocupacion % — real contra presupuesto', L, [
+    {nom:'Ocupacion real', datos:D.ocupPct, color:CL.azul},
+    {nom:'Ocupacion presupuestada', datos:D.pOcup.map(function(v){return v||0;}), color:CL.gris, tipo:'line'}
+  ], 220);
+  var g5=_mklGrafico('Tarifa promedio (ADR) y RevPAR', L, [
+    {nom:'ADR real', datos:D.adr, color:CL.azul},
+    {nom:'RevPAR real', datos:D.revpar, color:CL.verde},
+    {nom:'Tarifa presupuestada', datos:D.pTar.map(function(v){return v||0;}), color:CL.gris, tipo:'line'}
+  ], 220);
+  // costos por grupo (ejecutado)
+  var grpNom=[], grpVal=[];
+  window._MKL_GRUPOS.forEach(function(G){ if(G.tipo!=='cos') return;
+    var v=sIx(D.rGrp[G.g],ejec); if(Math.abs(v)>1){ grpNom.push(G.t); grpVal.push(v); } });
+  var ordg=grpNom.map(function(n,i){return [n,grpVal[i]];}).sort(function(a,b){return b[1]-a[1];});
+  var g6=ordg.length?_mklGrafico('Costos ejecutados por grupo', ordg.map(function(x){return x[0].split(' ')[0];}),
+        [{nom:'Ejecutado', datos:ordg.map(function(x){return x[1];}), color:CL.naranja}], 230):'';
+  // canales
+  var can=Object.keys(D.canal).map(function(k){ return [k,D.canal[k].v,D.canal[k].n]; }).sort(function(a,b){return b[1]-a[1];});
+  var g7=can.length?_mklGrafico('Venta por canal (todo el periodo con rack)', can.map(function(x){return x[0];}),
+        [{nom:'Venta', datos:can.map(function(x){return x[1];}), color:CL.azul}], 220):'';
+  var ta=Object.keys(D.tipoApto).map(function(k){ return [k,D.tipoApto[k].v,D.tipoApto[k].n]; }).sort(function(a,b){return b[1]-a[1];}).slice(0,10);
+  var g8=ta.length?_mklGrafico('Venta por tipo de apartamento', ta.map(function(x){return String(x[0]).slice(0,14);}),
+        [{nom:'Venta', datos:ta.map(function(x){return x[1];}), color:CL.verde}], 230):'';
+
+  // PYG resumido con estructura de PYG
+  var mo=D.mo, Cc=D.C;
+  var pygRows='';
+  var colEj=function(g){ return sIx(D.rGrp[g],ejec); };
+  window._MKL_GRUPOS.forEach(function(G){
+    var pv=proy.reduce(function(t,i){ var j=null; Cc.meses.forEach(function(mm,k){ if(mm.per===D.MESES[i]) j=k; }); return t+(j==null?0:Cc.sub[G.g][j]); },0);
+    var rv=colEj(G.g);
+    if(Math.abs(rv)<1 && Math.abs(pv)<1) return;
+    var esC=(G.tipo==='cos');
+    pygRows+='<tr style="background:'+(esC?'#f6f6f7':'#eef3fb')+'"><td style="text-align:left;font-weight:700;font-size:12px">'+G.t+'</td>'
+      +'<td style="text-align:right">'+f(rv)+'</td><td style="text-align:right;color:#6B7280">'+f(pv)+'</td></tr>';
+  });
+  var pvIng=proy.reduce(function(t,i){ return t+(D.pIng[i]||0); },0);
+  var pvCos=proy.reduce(function(t,i){ return t+(D.pCos[i]||0); },0);
+  pygRows+='<tr style="background:#d8e6f9;font-weight:800"><td style="text-align:left">TOTAL INGRESOS</td><td style="text-align:right">'+f(ingEj)+'</td><td style="text-align:right">'+f(pvIng)+'</td></tr>'
+    +'<tr style="background:#f0e6e6;font-weight:800"><td style="text-align:left">COSTOS OPERATIVOS</td><td style="text-align:right">'+f(cosEj)+'</td><td style="text-align:right">'+f(pvCos)+'</td></tr>'
+    +'<tr style="background:#eefbf2;font-weight:800"><td style="text-align:left">UTILIDAD OPERATIVA (GOP)</td><td style="text-align:right">'+f(gopEj)+'</td><td style="text-align:right">'+f(pvIng-pvCos)+'</td></tr>';
+
+  var mEj=ejec.length?(_infMesLbl(D.MESES[ejec[0]])+' a '+_infMesLbl(D.MESES[ejec[ejec.length-1]])):'—';
+  var mPr=proy.length?(_infMesLbl(D.MESES[proy[0]])+' a '+_infMesLbl(D.MESES[proy[proy.length-1]])):'—';
+
+  document.getElementById('main-content').innerHTML=
+    _infHead('Vista de junta · Ejecutado '+mEj+' · Presupuestado '+mPr)
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+    + kpi('Ingresos ejecutados','$'+f(ingEj), mEj,'var(--azul)')
+    + kpi('GOP ejecutado','$'+f(gopEj), (ingEj?Math.round(gopEj/ingEj*1000)/10:0)+'% de margen', gopEj>=0?'#1A5C2E':'#C0392B')
+    + kpi('Ocupacion promedio', ocupEj+'%', nocEj+' noches vendidas','var(--azul)')
+    + kpi('ADR','$'+f(adrEj),'RevPAR $'+f(revparEj),'#1A5C2E')
+    +'</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">'
+    + kpi('Ingresos presupuestados','$'+f(ingPr), mPr,'#6B7280')
+    + kpi('GOP presupuestado','$'+f(gopPr), (ingPr?Math.round(gopPr/ingPr*1000)/10:0)+'% de margen','#6B7280')
+    + kpi('Venta registrada en el SO','$'+f(vtaEj), mEj,'#eb6834')
+    + kpi('Diferencia contable vs SO','$'+f(ingEj-vtaEj), (vtaEj?((ingEj-vtaEj)>=0?'+':'')+Math.round((ingEj-vtaEj)/vtaEj*1000)/10+'%':'—'), Math.abs(ingEj-vtaEj)>vtaEj*0.05?'#C0392B':'#1A5C2E')
+    +'</div>'
+    + g1 + g2 + g3 + g4 + g5 + g6 + g7 + g8
+    +'<div class="card"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Estado de resultados — estructura del PYG</div>'
+    +'<div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr>'
+    +'<th style="text-align:left;min-width:280px">Concepto</th><th style="text-align:right;min-width:140px">Ejecutado<br><span style="font-weight:400;font-size:10px">'+mEj+'</span></th>'
+    +'<th style="text-align:right;min-width:140px">Presupuestado<br><span style="font-weight:400;font-size:10px">'+mPr+'</span></th></tr></thead><tbody>'+pygRows+'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">Ejecutado = contabilidad cargada. Presupuestado = modelo financiero. Los periodos no se traslapan: el presupuesto arranca donde termina lo ejecutado.</p></div>';
+}
+
+// ── OCUPACION Y VENTAS ───────────────────────────────────────────────
+function _infTabOcup(){
+  var D=window._infDatos, CL=window._MKL_COL, f=_mklNum;
+  var L=D.MESES.map(_infMesLbl);
+  var filas=D.MESES.map(function(p,i){
+    if(!D.hayRack[i]) return '';
+    var estadia=D.noc[i]&&D.tipoApto?0:0;
+    return '<tr><td style="text-align:left;font-weight:600">'+_infMesLbl(p)+'</td>'
+      +'<td style="text-align:right">'+D.ocupPct[i]+'%</td>'
+      +'<td style="text-align:right">'+f(D.noc[i])+'</td>'
+      +'<td style="text-align:right">'+f(D.adr[i])+'</td>'
+      +'<td style="text-align:right">'+f(D.revpar[i])+'</td>'
+      +'<td style="text-align:right;font-weight:700">'+f(D.vta[i])+'</td></tr>';
+  }).join('');
+  var can=Object.keys(D.canal).map(function(k){ return [k,D.canal[k].v,D.canal[k].n]; }).sort(function(a,b){return b[1]-a[1];});
+  var totC=can.reduce(function(t,x){return t+x[1];},0);
+  var canRows=can.map(function(x){ return '<tr><td style="text-align:left;font-weight:600">'+x[0]+'</td>'
+    +'<td style="text-align:right">'+f(x[2])+'</td><td style="text-align:right">'+f(Math.round(x[1]/x[2]))+'</td>'
+    +'<td style="text-align:right;font-weight:700">'+f(x[1])+'</td><td style="text-align:right">'+(totC?Math.round(x[1]/totC*1000)/10:0)+'%</td></tr>'; }).join('');
+  var ta=Object.keys(D.tipoApto).map(function(k){ return [k,D.tipoApto[k].v,D.tipoApto[k].n]; }).sort(function(a,b){return b[1]-a[1];});
+  var totT=ta.reduce(function(t,x){return t+x[1];},0);
+  var taRows=ta.map(function(x){ return '<tr><td style="text-align:left;font-weight:600">'+x[0]+'</td>'
+    +'<td style="text-align:right">'+f(x[2])+'</td><td style="text-align:right">'+f(Math.round(x[1]/x[2]))+'</td>'
+    +'<td style="text-align:right;font-weight:700">'+f(x[1])+'</td><td style="text-align:right">'+(totT?Math.round(x[1]/totT*1000)/10:0)+'%</td></tr>'; }).join('');
+  document.getElementById('main-content').innerHTML=
+    _infHead('Ocupacion y ventas · fuente: rack del sistema operativo')
+    + _mklGrafico('Ocupacion mensual (%)', L, [
+        {nom:'Real', datos:D.ocupPct, color:CL.azul},
+        {nom:'Presupuestada', datos:D.pOcup.map(function(v){return v||0;}), color:CL.gris, tipo:'line'}], 230)
+    + _mklGrafico('Venta de alojamiento', L, [
+        {nom:'Vendido', datos:D.vta, color:CL.naranja},
+        {nom:'Presupuestado', datos:D.pAloj.map(function(v){return v||0;}), color:CL.gris}], 230)
+    + _mklGrafico('ADR y RevPAR', L, [
+        {nom:'ADR', datos:D.adr, color:CL.azul},{nom:'RevPAR', datos:D.revpar, color:CL.verde}], 220)
+    +'<div class="card"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Detalle mensual</div>'
+    +'<div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th style="text-align:left">Mes</th><th style="text-align:right">Ocupacion</th><th style="text-align:right">Noches</th><th style="text-align:right">ADR</th><th style="text-align:right">RevPAR</th><th style="text-align:right">Venta</th></tr></thead><tbody>'+(filas||'<tr><td colspan="6">Sin datos de rack en el periodo.</td></tr>')+'</tbody></table></div></div>'
+    +'<div class="card"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Origen de las reservas</div>'
+    +'<div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th style="text-align:left">Canal</th><th style="text-align:right">Noches</th><th style="text-align:right">Tarifa prom.</th><th style="text-align:right">Venta</th><th style="text-align:right">Participacion</th></tr></thead><tbody>'+(canRows||'<tr><td colspan="5">Sin datos.</td></tr>')+'</tbody></table></div>'
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:8px">El canal se deduce del campo Canal del rack; si viene vacio, se clasifica como Corporativo cuando la reserva tiene empresa y como Directo cuando no.</p></div>'
+    +'<div class="card"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Venta por tipo de apartamento</div>'
+    +'<div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th style="text-align:left">Tipo</th><th style="text-align:right">Noches</th><th style="text-align:right">Tarifa prom.</th><th style="text-align:right">Venta</th><th style="text-align:right">Participacion</th></tr></thead><tbody>'+(taRows||'<tr><td colspan="5">Sin datos.</td></tr>')+'</tbody></table></div></div>';
+}
+
+// ── GENERADOR ────────────────────────────────────────────────────────
+window._INF_SECC=[
+  ['kpi','Indicadores principales'],['ing','Ingresos: ejecutado vs presupuesto'],['gop','Utilidad operativa (GOP)'],
+  ['aloj','Venta de alojamiento vs presupuesto'],['ocup','Ocupacion'],['adr','ADR y RevPAR'],
+  ['cos','Costos por grupo'],['can','Venta por canal'],['tipo','Venta por tipo de apartamento'],['pyg','Estado de resultados']
+];
+window._infSec = window._infSec || {kpi:1,ing:1,gop:1,aloj:1,ocup:1,adr:1,cos:1,can:1,tipo:1,pyg:1};
+window._infTog=function(k,v){ window._infSec[k]=v?1:0; };
+function _infTabGen(){
+  document.getElementById('main-content').innerHTML=
+    _infHead('Generador de informes por variables')
+    +'<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Que incluir</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px">'
+    + window._INF_SECC.map(function(s){ return '<label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" '+(window._infSec[s[0]]?'checked':'')+' onchange="window._infTog(\''+s[0]+'\',this.checked)"> '+s[1]+'</label>'; }).join('')
+    +'</div>'
+    +'<p style="font-size:12px;color:var(--gris-t);margin-top:12px">El periodo se controla con los selectores de arriba. El corte entre ejecutado y presupuestado lo marca el mes en curso.</p>'
+    +'<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button class="btn btn-success" onclick="window._infGenerar()">▶ Generar informe</button>'
+    +'<button class="btn" onclick="window.print()" style="background:#1D3461;color:#fff">🖨️ Imprimir / PDF</button>'
+    +'</div></div>'
+    +'<div id="inf-out"></div>';
+}
+window._infGenerar=function(){
+  var D=window._infDatos, CL=window._MKL_COL, f=_mklNum, S=window._infSec;
+  var L=D.MESES.map(_infMesLbl);
+  var hoy=(typeof TODAY!=='undefined'?TODAY:'2026-08-26').slice(0,7);
+  var ejec=[],proy=[]; D.MESES.forEach(function(p,i){ (p<=hoy?ejec:proy).push(i); });
+  var sIx=function(a,ix){ var t=0; ix.forEach(function(i){ t+=Number(a[i])||0; }); return t; };
+  var out='';
+  if(S.kpi){
+    var ingEj=sIx(D.rIng,ejec), cosEj=sIx(D.rCos,ejec), vtaEj=sIx(D.vta,ejec), nocEj=sIx(D.noc,ejec);
+    out+='<div class="card" style="margin-bottom:14px"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Indicadores</div>'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap">'
+      +['Ingresos ejecutados|$'+f(ingEj),'Costos ejecutados|$'+f(cosEj),'GOP|$'+f(ingEj-cosEj),
+        'Venta en el SO|$'+f(vtaEj),'Noches vendidas|'+f(nocEj),'ADR|$'+f(nocEj?Math.round(vtaEj/nocEj):0)]
+        .map(function(x){ var p=x.split('|'); return '<div style="flex:1;min-width:150px;background:var(--gris);border-radius:10px;padding:12px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+p[0]+'</div><div style="font-size:18px;font-weight:800">'+p[1]+'</div></div>'; }).join('')
+      +'</div></div>';
+  }
+  if(S.ing) out+=_mklGrafico('Ingresos — ejecutado vs presupuestado', L, [{nom:'Ejecutado',datos:D.rIng,color:CL.azul},{nom:'Presupuestado',datos:D.pIng.map(function(v){return v||0;}),color:CL.gris}],240);
+  if(S.gop) out+=_mklGrafico('Utilidad operativa (GOP)', L, [{nom:'Ejecutado',datos:D.rGop,color:CL.verde},{nom:'Presupuestado',datos:D.pGop.map(function(v){return v||0;}),color:CL.gris,tipo:'line'}],240);
+  if(S.aloj)out+=_mklGrafico('Venta de alojamiento', L, [{nom:'Vendido (rack)',datos:D.vta,color:CL.naranja},{nom:'Presupuestado',datos:D.pAloj.map(function(v){return v||0;}),color:CL.gris}],240);
+  if(S.ocup)out+=_mklGrafico('Ocupacion (%)', L, [{nom:'Real',datos:D.ocupPct,color:CL.azul},{nom:'Presupuestada',datos:D.pOcup.map(function(v){return v||0;}),color:CL.gris,tipo:'line'}],220);
+  if(S.adr) out+=_mklGrafico('ADR y RevPAR', L, [{nom:'ADR',datos:D.adr,color:CL.azul},{nom:'RevPAR',datos:D.revpar,color:CL.verde}],220);
+  if(S.cos){
+    var gn=[],gv=[];
+    window._MKL_GRUPOS.forEach(function(G){ if(G.tipo!=='cos') return; var v=sIx(D.rGrp[G.g],ejec); if(Math.abs(v)>1){ gn.push(G.t.split(' ')[0]); gv.push(v); } });
+    if(gn.length) out+=_mklGrafico('Costos ejecutados por grupo', gn, [{nom:'Ejecutado',datos:gv,color:CL.naranja}],230);
+  }
+  if(S.can){
+    var can=Object.keys(D.canal).map(function(k){return [k,D.canal[k].v];}).sort(function(a,b){return b[1]-a[1];});
+    if(can.length) out+=_mklGrafico('Venta por canal', can.map(function(x){return x[0];}), [{nom:'Venta',datos:can.map(function(x){return x[1];}),color:CL.azul}],220);
+  }
+  if(S.tipo){
+    var ta=Object.keys(D.tipoApto).map(function(k){return [k,D.tipoApto[k].v];}).sort(function(a,b){return b[1]-a[1];}).slice(0,10);
+    if(ta.length) out+=_mklGrafico('Venta por tipo de apartamento', ta.map(function(x){return String(x[0]).slice(0,14);}), [{nom:'Venta',datos:ta.map(function(x){return x[1];}),color:CL.verde}],230);
+  }
+  if(S.pyg){
+    var rows='';
+    window._MKL_GRUPOS.forEach(function(G){
+      var rv=sIx(D.rGrp[G.g],ejec); if(Math.abs(rv)<1) return;
+      rows+='<tr style="background:'+(G.tipo==='cos'?'#f6f6f7':'#eef3fb')+'"><td style="text-align:left;font-weight:700">'+G.t+'</td><td style="text-align:right">'+f(rv)+'</td></tr>';
+    });
+    var ie=sIx(D.rIng,ejec), ce=sIx(D.rCos,ejec);
+    rows+='<tr style="background:#d8e6f9;font-weight:800"><td style="text-align:left">TOTAL INGRESOS</td><td style="text-align:right">'+f(ie)+'</td></tr>'
+      +'<tr style="background:#f0e6e6;font-weight:800"><td style="text-align:left">COSTOS OPERATIVOS</td><td style="text-align:right">'+f(ce)+'</td></tr>'
+      +'<tr style="background:#eefbf2;font-weight:800"><td style="text-align:left">UTILIDAD OPERATIVA (GOP)</td><td style="text-align:right">'+f(ie-ce)+'</td></tr>';
+    out+='<div class="card"><div style="font-weight:700;color:var(--azul);margin-bottom:10px">Estado de resultados ejecutado</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th style="text-align:left">Concepto</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  }
+  document.getElementById('inf-out').innerHTML=out||'<div class="card"><p>No seleccionaste ninguna seccion.</p></div>';
 };
 
 // ═══════════════════════════════════════════════════════════
