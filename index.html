@@ -477,10 +477,12 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-31-ocupacion-criterio-unico-v53';
+const APP_VERSION = '2026-09-01-pyg-8010-antes-de-impuestos-v54';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-01', version:'2026-09-01-pyg-8010-antes-de-impuestos-v54', titulo:'El Estado de Resultados de 8010 ya no se detiene en la utilidad operacional: llega hasta la utilidad antes de impuestos, con el % de cada linea sobre los ingresos (Sol. Santiago)',
+    detalle:'DATOS. Se cargo el archivo PRESUPUESTO 2026 8010 (corte julio) completo: las cuatro entidades (80-10 Operador Turistico, LTM3 Arriendo, Propiedad Horizontal y el consolidado TOTAL), real de enero a julio y presupuesto, tomando como linea de comparacion el presupuesto original. Antes el modulo tenia datos congelados desde el 12 de julio, con junio y julio en cero. Las cifras se validaron contra la hoja Ppto VS Actual del propio archivo y coinciden al peso en las cinco lineas de control: ingresos 2.988.721.813, gastos de operacion 2.097.298.605, utilidad operacional 745.115.919, presupuesto de ingresos 3.718.161.301 y presupuesto de utilidad 1.642.829.111. CORRECCION DE UN ERROR VIEJO: la linea de mantenimiento estaba guardada como MANTENIMIENTO Y REPARACION en singular y la pantalla la buscaba en plural, de modo que nunca se mostro; eran 95.477.372 acumulados invisibles en el estado de resultados. Se unifico el nombre y se eliminaron las filas duplicadas que quedaban. ESTRUCTURA. El P&L se detenia en la utilidad operacional, que para 8010 es una lectura incompleta porque deja por fuera el leasing del edificio. Se agregaron tres lineas: INGRESOS NO OPERACIONALES, GASTOS NO OPERACIONALES y el subtotal UTILIDAD ANTES DE IMPUESTOS, que es GOP mas ingresos no operacionales menos gastos no operacionales. Los no operacionales quedan despues del GOP y no contaminan el total de gastos de operacion. PORCENTAJES. Se agrego una columna % Ing. que muestra cada linea como participacion sobre los ingresos operacionales del periodo, y dos indicadores nuevos en la banda superior: margen operacional acumulado y utilidad antes de impuestos acumulada con su porcentaje. LO QUE MUESTRA: enero a julio de 2026 cierra con utilidad operacional de +745.115.919 (24,9% de margen) pero utilidad ANTES DE IMPUESTOS de -411.714.409, es decir -13,8%. La diferencia son 1.156.830.328 de gastos financieros netos, de los cuales 1.090.574.638 son el leasing Itau del edificio: el 36,5% de todo lo vendido. Por entidad: 80-10 aporta +1.489.848.969 antes de impuestos, LTM3 -1.898.934.544 y la Propiedad Horizontal -48.779.754.' },
   { fecha:'2026-08-31', version:'2026-08-31-ocupacion-criterio-unico-v53', titulo:'La ocupacion ya da lo mismo en todas las pantallas: criterio unico de inventario (Sol. Cristina Cervino)',
     detalle:'Cristina Cervino reporto que el rack grafico mostraba 56% de ocupacion en agosto y el informe de KL mostraba 40,8% para el mismo mes. Se reprodujeron las dos cifras y ninguna estaba bien: diferian en el numerador Y en el denominador. El rack grafico contaba como noche ocupada el "Check-out hoy" (que es el dia de salida, no se cobra) y el estado "Completo" (unidad que se vendio dentro de otra o esta fuera de servicio), lo que inflaba las noches vendidas de agosto de 533 a 681; y como inventario descontaba solo Bloqueado y Mantenimiento. El informe de KL contaba bien las noches, pero dividia entre 42 llaves por los dias del mes sin descontar una sola noche fuera de servicio, lo que desinflaba el resultado. CRITERIO UNICO APROBADO POR GERENCIA GENERAL, ahora igual en el rack, en el informe y en el modelo financiero: noche vendida = Ocupado, Check-in hoy o Sale de viaje; "Check-out hoy" no cuenta porque es el dia de salida y su tarifa es cero; e inventario disponible = 42 llaves por los dias del mes MENOS las noches fuera de servicio (Completo, Bloqueado o Mantenimiento), porque una unidad que no se podia vender no puede estar en el denominador. Es la metodologia estandar de hoteleria: la ocupacion se mide sobre lo que efectivamente estaba disponible para vender. RESULTADO EN AGOSTO DE 2026: 533 noches vendidas sobre 1.160 noches disponibles (42 llaves x 31 dias = 1.302, menos 142 noches fuera de servicio: 122 en Completo, 11 bloqueadas y 9 en mantenimiento) = 45,9%. Ni 56% ni 40,8%. La serie del ano queda: abril 7,6%, mayo 19,7%, junio 27,2%, julio 34,8% y agosto 45,9%. HALLAZGO ADICIONAL: en agosto hubo 142 noches fuera de servicio, equivalentes a casi cinco apartamentos-mes. El 702 estuvo fuera los 31 dias y el 603 estuvo 28. Esa capacidad no vendida no aparecia en ningun indicador porque el informe la seguia contando como disponible.' },
   { fecha:'2026-08-26', version:'2026-08-26-modelo-informes-kl', titulo:'Modelo Financiero KL + Informes KL (Sol. Santiago)',
@@ -17758,7 +17760,10 @@ var FIN_LINEAS=[ // orden de presentación del P&L
   {cuenta:'DE VIAJE',grupo:'GASTOS'},
   {cuenta:'DIVERSOS',grupo:'GASTOS'},
   {sub:'TOTAL GASTOS OPERACIONALES'},
-  {sub:'UTILIDAD / RESULTADO OPERACIONAL'}
+  {sub:'UTILIDAD / RESULTADO OPERACIONAL'},
+  {cuenta:'INGRESOS NO OPERACIONALES',grupo:'INGRESOS'},
+  {cuenta:'GASTOS NO OPERACIONALES',grupo:'GASTOS'},
+  {sub:'UTILIDAD ANTES DE IMPUESTOS'}
 ];
 var FIN_MC=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 function _finNum(n){ return Math.round(Number(n)||0).toLocaleString('es-CO'); }
@@ -17772,11 +17777,17 @@ function _finGet(rows, entidad, cuenta, tipo){ // devuelve array de 12 para una 
 function _finSerie(rows, entidad, def, tipo){ // serie 12m para una linea (hoja o subtotal)
   if(!def.sub) return _finGet(rows,entidad,def.cuenta,tipo);
   var ing=_finGet(rows,entidad,'INGRESOS',tipo), cos=_finGet(rows,entidad,'COSTOS DIRECTOS',tipo);
+  // 'INGRESOS' es solo la linea operacional; los no operacionales se suman aparte, despues del GOP.
   var ub=ing.map(function(v,i){return v-cos[i];});
   if(def.sub==='UTILIDAD BRUTA EN VENTAS') return ub;
-  var tg=new Array(12).fill(0); FIN_LINEAS.forEach(function(l){ if(l.grupo==='GASTOS'){ var a=_finGet(rows,entidad,l.cuenta,tipo); for(var i=0;i<12;i++)tg[i]+=a[i]; } });
+  // Los no operacionales NO entran al total de gastos de operacion: van despues del GOP.
+  var tg=new Array(12).fill(0); FIN_LINEAS.forEach(function(l){ if(l.grupo==='GASTOS' && l.cuenta!=='GASTOS NO OPERACIONALES'){ var a=_finGet(rows,entidad,l.cuenta,tipo); for(var i=0;i<12;i++)tg[i]+=a[i]; } });
   if(def.sub==='TOTAL GASTOS OPERACIONALES') return tg;
-  return ub.map(function(v,i){return v-tg[i];}); // resultado operacional
+  var uo=ub.map(function(v,i){return v-tg[i];});             // resultado operacional
+  if(def.sub==='UTILIDAD / RESULTADO OPERACIONAL') return uo;
+  // UTILIDAD ANTES DE IMPUESTOS = GOP + ingresos no op. - gastos no op.
+  var ino=_finGet(rows,entidad,'INGRESOS NO OPERACIONALES',tipo), gno=_finGet(rows,entidad,'GASTOS NO OPERACIONALES',tipo);
+  return uo.map(function(v,i){return v+ino[i]-gno[i];});
 }
 async function renderFinanzas(){
   var _rolOK = currentProfile && (currentProfile.rol==='gerente_general'||currentProfile.rol==='asesora');
@@ -17794,8 +17805,11 @@ async function renderFinanzas(){
   // KPI band (mes actual + acumulado a hoyM) sobre RESULTADO e INGRESOS
   var ingR=_finSerie(rows,st.entidad,{cuenta:'INGRESOS'},'real'), ingP=_finSerie(rows,st.entidad,{cuenta:'INGRESOS'},'ppto');
   var resR=_finSerie(rows,st.entidad,{sub:'UTILIDAD / RESULTADO OPERACIONAL'},'real'), resP=_finSerie(rows,st.entidad,{sub:'UTILIDAD / RESULTADO OPERACIONAL'},'ppto');
+  var uaiR=_finSerie(rows,st.entidad,{sub:'UTILIDAD ANTES DE IMPUESTOS'},'real'), uaiP=_finSerie(rows,st.entidad,{sub:'UTILIDAD ANTES DE IMPUESTOS'},'ppto');
   var sum=function(a,n){var s=0;for(var i=0;i<n;i++)s+=a[i];return s;};
   var ingYR=sum(ingR,hoyM),ingYP=sum(ingP,hoyM),resYR=sum(resR,hoyM),resYP=sum(resP,hoyM);
+  var uaiYR=sum(uaiR,hoyM),uaiYP=sum(uaiP,hoyM);
+  var _mgOp=ingYR?Math.round(resYR/ingYR*1000)/10:0, _mgUai=ingYR?Math.round(uaiYR/ingYR*1000)/10:0;
   var pcol=function(p){return p>=100?'#1A7D3C':(p>=80?'#B8860B':'#C0392B');};
   var kpi=function(t,rv,pv,col){var p=pv?Math.round(rv/pv*100):0;return '<div style="flex:1;min-width:190px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:14px"><div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">'+t+'</div><div style="font-size:20px;font-weight:800;color:'+(col||'var(--azul)')+';white-space:nowrap">'+f$(rv)+'</div><div style="font-size:11px;color:var(--gris-t)">Ppto: '+f$(pv)+' · <span style="color:'+pcol(p)+';font-weight:700">'+p+'%</span></div></div>';};
   // selector + toggles
@@ -17805,17 +17819,17 @@ async function renderFinanzas(){
   var vSel='<div style="display:inline-flex;border:1px solid var(--gris-b);border-radius:8px;overflow:hidden">'+vistas.map(function(v){return '<button onclick="window._finState.vista=\''+v[0]+'\';renderFinanzas()" style="border:none;padding:7px 12px;font-size:12px;cursor:pointer;background:'+(v[0]===st.vista?'var(--azul)':'#fff')+';color:'+(v[0]===st.vista?'#fff':'var(--azul)')+'">'+v[1]+'</button>';}).join('')+'</div>';
   var hibrido=''; // Retirado: el rack no trae el tipo de contrato (vivienda/turístico) y no iguala la contabilidad. El Real de INGRESOS se carga del Excel mensual por entidad. finTraerIngresos() queda latente.
   // tabla
-  var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:210px;z-index:2">Cuenta</th>'+FIN_MC.map(function(m){return '<th style="text-align:right;min-width:88px">'+m+'</th>';}).join('')+'<th style="text-align:right;min-width:100px;background:#16284a">Total Año</th>';
+  var th='<th style="position:sticky;left:0;background:#1D3461;color:#fff;text-align:left;min-width:210px;z-index:2">Cuenta</th>'+FIN_MC.map(function(m){return '<th style="text-align:right;min-width:88px">'+m+'</th>';}).join('')+'<th style="text-align:right;min-width:100px;background:#16284a">Total Año</th><th style="text-align:right;min-width:74px;background:#16284a" title="Participacion de cada linea sobre los ingresos operacionales del periodo">% Ing.</th>';
   var body='';
   FIN_LINEAS.forEach(function(def){
     var isSub=!!def.sub; var nombre=isSub?def.sub:def.cuenta;
     var serieR=_finSerie(rows,st.entidad,def,'real'), serieP=_finSerie(rows,st.entidad,def,'ppto');
     var serie = st.vista==='ppto'?serieP : st.vista==='var'? serieR.map(function(v,i){return v-serieP[i];}) : serieR;
     var totA=serie.reduce(function(s,v){return s+v;},0);
-    var rowStyle = isSub? (def.sub==='UTILIDAD / RESULTADO OPERACIONAL'?'background:#eefbf2;font-weight:800':(def.sub==='UTILIDAD BRUTA EN VENTAS'?'background:#eef3fb;font-weight:700':'background:#f6f6f7;font-weight:700')) : '';
+    var rowStyle = isSub? (def.sub==='UTILIDAD ANTES DE IMPUESTOS'?'background:#fdf0ec;font-weight:800;border-top:2px solid #1D3461':(def.sub==='UTILIDAD / RESULTADO OPERACIONAL'?'background:#eefbf2;font-weight:800':(def.sub==='UTILIDAD BRUTA EN VENTAS'?'background:#eef3fb;font-weight:700':'background:#f6f6f7;font-weight:700'))) : '';
     var _ntxt=(!isSub && window._finNotas && window._finNotas[st.entidad+'|'+def.cuenta])||'';
     var _nico=isSub?'':' <span onclick="finNota(\''+encodeURIComponent(def.cuenta)+'\')" title="'+(_ntxt?String(_ntxt).replace(/"/g,'&quot;'):'Agregar comentario')+'" style="cursor:pointer;font-size:11px;opacity:'+(_ntxt?'1':'0.3')+'">💬</span>';
-    var nameCell='<td style="position:sticky;left:0;background:'+(isSub?(def.sub.indexOf('RESULTADO')>=0?'#eefbf2':(def.sub.indexOf('BRUTA')>=0?'#eef3fb':'#f6f6f7')):'#fff')+';text-align:left;font-size:12px;'+(isSub?'font-weight:700':'')+'">'+nombre+_nico+(_ntxt?'<div style="font-size:10px;color:#B8860B;font-style:italic;margin-top:1px">↳ '+String(_ntxt).replace(/</g,'&lt;')+'</div>':'')+'</td>';
+    var nameCell='<td style="position:sticky;left:0;background:'+(isSub?(def.sub.indexOf('ANTES DE IMP')>=0?'#fdf0ec':(def.sub.indexOf('RESULTADO')>=0?'#eefbf2':(def.sub.indexOf('BRUTA')>=0?'#eef3fb':'#f6f6f7'))):'#fff')+';text-align:left;font-size:12px;'+(isSub?'font-weight:700':'')+'">'+nombre+_nico+(_ntxt?'<div style="font-size:10px;color:#B8860B;font-style:italic;margin-top:1px">↳ '+String(_ntxt).replace(/</g,'&lt;')+'</div>':'')+'</td>';
     var cells='';
     for(var m=0;m<12;m++){
       if(isSub || st.vista==='var' || !editable){
@@ -17827,7 +17841,18 @@ async function renderFinanzas(){
         cells+='<td style="padding:1px"><input type="text" value="'+(raw?_finNum(raw):'')+'" data-c="'+encodeURIComponent(def.cuenta)+'" data-t="'+st.vista+'" data-m="'+(m+1)+'" onchange="finSet(this)" style="width:84px;border:1px solid #e3e6ea;border-radius:5px;padding:4px;font-size:11px;text-align:right'+(m+1===hoyM?';background:#fff7e6':'')+'"></td>';
       }
     }
-    body+='<tr style="'+rowStyle+'">'+nameCell+cells+'<td style="text-align:right;font-weight:700;background:'+(isSub?'#eaf0ea':'#f3f6fb')+'">'+_finNum(totA)+'</td></tr>';
+    // Analisis vertical: cada linea como % de los ingresos operacionales acumulados del periodo
+    var _ingSerie=_finSerie(rows,st.entidad,{cuenta:'INGRESOS'},(st.vista==='ppto'?'ppto':'real'));
+    var _ingAcum=0; for(var _i=0;_i<12;_i++) _ingAcum+=_ingSerie[_i];
+    var _pctTxt='·', _pctCol='#9aa';
+    if(_ingAcum && st.vista!=='var' && !(def.cuenta==='INGRESOS')){
+      var _p=totA/_ingAcum*100;
+      _pctTxt=(Math.abs(_p)>=100?_p.toFixed(0):_p.toFixed(1))+'%';
+      if(def.sub==='UTILIDAD ANTES DE IMPUESTOS'||def.sub==='UTILIDAD / RESULTADO OPERACIONAL') _pctCol=(totA>=0?'#1A7D3C':'#C0392B');
+      else if(isSub) _pctCol='#1D3461'; else _pctCol='#5a6672';
+    } else if(def.cuenta==='INGRESOS' && st.vista!=='var'){ _pctTxt='100%'; _pctCol='#1D3461'; }
+    var _pctCell='<td style="text-align:right;font-size:11px;font-weight:'+(isSub?'700':'500')+';color:'+_pctCol+';background:'+(isSub?'#eaf0ea':'#f8fafc')+'">'+_pctTxt+'</td>';
+    body+='<tr style="'+rowStyle+'">'+nameCell+cells+'<td style="text-align:right;font-weight:700;background:'+(isSub?'#eaf0ea':'#f3f6fb')+'">'+_finNum(totA)+'</td>'+_pctCell+'</tr>';
   });
   document.getElementById('main-content').innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="page-title" style="margin-bottom:0">📊 Estado de Resultados — '+st.anio+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+anioSel+entSel+vSel+hibrido+'</div></div>'
@@ -17837,6 +17862,14 @@ async function renderFinanzas(){
     + kpi('Resultado — '+FIN_MC[Math.min(hoyM,12)-1], resR[Math.min(hoyM,12)-1], resP[Math.min(hoyM,12)-1],'#1A5C2E')
     + kpi('Ingresos YTD (ene–'+FIN_MC[Math.min(hoyM,12)-1]+')', ingYR, ingYP,'var(--azul)')
     + kpi('Resultado YTD', resYR, resYP,'#1A5C2E')
+    + '<div style="flex:1;min-width:190px;background:#fff;border:1px solid var(--gris-b);border-radius:12px;padding:14px">'
+      + '<div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">Margen operacional YTD</div>'
+      + '<div style="font-size:20px;font-weight:800;color:'+(_mgOp>=0?'#1A5C2E':'#C0392B')+'">'+_mgOp+'%</div>'
+      + '<div style="font-size:11px;color:var(--gris-t)">del ingreso operacional</div></div>'
+    + '<div style="flex:1;min-width:210px;background:'+(uaiYR>=0?'#fff':'#FDF0EC')+';border:1px solid '+(uaiYR>=0?'var(--gris-b)':'#E8B4A2')+';border-radius:12px;padding:14px">'
+      + '<div style="font-size:10px;color:var(--gris-t);text-transform:uppercase;letter-spacing:1px">Utilidad antes de impuestos YTD</div>'
+      + '<div style="font-size:20px;font-weight:800;color:'+(uaiYR>=0?'#1A7D3C':'#C0392B')+';white-space:nowrap">'+f$(uaiYR)+'</div>'
+      + '<div style="font-size:11px;color:var(--gris-t)">'+_mgUai+'% del ingreso · despues de financieros</div></div>'
     +'</div>'
     +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px;border-collapse:collapse"><thead><tr>'+th+'</tr></thead><tbody>'+body+'</tbody></table></div>'
     +'<p style="font-size:11px;color:var(--gris-t);margin-top:10px">'+(editable?'Celdas editables en modo Real/Presupuesto. ':'TOTAL: el Real es la suma automática de 80-10 + LTM3. El Presupuesto (Original) SÍ es editable celda por celda. ')+'Columna naranja = mes en curso. Vista Variación = Real − Presupuesto (verde a favor).</p></div>';
