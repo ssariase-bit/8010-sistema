@@ -477,10 +477,12 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-08-24-facturacion-contabilidad-v38';
+const APP_VERSION = '2026-08-31-ocupacion-criterio-unico-v53';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-08-31', version:'2026-08-31-ocupacion-criterio-unico-v53', titulo:'La ocupacion ya da lo mismo en todas las pantallas: criterio unico de inventario (Sol. Cristina Cervino)',
+    detalle:'Cristina Cervino reporto que el rack grafico mostraba 56% de ocupacion en agosto y el informe de KL mostraba 40,8% para el mismo mes. Se reprodujeron las dos cifras y ninguna estaba bien: diferian en el numerador Y en el denominador. El rack grafico contaba como noche ocupada el "Check-out hoy" (que es el dia de salida, no se cobra) y el estado "Completo" (unidad que se vendio dentro de otra o esta fuera de servicio), lo que inflaba las noches vendidas de agosto de 533 a 681; y como inventario descontaba solo Bloqueado y Mantenimiento. El informe de KL contaba bien las noches, pero dividia entre 42 llaves por los dias del mes sin descontar una sola noche fuera de servicio, lo que desinflaba el resultado. CRITERIO UNICO APROBADO POR GERENCIA GENERAL, ahora igual en el rack, en el informe y en el modelo financiero: noche vendida = Ocupado, Check-in hoy o Sale de viaje; "Check-out hoy" no cuenta porque es el dia de salida y su tarifa es cero; e inventario disponible = 42 llaves por los dias del mes MENOS las noches fuera de servicio (Completo, Bloqueado o Mantenimiento), porque una unidad que no se podia vender no puede estar en el denominador. Es la metodologia estandar de hoteleria: la ocupacion se mide sobre lo que efectivamente estaba disponible para vender. RESULTADO EN AGOSTO DE 2026: 533 noches vendidas sobre 1.160 noches disponibles (42 llaves x 31 dias = 1.302, menos 142 noches fuera de servicio: 122 en Completo, 11 bloqueadas y 9 en mantenimiento) = 45,9%. Ni 56% ni 40,8%. La serie del ano queda: abril 7,6%, mayo 19,7%, junio 27,2%, julio 34,8% y agosto 45,9%. HALLAZGO ADICIONAL: en agosto hubo 142 noches fuera de servicio, equivalentes a casi cinco apartamentos-mes. El 702 estuvo fuera los 31 dias y el 603 estuvo 28. Esa capacidad no vendida no aparecia en ningun indicador porque el informe la seguia contando como disponible.' },
   { fecha:'2026-08-26', version:'2026-08-26-modelo-informes-kl', titulo:'Modelo Financiero KL + Informes KL (Sol. Santiago)',
     detalle:'Dos modulos nuevos, solo Kubik. (1) MODELO FINANCIERO KL: reemplaza el PYG en Excel de 8i8. Las 84 cuentas del plan con su regla de calculo, los supuestos mes a mes y la proyeccion a 12 meses. Dos modos: "Cifras del Excel", que muestra el PYG tal como esta pegado en el archivo (verificado: las 84 cuentas x 12 meses coinciden al peso), y "Calculado por drivers". La pestaña Cuadre lista las 9 cuentas donde el archivo no obedece su propia regla. La pestaña EQUILIBRIO Y DEUDA separa el costo en fijo y variable por el driver de cada linea (no por regresion) y calcula cuanto hay que vender al mes para cubrir costos, cuanto para cubrir costos mas la cuota del credito, y la cobertura mes a mes; la cuota y un ajuste al costo fijo son editables. Incluye cargue mensual del Excel contable con vista previa, normalizacion de signos y lote reversible, y el comparativo Real vs Proyectado por cuenta y mes. (2) INFORMES KL: vista de junta con indicadores, umbral de cobertura, y graficas de contabilizado, reservas en libros, presupuesto y GOP contra la cuota; informe de ocupacion y ventas desde el rack; y un generador por secciones. Las graficas llevan la cifra sobre cada barra y muestran el detalle del mes al tocar una columna. CRITERIOS DE OCUPACION: noche ocupada = Ocupado, Check-in hoy o Sale de viaje; "Check-out hoy" es el dia de salida y no cuenta; "Completo" marca una unidad reformada y se excluye. El tipo de apartamento se deduce del codigo de la unidad porque el campo viene vacio en el 98% del rack. HALLAZGOS: el GOP del PYG restaba la cuenta Valla en lugar de los costos operativos, sobreestimando el año 1 en 1.914.752.656; las celdas mensuales eran valores digitados y no formulas; tres bases distintas se llamaban "% Ing"; la linea de Upselling suma cero en el año; la nomina de recepcion va 62% sobre presupuesto (31,6 contra 19,5 millones en julio, ocho personas donde el modelo previo cuatro); energia, agua, residuos y fumigacion nunca se causaron en preoperacion y aparecen por primera vez en agosto por 15,7 millones al mes; y el archivo del PYG no trae las hojas FLUJO PREOPERATIVO ni DATA que su propia portada describe. Se cargaron los 1.052 movimientos contables de abril a julio de 2026. PERMISOS: Cristina Cervino entra a los modulos financieros y confidenciales en los dos edificios; la aprobacion sigue restringida a Gerencia General.' },
   { fecha:'2026-08-24', version:'2026-08-24-facturacion-contabilidad-v38', titulo:'El aviso de factura emitida en 8010 deja de llegarle a Talento Humano y pasa a Contabilidad (Sol. Santiago)',
@@ -3785,8 +3787,13 @@ async function renderDashboard() {
   const ocuHoyPct = _k.pct21;
 
   // ── KPIs DEL MES ─────────────────────────────────────────
-  const OCU_MES = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
-  const FUERA_MES = ['Bloqueado','Mantenimiento'];
+  // CRITERIO UNICO DE OCUPACION (Sol. Cristina Cervino, 31-ago-2026 / aprobado Santiago Arias):
+  //   noche vendida = Ocupado, Check-in hoy o Sale de viaje.
+  //   "Check-out hoy" es el dia de salida: no se cobra, no cuenta.
+  //   "Completo" = unidad neutralizada (vendida dentro de otra o fuera de servicio): sale del INVENTARIO.
+  //   Inventario disponible = 42 llaves x dias del mes - noches fuera de servicio.
+  const OCU_MES = ['Ocupado','Check-in hoy','Sale de viaje'];
+  const FUERA_MES = ['Bloqueado','Mantenimiento','Completo'];
   const _baseSet = new Set(EB().aptosBase);
   const _fueraBaseN = rackMesAll.filter(r=>_baseSet.has(r.apto) && FUERA_MES.includes(r.estado)).length;
   const dispMes = Math.max(1, TOTAL_APTOS*daysInMonth - _fueraBaseN); // noches disponibles reales del mes (aptos x dias - fuera de servicio)
@@ -16861,6 +16868,9 @@ function _infCanal(r){
 // "Completo" marca una unidad reformada/unida a otra: no es una noche vendida, es
 // inventario fuera de servicio, y contarla inflaba la ocupacion.
 window._INF_EST_OCUPA = ['ocupado','check-in hoy','sale de viaje'];
+// Estados que sacan la unidad del inventario vendible de ese dia.
+// "Completo" = la unidad se vendio dentro de otra (combinada) o esta fuera de servicio.
+window._INF_EST_FUERA = ['completo','bloqueado','mantenimiento'];
 function _infOcupado(r){
   var e=String(r.estado||'').trim().toLowerCase();
   return window._INF_EST_OCUPA.indexOf(e)>-1;
@@ -16920,6 +16930,7 @@ async function renderInformesKL(){
   var qk=await _infCargarRack(st.desde, st.hasta);
   var rk=(qk.error?[]:qk.data);
   var vta=new Array(N).fill(0), noc=new Array(N).fill(0), ocupN=new Array(N).fill(0), hayRack={};
+  var fueraN=new Array(N).fill(0);   // noches fuera de inventario: Completo, Bloqueado, Mantenimiento
   var canal={}, tipoApto={}, nComp=0;
   rk.forEach(function(r){
     var per=String(r.fecha||'').slice(0,7), i=idx[per]; if(i==null) return;
@@ -16927,18 +16938,23 @@ async function renderInformesKL(){
     var t=Number(r.tarifa)||0;
     if(t>0){ vta[i]+=t; noc[i]++; }
     if(_infOcupado(r)) ocupN[i]++;
-    if(String(r.estado||'').trim().toLowerCase()==='completo') nComp++;
+    var _e=String(r.estado||'').trim().toLowerCase();
+    if(window._INF_EST_FUERA.indexOf(_e)>-1) fueraN[i]++;   // no vendible ese dia
+    if(_e==='completo') nComp++;
     if(t>0){
       var cn=_infCanal(r); canal[cn]=canal[cn]||{v:0,n:0}; canal[cn].v+=t; canal[cn].n++;
       var ta=_infTipo(r); tipoApto[ta]=tipoApto[ta]||{v:0,n:0}; tipoApto[ta].v+=t; tipoApto[ta].n++;
     }
   });
-  var ocupPct=MESES.map(function(p,i){ var d=_infDiasMes(p)*window._INF_UNID; return d?Math.round(ocupN[i]/d*1000)/10:0; });
+  // Inventario disponible del mes = llaves x dias - noches fuera de servicio
+  var dispM=MESES.map(function(p,i){ return Math.max(1,_infDiasMes(p)*window._INF_UNID - fueraN[i]); });
+  var ocupPct=MESES.map(function(p,i){ return Math.round(ocupN[i]/dispM[i]*1000)/10; });
   var adr=MESES.map(function(p,i){ return noc[i]?Math.round(vta[i]/noc[i]):0; });
-  var revpar=MESES.map(function(p,i){ var d=_infDiasMes(p)*window._INF_UNID; return d?Math.round(vta[i]/d):0; });
+  var revpar=MESES.map(function(p,i){ return Math.round(vta[i]/dispM[i]); });
 
   window._infDatos={MESES:MESES,idx:idx,pIng:pIng,pCos:pCos,pGop:pGop,pAloj:pAloj,pOcup:pOcup,pTar:pTar,
     rIng:rIng,rCos:rCos,rGop:rGop,rGrp:rGrp,vta:vta,noc:noc,ocupPct:ocupPct,adr:adr,revpar:revpar,
+    fueraN:fueraN,dispM:dispM,
     canal:canal,tipoApto:tipoApto,hayConta:hayConta,hayRack:hayRack,C:C,mo:mo,rk:rk,nComp:nComp};
 
   if(st.tab==='ocup') return _infTabOcup();
@@ -16978,8 +16994,8 @@ function _infTabJunta(){
   var ingEj=sIx(D.rIng,ejec), cosEj=sIx(D.rCos,ejec), gopEj=ingEj-cosEj;
   var vtaEj=sIx(D.vta,ejec), nocEj=sIx(D.noc,ejec);
   var adrEj=nocEj?Math.round(vtaEj/nocEj):0;
-  var diasEj=ejec.reduce(function(t,i){ return t+_infDiasMes(D.MESES[i])*window._INF_UNID; },0);
-  var ocupEj=diasEj?Math.round(ejec.reduce(function(t,i){ return t+D.ocupPct[i]*_infDiasMes(D.MESES[i])*window._INF_UNID/100; },0)/diasEj*1000)/10:0;
+  var diasEj=ejec.reduce(function(t,i){ return t+((D.dispM&&D.dispM[i])||_infDiasMes(D.MESES[i])*window._INF_UNID); },0);
+  var ocupEj=diasEj?Math.round(ejec.reduce(function(t,i){ return t+D.ocupPct[i]*((D.dispM&&D.dispM[i])||_infDiasMes(D.MESES[i])*window._INF_UNID)/100; },0)/diasEj*1000)/10:0;
   var revparEj=diasEj?Math.round(vtaEj/diasEj):0;
   // presupuesto del horizonte proyectado
   var ingPr=proy.reduce(function(t,i){ return t+(D.pIng[i]||0); },0);
@@ -17120,7 +17136,7 @@ function _infTabOcup(){
     +'<td style="text-align:right;font-weight:700">'+f(x[1])+'</td><td style="text-align:right">'+(totT?Math.round(x[1]/totT*1000)/10:0)+'%</td></tr>'; }).join('');
   document.getElementById('main-content').innerHTML=
     _infHead('Ocupacion y ventas · fuente: rack del sistema operativo')
-    +(D.nComp?'<div style="background:#FFF8E1;border:1px solid #E0C068;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:12px">ℹ️ <b>'+_mklNum(D.nComp)+'</b> noches del periodo estan marcadas como <b>Completo</b> (unidad reformada o unida a otra). No se cuentan como noches ocupadas — se rentan bajo el codigo de la unidad resultante. El inventario se mantiene en '+window._INF_UNID+' unidades.</div>':'')
+    +(D.nComp?'<div style="background:#FFF8E1;border:1px solid #E0C068;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:12px">ℹ️ <b>'+_mklNum(D.nComp)+'</b> noches del periodo estan marcadas como <b>Completo</b> (unidad reformada o unida a otra). No se cuentan como noches ocupadas y ademas SALEN del inventario de esos dias, porque no eran vendibles por separado. El inventario parte de '+window._INF_UNID+' llaves y se descuentan las noches fuera de servicio.</div>':'')
     + _infGrafOcupacion(D)
     + _mklGrafico('Venta de alojamiento', L, [
         {nom:'Vendido', datos:D.vta, color:CL.naranja},
@@ -17292,7 +17308,7 @@ function _infGrafOcupacion(D){
       +'<td style="text-align:right;font-weight:800;background:#eaf0ea'+(promC==null?'':';color:'+(promC>=100?'#1A7D3C':(promC>=80?'#B8860B':'#C0392B')))+'">'+(promC==null?'':Math.round(promC)+'%')+'</td></tr>';
   return graf
     +'<div class="card" style="margin-bottom:14px"><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr>'+th+'</tr></thead><tbody>'+filas+'</tbody></table></div>'
-    +'<p style="font-size:11px;color:var(--gris-t);margin-top:9px">Las columnas en verde son de <b>preoperación</b>: no tienen presupuesto contra el cual medirse. El cumplimiento se calcula solo donde hay proyección y ejecución. Ocupación = noches ocupadas sobre '+window._INF_UNID+' unidades por los días del mes.</p></div>';
+    +'<p style="font-size:11px;color:var(--gris-t);margin-top:9px">Las columnas en verde son de <b>preoperación</b>: no tienen presupuesto contra el cual medirse. El cumplimiento se calcula solo donde hay proyección y ejecución. Ocupación = noches ocupadas (Ocupado, Check-in hoy o Sale de viaje) sobre el inventario disponible, que es '+window._INF_UNID+' llaves por los días del mes menos las noches fuera de servicio (Completo, Bloqueado o Mantenimiento). Criterio único en todo el sistema.</p></div>';
 }
 
 // ═══════════════════════════════════════════════════════════
