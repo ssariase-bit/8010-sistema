@@ -477,10 +477,12 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-02-inc-bagatelle-v55';
+const APP_VERSION = '2026-09-02-solicitudes-cristina-camila-martha-v56';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-02', version:'2026-09-02-solicitudes-cristina-camila-martha-v56', titulo:'Complementary fuera de la ocupación en Informes KL, corrección Suite Home/Suite Deluxe en Kubik, y Martha Galavis en copia a todas las notificaciones de Kubik',
+    detalle:'(1) Sol. Cristina Cerviño (1-sep-2026): "es mejor sacar de la ocupación los complementary, porque eso nos perjudica". La regla ya existía desde el 12-ago-2026 (Sol. Santiago) y se aplicaba en Rack, Dashboard, Informe Ejecutivo e Indicadores via la función canónica _esCompRack, pero el módulo Informes KL calculaba la ocupación (ocupN) solo por estado del rack, sin cruzar contra las reservas Complementary — quedó fuera de la unificación de criterio de ocupación del 31-ago (v53). Se agrega el mismo cruce (_esCompRack) también aquí, para que Informes KL quede consistente con el resto del sistema. (2) Sol. Camila Cuartas (2-sep-2026): la confirmación de reserva cambiaba "Suite Home" por "Suite Deluxe". Causa raíz: en Kubik, el campo que decide el nombre (config: completo/dividido) estaba fijo en un <select> oculto (display:none) con una sola opción ("Completo") que nunca se mostraba ni se podía cambiar — a diferencia de 8010, que sí tiene un selector visible ("Tipo de apto en la confirmación"). Resultado: toda reserva de una unidad combinable de Kubik (terminación 04, ej. 504/504A) generaba SIEMPRE "Suite Deluxe" en la confirmación, sin importar si solo se reservó la Suite Home. Se agrega el selector visible "Configuración del apartamento" (Completo/Dividido) en el formulario de reserva de Kubik, igual en espíritu al de 8010. IMPORTANTE: de aquí en adelante, para que una reserva de solo la Suite Home salga bien en la confirmación, hay que elegir "Dividido" al crear la reserva — antes era físicamente imposible elegirlo. (3) Sol. Ricardo Vallejo y Cristina Cerviño (1-sep-2026, duplicada): agregar a Martha Galavis (martha.galavis@kubikliving.com) en copia a todas las notificaciones de Kubik. Se agrega en las 7 listas de distribución de informes de Kubik (Novedades, Rack, Camareras, Control de Personal, Fin de Semana, Saldos, Carpeta, Semana en Curso) y en la lista de respaldo.' },
   { fecha:'2026-09-02', version:'2026-09-02-inc-bagatelle-v55', titulo:'Los consumos de Bagatelle pasan de IVA 19% a impuesto al consumo del 8%, por criterio de Revisoria Fiscal',
     detalle:'CRITERIO (Richard Afanador, Revisoria Fiscal y Adm-Fin, 2-sep-2026): Bagatelle opera como franquicia, por lo que SU servicio esta gravado con IVA del 19%. Pero 8i8 no traslada ese consumo al huesped como un reembolso de gastos, sino que lo cobra como un item prestado por 8i8, y ese hecho economico se trata en la operacion con IMPUESTO AL CONSUMO del 8%. Lo que registra este modulo es la venta de 8i8 al huesped, no la compra de 8i8 a Bagatelle: por eso la tasa correcta aqui es 8% de INC. El sistema estaba parametrizado con 19% de IVA. Queda en 8%, igual que Magnifique en 8010. QUE CAMBIA EN PANTALLA: sobre una comanda de $12.500, el impuesto pasa de $1.996 a $926 y la base gravable sube de $10.504 a $11.574; la propina del 10% se calcula sobre esa base y pasa de $1.050 a $1.157. HALLAZGO ADICIONAL AL REVISAR EL HISTORICO: los recibos de Kubik conviven con dos logicas opuestas. Los 46 recibos de mayo y junio SUMABAN el impuesto sobre el valor de la comanda; los 68 de julio en adelante lo EXTRAEN, que es lo correcto. Diez recibos no encajan en ninguna de las dos. Esa es la causa real de la diferencia reportada en la cortesia del apartamento 903: no era entre el sistema operativo y el de facturacion, sino entre dos generaciones de registros dentro del propio sistema. En 8010 el mismo problema aparece en 47 de 84 recibos. El cambio de tarifa aplica de aqui en adelante; la correccion retroactiva de los registros historicos queda pendiente de autorizacion expresa de Gerencia General por tratarse de una modificacion masiva de datos contables. Medido sobre los 124 recibos de Kubik: valor de comandas 14.373.531, impuesto registrado hoy 2.404.973, impuesto correcto al 8% extraido 1.064.706, diferencia 1.340.267 que pasa de impuesto a base gravable.' },
   { fecha:'2026-09-01', version:'2026-09-01-pyg-8010-antes-de-impuestos-v54', titulo:'El Estado de Resultados de 8010 ya no se detiene en la utilidad operacional: llega hasta la utilidad antes de impuestos, con el % de cada linea sobre los ingresos (Sol. Santiago)',
@@ -7188,8 +7190,7 @@ function renderNuevaReserva() {
             <input type="date" id="res-checkout" onchange="calcReserva()">
           </div>
         </div>
-        <select id="res-config" style="display:none"><option value="completo" selected>Completo</option></select>
-        ${(((EB&&EB().nombre)||'').indexOf('8010')>-1) ? `<div class="form-row"><div class="form-group">
+        ${(((EB&&EB().nombre)||'').indexOf('8010')>-1) ? `<select id="res-config" style="display:none"><option value="completo" selected>Completo</option></select><div class="form-row"><div class="form-group">
           <label>Tipo de apto en la confirmación (opcional)</label>
           <select id="res-tipo-manual">
             <option value="">Automático según el apartamento</option>
@@ -7203,7 +7204,14 @@ function renderNuevaReserva() {
             <option value="132">Apartamento 132 m² — 2 habitaciones, 01 King + 02 Twin</option>
           </select>
           <div style="font-size:11px;color:#7F7F7F;margin-top:4px">Déjalo en automático salvo que necesites forzar la descripción.</div><div class="form-group" style="margin-top:6px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#C2410C"><input type="checkbox" id="res-completo-a" style="width:18px;height:18px"> Reservar como APTO COMPLETO — bloquear también su habitación A (solo aptos con hab. A, ej. 1002 → 1002A)</label></div>
-        </div></div>` : ``}
+        </div></div>` : `<div class="form-row"><div class="form-group">
+          <label>Configuración del apartamento (opcional)</label>
+          <select id="res-config">
+            <option value="completo" selected>Completo (incluye la habitación combinada — ej. Suite Deluxe, Family/Two Residence)</option>
+            <option value="dividido">Dividido (solo esta unidad, sin la habitación combinada — ej. Suite Home)</option>
+          </select>
+          <div style="font-size:11px;color:#7F7F7F;margin-top:4px">Sol. Camila Cuartas (2-sep-2026): solo aplica a unidades combinables (terminación 04, ej. 504/504A). Antes no existía forma de marcar "Dividido" en Kubik y la confirmación siempre salía como Suite Deluxe aunque solo se reservara la Suite Home. Déjalo en "Completo" si no aplica.</div>
+        </div></div>`}
         <div class="form-row col3">
           <div class="form-group">
             <label>Noches</label>
@@ -8879,22 +8887,24 @@ function _tituloInforme(){ const mc=document.getElementById('main-content'); ret
 // nunca vuelva a quedar sin copia a recepcion por el solo hecho de no estar en la lista.
 const _DEST_INFORME = {
   '8010':  { to:['sa@8010ul.com'],     cc:['fabio.malaver@8010urbanliving.com','recepcion@8010urbanliving.com'] },
-  'kubik': { to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','recepcion@8i8op.com'] }
+  'kubik': { to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','recepcion@8i8op.com','martha.galavis@kubikliving.com'] }
 };
 // Listas de distribucion por reporte (Kubik). Primero = Para; resto = CC.
 // Fix (Sol. Juanita Noguera, hallazgo 8a0386ab): desde la migración de correos de 8i8, a Recepción
 // (recepcion@8i8op.com) dejaron de llegarle las copias de Novedades, Housekeeping y Control de Ingreso/
 // Salida de Personal — comparado con la lista de 8010 (donde recepción sí está en cc), en Kubik nunca
 // se agregó. Se agrega aquí a los mismos reportes que en 8010.
+// Sol. Ricardo Vallejo y Cristina Cerviño (1-sep-2026): agregar a Martha Galavis en copia a TODAS
+// las notificaciones/informes de Kubik. Se agrega en las 7 listas de abajo y en _DEST_INFORME.kubik.
 const _DEST_KUBIK_REPORTES = [
-  { match:/novedad/i,           to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com','recepcion@8i8op.com'] },
-  { match:/ingreso.*personal|control de personal/i, to:['rrhh@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','recepcion@8i8op.com'] },
-  { match:/rack/i,              to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com','recepcion@8i8op.com'] },
-  { match:/camareras/i,         to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','recepcion@8i8op.com'] },
-  { match:/fin de semana/i,     to:['operativo@8i8op.com'], cc:['operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com','recepcion@8i8op.com'] },
-  { match:/saldos/i,            to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com','recepcion@8i8op.com'] },
-  { match:/carpeta/i,           to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com','recepcion@8i8op.com'] },
-  { match:/semana en curso/i,   to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com','recepcion@8i8op.com'] },
+  { match:/novedad/i,           to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com','recepcion@8i8op.com','martha.galavis@kubikliving.com'] },
+  { match:/ingreso.*personal|control de personal/i, to:['rrhh@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','recepcion@8i8op.com','martha.galavis@kubikliving.com'] },
+  { match:/rack/i,              to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','admin1@8i8op.com','admin2@8i8op.com','admin4@8i8op.com','contador@8i8op.com','gmercadeo@8i8op.com','rrhh@8i8op.com','recepcion@8i8op.com','martha.galavis@kubikliving.com'] },
+  { match:/camareras/i,         to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','recepcion@8i8op.com','martha.galavis@kubikliving.com'] },
+  { match:/fin de semana/i,     to:['operativo@8i8op.com'], cc:['operativo.compras@8i8op.com','dir.mantenimiento@8i8op.com','recepcion@8i8op.com','martha.galavis@kubikliving.com'] },
+  { match:/saldos/i,            to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com','recepcion@8i8op.com','martha.galavis@kubikliving.com'] },
+  { match:/carpeta/i,           to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com','recepcion@8i8op.com','martha.galavis@kubikliving.com'] },
+  { match:/semana en curso/i,   to:['sariase@8i8op.com'], cc:['operativo@8i8op.com','operativo.compras@8i8op.com','compras@8010urbanliving.com','recepcion@8i8op.com','martha.galavis@kubikliving.com'] },
 ];
 // Listas de distribucion por reporte (8010). Primero = Para; resto = CC.
 const _DEST_8010_REPORTES = [
@@ -16853,7 +16863,7 @@ async function _infCargarRack(desde,hasta){
   var todas=[], off=0;
   for(var i=0;i<20;i++){
     var q=await window._sbFromRaw('rack')
-      .select('fecha,apto,tarifa,estado,huesped,canal,empresa,tipo_venta,tipo')
+      .select('fecha,apto,tarifa,estado,huesped,canal,empresa,tipo_venta,tipo,reserva_id')
       .eq('edificio','kubik').gte('fecha',d).lte('fecha',h)
       .order('fecha').range(off,off+999);
     if(q.error) return {error:q.error};
@@ -16941,15 +16951,21 @@ async function renderInformesKL(){
   // ── real operativo (rack) ──
   var qk=await _infCargarRack(st.desde, st.hasta);
   var rk=(qk.error?[]:qk.data);
+  // Sol. Cristina Cerviño (1-sep-2026): "sacar de la ocupacion los complementary, porque eso nos
+  // perjudica". Regla ya existia desde el 12-ago-2026 (Sol. Santiago) para Rack/Dashboard/Informe
+  // Ejecutivo/Indicadores via _esCompRack, pero este informe (Informes KL) calculaba ocupN solo por
+  // estado (_infOcupado), sin excluir las reservas Complementary — quedaba fuera de la regla canonica.
+  var _compSetKL = await (window._fetchCompReservaIds ? window._fetchCompReservaIds() : Promise.resolve(new Set()));
   var vta=new Array(N).fill(0), noc=new Array(N).fill(0), ocupN=new Array(N).fill(0), hayRack={};
   var fueraN=new Array(N).fill(0);   // noches fuera de inventario: Completo, Bloqueado, Mantenimiento
   var canal={}, tipoApto={}, nComp=0;
   rk.forEach(function(r){
     var per=String(r.fecha||'').slice(0,7), i=idx[per]; if(i==null) return;
     hayRack[i]=true;
-    var t=Number(r.tarifa)||0;
+    var esComp = window._esCompRack ? window._esCompRack(r,_compSetKL) : false;
+    var t=esComp?0:(Number(r.tarifa)||0);
     if(t>0){ vta[i]+=t; noc[i]++; }
-    if(_infOcupado(r)) ocupN[i]++;
+    if(_infOcupado(r) && !esComp) ocupN[i]++;
     var _e=String(r.estado||'').trim().toLowerCase();
     if(window._INF_EST_FUERA.indexOf(_e)>-1) fueraN[i]++;   // no vendible ese dia
     if(_e==='completo') nComp++;
