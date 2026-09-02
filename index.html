@@ -477,10 +477,14 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-02-solicitudes-cristina-camila-martha-v56';
+const APP_VERSION = '2026-09-02-paginacion-caja-historico-ck-v58';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-02', version:'2026-09-02-paginacion-caja-historico-ck-v58', titulo:'Auditoría del SO: se pagina caja (arqueo de turno) e Histórico CKI/CKO antes de que el límite de 1.000 filas de Supabase los trunque en silencio',
+    detalle:'Sol. Santiago (2-sep-2026): "audita el SO". Se encontraron dos consultas sin paginar que traían la tabla completa confiando en el límite por defecto de Supabase (1.000 filas): (1) _turnoCargarSaldos (arqueo/cuadre de caja menor) leía toda la tabla caja de una vez — hoy tiene 295 filas, sin problema todavía, pero es el mismo defecto que ya truncó el Rack en agosto (aptos ocupados se pintaban como libres al pasar de 1.000 filas) y esta tabla alimenta el cuadre de efectivo, así que se corrigió antes de que fuera un problema real. (2) Histórico CKI/CKO traía solo las 2.000 novedades más recientes con un .limit(2000) fijo; la tabla novedades ya tiene más de 2.000 registros, así que las ~130 más antiguas (algunas CKI/CKO) ya no aparecían ni eran buscables en ese histórico. Ambas se cambiaron a lectura paginada (bloques de 1.000, igual que ya se hace en Rack), para que dejen de depender de que la tabla se mantenga bajo el límite.' },
+  { fecha:'2026-09-02', version:'2026-09-02-dashboard-refresh-60s-v57', titulo:'El Dashboard se quedaba mostrando check-ins/check-outs ya hechos: el auto-refresh real eran 15 minutos, no 3 (Sol. Santiago)',
+    detalle:'Santiago reportó (2-sep-2026) que el Dashboard y el Rack mostraban "Check-in hoy 2 / Check-out hoy 2" con huéspedes que en realidad ya habían llegado/salido, y sin nombre en el detalle. Causa: el temporizador de auto-refresh del Dashboard decía en el comentario "cada 3 minutos" pero el valor real del código era 900000 ms = 15 minutos, así que el contador y la lista (mostrarListaCK) podían quedar hasta 15 minutos desactualizados frente a check-ins/check-outs hechos desde el Rack, Informe CKI o Informe CKO. Es el MISMO defecto que ya se había corregido en el Rack el 13-ago-2026 (ahí también decía 900000/15min con comentario de 60s) pero nunca se replicó en el Dashboard. Se deja en 60 segundos, igual que el Rack. HALLAZGO APARTE, AL REVISAR ESTO: hay reservas con múltiples registros vivos en la tabla de reservas para la MISMA estadía (mismo apto/huésped/fechas) creados en fechas distintas — ej. Rowan Fetzer (apto 1001, 8010) con 7 registros entre junio y agosto, Monica Frydman (apto 304, 8010) con 4 entre agosto y septiembre — indicio de que editar una reserva en ciertos casos crea un registro nuevo en vez de actualizar el existente, dejando el anterior huérfano. El Rack no lo muestra (solo referencia el más reciente), pero cualquier informe que lea la tabla de reservas directamente sí podría contarlos de más. Queda pendiente dimensionar el alcance total antes de decidir una corrección.' },
   { fecha:'2026-09-02', version:'2026-09-02-solicitudes-cristina-camila-martha-v56', titulo:'Complementary fuera de la ocupación en Informes KL, corrección Suite Home/Suite Deluxe en Kubik, y Martha Galavis en copia a todas las notificaciones de Kubik',
     detalle:'(1) Sol. Cristina Cerviño (1-sep-2026): "es mejor sacar de la ocupación los complementary, porque eso nos perjudica". La regla ya existía desde el 12-ago-2026 (Sol. Santiago) y se aplicaba en Rack, Dashboard, Informe Ejecutivo e Indicadores via la función canónica _esCompRack, pero el módulo Informes KL calculaba la ocupación (ocupN) solo por estado del rack, sin cruzar contra las reservas Complementary — quedó fuera de la unificación de criterio de ocupación del 31-ago (v53). Se agrega el mismo cruce (_esCompRack) también aquí, para que Informes KL quede consistente con el resto del sistema. (2) Sol. Camila Cuartas (2-sep-2026): la confirmación de reserva cambiaba "Suite Home" por "Suite Deluxe". Causa raíz: en Kubik, el campo que decide el nombre (config: completo/dividido) estaba fijo en un <select> oculto (display:none) con una sola opción ("Completo") que nunca se mostraba ni se podía cambiar — a diferencia de 8010, que sí tiene un selector visible ("Tipo de apto en la confirmación"). Resultado: toda reserva de una unidad combinable de Kubik (terminación 04, ej. 504/504A) generaba SIEMPRE "Suite Deluxe" en la confirmación, sin importar si solo se reservó la Suite Home. Se agrega el selector visible "Configuración del apartamento" (Completo/Dividido) en el formulario de reserva de Kubik, igual en espíritu al de 8010. IMPORTANTE: de aquí en adelante, para que una reserva de solo la Suite Home salga bien en la confirmación, hay que elegir "Dividido" al crear la reserva — antes era físicamente imposible elegirlo. (3) Sol. Ricardo Vallejo y Cristina Cerviño (1-sep-2026, duplicada): agregar a Martha Galavis (martha.galavis@kubikliving.com) en copia a todas las notificaciones de Kubik. Se agrega en las 7 listas de distribución de informes de Kubik (Novedades, Rack, Camareras, Control de Personal, Fin de Semana, Saldos, Carpeta, Semana en Curso) y en la lista de respaldo.' },
   { fecha:'2026-09-02', version:'2026-09-02-inc-bagatelle-v55', titulo:'Los consumos de Bagatelle pasan de IVA 19% a impuesto al consumo del 8%, por criterio de Revisoria Fiscal',
@@ -3906,12 +3910,18 @@ async function renderDashboard() {
   const ultTurno = ultTurnos[0];
   const horaActual = now.toLocaleTimeString('en-US',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit',hour12:true});
 
-  // ── AUTO-REFRESH cada 3 minutos ───────────────────────────
+  // ── AUTO-REFRESH cada 60s ───────────────────────────
+  // Sol. Santiago (2-sep-2026): el Dashboard mostraba "Check-in hoy"/"Check-out hoy" ya
+  // procesados (el contador no bajaba y el nombre no aparecía en el detalle) porque el
+  // temporizador real eran 900000ms (15 minutos), aunque el comentario decía "cada 3 minutos".
+  // Es el mismo defecto que ya se había corregido en el Rack el 13-ago-2026 (ahí también decía
+  // 900000/15min con comentario de 60s) pero nunca se replicó aquí. Se deja en 60s, igual que
+  // el Rack, para que "HOY EN TIEMPO REAL" sea real.
   clearTimeout(window._dashTimer);
   window._dashTimer = setTimeout(() => {
     // Solo refrescar si estamos viendo el dashboard (no si estamos en un formulario)
     if (window._currentView === 'dashboard') loadView('dashboard');
-  }, 900000); // 15 minutos
+  }, 60000); // 60 segundos
 
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px">
@@ -19911,7 +19921,18 @@ async function renderHistoricoCK(){
     </div>
     <div class="card"><div id="histck-body"><div class="empty"><div class="empty-icon">⏳</div><p>Cargando…</p></div></div></div>`;
   try { if (typeof window._cargarAptoNombres==='function') await window._cargarAptoNombres(); } catch(_){}
-  var r = await sb.from('novedades').select('*').order('created_at',{ascending:false}).limit(2000);
+  // Sol. Santiago (2-sep-2026), auditoria del SO: traia solo las 2.000 novedades mas recientes;
+  // la tabla ya tiene mas de 2.000, asi que las mas antiguas (algunas CKI/CKO) no aparecian ni
+  // eran buscables en este historico. Se pagina para traer todo.
+  var histRows=[], _hcOff=0;
+  for(var _hcI=0; _hcI<50; _hcI++){
+    var _hcQ=await sb.from('novedades').select('*').order('created_at',{ascending:false}).range(_hcOff,_hcOff+999);
+    if(_hcQ.error) break;
+    histRows=histRows.concat(_hcQ.data||[]);
+    if(!_hcQ.data || _hcQ.data.length<1000) break;
+    _hcOff+=1000;
+  }
+  var r={data:histRows};
   window._histCK = (r.data||[]).filter(function(n){ return _esNovedadCK(n) && (n.edificio===EDIFICIO_ACTIVO || !n.edificio); });
   _histCKPintar(window._histCK);
 }
@@ -21144,7 +21165,20 @@ window._turnoCajasHTML = function(){
 window._turnoCargarSaldos = async function(){
   try{
     var cajas=(EB().cajasMenores)||[]; var cols=['ltm3','ot','ph'];
-    var r=await sb.from('caja').select('caja,tipo,valor,estado_legal');
+    // Sol. Santiago (2-sep-2026), auditoria del SO: esta consulta traia TODA la tabla caja sin
+    // paginar, confiando en el limite por defecto de PostgREST (1.000 filas). Hoy caja tiene 295
+    // filas y no pasa nada, pero es el MISMO defecto que ya trunco el Rack en agosto al pasar de
+    // 1.000 filas (aptos ocupados se pintaban como libres). Como caja solo crece y alimenta el
+    // arqueo/cuadre de turno, se pagina aqui antes de que se convierta en un problema real.
+    var cajaRows=[], _cjOff=0;
+    for(var _cjI=0; _cjI<50; _cjI++){
+      var _cjQ=await sb.from('caja').select('caja,tipo,valor,estado_legal').range(_cjOff,_cjOff+999);
+      if(_cjQ.error) break;
+      cajaRows=cajaRows.concat(_cjQ.data||[]);
+      if(!_cjQ.data || _cjQ.data.length<1000) break;
+      _cjOff+=1000;
+    }
+    var r={data:cajaRows};
     var mov=(r.data||[]).filter(function(x){ return x.estado_legal!=='Histórico'; });
     var ENT=['Ingreso','Fondo','Reintegro'];
     cajas.forEach(function(c,i){ if(i>2) return; var col=cols[i]; var s=0;
