@@ -477,10 +477,12 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-01-pyg-8010-antes-de-impuestos-v54';
+const APP_VERSION = '2026-09-02-inc-bagatelle-v55';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-02', version:'2026-09-02-inc-bagatelle-v55', titulo:'Los consumos de Bagatelle pasan de IVA 19% a impuesto al consumo del 8%, por criterio de Revisoria Fiscal',
+    detalle:'CRITERIO (Richard Afanador, Revisoria Fiscal y Adm-Fin, 2-sep-2026): Bagatelle opera como franquicia, por lo que SU servicio esta gravado con IVA del 19%. Pero 8i8 no traslada ese consumo al huesped como un reembolso de gastos, sino que lo cobra como un item prestado por 8i8, y ese hecho economico se trata en la operacion con IMPUESTO AL CONSUMO del 8%. Lo que registra este modulo es la venta de 8i8 al huesped, no la compra de 8i8 a Bagatelle: por eso la tasa correcta aqui es 8% de INC. El sistema estaba parametrizado con 19% de IVA. Queda en 8%, igual que Magnifique en 8010. QUE CAMBIA EN PANTALLA: sobre una comanda de $12.500, el impuesto pasa de $1.996 a $926 y la base gravable sube de $10.504 a $11.574; la propina del 10% se calcula sobre esa base y pasa de $1.050 a $1.157. HALLAZGO ADICIONAL AL REVISAR EL HISTORICO: los recibos de Kubik conviven con dos logicas opuestas. Los 46 recibos de mayo y junio SUMABAN el impuesto sobre el valor de la comanda; los 68 de julio en adelante lo EXTRAEN, que es lo correcto. Diez recibos no encajan en ninguna de las dos. Esa es la causa real de la diferencia reportada en la cortesia del apartamento 903: no era entre el sistema operativo y el de facturacion, sino entre dos generaciones de registros dentro del propio sistema. En 8010 el mismo problema aparece en 47 de 84 recibos. El cambio de tarifa aplica de aqui en adelante; la correccion retroactiva de los registros historicos queda pendiente de autorizacion expresa de Gerencia General por tratarse de una modificacion masiva de datos contables. Medido sobre los 124 recibos de Kubik: valor de comandas 14.373.531, impuesto registrado hoy 2.404.973, impuesto correcto al 8% extraido 1.064.706, diferencia 1.340.267 que pasa de impuesto a base gravable.' },
   { fecha:'2026-09-01', version:'2026-09-01-pyg-8010-antes-de-impuestos-v54', titulo:'El Estado de Resultados de 8010 ya no se detiene en la utilidad operacional: llega hasta la utilidad antes de impuestos, con el % de cada linea sobre los ingresos (Sol. Santiago)',
     detalle:'DATOS. Se cargo el archivo PRESUPUESTO 2026 8010 (corte julio) completo: las cuatro entidades (80-10 Operador Turistico, LTM3 Arriendo, Propiedad Horizontal y el consolidado TOTAL), real de enero a julio y presupuesto, tomando como linea de comparacion el presupuesto original. Antes el modulo tenia datos congelados desde el 12 de julio, con junio y julio en cero. Las cifras se validaron contra la hoja Ppto VS Actual del propio archivo y coinciden al peso en las cinco lineas de control: ingresos 2.988.721.813, gastos de operacion 2.097.298.605, utilidad operacional 745.115.919, presupuesto de ingresos 3.718.161.301 y presupuesto de utilidad 1.642.829.111. CORRECCION DE UN ERROR VIEJO: la linea de mantenimiento estaba guardada como MANTENIMIENTO Y REPARACION en singular y la pantalla la buscaba en plural, de modo que nunca se mostro; eran 95.477.372 acumulados invisibles en el estado de resultados. Se unifico el nombre y se eliminaron las filas duplicadas que quedaban. ESTRUCTURA. El P&L se detenia en la utilidad operacional, que para 8010 es una lectura incompleta porque deja por fuera el leasing del edificio. Se agregaron tres lineas: INGRESOS NO OPERACIONALES, GASTOS NO OPERACIONALES y el subtotal UTILIDAD ANTES DE IMPUESTOS, que es GOP mas ingresos no operacionales menos gastos no operacionales. Los no operacionales quedan despues del GOP y no contaminan el total de gastos de operacion. PORCENTAJES. Se agrego una columna % Ing. que muestra cada linea como participacion sobre los ingresos operacionales del periodo, y dos indicadores nuevos en la banda superior: margen operacional acumulado y utilidad antes de impuestos acumulada con su porcentaje. LO QUE MUESTRA: enero a julio de 2026 cierra con utilidad operacional de +745.115.919 (24,9% de margen) pero utilidad ANTES DE IMPUESTOS de -411.714.409, es decir -13,8%. La diferencia son 1.156.830.328 de gastos financieros netos, de los cuales 1.090.574.638 son el leasing Itau del edificio: el 36,5% de todo lo vendido. Por entidad: 80-10 aporta +1.489.848.969 antes de impuestos, LTM3 -1.898.934.544 y la Propiedad Horizontal -48.779.754.' },
   { fecha:'2026-08-31', version:'2026-08-31-ocupacion-criterio-unico-v53', titulo:'La ocupacion ya da lo mismo en todas las pantallas: criterio unico de inventario (Sol. Cristina Cervino)',
@@ -1094,7 +1096,12 @@ const EDIFICIOS = {
     ],
     facturarA: ['8i8 Operadora SAS','Particular','Otra'],
     // Restaurante del edificio (impuesto YA incluido en el precio -> se extrae). Bagatelle factura IVA 19% + servicio 10%.
-    restaurante: { nombre:'Bagatelle', impuesto:'IVA', tasa:0.19, servicio:0.10, domicilio:0.15 },
+    // Criterio de Revisoria Fiscal (Richard Afanador, 2-sep-2026): Bagatelle opera como franquicia,
+    // por lo que SU servicio esta gravado con IVA del 19%. Pero 8i8 no traslada ese consumo como
+    // reembolso sino que lo cobra al huesped como un item prestado por 8i8, y en la operacion ese
+    // hecho se trata con IMPUESTO AL CONSUMO del 8%. Lo que registra este modulo es la venta de 8i8
+    // al huesped, no la compra a Bagatelle: por eso la tasa aqui es 8% de INC, no 19% de IVA.
+    restaurante: { nombre:'Bagatelle', impuesto:'Impoconsumo', tasa:0.08, servicio:0.10, domicilio:0.15 },
     wifi: { red:'HUESPEDES_KL', clave:'Kubik8i8' },
     camareras: ['YOLIMAR MANZANILLO','LUZ DARY RODRÍGUEZ','ÁNGELA DÍAZ'],
     jornadas: { 'ADMINISTRADOR':540, 'CAMARERA':500, 'MANTENIMIENTO':540, 'OTRO':540 },
@@ -8282,7 +8289,10 @@ function renderGenForm(tabla, titulo, campos) { if(!window._genEditData) window.
     const _r2 = (((EB&&EB().nombre)||'').indexOf('8010')>-1) ? (x=>Math.round((x||0)*100)/100) : (x=>Math.round(x||0));
     const _vc=document.getElementById('gf-valor_comanda'), _dm=document.getElementById('gf-domicilio'), _vr=document.getElementById('gf-valor_recibo'), _vd=document.getElementById('gf-valor_domicilio'), _ci=document.getElementById('gf-iva'), _pp=document.getElementById('gf-propina'), _ct=document.getElementById('gf-total');
     // IMPUESTO YA INCLUIDO en el precio del producto -> se EXTRAE, no se suma.
-    // Tasa por edificio: 8010 (Magnifique) impoconsumo 8% · Kubik (Bagatelle) IVA 19%.
+    // Tasa por edificio: impoconsumo 8% en los dos. Magnifique (8010) y Bagatelle (Kubik).
+    // Bagatelle opera como franquicia y SU servicio esta gravado con IVA 19%, pero 8i8 no lo
+    // traslada como reembolso: lo cobra al huesped como item prestado por 8i8, hecho gravado
+    // con INC del 8%. Este modulo registra la venta al huesped. Criterio de Revisoria Fiscal.
     const _rcfg = (EB&&EB().restaurante) || { nombre:'', tasa:0.19, servicio:0.10, domicilio:0.15 };
     const _rate = _rcfg.tasa;                                  // impuesto incluido por edificio (8010 8%, Kubik 19%)
     const _baseSin = b => _r2((b||0)/(1+_rate));               // base sin impuesto
