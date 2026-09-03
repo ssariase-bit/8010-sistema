@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-03-cruce-rack-grafico-v60';
+const APP_VERSION = '2026-09-03-criterio-unico-5-modulos-v61';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-03', version:'2026-09-03-criterio-unico-5-modulos-v61', titulo:'El % de ocupación del mes ya da lo mismo en los 5 módulos que lo muestran — Indicadores e Informe Ejecutivo tenían su propio criterio, distinto al de Dashboard/Rack/Informes KL',
+    afecta:'Indicadores de Ocupación y Ventas, Informe Ejecutivo, Dashboard, Rack (hereda de Indicadores), Informes KL',
+    detalle:'Sol. Santiago (3-sep-2026), sobre el cruce contra el Rack Gráfico externo: "todo debe coincidir en todos los modulos de ventas y los racks etc pero todo debe hablar el mismo idioma". El criterio único de ocupación (noche vendida = Ocupado/Check-in hoy/Sale de viaje; "Check-out hoy" no cuenta; disponible = llaves x días - noches fuera de servicio) se aprobó el 31-ago (v53) y se aplicó bien en Dashboard e Informes KL, pero cada módulo lo tenía copiado a mano en su propia función en vez de leerlo de un solo lugar — y dos nunca se actualizaron: (1) Indicadores de Ocupación y Ventas contaba "Completo" como noche ocupada (debía estar fuera de inventario) y su disponible NO restaba nada de fuera de servicio (ni Completo, ni Bloqueado, ni Mantenimiento) — era el más alejado del criterio de los 4 módulos que muestran esta cifra. Como el Rack (pantalla) toma su propio % directamente de Indicadores, heredaba el mismo error. (2) Informe Ejecutivo contaba "Check-out hoy" Y "Completo" como noches ocupadas, y tampoco restaba fuera de servicio del disponible. Verificado con el cruce contra el archivo externo del 3-sep: para 8010, homologando el inventario a 21 unidades base (igual al archivo), el % de ocupación mensual real de enero a agosto queda 58,6% / 77,0% / 66,7% / 57,5% / 86,5% / 72,9% / 87,8% / 83,0% — antes, Indicadores e Informe Ejecutivo mostraban cifras más altas que esas, cada uno por un motivo distinto. Se crean dos constantes únicas (window._OCU_NOCHE y window._FUERA_INVENTARIO, junto a _esVentaAloja) y los 5 módulos las usan a partir de ahora — incluido Informes KL, que ya calculaba bien pero tenía su propia copia en minúsculas; ahora esa copia se deriva de la constante única, para que no se vuelva a desincronizar como pasó aquí. IMPORTANTE: el % de ocupación mensual que muestran Indicadores, Informe Ejecutivo y Rack BAJA con este cambio (quedan iguales a Dashboard/Informes KL) — es la cifra correcta según el criterio que aprobó Gerencia General, no una regresión.' },
   { fecha:'2026-09-03', version:'2026-09-03-cruce-rack-grafico-v60', titulo:'Cruce contra el Rack Gráfico externo (Excel) de los dos edificios: se encuentra y corrige un huérfano en Kubik al mover una reserva combinada de apto',
     afecta:'editarReserva() y guardarReserva() — liberación del apto viejo al editar una reserva; datos de rack en Kubik',
     detalle:'Sol. Santiago (3-sep-2026): "revisa contra lo que tenemos", con el Rack Gráfico Ocupación y Ventas 2026 de Kubik (42 llaves) y el de 8010 (FOSE34, V06, 33 unidades) como referencia. HALLAZGO 1 (código, corregido): al editar una reserva y cambiarla de apartamento o acortarla, el sistema liberaba el apto viejo adivinando sus unidades físicas a partir del código guardado en la reserva (ej. "FR7"). Eso funciona para un combinado con código, pero en rack los días siempre quedan escritos bajo las unidades físicas (701/702), nunca bajo "FR7" — así que el borrado nunca encontraba nada que borrar en ese caso, y además una unidad hermana agregada a mano (sin código) tampoco se contemplaba. Se encontró un caso real: la reserva de Maria Lucia Villalba en Kubik se movió del apto 404 al 403, y el 404 quedó "Ocupado" a su nombre para el 30 y 31 de agosto, fantasma, sin reserva vigente que lo respalde. Se corrige de raíz: ahora, al abrir una reserva para editar, se guarda su huella real en rack (consultada por reserva_id, no adivinada), y esa huella es la que se libera al guardar — cubre combinados con código y unidades agregadas a mano por igual. Se liberaron las 2 filas fantasma ya detectadas. HALLAZGO 2 (datos, limpiado): 177 filas "Libre" en el rack de Kubik tenían como apto un código de combinado (FR2/FR3/FR7/FR8/SD4/SD6/SD8/TR2/TR4/TR5) en vez de una unidad física real — residuo del mismo defecto (relleno de "Libre" bajo el código en vez de la unidad). No afectaban ocupación ni venta (estaban vacías, sin tarifa ni huésped) pero sí ensuciaban cualquier conteo de unidades del edificio. Se borraron. HALLAZGO 3 (dato puntual, ya reportado en v57, ahora cuantificado): la reserva de Rowan Fetzer (apto 1001, 8010, USD, TRM 3.202,79) tiene tarifa $3.179.938.093 — un error de digitación (los mismos 992.865 USD parecen estar pensados como tarifa por noche o por reserva, no multiplicados dos veces). Este único registro explica la totalidad de la distorsión: sin él, la tarifa promedio de agosto en 8010 pasa de $8.630.365 (con el error) a $477.903 (consistente con julio). Pendiente de decisión de Gerencia General para corregir o eliminar — ver Solicitudes. HALLAZGO 4 (metodológico, sin corregir — requiere criterio de Gerencia General): al comparar venta total mensual contra el Rack Gráfico externo, 8010 queda entre 1% y 13% por debajo del archivo en cada mes de enero a agosto, y Kubik entre 2% y 8% por ENCIMA de mayo a agosto (abril, primer mes operativo, -29%, ruido esperable de arranque). Son diferencias del orden de una cifra, no de un error puntual — pueden ser reservas que aún no se han cruzado entre los dos registros, o timing de cancelaciones; no se investigó reserva por reserva por ser un cruce de gran volumen. Aparte, el conteo de "noches disponibles" de cada sistema no es comparable de forma directa: el Rack Gráfico externo cuenta un número fijo de unidades por edificio (21 en 8010, sin las unidades hermanas de un combinado; 42 en Kubik), mientras el SO cuenta también las unidades hermanas de los combinados como inventario propio (hasta 33 códigos en 8010) porque, desde la corrección del 19-ago, esas unidades quedan físicamente bloqueadas aunque no generen tarifa — es la metodología correcta de hotelería, pero hace que el % de ocupación de los dos sistemas no se pueda comparar en crudo sin homologar primero el criterio.' },
@@ -3391,7 +3394,11 @@ async function renderIndicadores(){
   const eb = (typeof EB==='function')?EB():{};
   const vendibles = (eb.aptosBase||[]).filter(a => ((eb.noEntregados||[]).indexOf(a)<0));
   const nVend = vendibles.length || 1;
-  const OCU = ['Ocupado','Check-in hoy','Completo','Sale de viaje'];
+  // Auditoria 3-sep-2026: este OCU tenia 'Completo' incluido como noche ocupada (deberia estar
+  // fuera de inventario, no contar como venta) y el disponible mas abajo (nVend*diasMes) no restaba
+  // nada de fuera de servicio — de los 4 modulos que muestran %ocupacion mensual, este era el que mas
+  // se alejaba del criterio unico del 31-ago. Se unifica con window._OCU_NOCHE (Dashboard/Informes KL).
+  const OCU = window._OCU_NOCHE;
   main.innerHTML = '<div class="page-title">📊 Indicadores de Ocupación y Ventas</div><p style="color:var(--gris-t)">Cargando datos del rack…</p>';
   const [curR, prevR, _compSetInd] = await Promise.all([
     _rackRango('estado,tarifa,fecha,apto,reserva_id,huesped,canal', yr+'-01-01', yr+'-12-31'),
@@ -3405,8 +3412,7 @@ async function renderIndicadores(){
   window._indRowsYr = curR.data || [];
   window._indVendSet = _vendSet;
   function agg(rows){
-    const m = Array.from({length:12}, ()=>({noches:0,nTar:0,ventas:0}));
-    const FUERA=['Libre','Bloqueado','Mantenimiento'];
+    const m = Array.from({length:12}, ()=>({noches:0,nTar:0,ventas:0,fuera:0}));
     (rows||[]).forEach(r=>{
       if(!_vendSet.has(r.apto)) return;
       const mi = parseInt(String(r.fecha).slice(5,7),10)-1;
@@ -3417,6 +3423,9 @@ async function renderIndicadores(){
       const fisica = OCU.indexOf(r.estado)>-1 && !window._esCompRack(r,compSetInd);
       if(cobrado||fisica) m[mi].noches++;
       if(cobrado){ m[mi].nTar++; m[mi].ventas+=t; }
+      // Auditoria 3-sep-2026: antes esta funcion no restaba nada de "fuera de servicio" del
+      // disponible (abajo se usaba nVend*diasMes(i) a secas) — se agrega, igual que Dashboard.
+      if(window._FUERA_INVENTARIO.indexOf(r.estado)>-1) m[mi].fuera++;
     });
     return m;
   }
@@ -3433,7 +3442,10 @@ async function renderIndicadores(){
   const _opera = (i)=> !_ini ? true : ((yr>_iy) || (yr===_iy && (i+1)>=_im));
   for(let i=0;i<12;i++){
     const _op=_opera(i);
-    const disp=_op?nVend*diasMes(i):0, o=cur[i];
+    const o=cur[i];
+    // Auditoria 3-sep-2026: disp restaba antes 0 dias por fuera de servicio (Completo/Bloqueado/
+    // Mantenimiento) — ahora igual que Dashboard.
+    const disp=_op?Math.max(1,nVend*diasMes(i)-o.fuera):0;
     const adr=o.nTar?Math.round(o.ventas/o.nTar):0;
     const ocu=disp?Math.round(o.noches/disp*100):0;
     const revpar=disp?Math.round(o.ventas/disp):0;
@@ -3817,8 +3829,8 @@ async function renderDashboard() {
   //   "Check-out hoy" es el dia de salida: no se cobra, no cuenta.
   //   "Completo" = unidad neutralizada (vendida dentro de otra o fuera de servicio): sale del INVENTARIO.
   //   Inventario disponible = 42 llaves x dias del mes - noches fuera de servicio.
-  const OCU_MES = ['Ocupado','Check-in hoy','Sale de viaje'];
-  const FUERA_MES = ['Bloqueado','Mantenimiento','Completo'];
+  const OCU_MES = window._OCU_NOCHE;      // criterio único — ver definición junto a _esVentaAloja
+  const FUERA_MES = window._FUERA_INVENTARIO;
   const _baseSet = new Set(EB().aptosBase);
   const _fueraBaseN = rackMesAll.filter(r=>_baseSet.has(r.apto) && FUERA_MES.includes(r.estado)).length;
   const dispMes = Math.max(1, TOTAL_APTOS*daysInMonth - _fueraBaseN); // noches disponibles reales del mes (aptos x dias - fuera de servicio)
@@ -5167,6 +5179,21 @@ window._fetchCompReservaIds = async function(){
   }catch(e){ return new Set(); }
 };
 window._esCompRack = function(r, compSet){ return !!(compSet && r && r.reserva_id && compSet.has(r.reserva_id)); };
+// ── REGLA CANÓNICA DE OCUPACIÓN (CRITERIO ÚNICO, Sol. Cristina Cerviño 31-ago-2026 / aprobado
+// Santiago Arias) — noche vendida = Ocupado, Check-in hoy o Sale de viaje. "Check-out hoy" es el
+// día de salida y no cuenta. "Completo" (unidad vendida dentro de otra, o fuera de servicio) sale
+// del INVENTARIO, no se cuenta como ocupada. Disponibles = llaves x días del mes - noches fuera de
+// servicio (Completo, Bloqueado, Mantenimiento).
+// Auditoría 3-sep-2026 (cruce contra Rack Gráfico externo, Sol. Santiago "todo debe hablar el mismo
+// idioma"): Dashboard, Informes KL y guardarReserva ya aplicaban este criterio, pero cada uno lo
+// tenía copiado a mano en su propia función (OCU_MES / _INF_EST_OCUPA) en vez de leerlo de un solo
+// lugar. Indicadores de Ocupación y Ventas e Informe Ejecutivo NUNCA lo aplicaron: Indicadores
+// contaba "Completo" como noche ocupada y no restaba nada del inventario; Informe Ejecutivo contaba
+// "Check-out hoy" Y "Completo" como ocupadas y tampoco restaba fuera de servicio del inventario — el
+// % de ocupación que mostraban podía ser varios puntos más alto que el de Dashboard/Informes KL para
+// el mismo mes. Se centraliza aquí para que nadie vuelva a copiarlo a mano y se desincronice.
+window._OCU_NOCHE = ['Ocupado','Check-in hoy','Sale de viaje'];
+window._FUERA_INVENTARIO = ['Completo','Bloqueado','Mantenimiento'];
 function _toggleTRM(){ var s=document.getElementById('m-moneda'); var w=document.getElementById('m-trm-wrap'); if(w) w.style.display=(s&&s.value==='USD')?'':'none'; }
 // Observacion automatica de hora al salir/volver de viaje (rellena el campo; editable antes de guardar)
 function _autoObsViaje(nuevo){
@@ -14577,11 +14604,16 @@ async function renderInformeEjecutivo(){
   const compSetEj = _compSetEj || new Set();
   const _ejecRelevo = window._rkBuildRelevoMap(rMes.data || []);   /* relevos desde RACK, no reservas */
   const k = (typeof calcKpisDia==='function') ? calcKpisDia(rHoy.data||[], _ejecRelevo, compSetEj) : {b21:{ocu:0,disp:1},cki:0,cko:0,ing:0,adr:0,pct21:0};
-  const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
+  // Auditoria 3-sep-2026: este OCU incluia 'Check-out hoy' Y 'Completo' como noches ocupadas (el
+  // criterio unico del 31-ago excluye las dos), y dispMes no restaba nada de fuera de servicio —
+  // de los 4 modulos que muestran %ocupacion mensual, este era el segundo mas alejado del criterio.
+  // Se unifica con window._OCU_NOCHE / _FUERA_INVENTARIO (Dashboard/Indicadores/Informes KL).
+  const OCU = window._OCU_NOCHE;
   const baseSet = new Set(EB().aptosBase);
   const rmes = rMes.data||[];
   const ocuMesN = rmes.filter(r=>baseSet.has(r.apto)&&OCU.includes(r.estado)&&!window._esCompRack(r,compSetEj)).length;
-  const dispMes = Math.max(1, EB().aptosBase.length*dim);
+  const fueraMesN = rmes.filter(r=>baseSet.has(r.apto)&&window._FUERA_INVENTARIO.includes(r.estado)).length;
+  const dispMes = Math.max(1, EB().aptosBase.length*dim - fueraMesN);
   const ocuMesPct = Math.round(ocuMesN/dispMes*100);
   const ventasMes_base = rmes.filter(r=>window._esVentaAloja(r)).reduce((s,r)=>s+Number(r.tarifa),0);
   // Ajuste por relevos (misma técnica que ventasMesRk): sumamos (par - lo ya contado), una vez por celda.
@@ -16933,10 +16965,12 @@ function _infCanal(r){
 // "Check-out hoy" es el dia de salida (el rack lo trae sin tarifa) y no cuenta.
 // "Completo" marca una unidad reformada/unida a otra: no es una noche vendida, es
 // inventario fuera de servicio, y contarla inflaba la ocupacion.
-window._INF_EST_OCUPA = ['ocupado','check-in hoy','sale de viaje'];
-// Estados que sacan la unidad del inventario vendible de ese dia.
-// "Completo" = la unidad se vendio dentro de otra (combinada) o esta fuera de servicio.
-window._INF_EST_FUERA = ['completo','bloqueado','mantenimiento'];
+// Auditoria 3-sep-2026: se derivan de window._OCU_NOCHE / _FUERA_INVENTARIO (definidas junto a
+// _esVentaAloja) en vez de repetir la lista a mano — es la misma que ya usan Dashboard, Indicadores
+// e Informe Ejecutivo desde esa fecha; derivarla evita que alguno de los cinco se desincronice otra
+// vez como paso con este mismo modulo el 31-ago (v53) y con Indicadores/Informe Ejecutivo hasta hoy.
+window._INF_EST_OCUPA = (window._OCU_NOCHE||['Ocupado','Check-in hoy','Sale de viaje']).map(function(s){return s.toLowerCase();});
+window._INF_EST_FUERA = (window._FUERA_INVENTARIO||['Completo','Bloqueado','Mantenimiento']).map(function(s){return s.toLowerCase();});
 function _infOcupado(r){
   var e=String(r.estado||'').trim().toLowerCase();
   return window._INF_EST_OCUPA.indexOf(e)>-1;
