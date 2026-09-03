@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-03-criterio-unico-5-modulos-v61';
+const APP_VERSION = '2026-09-03-nombres-y-facturas-v62';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-03', version:'2026-09-03-nombres-y-facturas-v62', titulo:'Sistema confiable de nombres (Facturación vs Rack) + limpieza de facturas duplicadas y facturas anuladas que sumaban de mas',
+    afecta:'Facturación vs Rack, Recaudo x Cliente, Facturado vs Devengado, Composición de Ventas, tabla facturas',
+    detalle:'Sol. Santiago (3-sep-2026): "debe coincidir nombre facturacion, reservas, contratos etc, tenemos que tener un sistema confiable". (1) Facturación vs Rack ahora cruza tambien el NOMBRE del cliente facturado contra el huesped del rack (misma logica difusa del buscador de reservas) y marca "⚠ Nombre" cuando no coinciden y el cliente no parece ser una empresa/institucion (auditoria completa: 137 casos reales de 171 candidatos, 120 de estadia corta ≤7 noches y 17 de estadia larga; el resto eran facturacion corporativa/institucional correcta). (2) Se amplio el detector de "es empresa" (antes solo SAS/LTDA/LLC/Corp) para que tambien reconozca embajadas, bancos, fondos, fundaciones, ministerios, universidades, hoteles y holdings como pagadores legitimos y no los marque en falso. (3) HALLAZGO Y CORRECCION: se auditaron las 1.212 facturas del año contra si mismas por num_reserva+apto+monto+fechas — 55 grupos con filas repetidas. De esos, 38 filas eran duplicado real por reingreso accidental (misma fecha de captura) y se borraron, dejando la mas antigua de cada grupo — retira $207.576.934 que estaban inflando Recaudo x Cliente y Facturado vs Devengado. Otros 6 grupos ya estaban bien resueltos con una fila en estado ANULADA, pero esas facturas ANULADAS se seguian sumando en los reportes (nadie las restaba) — se corrigio la consulta en Recaudo x Cliente, Facturado vs Devengado, Composicion de Ventas y Facturacion vs Rack para excluir siempre estado=ANULADA (eran 9 facturas anuladas por $16.046.291 que no debian contarse). Quedan 21 grupos con MISMO monto pero fecha de captura distinta (semanas o meses aparte) — no se tocaron, parecen facturacion corporativa recurrente pero hay que confirmar caso por caso con Gerencia. (4) Se corrigieron ademas 7 facturas con el año mal digitado en checkin/checkout (ej. "0206-03-19" en vez de "2026-03-19") que rompian el cruce de fechas contra el rack.' },
   { fecha:'2026-09-03', version:'2026-09-03-criterio-unico-5-modulos-v61', titulo:'El % de ocupación del mes ya da lo mismo en los 5 módulos que lo muestran — Indicadores e Informe Ejecutivo tenían su propio criterio, distinto al de Dashboard/Rack/Informes KL',
     afecta:'Indicadores de Ocupación y Ventas, Informe Ejecutivo, Dashboard, Rack (hereda de Indicadores), Informes KL',
     detalle:'Sol. Santiago (3-sep-2026), sobre el cruce contra el Rack Gráfico externo: "todo debe coincidir en todos los modulos de ventas y los racks etc pero todo debe hablar el mismo idioma". El criterio único de ocupación (noche vendida = Ocupado/Check-in hoy/Sale de viaje; "Check-out hoy" no cuenta; disponible = llaves x días - noches fuera de servicio) se aprobó el 31-ago (v53) y se aplicó bien en Dashboard e Informes KL, pero cada módulo lo tenía copiado a mano en su propia función en vez de leerlo de un solo lugar — y dos nunca se actualizaron: (1) Indicadores de Ocupación y Ventas contaba "Completo" como noche ocupada (debía estar fuera de inventario) y su disponible NO restaba nada de fuera de servicio (ni Completo, ni Bloqueado, ni Mantenimiento) — era el más alejado del criterio de los 4 módulos que muestran esta cifra. Como el Rack (pantalla) toma su propio % directamente de Indicadores, heredaba el mismo error. (2) Informe Ejecutivo contaba "Check-out hoy" Y "Completo" como noches ocupadas, y tampoco restaba fuera de servicio del disponible. Verificado con el cruce contra el archivo externo del 3-sep: para 8010, homologando el inventario a 21 unidades base (igual al archivo), el % de ocupación mensual real de enero a agosto queda 58,6% / 77,0% / 66,7% / 57,5% / 86,5% / 72,9% / 87,8% / 83,0% — antes, Indicadores e Informe Ejecutivo mostraban cifras más altas que esas, cada uno por un motivo distinto. Se crean dos constantes únicas (window._OCU_NOCHE y window._FUERA_INVENTARIO, junto a _esVentaAloja) y los 5 módulos las usan a partir de ahora — incluido Informes KL, que ya calculaba bien pero tenía su propia copia en minúsculas; ahora esa copia se deriva de la constante única, para que no se vuelva a desincronizar como pasó aquí. IMPORTANTE: el % de ocupación mensual que muestran Indicadores, Informe Ejecutivo y Rack BAJA con este cambio (quedan iguales a Dashboard/Informes KL) — es la cifra correcta según el criterio que aprobó Gerencia General, no una regresión.' },
@@ -2085,7 +2088,7 @@ window.renderFlujoSemanal=async function(){
   window._rcFetch=async function(ed,mes){
     var y=+mes.slice(0,4),m=+mes.slice(5,7);var dim=new Date(y,m,0).getDate();
     var a=mes+'-01',b=mes+'-'+_pad(dim);
-    var r=await sb.from('facturas').select('cliente,cliente_nit,fecha,total,tipo').eq('edificio',ed).gte('fecha',a).lte('fecha',b);
+    var r=await sb.from('facturas').select('cliente,cliente_nit,fecha,total,tipo').eq('edificio',ed).neq('estado','ANULADA').gte('fecha',a).lte('fecha',b);
     if(r.error)throw new Error(r.error.message||'consulta');
     return r.data||[];
   };
@@ -15371,7 +15374,7 @@ async function renderFacturasComposicion(){
   var mes=window._facCompMes||TODAY.slice(0,7); window._facCompMes=mes;
   var pp=mes.split('-'); var dim=new Date(+pp[0],+pp[1],0).getDate();
   var ini=mes+'-01', fin=mes+'-'+String(dim).padStart(2,'0');
-  var r=await sb.from('facturas').select('*').eq('edificio',EDIFICIO_ACTIVO).gte('fecha',ini).lte('fecha',fin).order('fecha');
+  var r=await sb.from('facturas').select('*').eq('edificio',EDIFICIO_ACTIVO).neq('estado','ANULADA').gte('fecha',ini).lte('fecha',fin).order('fecha');
   if(r.error){ document.getElementById('main-content').innerHTML='<div class="page-title">📊 Composición de Ventas</div><div class="card" style="max-width:560px"><p style="font-size:14px">'+(r.error.message||'')+'</p></div>'; return; }
   var rows=r.data||[]; rows.sort(function(a,b){return _facNum(a.numero)-_facNum(b.numero);}); window._facRows=rows; var m=function(n){return Math.round(Number(n)||0).toLocaleString('es-CO');};
   var T={aloja:0,fb:0,com:0,eventos:0,spa:0,otros:0,neto:0,imp:0,total:0};
@@ -15385,7 +15388,7 @@ async function renderFacturacionVsRack(){
   var pp=mes.split('-'); var dim=new Date(+pp[0],+pp[1],0).getDate();
   var ini=mes+'-01', fin=mes+'-'+String(dim).padStart(2,'0');
   document.getElementById('main-content').innerHTML='<div class="page-title">🔍 Facturación vs Rack</div><p style="color:var(--gris-t)">Cargando…</p>';
-  var fr=await sb.from('facturas').select('apto,lineas,cliente,fecha').eq('edificio',EDIFICIO_ACTIVO).gte('fecha',ini).lte('fecha',fin);
+  var fr=await sb.from('facturas').select('apto,lineas,cliente,fecha').eq('edificio',EDIFICIO_ACTIVO).neq('estado','ANULADA').gte('fecha',ini).lte('fecha',fin);
   if(fr.error){ document.getElementById('main-content').innerHTML='<div class="page-title">🔍 Facturación vs Rack</div><div class="card" style="max-width:560px"><p style="font-size:14px">'+(fr.error.message||'')+'</p></div>'; return; }
   var rk=await _rackRango('apto,fecha,estado,tarifa,tipo,huesped,nombre,apellido1,empresa,canal,checkin,checkout,updated_at',ini,fin);
   var fac={}; (fr.data||[]).forEach(function(f){ var ap=String(f.apto||'(sin apto)'); var a=0; (f.lineas||[]).forEach(function(l){ if((FAC_CAT[l.concepto]||'')==='aloja') a+=Number(l.valor)||0; }); if(!fac[ap])fac[ap]={aloja:0,cli:{}}; fac[ap].aloja+=a; if(f.cliente)fac[ap].cli[f.cliente]=1; });
@@ -15395,15 +15398,32 @@ async function renderFacturacionVsRack(){
   var rack={}; Object.keys(map).forEach(function(k){var r=map[k];if(!window._esVentaAloja(r))return;var ap=String(r.apto); if(!rack[ap])rack[ap]={aloja:0,noches:0,hue:{},emp:{},can:{},ci:'',co:''}; var R=rack[ap]; R.aloja+=Number(r.tarifa)||0; R.noches++; var hn=window._nombreCompleto(r); if(hn)R.hue[hn]=1; if(r.empresa)R.emp[r.empresa]=1; if(r.canal)R.can[r.canal]=1; var ci=r.checkin||r.fecha, co=r.checkout||r.fecha; if(!R.ci||ci<R.ci)R.ci=ci; if(!R.co||co>R.co)R.co=co; });
   var aptos=Object.keys(fac).concat(Object.keys(rack)).filter(function(v,i,a){return a.indexOf(v)===i;}).sort(_aptoSort);
   var m=function(n){return '$'+Math.round(Number(n)||0).toLocaleString('es-CO');}; var esc=function(s){return String(s==null?'':s).replace(/</g,'&lt;');}; var keys=function(o){return Object.keys(o||{}).join(', ');};
-  var Tf=0,Tr=0;
+  // Auditoria 3-sep-2026 (Sol. Santiago: "debe coincidir nombre facturacion, reservas, contratos
+  // etc, tenemos que tener un sistema confiable"): esta pantalla ya cruzaba MONTOS entre
+  // facturación y rack, pero no el NOMBRE — un apto podía "Cuadrar" en plata con el cliente
+  // facturado siendo una persona distinta al huésped del rack, y nadie se enteraba. Se agrega el
+  // cruce de nombre (misma función _rvNameMatch que usa el buscador de reservas) con una excepción:
+  // cuando el cliente facturado es una EMPRESA (facturación corporativa, el huésped real es un
+  // empleado) no se marca como inconsistencia — eso es normal, no un error de dato.
+  var _esEmpresa=function(s){ return /\b(sas|s\.a\.s|ltda|s\.a\b|s\.a\.|llc|ltd|limited|inc|cia|corp|corporation|company|group|grupo|sucursal|colombioa|embajada|embassy|banco|bank|inversiones|fondo|fundacion|fundaci[oó]n|ministerio|consulado|aerol[ií]nea|airlines|universidad|hospital|cl[ií]nica|hoteles|constructora|holding)\b/i.test(String(s||'')); };
+  var Tf=0,Tr=0, nInconsist=0;
   var body=aptos.map(function(ap){ var F=fac[ap]||{aloja:0,cli:{}}, R=rack[ap]||{aloja:0,noches:0,hue:{},emp:{},can:{},ci:'',co:''}; var ff=F.aloja||0, rr=R.aloja||0, d=ff-rr; Tf+=ff;Tr+=rr;
     var est, ec; if(rr>0&&ff>0&&Math.abs(d)<=1000){est='✓ Cuadra';ec='#1A5C2E';} else if(rr>0&&ff===0){est='Falta factura';ec='#C0392B';} else if(ff>0&&rr===0){est='Sin rack';ec='#B8860B';} else {est='Revisar';ec='#C0392B';}
-    return '<tr><td><strong>'+esc(ap)+'</strong></td><td>'+(esc(keys(R.hue))||'—')+'</td><td>'+(esc(keys(R.emp))||esc(keys(R.can))||'—')+'</td><td style="white-space:nowrap;font-size:10px">'+(R.ci?fmtDate(R.ci):'')+(R.co?(' → '+fmtDate(R.co)):'')+'</td><td style="text-align:center">'+(R.noches||'—')+'</td><td>'+(esc(keys(F.cli))||'—')+'</td><td style="text-align:right">'+m(ff)+'</td><td style="text-align:right">'+m(rr)+'</td><td style="text-align:right;font-weight:600;color:'+(Math.abs(d)>1000?(d>0?'#C0392B':'#B8860B'):'#1A5C2E')+'">'+m(d)+'</td><td style="font-weight:600;color:'+ec+'">'+est+'</td></tr>'; }).join('')||'<tr><td colspan="10" style="text-align:center;color:#999;padding:18px">Sin datos en el mes</td></tr>';
+    var clientes=Object.keys(F.cli||{}), huespedes=Object.keys(R.hue||{});
+    var nombreOK=true;
+    if(clientes.length && huespedes.length){
+      nombreOK = clientes.every(function(cl){
+        if(_esEmpresa(cl)) return true; // facturación a empresa: no se exige que coincida con el huésped
+        return huespedes.some(function(hu){ return window._rvNameMatch(cl,hu); });
+      });
+    }
+    if(!nombreOK){ nInconsist++; est='⚠ Nombre'; ec='#B8860B'; }
+    return '<tr'+(!nombreOK?' style="background:#FFF9E6"':'')+'><td><strong>'+esc(ap)+'</strong></td><td>'+(esc(keys(R.hue))||'—')+'</td><td>'+(esc(keys(R.emp))||esc(keys(R.can))||'—')+'</td><td style="white-space:nowrap;font-size:10px">'+(R.ci?fmtDate(R.ci):'')+(R.co?(' → '+fmtDate(R.co)):'')+'</td><td style="text-align:center">'+(R.noches||'—')+'</td><td'+(!nombreOK?' style="color:#B8860B;font-weight:600" title="El cliente facturado no coincide con ningún huésped del rack para este apto/mes"':'')+'>'+(esc(keys(F.cli))||'—')+(!nombreOK?' ⚠':'')+'</td><td style="text-align:right">'+m(ff)+'</td><td style="text-align:right">'+m(rr)+'</td><td style="text-align:right;font-weight:600;color:'+(Math.abs(d)>1000?(d>0?'#C0392B':'#B8860B'):'#1A5C2E')+'">'+m(d)+'</td><td style="font-weight:600;color:'+ec+'">'+est+'</td></tr>'; }).join('')||'<tr><td colspan="10" style="text-align:center;color:#999;padding:18px">Sin datos en el mes</td></tr>';
   var Td=Tf-Tr;
   document.getElementById('main-content').innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px"><div class="page-title" style="margin-bottom:0">🔍 Facturación vs Rack — solicitud de info</div><div style="display:flex;gap:6px;align-items:center"><input type="month" value="'+mes+'" onchange="window._fvrMes=this.value;renderFacturacionVsRack()" style="padding:7px;border:1px solid var(--gris-b);border-radius:8px;font-size:13px">'+barraCompartir()+'</div></div>'
-   +'<div style="background:'+(Math.abs(Td)>1000?'#FCEEEE':'#EAF6EE')+';border:1px solid '+(Math.abs(Td)>1000?'#E6B0AA':'#A9DFBF')+';border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px">Facturado: <strong>'+m(Tf)+'</strong> &middot; Rack: <strong>'+m(Tr)+'</strong> &middot; Diferencia: <strong style="color:'+(Math.abs(Td)>1000?'#C0392B':'#1A5C2E')+'">'+m(Td)+'</strong></div>'
+   +'<div style="background:'+(Math.abs(Td)>1000?'#FCEEEE':'#EAF6EE')+';border:1px solid '+(Math.abs(Td)>1000?'#E6B0AA':'#A9DFBF')+';border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px">Facturado: <strong>'+m(Tf)+'</strong> &middot; Rack: <strong>'+m(Tr)+'</strong> &middot; Diferencia: <strong style="color:'+(Math.abs(Td)>1000?'#C0392B':'#1A5C2E')+'">'+m(Td)+'</strong>'+(nInconsist?(' &middot; <strong style="color:#B8860B">⚠ '+nInconsist+' apto'+(nInconsist===1?'':'s')+' con nombre que no coincide</strong>'):'')+'</div>'
    +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:11px"><thead><tr><th>Apto</th><th>Huésped (rack)</th><th>Empresa / Canal</th><th>Estadía</th><th>Noches</th><th>Cliente facturado</th><th style="text-align:right">Facturado</th><th style="text-align:right">Rack</th><th style="text-align:right">Dif.</th><th>Estado</th></tr></thead><tbody>'+body+'<tr style="background:var(--azul-c);font-weight:800"><td colspan="6">TOTAL</td><td style="text-align:right">'+m(Tf)+'</td><td style="text-align:right">'+m(Tr)+'</td><td style="text-align:right">'+m(Td)+'</td><td></td></tr></tbody></table></div></div>'
-   +'<p style="font-size:11px;color:var(--gris-t);margin-top:8px">Cruce del alojamiento facturado vs el rack, apto por apto, con el huésped y la empresa del rack. <strong>Falta factura</strong> = hay ocupación en el rack pero no se facturó; <strong>Sin rack</strong> = se facturó pero el rack no tiene esa ocupación; <strong>Revisar</strong> = hay diferencia de monto. Sirve para pedir/cerrar la información faltante.</p>';
+   +'<p style="font-size:11px;color:var(--gris-t);margin-top:8px">Cruce del alojamiento facturado vs el rack, apto por apto, con el huésped y la empresa del rack. <strong>Falta factura</strong> = hay ocupación en el rack pero no se facturó; <strong>Sin rack</strong> = se facturó pero el rack no tiene esa ocupación; <strong>Revisar</strong> = hay diferencia de monto; <strong>⚠ Nombre</strong> = el cliente facturado no coincide con el huésped del rack (y no parece ser facturación a una empresa) — revisar si es la misma persona mal escrita o alguien distinto. Sirve para pedir/cerrar la información faltante.</p>';
 }
 
 async function renderIngresos(){
@@ -15586,7 +15606,7 @@ window.renderFactDevengado = async function(){
 
   var facts, resv, cfg;
   try{
-    var fR=await sb.from('facturas').select('id,numero,fecha,total,tipo,perfil,apto,cliente,num_reserva').eq('edificio',ed).gte('fecha',ini).lte('fecha',fin);
+    var fR=await sb.from('facturas').select('id,numero,fecha,total,tipo,perfil,apto,cliente,num_reserva').eq('edificio',ed).neq('estado','ANULADA').gte('fecha',ini).lte('fecha',fin);
     if(fR.error) throw fR.error;
     facts=fR.data||[];
     var rR=await sb.from('reservas').select('numero,num_reserva,apto,nombre,checkin,checkout,noches').eq('edificio',ed);
