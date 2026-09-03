@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-02-paginacion-caja-historico-ck-v58';
+const APP_VERSION = '2026-09-03-prestamos-inventario-edificio-v59';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-03', version:'2026-09-03-prestamos-inventario-edificio-v59', titulo:'Se unifica Préstamos en un solo módulo y se cierra un vacío de aislamiento por edificio en Inventario (Sol. Santiago: "optimizar proceso")',
+    afecta:'menú (se retira Préstamos), prestamos_tec/prestamos_elementos, KPI "Préstamos activos" del Dashboard, y las funciones de Inventario (_invLista, _invEditar, _invGuardar, _invAjustarMin, _invBorrar, receiving de Órdenes de Compra)',
+    detalle:'(1) PRÉSTAMOS. El sistema tenía el mismo proceso registrado por partida doble: "Préstamos" (tabla prestamos_tec, 140 filas — 69 8010 + 71 kubik, sin control de stock disponible) y "Préstamos e Inventario" (tabla prestamos_elementos, 97 filas — 93 8010 + 4 kubik, con catálogo de inventario_items y stock disponible calculado en vivo). Cada edificio venía usando el que le tocó por costumbre, no por diseño. Se migraron las 140 filas de prestamos_tec a prestamos_elementos preservando fecha original; total unificado: 237 filas (162 8010 + 75 kubik), verificado contra la suma exacta. Se retira "Préstamos" del menú (prestamos-list); la tabla y el código de prestamos_tec NO se borran, quedan como archivo histórico y siguen siendo consultables por quien necesite el dato viejo. El KPI "Préstamos activos" del Dashboard leía solo prestamos_tec — de aquí en adelante los préstamos nuevos solo se registran en prestamos_elementos, así que se cambió el KPI a leer de ahí (ya incluye lo migrado, sin duplicar). (2) INVENTARIO. Al revisar el módulo "Inventario" (tabla inventario, compras/stock) se confirmó que el interceptor global de aislamiento por edificio (sb.from, líneas ~1150) sí protege las LECTURAS e INSERCIONES de esta tabla automáticamente — la sospecha inicial de fuga total no era exacta. El vacío real estaba en ACTUALIZAR y BORRAR: ese interceptor no cubre update()/delete(), así que _invGuardar (editar producto), _invAjustarMin (stock mínimo) y _invBorrar (dar de baja) filtraban solo por id, sin exigir también el edificio activo — en teoría, quien conociera o adivinara el id de una fila del otro edificio podía modificarla o borrarla sin pasar por su propia pantalla. Se agregó .eq("edificio", EDIFICIO_ACTIVO) a las tres operaciones de escritura por id. No hay evidencia de que esto haya ocurrido; es un cierre preventivo, no una corrección de datos ya afectados.' },
   { fecha:'2026-09-02', version:'2026-09-02-paginacion-caja-historico-ck-v58', titulo:'Auditoría del SO: se pagina caja (arqueo de turno) e Histórico CKI/CKO antes de que el límite de 1.000 filas de Supabase los trunque en silencio',
     detalle:'Sol. Santiago (2-sep-2026): "audita el SO". Se encontraron dos consultas sin paginar que traían la tabla completa confiando en el límite por defecto de Supabase (1.000 filas): (1) _turnoCargarSaldos (arqueo/cuadre de caja menor) leía toda la tabla caja de una vez — hoy tiene 295 filas, sin problema todavía, pero es el mismo defecto que ya truncó el Rack en agosto (aptos ocupados se pintaban como libres al pasar de 1.000 filas) y esta tabla alimenta el cuadre de efectivo, así que se corrigió antes de que fuera un problema real. (2) Histórico CKI/CKO traía solo las 2.000 novedades más recientes con un .limit(2000) fijo; la tabla novedades ya tiene más de 2.000 registros, así que las ~130 más antiguas (algunas CKI/CKO) ya no aparecían ni eran buscables en ese histórico. Ambas se cambiaron a lectura paginada (bloques de 1.000, igual que ya se hace en Rack), para que dejen de depender de que la tabla se mantenga bajo el límite.' },
   { fecha:'2026-09-02', version:'2026-09-02-dashboard-refresh-60s-v57', titulo:'El Dashboard se quedaba mostrando check-ins/check-outs ya hechos: el auto-refresh real eran 15 minutos, no 3 (Sol. Santiago)',
@@ -1643,7 +1646,11 @@ const MENU_COMPLETO = [
   { id: 'capsulas-list', icon: '🧴', label: 'Cápsulas Cortesía' },
   { id: 'loza-list', icon: '🍽️', label: 'Inventario de Loza' },
   { id: 'scape-list', icon: '💆', label: 'Masajes Scape' },
-  { id: 'prestamos-list', icon: '📦', label: 'Préstamos' },
+  // 'Préstamos' (prestamos-list / tabla prestamos_tec) se retira del menú (2-sep-2026):
+  // se unificó con 'Préstamos e Inventario' (prestamos_elementos), que ya tenía mejor control
+  // de stock disponible por edificio. Las 140 filas históricas (69 8010 + 71 kubik) se migraron
+  // a prestamos_elementos (quedó en 237 = 162 8010 + 75 kubik). La tabla prestamos_tec y su
+  // código NO se borran (queda como archivo histórico); solo se oculta la entrada del menú.
   { id: 'prestamos-elem', icon: '☂️', label: 'Préstamos e Inventario' },
   { section: 'Financiero / Admin' },
   { id: 'ingresos', icon: '📈', label: 'Ingresos del Mes' },
@@ -7014,7 +7021,7 @@ async function renderDashFinanciero() {
   const [caja, maletas, prestamos, contratos] = await Promise.all([
     sb.from('caja').select('valor').gte('fecha', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]),
     sb.from('maletas').select('id').eq('estado', 'En bodega'),
-    sb.from('prestamos_tec').select('id').eq('estado', 'Prestado'),
+    sb.from('prestamos_elementos').select('id').eq('estado', 'Prestado'), // migrado 2-sep-2026: antes leía prestamos_tec (tabla retirada del menú); prestamos_elementos ya incluye las 140 filas históricas migradas + las nuevas.
     sb.from('contratos').select('fecha_vencimiento,apto,arrendatario').eq('estado','Activo'),
   ]);
   const totalCaja = (caja.data||[]).reduce((s,r) => s + Number(r.valor||0), 0);
@@ -10760,7 +10767,7 @@ window._cmpAvanzar = async function(id, nuevo){
     var its = Array.isArray(r0.data.items)?r0.data.items:[];
     var _prov = r0.data.proveedor||'';
     var _norm = function(x){ return String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim(); };
-    var _invAll = await sb.from('inventario').select('id,producto,cantidad');
+    var _invAll = await sb.from('inventario').select('id,producto,cantidad').eq('edificio',EDIFICIO_ACTIVO);
     var _byName = {}; if(_invAll.data){ _invAll.data.forEach(function(z){ _byName[_norm(z.producto)] = z; }); }
     var _cambio = false;
     for(var i=0;i<its.length;i++){
@@ -10771,7 +10778,7 @@ window._cmpAvanzar = async function(id, nuevo){
         var u = await sb.from('inventario').update({ cantidad: nueva }).eq('id', _rec.id);
         if(!u.error){ sumado++; _rec.cantidad = nueva; if(!its[i].inv_id){ its[i].inv_id = _rec.id; _cambio = true; } }
       } else {
-        var reg = { producto:String(its[i].desc).trim(), proveedor:_prov, categoria:'Otros', unidad:(its[i].und||'und'), valor_unit:Number(its[i].valor)||0, cantidad:_cant, stock_min:0, observaciones:'Creado desde '+(r0.data.consecutivo||'orden de compra'), activo:true };
+        var reg = { producto:String(its[i].desc).trim(), proveedor:_prov, categoria:'Otros', unidad:(its[i].und||'und'), valor_unit:Number(its[i].valor)||0, cantidad:_cant, stock_min:0, observaciones:'Creado desde '+(r0.data.consecutivo||'orden de compra'), activo:true, edificio:EDIFICIO_ACTIVO };
         var ins = await sb.from('inventario').insert([reg]).select('id').single();
         if(!ins.error && ins.data){ its[i].inv_id = ins.data.id; _byName[_norm(reg.producto)] = { id:ins.data.id, producto:reg.producto, cantidad:_cant }; creados++; _cambio = true; }
       }
@@ -10953,12 +10960,12 @@ window._INV_CATS = ['Aseo','Papelería','Amenities','Mantenimiento','Lencería',
 
 window._invSetMin = async function(id, val){
   var n = Math.max(0, Math.round(Number(val)||0));
-  var u = await sb.from('inventario').update({ stock_min: n }).eq('id', id);
+  var u = await sb.from('inventario').update({ stock_min: n }).eq('id', id).eq('edificio',EDIFICIO_ACTIVO);
   if(u.error){ showToast('No se pudo guardar el mínimo: '+u.error.message,'error'); return; }
   showToast('Mínimo guardado: '+n,'success');
 };
 window._invLista = async function(){
-  var r = await sb.from('inventario').select('*').order('proveedor',{ascending:true}).order('producto',{ascending:true}).limit(1000);
+  var r = await sb.from('inventario').select('*').eq('edificio',EDIFICIO_ACTIVO).order('proveedor',{ascending:true}).order('producto',{ascending:true}).limit(1000);
   if(r.error){
     document.getElementById('main-content').innerHTML =
       '<div class="page-title">📦 Inventario</div><div class="card"><p style="color:#9A4A40"><strong>El módulo aún no está habilitado en la base de datos.</strong></p>'
@@ -11118,7 +11125,7 @@ window._invGenerarOrden = async function(){
 };
 
 window._invEditar = async function(id){
-  var r = await sb.from('inventario').select('*').eq('id',id).single();
+  var r = await sb.from('inventario').select('*').eq('id',id).eq('edificio',EDIFICIO_ACTIVO).single();
   if(r.error||!r.data){ showToast('No se encontró el producto','error'); return; }
   window._invEdit = r.data; loadView('inventario-form');
 };
@@ -11168,10 +11175,10 @@ window._invGuardar = async function(btn){
     cantidad: Number((document.getElementById('inv-cant')||{}).value)||0,
     stock_min: Number((document.getElementById('inv-min')||{}).value)||0,
     observaciones: ((document.getElementById('inv-obs')||{}).value||'').trim(),
-    activo: true
+    activo: true, edificio: EDIFICIO_ACTIVO
   };
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Guardando...';
-  var r = e ? await sb.from('inventario').update(reg).eq('id', e.id)
+  var r = e ? await sb.from('inventario').update(reg).eq('id', e.id).eq('edificio',EDIFICIO_ACTIVO)
             : await sb.from('inventario').insert([reg]);
   btn.disabled = false; btn.innerHTML = '💾 Guardar';
   if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
@@ -11182,7 +11189,7 @@ window._invGuardar = async function(btn){
 window._invBorrar = async function(id){
   if(!window._cmpEsGG()){ showToast('Solo Gerencia General','error'); return; }
   if(!confirm('¿Dar de baja este producto?\n\nNo se borra el registro: deja de aparecer en el catálogo.')) return;
-  var r = await sb.from('inventario').update({activo:false}).eq('id',id);
+  var r = await sb.from('inventario').update({activo:false}).eq('id',id).eq('edificio',EDIFICIO_ACTIVO);
   if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
   showToast('Producto dado de baja','info');
   window._invEdit=null; loadView('inventario-list');
