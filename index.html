@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-03-prestamos-inventario-edificio-v59';
+const APP_VERSION = '2026-09-03-cruce-rack-grafico-v60';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-03', version:'2026-09-03-cruce-rack-grafico-v60', titulo:'Cruce contra el Rack Gráfico externo (Excel) de los dos edificios: se encuentra y corrige un huérfano en Kubik al mover una reserva combinada de apto',
+    afecta:'editarReserva() y guardarReserva() — liberación del apto viejo al editar una reserva; datos de rack en Kubik',
+    detalle:'Sol. Santiago (3-sep-2026): "revisa contra lo que tenemos", con el Rack Gráfico Ocupación y Ventas 2026 de Kubik (42 llaves) y el de 8010 (FOSE34, V06, 33 unidades) como referencia. HALLAZGO 1 (código, corregido): al editar una reserva y cambiarla de apartamento o acortarla, el sistema liberaba el apto viejo adivinando sus unidades físicas a partir del código guardado en la reserva (ej. "FR7"). Eso funciona para un combinado con código, pero en rack los días siempre quedan escritos bajo las unidades físicas (701/702), nunca bajo "FR7" — así que el borrado nunca encontraba nada que borrar en ese caso, y además una unidad hermana agregada a mano (sin código) tampoco se contemplaba. Se encontró un caso real: la reserva de Maria Lucia Villalba en Kubik se movió del apto 404 al 403, y el 404 quedó "Ocupado" a su nombre para el 30 y 31 de agosto, fantasma, sin reserva vigente que lo respalde. Se corrige de raíz: ahora, al abrir una reserva para editar, se guarda su huella real en rack (consultada por reserva_id, no adivinada), y esa huella es la que se libera al guardar — cubre combinados con código y unidades agregadas a mano por igual. Se liberaron las 2 filas fantasma ya detectadas. HALLAZGO 2 (datos, limpiado): 177 filas "Libre" en el rack de Kubik tenían como apto un código de combinado (FR2/FR3/FR7/FR8/SD4/SD6/SD8/TR2/TR4/TR5) en vez de una unidad física real — residuo del mismo defecto (relleno de "Libre" bajo el código en vez de la unidad). No afectaban ocupación ni venta (estaban vacías, sin tarifa ni huésped) pero sí ensuciaban cualquier conteo de unidades del edificio. Se borraron. HALLAZGO 3 (dato puntual, ya reportado en v57, ahora cuantificado): la reserva de Rowan Fetzer (apto 1001, 8010, USD, TRM 3.202,79) tiene tarifa $3.179.938.093 — un error de digitación (los mismos 992.865 USD parecen estar pensados como tarifa por noche o por reserva, no multiplicados dos veces). Este único registro explica la totalidad de la distorsión: sin él, la tarifa promedio de agosto en 8010 pasa de $8.630.365 (con el error) a $477.903 (consistente con julio). Pendiente de decisión de Gerencia General para corregir o eliminar — ver Solicitudes. HALLAZGO 4 (metodológico, sin corregir — requiere criterio de Gerencia General): al comparar venta total mensual contra el Rack Gráfico externo, 8010 queda entre 1% y 13% por debajo del archivo en cada mes de enero a agosto, y Kubik entre 2% y 8% por ENCIMA de mayo a agosto (abril, primer mes operativo, -29%, ruido esperable de arranque). Son diferencias del orden de una cifra, no de un error puntual — pueden ser reservas que aún no se han cruzado entre los dos registros, o timing de cancelaciones; no se investigó reserva por reserva por ser un cruce de gran volumen. Aparte, el conteo de "noches disponibles" de cada sistema no es comparable de forma directa: el Rack Gráfico externo cuenta un número fijo de unidades por edificio (21 en 8010, sin las unidades hermanas de un combinado; 42 en Kubik), mientras el SO cuenta también las unidades hermanas de los combinados como inventario propio (hasta 33 códigos en 8010) porque, desde la corrección del 19-ago, esas unidades quedan físicamente bloqueadas aunque no generen tarifa — es la metodología correcta de hotelería, pero hace que el % de ocupación de los dos sistemas no se pueda comparar en crudo sin homologar primero el criterio.' },
   { fecha:'2026-09-03', version:'2026-09-03-prestamos-inventario-edificio-v59', titulo:'Se unifica Préstamos en un solo módulo y se cierra un vacío de aislamiento por edificio en Inventario (Sol. Santiago: "optimizar proceso")',
     afecta:'menú (se retira Préstamos), prestamos_tec/prestamos_elementos, KPI "Préstamos activos" del Dashboard, y las funciones de Inventario (_invLista, _invEditar, _invGuardar, _invAjustarMin, _invBorrar, receiving de Órdenes de Compra)',
     detalle:'(1) PRÉSTAMOS. El sistema tenía el mismo proceso registrado por partida doble: "Préstamos" (tabla prestamos_tec, 140 filas — 69 8010 + 71 kubik, sin control de stock disponible) y "Préstamos e Inventario" (tabla prestamos_elementos, 97 filas — 93 8010 + 4 kubik, con catálogo de inventario_items y stock disponible calculado en vivo). Cada edificio venía usando el que le tocó por costumbre, no por diseño. Se migraron las 140 filas de prestamos_tec a prestamos_elementos preservando fecha original; total unificado: 237 filas (162 8010 + 75 kubik), verificado contra la suma exacta. Se retira "Préstamos" del menú (prestamos-list); la tabla y el código de prestamos_tec NO se borran, quedan como archivo histórico y siguen siendo consultables por quien necesite el dato viejo. El KPI "Préstamos activos" del Dashboard leía solo prestamos_tec — de aquí en adelante los préstamos nuevos solo se registran en prestamos_elementos, así que se cambió el KPI a leer de ahí (ya incluye lo migrado, sin duplicar). (2) INVENTARIO. Al revisar el módulo "Inventario" (tabla inventario, compras/stock) se confirmó que el interceptor global de aislamiento por edificio (sb.from, líneas ~1150) sí protege las LECTURAS e INSERCIONES de esta tabla automáticamente — la sospecha inicial de fuga total no era exacta. El vacío real estaba en ACTUALIZAR y BORRAR: ese interceptor no cubre update()/delete(), así que _invGuardar (editar producto), _invAjustarMin (stock mínimo) y _invBorrar (dar de baja) filtraban solo por id, sin exigir también el edificio activo — en teoría, quien conociera o adivinara el id de una fila del otro edificio podía modificarla o borrarla sin pasar por su propia pantalla. Se agregó .eq("edificio", EDIFICIO_ACTIVO) a las tres operaciones de escritura por id. No hay evidencia de que esto haya ocurrido; es un cierre preventivo, no una corrección de datos ya afectados.' },
@@ -7770,7 +7773,17 @@ async function guardarReserva() {
   if(window._reservaEditOld && window._reservaEditOld.apto && window._reservaEditOld.checkin && window._reservaEditOld.checkout){
     var _ro=window._reservaEditOld;
     try{
-      await sb.from('rack').delete().eq('apto',_ro.apto).gte('fecha',_ro.checkin).lte('fecha',_ro.checkout).eq('edificio',EDIFICIO_ACTIVO);
+      // Auditoria 3-sep-2026: la huella vieja en rack (fecha+apto) se toma de _reservaEditOldRack,
+      // capturada en editarReserva() por reserva_id — cubre tanto combinados por codigo (FR/TR/SD/AH,
+      // que en rack quedan escritos en las unidades FISICAS, nunca bajo el codigo) como unidades
+      // "adjunto" agregadas a mano. Antes se adivinaba la unidad vieja a partir de _ro.apto (el
+      // codigo guardado en la reserva), que en un combinado nunca coincidia con lo escrito en rack:
+      // el delete no borraba nada y la unidad fisica vieja quedaba "Ocupado" huerfana para siempre.
+      var _huellaVieja = (window._reservaEditOldRack && window._reservaEditOldRack.length)
+        ? window._reservaEditOldRack
+        : (window._aptosFisicosDe ? window._aptosFisicosDe(_ro.apto).map(function(a){return {apto:a}; }) : [{apto:_ro.apto}]);
+      var _roFisicos = [...new Set(_huellaVieja.map(function(x){return x.apto;}))];
+      await sb.from('rack').delete().in('apto',_roFisicos).gte('fecha',_ro.checkin).lte('fecha',_ro.checkout).eq('edificio',EDIFICIO_ACTIVO);
       // Sol Sebastian 6-ago-2026 (apto 301/Paola): al mover una reserva a otro apto (o acortarla),
       // las fechas que quedan libres en el apto viejo se borraban del rack sin dejar nada en su lugar
       // — quedaba un hueco sin fila, y el rack seguía mostrando el estado viejo (CKO) porque nunca
@@ -7780,14 +7793,17 @@ async function guardarReserva() {
       var _dFin = new Date(_ro.checkout);
       while (_dLoop <= _dFin) {
         var _fLoop = _dLoop.toISOString().split('T')[0];
-        var _mismoApto = (_ro.apto === apto) && _aptosW2.indexOf(_ro.apto) >= 0;
         var _dentroRangoNuevo = (_fLoop >= ci && _fLoop <= co);
-        if (!(_mismoApto && _dentroRangoNuevo)) { _libreRows.push({ fecha:_fLoop, apto:_ro.apto, estado:'Libre', edificio:EDIFICIO_ACTIVO, updated_by:currentUser.id }); }
+        _roFisicos.forEach(function(_af){
+          var _mismoApto = _dentroRangoNuevo && _aptosW2.indexOf(_af) >= 0;
+          if (!_mismoApto) { _libreRows.push({ fecha:_fLoop, apto:_af, estado:'Libre', edificio:EDIFICIO_ACTIVO, updated_by:currentUser.id }); }
+        });
         _dLoop.setDate(_dLoop.getDate()+1);
       }
       if (_libreRows.length) { await sb.from('rack').insert(_libreRows); }
     }catch(e){}
     window._reservaEditOld=null;
+    window._reservaEditOldRack=null;
   }
   const { error } = await sb.from('rack').insert(rows);
 
@@ -9694,6 +9710,17 @@ window.editarReserva = async function(id){
   var res=await sb.from('reservas').select('*').eq('id',id).single();
   if(res.error||!res.data){ if(typeof showToast==='function') showToast('No se encontró la reserva','error'); return; }
   var r=res.data; window._reservaEditId=id; window._reservaEditOld={apto:r.apto,checkin:r.checkin,checkout:r.checkout};
+  // Auditoria 3-sep-2026 (cruce contra Rack Grafico externo): se guarda tambien la huella REAL
+  // en rack (todas las filas fecha+apto que hoy tienen este reserva_id) para poder liberarla
+  // correctamente al guardar la edicion. Antes se reconstruia esa huella adivinando las unidades
+  // fisicas a partir de r.apto (via _aptosFisicosDe), lo cual solo cubre los combinados con codigo
+  // (FR/TR/SD/AH); una unidad hermana agregada a mano como "adjunto" (sin codigo) quedaba fuera y
+  // su fila en rack nunca se liberaba al mover o acortar la reserva — quedaba "Ocupado" huerfano
+  // para siempre. Consultando directo por reserva_id se cubren los dos casos por igual.
+  try{
+    var _huella = await sb.from('rack').select('apto,fecha').eq('reserva_id', id).eq('edificio', r.edificio||EDIFICIO_ACTIVO);
+    window._reservaEditOldRack = _huella.data || [];
+  }catch(_e){ window._reservaEditOldRack = null; }
   loadView('nueva-reserva');
   setTimeout(function(){
     var set=function(fid,v){ var e=document.getElementById(fid); if(e!=null) e.value=(v==null?'':v); };
