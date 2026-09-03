@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-03-nombres-y-facturas-v62';
+const APP_VERSION = '2026-09-03-kubik-disponible-combos-v63';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-03', version:'2026-09-03-kubik-disponible-combos-v63', titulo:'Kubik: disponible siempre es 42 llaves x dias del mes, y las unidades combinadas reparten la tarifa proporcional al metraje en vez de salir del inventario',
+    afecta:'Dashboard, Indicadores de Ocupación y Ventas, Rack, Informe Ejecutivo, Informes KL (todos en Kubik)',
+    detalle:'Sol. Santiago (3-sep-2026), sobre el disponible de Kubik: "siempre tiene que ser el numero de aptos y numero de dias" y "esas combinadas deben estar en el inventario y repartir proporcional la tarifa". Por ahora el cambio es SOLO Kubik (8010 sigue con el criterio anterior hasta tener el metraje por apto de sus combos de "habitacion A"). Dos cambios: (1) DISPONIBLE: en los 7 lugares que lo calculan (Dashboard, Indicadores, Rack, Informe Ejecutivo, Informes KL) Kubik ya NO resta noches Bloqueado/Mantenimiento/Completo del disponible — es constante, 42 llaves x dias del mes, siempre. (2) COMBOS (Two Residence, Famili Residence, Suite Deluxe): antes la unidad secundaria de un combo (ej. 603 en el combo 602+603) se guardaba con tarifa null y estado "Completo", y salia de ventas y del disponible — su ingreso completo quedaba en la unidad principal (602). Ahora la tarifa de la noche se reparte proporcional al metraje real de cada unidad (602=29m2/603=56m2 -> 34%/66%; 701=100m2/702=29m2 -> 78%/22%; etc., datos ya existentes en EB().metrajes) y la unidad secundaria queda con el mismo estado de ocupacion que la principal (Ocupado/Check-in hoy/Check-out hoy/Sale de viaje) en vez de "Completo" — ya cuenta como venta y como noche vendida igual que cualquier otra unidad. Se migraron retroactivamente 319 filas de 2026 (todo el año hasta hoy): 307 con reparto de tarifa (verificado que la suma total no cambio, $0 de diferencia, es solo redistribucion) y 12 dias de checkout sin tarifa (solo se sincronizo el estado). Efecto en la ocupacion mensual de Kubik: julio 31,6% -> 38,5%, agosto 44,9% (v61) -> 49,8% con este criterio completo — sube porque ahora se reconoce como vendida la unidad secundaria de los combos activos, que antes desaparecia del calculo. Pendiente: aplicar el mismo criterio a 8010 cuando se tenga el metraje por apartamento de sus combos.' },
   { fecha:'2026-09-03', version:'2026-09-03-nombres-y-facturas-v62', titulo:'Sistema confiable de nombres (Facturación vs Rack) + limpieza de facturas duplicadas y facturas anuladas que sumaban de mas',
     afecta:'Facturación vs Rack, Recaudo x Cliente, Facturado vs Devengado, Composición de Ventas, tabla facturas',
     detalle:'Sol. Santiago (3-sep-2026): "debe coincidir nombre facturacion, reservas, contratos etc, tenemos que tener un sistema confiable". (1) Facturación vs Rack ahora cruza tambien el NOMBRE del cliente facturado contra el huesped del rack (misma logica difusa del buscador de reservas) y marca "⚠ Nombre" cuando no coinciden y el cliente no parece ser una empresa/institucion (auditoria completa: 137 casos reales de 171 candidatos, 120 de estadia corta ≤7 noches y 17 de estadia larga; el resto eran facturacion corporativa/institucional correcta). (2) Se amplio el detector de "es empresa" (antes solo SAS/LTDA/LLC/Corp) para que tambien reconozca embajadas, bancos, fondos, fundaciones, ministerios, universidades, hoteles y holdings como pagadores legitimos y no los marque en falso. (3) HALLAZGO Y CORRECCION: se auditaron las 1.212 facturas del año contra si mismas por num_reserva+apto+monto+fechas — 55 grupos con filas repetidas. De esos, 38 filas eran duplicado real por reingreso accidental (misma fecha de captura) y se borraron, dejando la mas antigua de cada grupo — retira $207.576.934 que estaban inflando Recaudo x Cliente y Facturado vs Devengado. Otros 6 grupos ya estaban bien resueltos con una fila en estado ANULADA, pero esas facturas ANULADAS se seguian sumando en los reportes (nadie las restaba) — se corrigio la consulta en Recaudo x Cliente, Facturado vs Devengado, Composicion de Ventas y Facturacion vs Rack para excluir siempre estado=ANULADA (eran 9 facturas anuladas por $16.046.291 que no debian contarse). Quedan 21 grupos con MISMO monto pero fecha de captura distinta (semanas o meses aparte) — no se tocaron, parecen facturacion corporativa recurrente pero hay que confirmar caso por caso con Gerencia. (4) Se corrigieron ademas 7 facturas con el año mal digitado en checkin/checkout (ej. "0206-03-19" en vez de "2026-03-19") que rompian el cruce de fechas contra el rack.' },
@@ -3276,12 +3279,19 @@ function calcKpisDia(registrosHoy, relevoMap, compSet){
   const FUERA = ['Bloqueado','Mantenimiento'];
   const EN_CASA = ['Ocupado','Completo','Sale de viaje','Check-out hoy']; // ocupado real, sin CKI/CKO (esos tienen su propio contador)
   const calc = (lista) => {
-    let ocu=0, disp=0, enCasa=0; const tar=[];
+    // Auditoria 3-sep-2026 (Sol. Santiago): "siempre tiene que ser el numero de aptos y numero de
+    // dias" — por ahora SOLO Kubik: disponible es el conteo de unidades de la lista, sin restar
+    // Bloqueado/Mantenimiento/"Apto completo". 8010 sigue con el criterio anterior (los resta) hasta
+    // tener el metraje por apto de sus combos.
+    const _bruto = (EDIFICIO_ACTIVO==='kubik');
+    let ocu=0, disp=_bruto?lista.length:0, enCasa=0; const tar=[];
     lista.forEach(a=>{
       const r = getRec(a); const e = r?.estado||'Libre';
-      const incluida = (r?.observaciones||'').includes('Apto completo'); // A de apto completo: fuera de inventario
-      if (FUERA.includes(e) || incluida) return;
-      disp++;
+      if(!_bruto){
+        const incluida = (r?.observaciones||'').includes('Apto completo');
+        if (FUERA.includes(e) || incluida) return;
+        disp++;
+      }
       // Sol. Santiago (12-ago-2026): Complementary no debe sumar al % de ocupación.
       const esComp = window._esCompRack ? window._esCompRack(r, compSet) : false;
       if (OCU.includes(e) && !esComp){
@@ -3448,7 +3458,7 @@ async function renderIndicadores(){
     const o=cur[i];
     // Auditoria 3-sep-2026: disp restaba antes 0 dias por fuera de servicio (Completo/Bloqueado/
     // Mantenimiento) — ahora igual que Dashboard.
-    const disp=_op?Math.max(1,nVend*diasMes(i)-o.fuera):0;
+    const disp=_op?(EDIFICIO_ACTIVO==='kubik'?(nVend*diasMes(i)):Math.max(1,nVend*diasMes(i)-o.fuera)):0; // 3-sep-2026: Kubik=aptos x dias siempre; 8010 sigue restando fuera de servicio
     const adr=o.nTar?Math.round(o.ventas/o.nTar):0;
     const ocu=disp?Math.round(o.noches/disp*100):0;
     const revpar=disp?Math.round(o.ventas/disp):0;
@@ -3836,7 +3846,10 @@ async function renderDashboard() {
   const FUERA_MES = window._FUERA_INVENTARIO;
   const _baseSet = new Set(EB().aptosBase);
   const _fueraBaseN = rackMesAll.filter(r=>_baseSet.has(r.apto) && FUERA_MES.includes(r.estado)).length;
-  const dispMes = Math.max(1, TOTAL_APTOS*daysInMonth - _fueraBaseN); // noches disponibles reales del mes (aptos x dias - fuera de servicio)
+  // Auditoria 3-sep-2026 (Sol. Santiago): "siempre tiene que ser el numero de aptos y numero de
+  // dias" — por ahora SOLO Kubik. 8010 sigue restando fuera de servicio hasta tener el metraje
+  // por apto de sus combos.
+  const dispMes = (EDIFICIO_ACTIVO==='kubik') ? (TOTAL_APTOS*daysInMonth) : Math.max(1, TOTAL_APTOS*daysInMonth - _fueraBaseN);
   const ocuMesN = rackMesAll.filter(r=>_baseSet.has(r.apto) && OCU_MES.includes(r.estado) && !window._esCompRack(r,compSetDash)).length;
   const conTarifaMes = rackMesAll.filter(r=>window._esVentaAloja(r));
   const _vmRel = window._rkRelevoAj(rackMesAll);   // relevos desde RACK -> coincide con Rack/Informe/Export
@@ -3847,7 +3860,7 @@ async function renderDashboard() {
   // Variante por habitaciones (incluye A) — aptosFull
   const _fullSet = new Set(EB().aptosFull);
   const _fueraHabN = rackMesAll.filter(r=>_fullSet.has(r.apto) && FUERA_MES.includes(r.estado)).length;
-  const dispMesHab = Math.max(1, EB().aptosFull.length*daysInMonth - _fueraHabN);
+  const dispMesHab = (EDIFICIO_ACTIVO==='kubik') ? (EB().aptosFull.length*daysInMonth) : Math.max(1, EB().aptosFull.length*daysInMonth - _fueraHabN);
   const ocuMesHabN = rackMesAll.filter(r=>_fullSet.has(r.apto) && OCU_MES.includes(r.estado) && !window._esCompRack(r,compSetDash)).length;
   const ocuMesHabPct = dispMesHab>0 ? Math.round(ocuMesHabN/dispMesHab*100) : 0;
 
@@ -4304,8 +4317,8 @@ async function renderRack() {
   const _FURK=["Bloqueado","Mantenimiento"];
   const _mr=allRack.filter(r=> r.edificio===EDIFICIO_ACTIVO);
   const _s21=new Set(EB().aptosBase), _s33=new Set(EB().aptosFull);
-  const _disp21m=Math.max(1, EB().aptosBase.length*daysInMonth - _mr.filter(r=>_s21.has(r.apto)&&_FURK.includes(r.estado)).length);
-  const _disp33m=Math.max(1, EB().aptosFull.length*daysInMonth - _mr.filter(r=>_s33.has(r.apto)&&_FURK.includes(r.estado)).length);
+  const _disp21m=(EDIFICIO_ACTIVO==='kubik')?(EB().aptosBase.length*daysInMonth):Math.max(1, EB().aptosBase.length*daysInMonth - _mr.filter(r=>_s21.has(r.apto)&&_FURK.includes(r.estado)).length);
+  const _disp33m=(EDIFICIO_ACTIVO==='kubik')?(EB().aptosFull.length*daysInMonth):Math.max(1, EB().aptosFull.length*daysInMonth - _mr.filter(r=>_s33.has(r.apto)&&_FURK.includes(r.estado)).length);
   const _ocu21m=_mr.filter(r=>_s21.has(r.apto)&&_OCURK.includes(r.estado)).length;
   const _ocu33m=_mr.filter(r=>_s33.has(r.apto)&&_OCURK.includes(r.estado)).length;
   const _pct21m=Math.round(_ocu21m/_disp21m*100), _pct33m=Math.round(_ocu33m/_disp33m*100);
@@ -4817,13 +4830,16 @@ function infoDiaRack(dia){
   const AS = EB().habitacionesA || [];
   const OCU = ['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje'];
   const FUERA = ['Bloqueado','Mantenimiento'];
+  const _bruto = (EDIFICIO_ACTIVO==='kubik'); // 3-sep-2026: Kubik=aptos siempre; 8010 sigue restando fuera de servicio
   const calc = (lista) => {
-    let ocu=0, disp=0; const tar=[];
+    let ocu=0, disp=_bruto?lista.length:0; const tar=[];
     lista.forEach(a=>{
       const r = rack[a]?.[dia]; const e = r?.estado||'Libre';
-      const incluida = (r?.observaciones||'').includes('Apto completo');
-      if (FUERA.includes(e) || incluida) return;
-      disp++;
+      if(!_bruto){
+        const incluida = (r?.observaciones||'').includes('Apto completo');
+        if (FUERA.includes(e) || incluida) return;
+        disp++;
+      }
       if (OCU.includes(e)){
         ocu++;
         var _dISO = window._rackYear+'-'+String((window._rackMes||0)+1).toString().padStart(2,'0')+'-'+String(dia).padStart(2,'0');
@@ -5160,12 +5176,19 @@ window._esVentaAloja = function(r){
   // que quedo escrito antes. Se corrigen dos fallas del filtro original: (a) comparaba contra
   // 'Family Residence' mientras que guardarReserva escribe 'Famili Residence', de modo que no
   // atrapaba ni una sola fila de FR; (b) no contemplaba Suite Deluxe ni Air House.
-  var _ap = String(r.apto||''), _tp = String(r.tipo||'');
-  var esParSec = (_tp==='Two Residence'  && /03$/.test(_ap))
-              || (/^Fami(li|ly) Residence$/.test(_tp) && /02$/.test(_ap))
-              || (_tp==='Suite Deluxe'   && /A$/.test(_ap))
-              || (_tp==='Air House'      && _ap==='PH2');
-  if(esParSec) return false;
+  // Sol. Santiago (3-sep-2026): "esas combinadas deben estar en el inventario y repartir
+  // proporcional la tarifa" — en Kubik la unidad hermana YA se guarda con su propia tarifa
+  // proporcional (ver guardarReserva), asi que debe contar como venta igual que cualquier otra
+  // unidad; esta exclusion queda SOLO para 8010, que sigue con el criterio anterior (unidad
+  // hermana sin tarifa propia) hasta tener el metraje por apto de sus combos.
+  if(EDIFICIO_ACTIVO !== 'kubik'){
+    var _ap = String(r.apto||''), _tp = String(r.tipo||'');
+    var esParSec = (_tp==='Two Residence'  && /03$/.test(_ap))
+                || (/^Fami(li|ly) Residence$/.test(_tp) && /02$/.test(_ap))
+                || (_tp==='Suite Deluxe'   && /A$/.test(_ap))
+                || (_tp==='Air House'      && _ap==='PH2');
+    if(esParSec) return false;
+  }
   return true;
 };
 // ── EXCLUSIÓN DE COMPLEMENTARY (CORTESÍA) EN OCUPACIÓN FÍSICA ──────────────
@@ -7751,6 +7774,18 @@ async function guardarReserva() {
     }
   }
 
+  // Sol. Santiago (3-sep-2026): "esas combinadas deben estar en el inventario y repartir
+  // proporcional la tarifa" — por ahora SOLO Kubik (8010 sigue con la unidad hermana sin tarifa
+  // hasta tener el metraje por apto de sus combos). Cuando el combo es un par reconocido (FR/TR/SD/AH,
+  // _aptosW.length===2) y ambas unidades tienen metraje en EB().metrajes, la tarifa de la noche se
+  // reparte proporcional a m²; si viene con "adjuntos" extra o falta metraje, esa unidad extra sigue
+  // sin tarifa propia (comportamiento anterior).
+  const _kubikSplit = (EDIFICIO_ACTIVO==='kubik' && _aptosW.length===2 && EB().metrajes && Number(EB().metrajes[_aptosW[0]])>0 && Number(EB().metrajes[_aptosW[1]])>0);
+  const _mPpal = _kubikSplit ? Number(EB().metrajes[_aptosW[0]]) : 0;
+  const _mHer  = _kubikSplit ? Number(EB().metrajes[_aptosW[1]]) : 0;
+  const _ratioPpal = _kubikSplit ? (_mPpal/(_mPpal+_mHer)) : 1;
+  const _ratioHer  = _kubikSplit ? (_mHer/(_mPpal+_mHer)) : 0;
+  const _esHermanaPar = (_a) => (_kubikSplit && _a === _aptosW[1]);
   const rows = [];
   for (let i = 0; i < noches; i++) {
     const d = new Date(ci);
@@ -7762,7 +7797,16 @@ async function guardarReserva() {
     const _tCanon = _canonMensual ? window._canonNoche(_canonMensual, fecha) : null;
     const tNoche = porNoche ? (tarifasNoche[fecha] ?? tarifa) : (_tCanon !== null ? _tCanon : tarifa);
     const tNocheCOP = _esUSDr ? Math.round(tNoche*_trmR) : tNoche; // USD→COP (la TRM ya está validada arriba)
-    for (const _a of _aptosW2){ const _sib=_esHermana(_a); const _tA=_sib?null:(tNocheCOP||null); const _tU=(_esUSDr && !_sib)?(tNoche||null):null; rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _tipoCombo }); }
+    for (const _a of _aptosW2){
+      const _sib=_esHermana(_a);
+      const _parHer = _esHermanaPar(_a);
+      const _tA = _parHer ? (Math.round((tNocheCOP||0)*_ratioHer)||null)
+                : (_sib ? null : (tNocheCOP!=null ? Math.round(_kubikSplit?(tNocheCOP*_ratioPpal):tNocheCOP) : null));
+      const _tU = !_esUSDr ? null
+                : (_parHer ? (Math.round((tNoche||0)*_ratioHer*100)/100 || null)
+                : (_sib ? null : Math.round((_kubikSplit?(tNoche*_ratioPpal):tNoche)*100)/100));
+      rows.push({ fecha, apto:_a, estado, huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _tipoCombo });
+    }
   }
   // Día de check-out
   // Uso de dia (noches = 0, modalidad TxD): el ciclo de arriba no recorre ninguna noche, pero el dia
@@ -7774,8 +7818,12 @@ async function guardarReserva() {
     const _tDiaCOP = _esUSDr ? Math.round(_tDia*_trmR) : _tDia;
     for (const _a of _aptosW2){
       const _sib = _esHermana(_a);
-      const _tA  = _sib ? null : (_tDiaCOP||null);
-      const _tU  = (_esUSDr && !_sib) ? (_tDia||null) : null;
+      const _parHer = _esHermanaPar(_a);
+      const _tA = _parHer ? (Math.round((_tDiaCOP||0)*_ratioHer)||null)
+                : (_sib ? null : (_tDiaCOP!=null ? Math.round(_kubikSplit?(_tDiaCOP*_ratioPpal):_tDiaCOP) : null));
+      const _tU = !_esUSDr ? null
+                : (_parHer ? (Math.round((_tDia||0)*_ratioHer*100)/100 || null)
+                : (_sib ? null : Math.round((_kubikSplit?(_tDia*_ratioPpal):_tDia)*100)/100));
       rows.push({ fecha: ci, apto:_a, estado: 'Ocupado', huesped: nombre, huespedes_extra: _he2, checkin: ci, checkout: co, nombre: _rNom, apellido1: _rAp1, apellido2: _rAp2, telefono: _telR || null, tarifa: _tA, tarifa_usd: _tU, moneda: _monedaR, canal, iva, entidad: _entR, updated_by: currentUser.id, tipo: _tipoCombo });
     }
   } else {
@@ -14616,7 +14664,7 @@ async function renderInformeEjecutivo(){
   const rmes = rMes.data||[];
   const ocuMesN = rmes.filter(r=>baseSet.has(r.apto)&&OCU.includes(r.estado)&&!window._esCompRack(r,compSetEj)).length;
   const fueraMesN = rmes.filter(r=>baseSet.has(r.apto)&&window._FUERA_INVENTARIO.includes(r.estado)).length;
-  const dispMes = Math.max(1, EB().aptosBase.length*dim - fueraMesN);
+  const dispMes = (EDIFICIO_ACTIVO==='kubik') ? (EB().aptosBase.length*dim) : Math.max(1, EB().aptosBase.length*dim - fueraMesN);
   const ocuMesPct = Math.round(ocuMesN/dispMes*100);
   const ventasMes_base = rmes.filter(r=>window._esVentaAloja(r)).reduce((s,r)=>s+Number(r.tarifa),0);
   // Ajuste por relevos (misma técnica que ventasMesRk): sumamos (par - lo ya contado), una vez por celda.
@@ -17072,8 +17120,9 @@ async function renderInformesKL(){
       var ta=_infTipo(r); tipoApto[ta]=tipoApto[ta]||{v:0,n:0}; tipoApto[ta].v+=t; tipoApto[ta].n++;
     }
   });
-  // Inventario disponible del mes = llaves x dias - noches fuera de servicio
-  var dispM=MESES.map(function(p,i){ return Math.max(1,_infDiasMes(p)*window._INF_UNID - fueraN[i]); });
+  // Inventario disponible del mes = llaves x dias. 3-sep-2026 (Sol. Santiago): en Kubik ya no resta
+  // noches fuera de servicio (fueraN queda solo informativo); 8010 sigue restando.
+  var dispM=MESES.map(function(p,i){ return (EDIFICIO_ACTIVO==='kubik') ? (_infDiasMes(p)*window._INF_UNID) : Math.max(1,_infDiasMes(p)*window._INF_UNID - fueraN[i]); });
   var ocupPct=MESES.map(function(p,i){ return Math.round(ocupN[i]/dispM[i]*1000)/10; });
   var adr=MESES.map(function(p,i){ return noc[i]?Math.round(vta[i]/noc[i]):0; });
   var revpar=MESES.map(function(p,i){ return Math.round(vta[i]/dispM[i]); });
