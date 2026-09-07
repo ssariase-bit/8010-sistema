@@ -477,10 +477,16 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-03-kubik-disponible-combos-v63';
+const APP_VERSION = '2026-09-07-reembolsos-historico-v65';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-07', version:'2026-09-07-reembolsos-historico-v65', titulo:'Reembolsos: los lotes con reintegro confirmado pasan a Histórico y el total de la bandeja arranca en cero',
+    afecta:'Reembolsos (lista de lotes), Préstamos e Inventario',
+    detalle:'Sol. Santiago (7-sep-2026): "en reembolsos de 8010 poner todos recibidos, para arrancar esas cajas en 0". Se marcaron los 200 recibos de 8010 (86 lotes, $15.671.050) como "Reembolso recibido completo" con reintegro confirmado. Pero la lista seguia sumando los $15,6 millones en el encabezado porque sumaba TODOS los lotes, cerrados o no. Ahora un lote con reintegro confirmado se considera cerrado: sale de la lista y del total, y queda en un Historico consultable con el enlace "ver" del encabezado. No se borra nada. Los lotes que aun no tienen el reintegro confirmado siguen visibles y sumando. (2) PRESTAMOS E INVENTARIO (Sol. Santiago 7-sep-2026): en las tarjetas de inventario, el numero de "Prestadas" ahora es un enlace: al hacer clic muestra donde esta cada unidad prestada (apto, huesped, fecha, dias transcurridos, devolucion pactada, marcando en rojo las vencidas) y permite registrar la devolucion desde ahi mismo.' },
+  { fecha:'2026-09-04', version:'2026-09-04-mismo-idioma-3-modulos-v64', titulo:'Rack de Aptos, Indicadores y Detalle de Ventas daban tres cifras distintas de noches y ventas para el mismo mes — ahora los tres leen la misma regla',
+    afecta:'Rack de Aptos (KPIs del mes), Indicadores de Ocupación y Ventas, Detalle de Ventas, Dashboard, Informe Ejecutivo, Informes KL — todo lo que usa _esVentaAloja',
+    detalle:'Sol. Santiago (4-sep-2026): "TODO el sistema debe hablar el mismo idioma y las mismas cifras, no esta pasando eso". Verificado en Kubik agosto 2026: Rack de Aptos 674 noches / $279.588.998, Indicadores 644 / $279.739.292, Detalle de Ventas 626 / $277.601.687 — 48 noches y $2.137.605 de diferencia para el MISMO mes. Tres causas, cada una en un modulo: (1) RACK DE APTOS tenia su propia lista de estados ocupados copiada a mano (_OCURK), que todavia contaba "Check-out hoy" y "Completo" como noche ocupada y no restaba "Completo" del inventario, y ademas no excluia las Complementary — era el unico de los 5 modulos que la auditoria v61 no alcanzo a corregir. Ahora usa las constantes unicas _OCU_NOCHE y _FUERA_INVENTARIO y excluye Complementary, igual que Dashboard. (2) INDICADORES contaba como noche ocupada cualquier fila con tarifa (cobrado) O fisicamente ocupada; con eso una noche de "Check-out hoy" con tarifa sumaba ocupacion, contra el criterio aprobado el 31-ago (el dia de salida no cuenta). Ahora noche ocupada = solo fisica (Ocupado, Check-in hoy, Sale de viaje, sin Complementary); ventas y ADR siguen por noche con tarifa. (3) COMPLEMENTARY CON TARIFA: hay noches de reservas Complementary que quedaron escritas en el rack CON tarifa. Detalle de Ventas las excluia (porque cruza contra tipo_tarifa=COMP) pero Dashboard, Rack, Indicadores e Informes las sumaban como venta — de ahi los $2.137.605 de mas en agosto. Sol. Santiago del 12-ago ("todas las Complementary que no sumen % de ocupacion ni suma de ingresos") ya lo prohibia; ahora la regla canonica _esVentaAloja descarta la fila si su reserva es COMP, sin importar que traiga tarifa, asi que el descarte aplica en TODOS los modulos a la vez. La lista de reservas COMP se carga una sola vez por sesion (_compSetGlobal) y la comparten todos. RESULTADO: los tres modulos dan la misma venta (la de Detalle de Ventas, que era la correcta) y la misma ocupacion (la de Dashboard). Las noches y ventas de agosto en Rack e Indicadores BAJAN con este cambio; no es una regresion, es que antes contaban de mas. PENDIENTE (dato, no codigo): depurar en la tabla rack las filas Complementary que quedaron con tarifa, para que el dato de origen quede limpio y no dependa del filtro.' },
   { fecha:'2026-09-03', version:'2026-09-03-kubik-disponible-combos-v63', titulo:'Kubik: disponible siempre es 42 llaves x dias del mes, y las unidades combinadas reparten la tarifa proporcional al metraje en vez de salir del inventario',
     afecta:'Dashboard, Indicadores de Ocupación y Ventas, Rack, Informe Ejecutivo, Informes KL (todos en Kubik)',
     detalle:'Sol. Santiago (3-sep-2026), sobre el disponible de Kubik: "siempre tiene que ser el numero de aptos y numero de dias" y "esas combinadas deben estar en el inventario y repartir proporcional la tarifa". Por ahora el cambio es SOLO Kubik (8010 sigue con el criterio anterior hasta tener el metraje por apto de sus combos de "habitacion A"). Dos cambios: (1) DISPONIBLE: en los 7 lugares que lo calculan (Dashboard, Indicadores, Rack, Informe Ejecutivo, Informes KL) Kubik ya NO resta noches Bloqueado/Mantenimiento/Completo del disponible — es constante, 42 llaves x dias del mes, siempre. (2) COMBOS (Two Residence, Famili Residence, Suite Deluxe): antes la unidad secundaria de un combo (ej. 603 en el combo 602+603) se guardaba con tarifa null y estado "Completo", y salia de ventas y del disponible — su ingreso completo quedaba en la unidad principal (602). Ahora la tarifa de la noche se reparte proporcional al metraje real de cada unidad (602=29m2/603=56m2 -> 34%/66%; 701=100m2/702=29m2 -> 78%/22%; etc., datos ya existentes en EB().metrajes) y la unidad secundaria queda con el mismo estado de ocupacion que la principal (Ocupado/Check-in hoy/Check-out hoy/Sale de viaje) en vez de "Completo" — ya cuenta como venta y como noche vendida igual que cualquier otra unidad. Se migraron retroactivamente 319 filas de 2026 (todo el año hasta hoy): 307 con reparto de tarifa (verificado que la suma total no cambio, $0 de diferencia, es solo redistribucion) y 12 dias de checkout sin tarifa (solo se sincronizo el estado). Efecto en la ocupacion mensual de Kubik: julio 31,6% -> 38,5%, agosto 44,9% (v61) -> 49,8% con este criterio completo — sube porque ahora se reconoce como vendida la unidad secundaria de los combos activos, que antes desaparecia del calculo. Pendiente: aplicar el mismo criterio a 8010 cuando se tenga el metraje por apartamento de sus combos.' },
@@ -3434,7 +3440,9 @@ async function renderIndicadores(){
       const cobrado = window._esVentaAloja(r);       // regla canónica de venta de alojamiento
       // Sol. Santiago (12-ago-2026): Complementary ya NO cuenta en la ocupación física.
       const fisica = OCU.indexOf(r.estado)>-1 && !window._esCompRack(r,compSetInd);
-      if(cobrado||fisica) m[mi].noches++;
+      // v64 (Sol. Santiago 4-sep-2026): noche ocupada = SOLO fisica (criterio 31-ago). Antes sumaba
+      // tambien cualquier fila con tarifa, y una "Check-out hoy" cobrada contaba como ocupada.
+      if(fisica) m[mi].noches++;
       if(cobrado){ m[mi].nTar++; m[mi].ventas+=t; }
       // Auditoria 3-sep-2026: antes esta funcion no restaba nada de "fuera de servicio" del
       // disponible (abajo se usaba nVend*diasMes(i) a secas) — se agrega, igual que Dashboard.
@@ -4197,7 +4205,10 @@ async function renderRack() {
   // aptos "Ocupado/Sale de viaje" (que ordenaban al final) caían y se pintaban Libres. Se pagina
   // con _rackFetchRango (filtra por edificio activo; verificado: 0 filas con edificio nulo).
   // El _PRIO de más abajo resuelve los duplicados, así que no hace falta .order('estado').
-  const { data: rawRack, error: rackErr } = await window._rackFetchRango(monthStart, monthEnd, '*');
+  const [{ data: rawRack, error: rackErr }] = await Promise.all([
+    window._rackFetchRango(monthStart, monthEnd, '*'),
+    window._fetchCompReservaIds()   // v64: necesario para excluir Complementary en los KPIs del mes
+  ]);
   if (rackErr) { document.getElementById('main-content').innerHTML = `<div class="empty"><div class="empty-icon">❌</div><p>Error cargando rack: ${rackErr.message}</p></div>`; return; }
   let allRack = rawRack || [];
 
@@ -4313,14 +4324,18 @@ async function renderRack() {
     _rkRelevoCountAj += (((_tS>0?1:0)+(_tE>0?1:0)) - (_contado>0?1:0));
   });
   const ventasMesRk = ventasMesRk_base + _rkRelevoVentaAj;
-  const _OCURK=["Ocupado","Check-in hoy","Check-out hoy","Completo","Sale de viaje"];
-  const _FURK=["Bloqueado","Mantenimiento"];
+  // v64 (Sol. Santiago 4-sep-2026): este modulo tenia su propia lista copiada a mano (contaba
+  // "Check-out hoy" y "Completo" como ocupadas y no excluia Complementary) — era el unico que la
+  // auditoria v61 no corrigio. Ahora lee las constantes unicas, igual que Dashboard e Indicadores.
+  const _OCURK=window._OCU_NOCHE;
+  const _FURK=window._FUERA_INVENTARIO;
+  const _compRk = window._compSetGlobal || new Set();
   const _mr=allRack.filter(r=> r.edificio===EDIFICIO_ACTIVO);
   const _s21=new Set(EB().aptosBase), _s33=new Set(EB().aptosFull);
   const _disp21m=(EDIFICIO_ACTIVO==='kubik')?(EB().aptosBase.length*daysInMonth):Math.max(1, EB().aptosBase.length*daysInMonth - _mr.filter(r=>_s21.has(r.apto)&&_FURK.includes(r.estado)).length);
   const _disp33m=(EDIFICIO_ACTIVO==='kubik')?(EB().aptosFull.length*daysInMonth):Math.max(1, EB().aptosFull.length*daysInMonth - _mr.filter(r=>_s33.has(r.apto)&&_FURK.includes(r.estado)).length);
-  const _ocu21m=_mr.filter(r=>_s21.has(r.apto)&&_OCURK.includes(r.estado)).length;
-  const _ocu33m=_mr.filter(r=>_s33.has(r.apto)&&_OCURK.includes(r.estado)).length;
+  const _ocu21m=_mr.filter(r=>_s21.has(r.apto)&&_OCURK.includes(r.estado)&&!window._esCompRack(r,_compRk)).length;
+  const _ocu33m=_mr.filter(r=>_s33.has(r.apto)&&_OCURK.includes(r.estado)&&!window._esCompRack(r,_compRk)).length;
   const _pct21m=Math.round(_ocu21m/_disp21m*100), _pct33m=Math.round(_ocu33m/_disp33m*100);
   const _conTarM=_mr.filter(r=>window._esVentaAloja(r));
   const _denAdrMes=_conTarM.length + _rkRelevoCountAj; // cada relevo aporta hasta 2 muestras de tarifa
@@ -5169,6 +5184,9 @@ window._esVentaAloja = function(r){
   if(!r) return false;
   if(!window._OCU_VENTA.has(r.estado)) return false;
   if((Number(r.tarifa)||0) <= 0) return false;
+  // v64 (Sol. Santiago 4-sep-2026, "mismo idioma"): una noche de reserva Complementary NUNCA es venta,
+  // aunque la fila del rack traiga tarifa por error de dato. Antes solo Detalle de Ventas lo aplicaba.
+  if(window._compSetGlobal && r.reserva_id && window._compSetGlobal.has(r.reserva_id)) return false;
   // Combo Two/Family Residence de 8010: la pareja X02+X03 comparte UNA sola tarifa -> no contar la unidad
   // secundaria (03/02) para no duplicar. Los 03 independientes de Kubik NO son tipo Two/Family -> sí cuentan.
   // Segunda linea de defensa sobre filas historicas. Desde el 19-ago-2026 la unidad hermana de un
@@ -5200,9 +5218,11 @@ window._esVentaAloja = function(r){
 window._fetchCompReservaIds = async function(){
   try{
     var r = await sb.from('reservas').select('id').eq('tipo_tarifa','COMP');
-    if(r.error) return new Set();
-    return new Set((r.data||[]).map(function(x){return x.id;}));
-  }catch(e){ return new Set(); }
+    if(r.error) return window._compSetGlobal || new Set();
+    var s = new Set((r.data||[]).map(function(x){return x.id;}));
+    window._compSetGlobal = s;   // v64: lo comparte _esVentaAloja con todos los modulos
+    return s;
+  }catch(e){ return window._compSetGlobal || new Set(); }
 };
 window._esCompRack = function(r, compSet){ return !!(compSet && r && r.reserva_id && compSet.has(r.reserva_id)); };
 // ── REGLA CANÓNICA DE OCUPACIÓN (CRITERIO ÚNICO, Sol. Cristina Cerviño 31-ago-2026 / aprobado
@@ -13532,6 +13552,14 @@ async function renderReembolsosList(){
   // se gestionan y se muestran desde el módulo Anticipos, no aquí (Sol. Sebastián + Santiago,
   // 07-ago-2026). Se excluyen para no mezclar los dos flujos en la bandeja general.
   d=d.filter(function(x){ return !x.anticipo_id; });
+  // v65 (Sol. Santiago 7-sep-2026, "para arrancar esas cajas en 0"): un lote cuyo reintegro ya
+  // fue confirmado esta CERRADO — pasa a Historico y deja de sumar en el total de la bandeja.
+  // Se puede ver con el enlace "ver historico"; no se borra nada.
+  var _esHist=function(x){ return !!x.reintegro_confirmado_at && x.consecutivo!=null; };
+  var _histRows=d.filter(_esHist);
+  var _histLotes={}; _histRows.forEach(function(x){ _histLotes['c'+x.consecutivo]=1; });
+  var _histN=Object.keys(_histLotes).length, _histTot=_histRows.reduce(function(s,x){ return s+(Number(x.valor)||0); },0);
+  if(!window._reembVerHist) d=d.filter(function(x){ return !_esHist(x); });
   var _APROB=['Aprobado','Pagado','Reembolso recibido completo','Reembolso recibido parcial'];
   // agrupar
   var g={}, orden=[];
@@ -13628,7 +13656,8 @@ async function renderReembolsosList(){
     +'<div style="font-size:12px;color:var(--gris-t);margin-bottom:12px">Los recibos se registran en la <b>bandeja</b> y se acumulan hasta que se saca el lote. Cada lote queda <b>sellado</b> con su consecutivo: lo que llegue después entra al siguiente. Cada línea de la lista es un lote con todos sus recibos adentro.</div>'
     +bandejaHTML
     +'<div class="card"><div class="card-header" style="flex-wrap:wrap;gap:8px">'
-    +'<div class="card-title">'+ordenLotes.length+' lotes <span style="font-weight:400;color:#888;font-size:12px">· '+nRec+' recibos · '+nPend+' con pendientes</span> <span style="margin-left:14px;color:var(--verde);font-weight:700">'+fmt(totGral)+'</span></div>'
+    +'<div class="card-title">'+ordenLotes.length+' lotes <span style="font-weight:400;color:#888;font-size:12px">· '+nRec+' recibos · '+nPend+' con pendientes</span> <span style="margin-left:14px;color:var(--verde);font-weight:700">'+fmt(totGral)+'</span>'
+    +(_histN?('<span style="margin-left:14px;font-weight:400;color:#888;font-size:12px">· '+_histN+' lote'+(_histN>1?'s':'')+' en histórico ('+fmt(_histTot)+') <a href="#" onclick="event.preventDefault();window._reembVerHist=!window._reembVerHist;renderReembolsosList()" style="color:#1D3461">'+(window._reembVerHist?'ocultar':'ver')+'</a></span>'):'')+'</div>'
     +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
     +'<input type="text" onkeyup="_reembBuscar(this)" placeholder="🔎 Buscar empresa, recibo, descripción…" style="padding:6px 10px;border:1px solid var(--gris-b);border-radius:6px;font-size:12px">'
     +'<button class="btn btn-sm" style="background:#1A5C2E;color:#fff" onclick="_loteAbrir(null)">➕ Registrar recibos</button>'
@@ -14425,17 +14454,22 @@ async function renderPrestamosElementos(){
 async function cargarInventarioElem(){
   var inv=await sb.from('inventario_items').select('*').eq('edificio',EDIFICIO_ACTIVO).order('nombre');
   var items=(inv.data)||[];
-  var pr=await sb.from('prestamos_elementos').select('item,cantidad').eq('edificio',EDIFICIO_ACTIVO).eq('estado','Prestado');
+  // v65 (Sol. Santiago 7-sep-2026): se traen los prestamos activos completos para poder mostrar
+  // DONDE esta cada elemento prestado (apto, huesped, fecha) al hacer clic en "Prestadas".
+  var pr=await sb.from('prestamos_elementos').select('*').eq('edificio',EDIFICIO_ACTIVO).eq('estado','Prestado').order('fecha_prestamo');
+  window._peActivos=(pr.data||[]);
   var prestadas={}; (pr.data||[]).forEach(function(x){ prestadas[x.item]=(prestadas[x.item]||0)+(Number(x.cantidad)||0); });
   var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');};
   var cards=items.map(function(it){
     var p=prestadas[it.nombre]||0; var disp=(Number(it.total)||0)-p;
     var col=disp<=0?'#C0392B':(disp<=2?'#B9770E':'#1E7E34');
-    return '<div style="border:1px solid #e3e6ea;border-radius:10px;padding:12px;min-width:170px;background:#fff">'+
-      '<div style="font-weight:700;font-size:15px">'+esc(it.nombre)+'</div>'+
-      '<div style="font-size:12px;color:#666;margin:4px 0">Total: <b>'+(Number(it.total)||0)+'</b> · Prestadas: <b>'+p+'</b></div>'+
+    // v65: toda la tarjeta es clicable cuando hay unidades prestadas — abre "donde esta / a quien"
+    var _nomJs=esc(it.nombre).replace(/'/g,'&#39;');
+    return '<div '+(p>0?'onclick="window._peVerPrestados(\''+_nomJs+'\')" title="Clic para ver dónde está y a quién se prestó" ':'')+'style="border:1px solid '+(p>0?'#B9770E':'#e3e6ea')+';border-radius:10px;padding:12px;min-width:170px;background:#fff'+(p>0?';cursor:pointer;box-shadow:0 0 0 2px #FDE68A':'')+'">'+
+      '<div style="font-weight:700;font-size:15px">'+esc(it.nombre)+(p>0?' <span style="font-size:11px;color:#B9770E;font-weight:600">🔍 ver dónde</span>':'')+'</div>'+
+      '<div style="font-size:12px;color:#666;margin:4px 0">Total: <b>'+(Number(it.total)||0)+'</b> · Prestadas: '+(p>0?'<a href="#" onclick="event.preventDefault();event.stopPropagation();window._peVerPrestados(\''+esc(it.nombre).replace(/'/g,'&#39;')+'\')" style="font-weight:700;color:#B9770E;text-decoration:underline" title="Ver dónde están">'+p+'</a>':'<b>0</b>')+'</div>'+
       '<div style="font-size:22px;font-weight:800;color:'+col+'">'+disp+' <span style="font-size:12px;font-weight:500;color:#666">disponibles</span></div>'+
-      '<button class="btn btn-secondary" style="margin-top:8px;padding:4px 10px;font-size:12px" onclick="editarTotalItem(\''+it.id+'\','+(Number(it.total)||0)+',\''+esc(it.nombre)+'\')">✏️ Editar total</button>'+
+      '<button class="btn btn-secondary" style="margin-top:8px;padding:4px 10px;font-size:12px" onclick="event.stopPropagation();editarTotalItem(\''+it.id+'\','+(Number(it.total)||0)+',\''+esc(it.nombre)+'\')">✏️ Editar total</button>'+
     '</div>';
   }).join('');
   document.getElementById('pe-inv').innerHTML=
@@ -14446,6 +14480,27 @@ async function cargarInventarioElem(){
   var sel=document.getElementById('pe-item');
   if(sel) sel.innerHTML=items.map(function(it){return '<option>'+esc(it.nombre)+'</option>';}).join('')||'<option value="">(crea un elemento primero)</option>';
 }
+// v65: modal con el detalle de los prestamos activos de un elemento (apto, huesped, fecha, dias)
+window._peVerPrestados=function(nombre){
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
+  var fmtF=function(f){if(!f)return '-';var p=String(f).slice(0,10).split('-');return p[2]+'/'+p[1]+'/'+p[0];};
+  var rows=(window._peActivos||[]).filter(function(x){ return x.item===nombre; });
+  var hoy=new Date(TODAY+'T00:00:00');
+  var filas=rows.map(function(x){
+    var d=x.fecha_prestamo?Math.round((hoy-new Date(String(x.fecha_prestamo).slice(0,10)+'T00:00:00'))/86400000):null;
+    var venc=x.fecha_dev_pactada && String(x.fecha_dev_pactada).slice(0,10)<TODAY;
+    return '<tr'+(venc?' style="background:#fef2f2"':'')+'><td>'+fmtF(x.fecha_prestamo)+'</td><td>'+(Number(x.cantidad)||1)+'</td><td><b>'+esc(x.apto||'—')+'</b></td><td style="text-align:left">'+esc(x.huesped||'—')+'</td><td>'+(d==null?'—':d+' d')+'</td><td>'+(x.fecha_dev_pactada?fmtF(x.fecha_dev_pactada)+(venc?' <span style="color:#b91c1c;font-weight:700">vencida</span>':''):'—')+'</td><td>'+esc(x.observaciones||x.obs||'')+'</td>'
+      +'<td><button class="btn btn-success" style="padding:3px 9px;font-size:12px" onclick="devolverPrestamoElem(\''+x.id+'\');var m=document.getElementById(\'pe-modal\');if(m)m.remove();">↩ Devolver</button></td></tr>';
+  }).join('')||'<tr><td colspan="8" style="text-align:center;color:#999;padding:14px">Sin préstamos activos</td></tr>';
+  var old=document.getElementById('pe-modal'); if(old) old.remove();
+  var m=document.createElement('div'); m.id='pe-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  m.onclick=function(e){ if(e.target===m) m.remove(); };
+  m.innerHTML='<div style="background:#fff;border-radius:14px;padding:20px 22px;max-width:860px;width:94%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:16px;font-weight:800;color:#1D3461">☂️ '+esc(nombre)+' — '+rows.length+' préstamo'+(rows.length===1?'':'s')+' activo'+(rows.length===1?'':'s')+'</div><button onclick="document.getElementById(\'pe-modal\').remove()" style="border:none;background:none;font-size:18px;cursor:pointer">✕</button></div>'
+    +'<div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th>Fecha</th><th>Cant.</th><th>Apto</th><th style="text-align:left">Huésped</th><th>Días</th><th>Devolución pactada</th><th>Obs.</th><th></th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
+  document.body.appendChild(m);
+};
 async function nuevoItemInventario(){
   var nom=prompt('Nombre del elemento (ej. Sombrillas):'); if(!nom) return;
   var tot=prompt('Cantidad total en inventario:','0'); if(tot===null) return;
