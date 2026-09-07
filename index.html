@@ -477,7 +477,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-07-solicitudes-v66';
+const APP_VERSION = '2026-09-07-solicitudes-v66b';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
@@ -18479,17 +18479,23 @@ async function renderSemanaInfo(){
   if(derivados.length){ const rr = await sb.from('semana_seguimiento').upsert(derivados, { onConflict:'fecha,apto,tipo,edificio', ignoreDuplicates:true }); if(rr.error) console.error('semana upsert:', rr.error); }
   // 1b) v66 (Sol. Fabio Malaver 7-sep-2026, 1e606d7f): si la reserva cambio de fecha DESPUES de que
   // la semana ya habia derivado su CKI/CKO (ej. Castaldo: CKO 7-sep en el rack el 31-ago, corregido
-  // a 3-sep el 4-sep), la fila vieja seguia mostrandose junto con la nueva porque el upsert solo
-  // agrega, nunca retira. Ahora: una fila derivada cuyo huesped ya no tiene esa fecha en el rack
-  // (para ese apto y tipo) se marca "Reemplazado" y deja de mostrarse. No se borra nada, y las filas
-  // de otros huespedes (manuales) no se tocan.
+  // a 3-sep el 4-sep), la fila vieja seguia mostrandose porque el upsert solo agrega, nunca retira.
+  // Ahora: para cada fila de la semana se verifica contra el rack (fuente unica) si ese huesped en
+  // ese apto tiene esa fecha como check-in/check-out. Si el rack tiene al huesped en el apto pero con
+  // OTRA fecha, la fila se marca "Reemplazado" y deja de mostrarse. No se borra nada; si el rack no
+  // tiene al huesped (fila manual de algo que no esta en el rack) no se toca.
   try{
     const _norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
-    const _validas = {}; derivados.forEach(d=>{ _validas[d.fecha+'|'+d.apto+'|'+d.tipo]=1; });
-    const _hueSet = {}; derivados.forEach(d=>{ _hueSet[d.apto+'|'+d.tipo+'|'+_norm(d.huesped)]=1; });
-    const { data: _prev } = await sb.from('semana_seguimiento').select('id,fecha,apto,tipo,huesped,estado').gte('fecha',_ini).lte('fecha',_fin);
-    const _stale = (_prev||[]).filter(x => x.estado!=='Reemplazado' && !_validas[x.fecha+'|'+x.apto+'|'+x.tipo] && _hueSet[x.apto+'|'+x.tipo+'|'+_norm(x.huesped)]);
-    if(_stale.length){ await sb.from('semana_seguimiento').update({ estado:'Reemplazado', observaciones:'Fecha corregida en la reserva — fila reemplazada automáticamente el '+TODAY }).in('id', _stale.map(x=>x.id)); }
+    const { data: _prev } = await sb.from('semana_seguimiento').select('id,fecha,apto,tipo,huesped,estado').gte('fecha',_ini).lte('fecha',_fin).neq('estado','Reemplazado');
+    const _aptos=[...new Set((_prev||[]).map(x=>x.apto).filter(Boolean))];
+    if(_aptos.length){
+      const _d1=new Date(_ini+'T00:00:00'); _d1.setDate(_d1.getDate()-120); const _d2=new Date(_fin+'T00:00:00'); _d2.setDate(_d2.getDate()+120);
+      const { data: _rk } = await sb.from('rack').select('apto,huesped,checkin,checkout').in('apto',_aptos).not('huesped','is',null).gte('fecha',_d1.toISOString().slice(0,10)).lte('fecha',_d2.toISOString().slice(0,10)).limit(20000);
+      const _tiene={}, _fechas={};
+      (_rk||[]).forEach(r=>{ const k=r.apto+'|'+_norm(r.huesped); _tiene[k]=1; if(r.checkin) _fechas[k+'|CKI|'+String(r.checkin).slice(0,10)]=1; if(r.checkout) _fechas[k+'|CKO|'+String(r.checkout).slice(0,10)]=1; });
+      const _stale=(_prev||[]).filter(x=>{ const k=x.apto+'|'+_norm(x.huesped); return _tiene[k] && !_fechas[k+'|'+x.tipo+'|'+String(x.fecha).slice(0,10)]; });
+      if(_stale.length){ await sb.from('semana_seguimiento').update({ estado:'Reemplazado', observaciones:'Fecha corregida en la reserva — fila reemplazada automáticamente el '+TODAY }).in('id', _stale.map(x=>x.id)); }
+    }
   }catch(_e){ console.warn('semana stale', _e); }
   // 2) Cargar y pintar
   const { data } = await sb.from('semana_seguimiento').select('*').gte('fecha',_ini).lte('fecha',_fin).neq('estado','Reemplazado').order('fecha').order('apto');
