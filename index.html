@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-07-reembolsos-historico-v65';
+const APP_VERSION = '2026-09-07-solicitudes-v66';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-07', version:'2026-09-07-solicitudes-v66', titulo:'Cierre de 5 solicitudes pendientes: seguimiento que se borraba al cambiar de dia (8010), CKO viejo en Informacion de la Semana (Kubik), correos con mayuscula, editar prestamos, agenda de eventos a Michell y Fernando',
+    afecta:'Estado de Huéspedes / Ocupación (seguimiento), Información de la Semana, formulario global (campos de correo), Préstamos e Inventario, Agenda de Eventos 8010',
+    detalle:'(1) Sol. Luis Guzman 4-sep (7893a086), 8010: "al cambiar de dia el sistema vuelve y se desactualiza". Causa: el campo Seguimiento de Estado de Huespedes se guardaba SOLO en la fila del rack de ese dia; la fila del dia siguiente nacia en blanco. Nota y Telefono si se replicaban a toda la estadia — Seguimiento no. Ahora se replica igual (apto + huesped, de check-in a check-out). (2) Sol. Fabio Malaver 7-sep (1e606d7f), Kubik: Castaldo con CKO 3-sep en la reserva pero 7-sep en Informacion de la Semana. Causa: la semana deriva CKI/CKO del rack y los guarda en semana_seguimiento con "solo agregar"; cuando la reserva cambio de fecha (7-sep -> 3-sep, corregida el 4-sep) la fila vieja se quedo junto a la nueva. Ahora una fila derivada cuya fecha ya no existe en el rack para ese huesped/apto se marca "Reemplazado" y deja de mostrarse (no se borra; las filas manuales de otros huespedes no se tocan). (3) Sol. Juanita Noguera 4-sep (9c672cec): el formato Titulo al salir de un campo de texto ponia mayuscula despues del punto en los correos ("Juan.Perez@"). Un valor con @, una URL o un campo llamado email/correo/mail/url/usuario se deja tal cual. (4) Sol. Camila Cuartas 4-sep (56e9340b): no se podia corregir un prestamo con error (tocaba devolverlo y crear otro). Boton ✏️ en cada fila de Prestamos: elemento, cantidad, fechas, apto, huesped, devolucion pactada, observaciones y estado. (5) Sol. Natalia Munoz 4-sep (46baab64): Agenda de Eventos 8010 ahora tambien llega a Michell Cardoso y Fernando Herrera (correo de Michell asumido con el patron nombre.apellido@8010urbanliving.com — confirmar). PENDIENTE de dato (no de codigo): Tareas Fin de Semana Kubik — agregar Camila Cuartas y Barbara Alfonso y retirar Nancy Medina Pabon en Personal/RRHH (e39e8398); se intento y esta sesion no tiene permiso para escribir en la tabla personal.' },
   { fecha:'2026-09-07', version:'2026-09-07-reembolsos-historico-v65', titulo:'Reembolsos: los lotes con reintegro confirmado pasan a Histórico y el total de la bandeja arranca en cero',
     afecta:'Reembolsos (lista de lotes), Préstamos e Inventario',
     detalle:'Sol. Santiago (7-sep-2026): "en reembolsos de 8010 poner todos recibidos, para arrancar esas cajas en 0". Se marcaron los 200 recibos de 8010 (86 lotes, $15.671.050) como "Reembolso recibido completo" con reintegro confirmado. Pero la lista seguia sumando los $15,6 millones en el encabezado porque sumaba TODOS los lotes, cerrados o no. Ahora un lote con reintegro confirmado se considera cerrado: sale de la lista y del total, y queda en un Historico consultable con el enlace "ver" del encabezado. No se borra nada. Los lotes que aun no tienen el reintegro confirmado siguen visibles y sumando. (2) PRESTAMOS E INVENTARIO (Sol. Santiago 7-sep-2026): en las tarjetas de inventario, el numero de "Prestadas" ahora es un enlace: al hacer clic muestra donde esta cada unidad prestada (apto, huesped, fecha, dias transcurridos, devolucion pactada, marcando en rojo las vencidas) y permite registrar la devolucion desde ahi mismo.' },
@@ -14480,6 +14483,44 @@ async function cargarInventarioElem(){
   var sel=document.getElementById('pe-item');
   if(sel) sel.innerHTML=items.map(function(it){return '<option>'+esc(it.nombre)+'</option>';}).join('')||'<option value="">(crea un elemento primero)</option>';
 }
+// v66: editar un prestamo (elemento, cantidad, fecha, apto, huesped, devolucion pactada, observaciones, estado)
+window._peEditar=async function(id){
+  var x=(window._peRows||[]).concat(window._peActivos||[]).find(function(r){ return String(r.id)===String(id); });
+  if(!x){ var q=await sb.from('prestamos_elementos').select('*').eq('id',id).single(); x=q.data; }
+  if(!x){ showToast('No se encontró el préstamo','error'); return; }
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');};
+  var inv=await sb.from('inventario_items').select('nombre').eq('edificio',EDIFICIO_ACTIVO).order('nombre');
+  var opts=((inv.data)||[]).map(function(it){ return '<option'+(it.nombre===x.item?' selected':'')+'>'+esc(it.nombre)+'</option>'; }).join('');
+  if(opts.indexOf('selected')<0) opts='<option selected>'+esc(x.item)+'</option>'+opts;
+  var old=document.getElementById('pe-modal'); if(old) old.remove();
+  var m=document.createElement('div'); m.id='pe-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  m.onclick=function(e){ if(e.target===m) m.remove(); };
+  var f=function(v){ return v?String(v).slice(0,10):''; };
+  m.innerHTML='<div style="background:#fff;border-radius:14px;padding:20px 22px;max-width:560px;width:94%;box-shadow:0 20px 60px rgba(0,0,0,.3)">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:16px;font-weight:800;color:#1D3461">✏️ Corregir préstamo</div><button onclick="document.getElementById(\'pe-modal\').remove()" style="border:none;background:none;font-size:18px;cursor:pointer">✕</button></div>'
+    +'<div class="form-row col3"><div class="form-group"><label>Elemento</label><select id="pee-item">'+opts+'</select></div>'
+    +'<div class="form-group"><label>Cantidad</label><input type="number" id="pee-cant" min="1" value="'+(Number(x.cantidad)||1)+'"></div>'
+    +'<div class="form-group"><label>Fecha préstamo</label><input type="date" id="pee-fecha" value="'+f(x.fecha_prestamo)+'"></div></div>'
+    +'<div class="form-row col3"><div class="form-group"><label>Apto / Habitación</label><input type="text" id="pee-apto" value="'+esc(x.apto)+'"></div>'
+    +'<div class="form-group"><label>Huésped / Quien recibe</label><input type="text" id="pee-huesped" value="'+esc(x.huesped)+'"></div>'
+    +'<div class="form-group"><label>Devolución pactada</label><input type="date" id="pee-devpact" value="'+f(x.fecha_dev_pactada)+'"></div></div>'
+    +'<div class="form-row col3"><div class="form-group" style="grid-column:span 2"><label>Observaciones</label><input type="text" id="pee-obs" value="'+esc(x.observaciones)+'"></div>'
+    +'<div class="form-group"><label>Estado</label><select id="pee-estado"><option'+(x.estado==='Prestado'?' selected':'')+'>Prestado</option><option'+(x.estado==='Devuelto'?' selected':'')+'>Devuelto</option></select></div></div>'
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px"><button class="btn btn-outline" onclick="document.getElementById(\'pe-modal\').remove()">Cancelar</button><button class="btn btn-success" onclick="window._peGuardarEdicion(\''+x.id+'\')">💾 Guardar</button></div></div>';
+  document.body.appendChild(m);
+};
+window._peGuardarEdicion=async function(id){
+  var g=function(i){ var e=document.getElementById(i); return e?e.value:''; };
+  var est=g('pee-estado');
+  var upd={ item:g('pee-item'), cantidad:Number(g('pee-cant'))||1, fecha_prestamo:g('pee-fecha')||TODAY, apto:g('pee-apto').trim(), huesped:g('pee-huesped').trim(), fecha_dev_pactada:g('pee-devpact')||null, observaciones:g('pee-obs').trim(), estado:est };
+  if(est==='Devuelto'){ upd.fecha_devolucion = upd.fecha_devolucion||TODAY; } else { upd.fecha_devolucion=null; }
+  var r=await sb.from('prestamos_elementos').update(upd).eq('id',id).eq('edificio',EDIFICIO_ACTIVO);
+  if(r.error){ showToast('Error: '+r.error.message,'error'); return; }
+  var m=document.getElementById('pe-modal'); if(m) m.remove();
+  showToast('✓ Préstamo corregido','success');
+  await cargarInventarioElem(); await cargarPrestamosElem();
+};
 // v65: modal con el detalle de los prestamos activos de un elemento (apto, huesped, fecha, dias)
 window._peVerPrestados=function(nombre){
   var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
@@ -14534,11 +14575,14 @@ async function cargarPrestamosElem(){
   var cont=document.getElementById('pe-lista'); if(!cont) return;
   var r=await sb.from('prestamos_elementos').select('*').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(60);
   var rows=(r.data)||[];
+  window._peRows=rows;   // v66: para editar
   var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
   var fmtF=function(f){if(!f)return '-';var p=String(f).slice(0,10).split('-');return p[2]+'/'+p[1]+'/'+p[0];};
   var tr=rows.map(function(x){
     var badge=x.estado==='Devuelto'?'<span style="color:#1E7E34;font-weight:600">Devuelto</span>':'<span style="color:#B9770E;font-weight:600">Prestado</span>';
-    var acc=x.estado==='Prestado'?'<button class="btn btn-success" style="padding:3px 9px;font-size:12px" onclick="devolverPrestamoElem(\''+x.id+'\')">↩ Devolver</button>':(fmtF(x.fecha_devolucion));
+    // v66 (Sol. Camila Cuartas 4-sep-2026, 56e9340b): se puede corregir un prestamo con error sin tener que devolverlo y crearlo de nuevo
+    var _ed='<button class="btn btn-outline" style="padding:3px 8px;font-size:12px;margin-right:4px" title="Corregir este préstamo" onclick="window._peEditar(\''+x.id+'\')">✏️</button>';
+    var acc=_ed+(x.estado==='Prestado'?'<button class="btn btn-success" style="padding:3px 9px;font-size:12px" onclick="devolverPrestamoElem(\''+x.id+'\')">↩ Devolver</button>':(fmtF(x.fecha_devolucion)));
     return '<tr><td>'+fmtF(x.fecha_prestamo)+'</td><td><b>'+esc(x.item)+'</b></td><td>'+(Number(x.cantidad)||1)+'</td><td>'+esc(x.apto||'')+'</td><td style="text-align:left">'+esc(x.huesped||'')+'</td><td>'+badge+'</td><td>'+acc+'</td></tr>';
   }).join('')||'<tr><td colspan="7" style="text-align:center;color:#999;padding:16px">Sin préstamos registrados</td></tr>';
   cont.innerHTML='<div class="card"><div class="card-title" style="margin-bottom:8px">Préstamos</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th>Fecha</th><th>Elemento</th><th>Cant.</th><th>Apto</th><th>Recibe</th><th>Estado</th><th></th></tr></thead><tbody>'+tr+'</tbody></table></div></div>';
@@ -14909,7 +14953,24 @@ function _paxLista(r){
   }
   return out;
 }
-function guardarSeguimiento(id,val){ sb.from('rack').update({seguimiento:String(val||'').trim()}).eq('id',id).then(function(r){ if(r.error){ if(typeof showToast==='function') showToast('Error seguimiento: '+r.error.message,'error'); } else if(typeof showToast==='function') showToast('Seguimiento guardado','success'); }); }
+// v66 (Sol. Luis Guzman 4-sep-2026, 7893a086: "al cambiar de dia el sistema vuelve y se desactualiza"):
+// el Seguimiento se guardaba SOLO en la fila del rack de ese dia, asi que al dia siguiente la fila
+// nueva salia en blanco. Ahora se replica a toda la estadia del huesped (igual que Nota y Telefono).
+async function guardarSeguimiento(id,val){
+  var _v=String(val||'').trim();
+  var r=await sb.from('rack').select('apto,huesped,checkin,checkout').eq('id',id).single();
+  var row=(r&&r.data)||{}; var q;
+  if(row.apto && row.huesped && row.checkin && row.checkout){
+    q=await sb.from('rack').update({seguimiento:_v}).eq('apto',row.apto).eq('edificio',EDIFICIO_ACTIVO).eq('huesped',row.huesped).gte('fecha',row.checkin).lte('fecha',row.checkout);
+  } else if(row.apto && row.huesped){
+    var d2=new Date(TODAY+'T00:00:00'); d2.setDate(d2.getDate()+400); var hasta=d2.toISOString().split('T')[0];
+    q=await sb.from('rack').update({seguimiento:_v}).eq('apto',row.apto).eq('edificio',EDIFICIO_ACTIVO).eq('huesped',row.huesped).gte('fecha',TODAY).lte('fecha',hasta);
+  } else {
+    q=await sb.from('rack').update({seguimiento:_v}).eq('id',id);
+  }
+  if(q.error){ if(typeof showToast==='function') showToast('Error seguimiento: '+q.error.message,'error'); }
+  else if(typeof showToast==='function') showToast('Seguimiento guardado para toda la estadía','success');
+}
 
 
 // ═══════════════════════════════════════════════════════════
@@ -15031,7 +15092,9 @@ async function renderEventos(){
     </div>`;
 }
 function enviarAgendaEventos(btn){
-  var dest={ to:['natalia.munoz@8010urbanliving.com','cristina.cervino@8010urbanliving.com'], cc:['santiago.arias@8010urbanliving.com','gerencia@8010urbanliving.com','fabio.malaver@8010urbanliving.com','mantenimiento@8010urbanliving.com','operativo.compras@8i8op.com','administrativo@8010urbanliving.com','zareth.varela@8010urbanliving.com','cocina@8010urbanliving.com','migue22more@gmail.com'] };
+  var dest={ to:['natalia.munoz@8010urbanliving.com','cristina.cervino@8010urbanliving.com'], cc:['santiago.arias@8010urbanliving.com','gerencia@8010urbanliving.com','fabio.malaver@8010urbanliving.com','mantenimiento@8010urbanliving.com','operativo.compras@8i8op.com','administrativo@8010urbanliving.com','zareth.varela@8010urbanliving.com','cocina@8010urbanliving.com','migue22more@gmail.com',
+    // v66 (Sol. Natalia Munoz 4-sep-2026, 46baab64): programacion de eventos a Michell y a Fernando Herrera
+    'michell.cardoso@8010urbanliving.com','fernando.herrera@8010urbanliving.com'] };
   return enviarInformeCorreo('Agenda de Eventos · '+(window._evAgWeek||''), window._evAgTxt||'Sin eventos.', btn, null, dest);
 }
 async function renderEventosAgenda(){
@@ -18414,8 +18477,22 @@ async function renderSemanaInfo(){
   (_rkCki||[]).forEach(r=>{ if(!(r.huesped||'').trim()||!r.checkin) return; const k=r.checkin+'|'+r.apto+'|CKI'; if(vistos[k])return; vistos[k]=1; derivados.push({ fecha:r.checkin, apto:r.apto, tipo:'CKI', huesped:r.huesped, pago:_pagoDef, observaciones:r.canal?('Reserva de '+r.canal+'.'):'', estado:'Pendiente', user_id:currentUser.id }); });
   (_rkCko||[]).forEach(r=>{ if(!(r.huesped||'').trim()||!r.checkout) return; const k=r.checkout+'|'+r.apto+'|CKO'; if(vistos[k])return; vistos[k]=1; derivados.push({ fecha:r.checkout, apto:r.apto, tipo:'CKO', huesped:r.huesped, pago:_pagoDef, observaciones:r.canal?('Reserva de '+r.canal+'.'):'', estado:'Pendiente', user_id:currentUser.id }); });
   if(derivados.length){ const rr = await sb.from('semana_seguimiento').upsert(derivados, { onConflict:'fecha,apto,tipo,edificio', ignoreDuplicates:true }); if(rr.error) console.error('semana upsert:', rr.error); }
+  // 1b) v66 (Sol. Fabio Malaver 7-sep-2026, 1e606d7f): si la reserva cambio de fecha DESPUES de que
+  // la semana ya habia derivado su CKI/CKO (ej. Castaldo: CKO 7-sep en el rack el 31-ago, corregido
+  // a 3-sep el 4-sep), la fila vieja seguia mostrandose junto con la nueva porque el upsert solo
+  // agrega, nunca retira. Ahora: una fila derivada cuyo huesped ya no tiene esa fecha en el rack
+  // (para ese apto y tipo) se marca "Reemplazado" y deja de mostrarse. No se borra nada, y las filas
+  // de otros huespedes (manuales) no se tocan.
+  try{
+    const _norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+    const _validas = {}; derivados.forEach(d=>{ _validas[d.fecha+'|'+d.apto+'|'+d.tipo]=1; });
+    const _hueSet = {}; derivados.forEach(d=>{ _hueSet[d.apto+'|'+d.tipo+'|'+_norm(d.huesped)]=1; });
+    const { data: _prev } = await sb.from('semana_seguimiento').select('id,fecha,apto,tipo,huesped,estado').gte('fecha',_ini).lte('fecha',_fin);
+    const _stale = (_prev||[]).filter(x => x.estado!=='Reemplazado' && !_validas[x.fecha+'|'+x.apto+'|'+x.tipo] && _hueSet[x.apto+'|'+x.tipo+'|'+_norm(x.huesped)]);
+    if(_stale.length){ await sb.from('semana_seguimiento').update({ estado:'Reemplazado', observaciones:'Fecha corregida en la reserva — fila reemplazada automáticamente el '+TODAY }).in('id', _stale.map(x=>x.id)); }
+  }catch(_e){ console.warn('semana stale', _e); }
   // 2) Cargar y pintar
-  const { data } = await sb.from('semana_seguimiento').select('*').gte('fecha',_ini).lte('fecha',_fin).order('fecha').order('apto');
+  const { data } = await sb.from('semana_seguimiento').select('*').gte('fecha',_ini).lte('fecha',_fin).neq('estado','Reemplazado').order('fecha').order('apto');
   const rows = data||[];
   window._semRows = rows; window._semIni = _ini; window._semFin = _fin;
   const cki = rows.filter(r=>r.tipo==='CKI'), cko = rows.filter(r=>r.tipo==='CKO');
@@ -22039,6 +22116,11 @@ document.addEventListener('blur', function(e){
   if(!el || el.tagName !== 'INPUT' || el.type !== 'text' || el.hasAttribute('data-no-upper')) return;
   var v = el.value;
   if(!v) return;
+  // v66 (Sol. Juanita Noguera 4-sep-2026, 9c672cec): los correos escritos en campos type="text"
+  // quedaban "Juan.Perez@..." (mayuscula despues del punto). Un correo, una URL o un campo cuyo
+  // id/nombre diga email/correo/mail/url se deja tal cual.
+  var _idn = String((el.id||'')+' '+(el.name||'')+' '+(el.placeholder||'')).toLowerCase();
+  if(v.indexOf('@')>-1 || /^https?:\/\//i.test(v) || /mail|correo|url|web|usuario|password|clave/.test(_idn)) return;
   var uv = v.toLowerCase().replace(/(^|[\s'\-\/.(])([a-záéíóúñü])/g, function(m,p,c){ return p+c.toUpperCase(); });
   if(uv !== v){ el.value = uv; try{ el.dispatchEvent(new Event('input',{bubbles:true})); }catch(_){} }
 }, true);
