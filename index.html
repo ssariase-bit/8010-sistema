@@ -477,11 +477,11 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-08-importar-nh-v68';
+const APP_VERSION = '2026-09-08-importar-nh-v68b';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
-  { fecha:'2026-09-08', version:'2026-09-08-importar-nh-v68', titulo:'Kubik: nuevo módulo Importar Newhotel (puente NH → SO) con la migración de facturación del 8-sep-2026',
+  { fecha:'2026-09-08', version:'2026-09-08-importar-nh-v68b', titulo:'Kubik: nuevo módulo Importar Newhotel (puente NH → SO) con la migración de facturación del 8-sep-2026 + formato único de numeración F8I8 n / NCR26 n',
     afecta:'Menú (Kubik): Importar Newhotel; Facturación Kubik',
     detalle:'Sol. Santiago (8-sep-2026): "el Sistema Operativo se debe alimentar de NH" (Newhotel Cloud PMS, instancia kubikliving8i8). Auditoría del 8-sep: NH tiene 187 facturas + 41 notas crédito y el SO tenía 145 + 30; faltaban 42 facturas ($196,7M) y 12 NC, 3 NC estaban guardadas con el número de la factura, 2 valores no coincidían (N8, F118) y 40 documentos tenían fecha de captura en vez de fecha de emisión. El módulo trae embebidos esos documentos (con cliente, NIT, # reserva NH, apto, fechas de estadía, líneas con IVA por renglón, forma y medio de pago) y las correcciones; muestra el cruce contra Facturación y cada bloque se aplica con un botón (nada automático). Los registros cargados quedan con observación "Cargada desde Newhotel" y fecha de emisión real. Incluye lector del export de NH (Reportes → Exportar → Facturas / Notas Crédito) pendiente de mapeo con un archivo de ejemplo. Hallazgos de la auditoría documentados en Base_Conocimiento_Newhotel_vs_SO_Kubik.xlsx: NH no registra tarifa por noche (0 en 129 de 142 reservas → el SO sigue siendo la fuente de ventas/ADR), las 16 combinadas están creadas en NH como habitaciones físicas (Hab. Virtuales vacío → NH reporta 58 habitaciones), el número de reserva NH (n/2026) ya está en el SO en 105 de 110 reservas cruzadas y es la llave entre sistemas, cartera NH $639,6M por validar con Contabilidad.' },
   { fecha:'2026-09-08', version:'2026-09-08-puertas-v67', titulo:'Kubik: nuevo módulo Puertas comunicantes (inventario de las espumas entre apartamentos) + Michell y Fernando en agenda de eventos 8010',
@@ -14504,12 +14504,15 @@ async function cargarRevisionesApto(){
     if(err.length) alert(err.join('\n'));
     window.renderImportarNH();
   };
+  // Bloque 3: un solo formato de número en todo el SO (F8I8 n / NCR26 n) y estado coherente con el tipo.
+  window._nhPlanFormato=async function(){ var F=await window._nhFacturas(); var out=[]; F.forEach(function(f){ var k=_key(f.numero); var nuevo=null; var m=/^F(\d+)$/.exec(k); if(m) nuevo='F8I8 '+m[1]; m=/^N(\d+)$/.exec(k); if(m) nuevo='NCR26 '+m[1]; var upd={}; if(nuevo && nuevo!==f.numero) upd.numero=nuevo; if(f.tipo==='Nota Crédito' && f.estado!=='NOTA CRÉDITO') upd.estado='NOTA CRÉDITO'; if(Object.keys(upd).length) out.push({f:f,upd:upd}); }); return out; };
+  window._nhAplicarFormato=async function(){ var L=await window._nhPlanFormato(); if(!L.length){ showToast('Todos los números ya están en el formato único','info'); return; } if(!confirm('Se va a unificar el formato de '+L.length+' documentos (F8I8 n / NCR26 n). ¿Continuar?')) return; var ok=0, err=[]; for(var i=0;i<L.length;i++){ var r=await sb.from('facturas').update(L[i].upd).eq('id',L[i].f.id); if(r.error) err.push(L[i].f.numero+': '+r.error.message); else ok++; } showToast('✓ '+ok+' documentos unificados'+(err.length?(' · '+err.length+' con error'):''), err.length?'error':'success'); if(err.length) alert(err.join('\n')); window.renderImportarNH(); };
   // Importador genérico del export de NH (CSV con encabezados). Se completa el mapeo con un archivo de ejemplo.
   window._nhLeerArchivo=function(inp){ var f=inp.files&&inp.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(){ var txt=String(rd.result||''); var sep=(txt.split('\n')[0].split(';').length>txt.split('\n')[0].split(',').length)?';':','; var rows=txt.split(/\r?\n/).filter(Boolean).map(function(l){return l.split(sep);}); var head=rows.shift()||[]; var el=document.getElementById('nh-arch-res'); el.innerHTML='<p style="font-size:12px">Archivo leído: <b>'+_esc(f.name)+'</b> · '+rows.length+' filas · columnas: '+head.map(_esc).join(' | ')+'</p><p style="font-size:12px;color:var(--gris-t)">El mapeo de columnas se define con este ejemplo (pendiente). Envía el archivo a Gerencia/Claude para terminar el importador.</p>'; }; rd.readAsText(f); };
   window.renderImportarNH=async function(){
     var mc=document.getElementById('main-content');
     mc.innerHTML='<div class="page-title">🔄 Importar Newhotel</div><p style="color:var(--gris-t)">Cargando cruce contra Facturación…</p>';
-    var p; try{ p=await window._nhPlan(); }catch(e){ mc.innerHTML+='<p style="color:#b91c1c">Error: '+_esc(e.message||e)+'</p>'; return; }
+    var p, fmt=[]; try{ p=await window._nhPlan(); fmt=await window._nhPlanFormato(); }catch(e){ mc.innerHTML+='<p style="color:#b91c1c">Error: '+_esc(e.message||e)+'</p>'; return; }
     var netF=p.faltan.reduce(function(s,o){return s+(o.isNC?-1:1)*o.val;},0);
     var rowsF=p.faltan.map(function(o){ return '<tr><td>'+_esc(o.numero)+'</td><td>'+_esc(o.fecha)+'</td><td>'+(o.isNC?'NC → '+_esc(o.ref):'Factura '+_esc(o.fp))+'</td><td>'+_esc(o.cliente)+'</td><td>'+_esc(o.res||'')+'</td><td>'+_esc(o.apto||'')+'</td><td style="text-align:right">'+_money((o.isNC?-1:1)*o.val)+'</td></tr>'; }).join('');
     var rowsC=p.ren.map(function(x){return '<tr><td>Renumerar NC</td><td>'+_esc(x.f.numero)+'</td><td>→ '+_esc(x.nuevo)+'</td></tr>';}).join('')
@@ -14525,7 +14528,10 @@ async function cargarRevisionesApto(){
      +((p.ren.length+p.fechas.length+p.valores.length)?('<div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th>Tipo</th><th>Documento SO</th><th>Cambio</th></tr></thead><tbody>'+rowsC+'</tbody></table></div>'
        +'<div class="form-actions"><button class="btn btn-primary" onclick="window._nhAplicarCorrecciones()">✏️ Aplicar correcciones</button></div>'):'<p style="color:var(--verde,#166534)">✓ Sin correcciones pendientes.</p>')
      +'</div>'
-     +'<div class="card"><div class="form-section-title">3. Importar archivo de Newhotel (Reportes → Exportar → Facturas / Notas Crédito)</div><input type="file" accept=".csv,.txt,.xls,.xlsx" onchange="window._nhLeerArchivo(this)"><div id="nh-arch-res"></div></div>';
+     +'<div class="card"><div class="form-section-title">3. Un solo formato de número — <b>'+fmt.length+'</b> documentos por unificar</div>'
+     +(fmt.length?('<p style="font-size:12px;color:var(--gris-t)">Hoy conviven "F8I8 185", "F8i8179", "F8l8 67", "Ncr2639", "37/Ncr26". Se dejan todos como <b>F8I8 n</b> y <b>NCR26 n</b> (mismo idioma que Newhotel) y las notas crédito con estado NOTA CRÉDITO.</p><div style="overflow-x:auto;max-height:220px"><table class="tabla" style="font-size:12px"><thead><tr><th>Actual</th><th>Nuevo</th></tr></thead><tbody>'+fmt.map(function(x){return '<tr><td>'+_esc(x.f.numero)+(x.upd.estado?' <span style="color:#888">(estado → NOTA CRÉDITO)</span>':'')+'</td><td>'+_esc(x.upd.numero||x.f.numero)+'</td></tr>';}).join('')+'</tbody></table></div><div class="form-actions"><button class="btn btn-primary" onclick="window._nhAplicarFormato()">🔤 Unificar formato</button></div>'):'<p style="color:var(--verde,#166534)">✓ Numeración unificada.</p>')
+     +'</div>'
+     +'<div class="card"><div class="form-section-title">4. Importar archivo de Newhotel (Reportes → Exportar → Facturas / Notas Crédito)</div><input type="file" accept=".csv,.txt,.xls,.xlsx" onchange="window._nhLeerArchivo(this)"><div id="nh-arch-res"></div></div>';
   };
 })();
 
