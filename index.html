@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-07-solicitudes-v66b';
+const APP_VERSION = '2026-09-08-puertas-v67';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-08', version:'2026-09-08-puertas-v67', titulo:'Kubik: nuevo módulo Puertas comunicantes (inventario de las espumas entre apartamentos) + Michell y Fernando en agenda de eventos 8010',
+    afecta:'Menú Operación (Kubik): Puertas comunicantes; Revisión de Apartamento (Kubik)',
+    detalle:'Sol. Santiago (8-sep-2026): entre el 01 y el 02, y entre el 02 y el 03 de cada piso (2 al 9) hay dos puertas, una a cada lado, y la espuma aislante va en el vacio entre las dos; se necesitaba un inventario con casillas para saber donde esta cada espuma y que apto esta completo al revisarlo. Nuevo modulo "Puertas comunicantes" (solo Kubik, bajo Mantenimiento): cuadricula de 8 pisos x 2 pares de puertas = 16 espumas; en cada una se marca Instalada en el vacio / Guardada en el apto X / Falta, con observacion, y queda quien y cuando lo marco. Resumen arriba: instaladas, guardadas/faltan y sin revisar. En Revision de Apartamento, al elegir el apto aparecen sus puertas con el estado de la espuma (verde instalada, amarillo guardada, rojo falta). Se guarda en config (puertas_kubik), igual que Atelier.' },
   { fecha:'2026-09-07', version:'2026-09-07-solicitudes-v66', titulo:'Cierre de 5 solicitudes pendientes: seguimiento que se borraba al cambiar de dia (8010), CKO viejo en Informacion de la Semana (Kubik), correos con mayuscula, editar prestamos, agenda de eventos a Michell y Fernando',
     afecta:'Estado de Huéspedes / Ocupación (seguimiento), Información de la Semana, formulario global (campos de correo), Préstamos e Inventario, Agenda de Eventos 8010',
     detalle:'(1) Sol. Luis Guzman 4-sep (7893a086), 8010: "al cambiar de dia el sistema vuelve y se desactualiza". Causa: el campo Seguimiento de Estado de Huespedes se guardaba SOLO en la fila del rack de ese dia; la fila del dia siguiente nacia en blanco. Nota y Telefono si se replicaban a toda la estadia — Seguimiento no. Ahora se replica igual (apto + huesped, de check-in a check-out). (2) Sol. Fabio Malaver 7-sep (1e606d7f), Kubik: Castaldo con CKO 3-sep en la reserva pero 7-sep en Informacion de la Semana. Causa: la semana deriva CKI/CKO del rack y los guarda en semana_seguimiento con "solo agregar"; cuando la reserva cambio de fecha (7-sep -> 3-sep, corregida el 4-sep) la fila vieja se quedo junto a la nueva. Ahora una fila derivada cuya fecha ya no existe en el rack para ese huesped/apto se marca "Reemplazado" y deja de mostrarse (no se borra; las filas manuales de otros huespedes no se tocan). (3) Sol. Juanita Noguera 4-sep (9c672cec): el formato Titulo al salir de un campo de texto ponia mayuscula despues del punto en los correos ("Juan.Perez@"). Un valor con @, una URL o un campo llamado email/correo/mail/url/usuario se deja tal cual. (4) Sol. Camila Cuartas 4-sep (56e9340b): no se podia corregir un prestamo con error (tocaba devolverlo y crear otro). Boton ✏️ en cada fila de Prestamos: elemento, cantidad, fechas, apto, huesped, devolucion pactada, observaciones y estado. (5) Sol. Natalia Munoz 4-sep (46baab64): Agenda de Eventos 8010 ahora tambien llega a Michell Cardoso y Fernando Herrera (correo de Michell asumido con el patron nombre.apellido@8010urbanliving.com — confirmar). PENDIENTE de dato (no de codigo): Tareas Fin de Semana Kubik — agregar Camila Cuartas y Barbara Alfonso y retirar Nancy Medina Pabon en Personal/RRHH (e39e8398); se intento y esta sesion no tiene permiso para escribir en la tabla personal.' },
@@ -1641,6 +1644,7 @@ const MENU_COMPLETO = [
   { id: 'informe-noshow', icon: '🟣', label: 'Informe No Shows' },
   { id: 'novedades-list', icon: '⚠️', label: 'Novedades / Seguimientos' }, { id: 'puntos-fijos-list', icon: '🧽', label: 'Puntos Fijos' },
   { id: 'mantenimiento-list', icon: '🔧', label: 'Mantenimiento' },
+  { id: 'puertas-kl', icon: '🚪', label: 'Puertas comunicantes' },
   { id: 'hk-list', icon: '🧹', label: 'Tiempos Camareras' },
   { id: 'transportes-list', icon: '🚗', label: 'Transportes' },
   { id: 'caja-list', icon: '💰', label: 'Caja' },
@@ -1782,7 +1786,7 @@ window._ITEMS_SISTEMA = ['import-rack','changelog','mi-firma','avisos-push'];
 window._ITEMS_SOLO_8010 = ['ventas-ppto','finanzas'];
 // Sol Santiago: procesos que son ÚNICAMENTE de Kubik. En 8010 no existen y no deben aparecer:
 // entrega de llaves/accesos, inventario de loza, check list de turnos y revistas nocturnas.
-window._ITEMS_SOLO_KUBIK = ['modelo-kl','informes-kl','revistas-list','loza-list','entrega-llaves','checklist-turnos','financiero-kl','carta-bagatelle-list','atelier-list'];
+window._ITEMS_SOLO_KUBIK = ['modelo-kl','informes-kl','revistas-list','loza-list','entrega-llaves','checklist-turnos','financiero-kl','carta-bagatelle-list','atelier-list','puertas-kl'];
 window._itemPermitido = function(it){
   var _rol = currentProfile && currentProfile.rol;
   if(it.roles && it.roles.indexOf(_rol)<0) return false;
@@ -2987,6 +2991,7 @@ window.renderFlujoSemanal=async function(){
       {id:'observaciones',label:'Observaciones',type:'textarea'},
     ]); break;
     case 'prestamos-elem': await renderPrestamosElementos(); break;
+    case 'puertas-kl': await window.renderPuertasKL(); break;
     case 'prestamos-list':     await renderList('prestamos_tec','💻 Préstamos Tecnológicos','prestamos-form',['fecha_prestamo','apto','arrendatario','articulo','cantidad','estado','fecha_devolucion'],['Fecha','Apto','Arrendatario','Artículo','Cant.','Estado','Devolución']); break;
     case 'prestamos-form':     renderGenForm('prestamos_tec','💻 Registrar Préstamo Tecnológico',[
       {id:'fecha_prestamo',label:'Fecha préstamo',type:'date',default:TODAY,req:true},
@@ -14385,7 +14390,7 @@ async function renderRevisionApto(){
     '<div class="card" style="max-width:720px">'+
       '<div style="font-size:12px;color:var(--gris-t);margin-bottom:10px">Revisión y alistamiento del apartamento ANTES del ingreso del huésped. Aquí se marcan las cortesías que se dejan.</div>'+
       '<div class="form-row col3">'+
-        '<div class="form-group"><label>Apartamento</label><select id="rv-apto">'+opc+'</select></div>'+
+        '<div class="form-group"><label>Apartamento</label><select id="rv-apto" onchange="window._pkRevBadge&&window._pkRevBadge(this.value)">'+opc+'</select><div id="rv-puertas" style="font-size:11px;margin-top:4px"></div></div>'+
         '<div class="form-group"><label>Fecha (automática)</label><input type="date" value="'+TODAY+'" disabled style="background:#eef0f2;color:#555"></div>'+
         '<div class="form-group"><label>Estado del apto</label><select id="rv-estado"><option>Listo para entrega</option><option>Pendiente de alistar</option><option>Con observaciones</option></select></div>'+
       '</div>'+
@@ -14403,6 +14408,8 @@ async function renderRevisionApto(){
       '<button class="btn btn-success" onclick="guardarRevisionApto()">💾 Guardar revisión</button>'+
     '</div>'+
     '<div id="rv-lista" style="margin-top:14px"></div>';
+  // v67: estado de las espumas de las puertas comunicantes del apto (Kubik)
+  if(EDIFICIO_ACTIVO==='kubik'){ (async function(){ try{ if(!window._pkSt) window._pkSt=await window._pkLoad(); var _e=document.getElementById('rv-apto'); if(_e&&window._pkRevBadge) window._pkRevBadge(_e.value); }catch(e){} })(); }
   try{ var _dn=window._revDesdeNov; if(_dn){ var _el=document.getElementById('rv-apto'); if(_el&&_dn.apto){ _el.value=_dn.apto; } var _mc=document.getElementById('main-content'); if(_mc){ var _bn=document.createElement('div'); _bn.style.cssText='max-width:720px;margin:0 0 10px;background:#f3ecff;border-left:4px solid #7C3AED;border-radius:6px;padding:8px 12px;font-size:12px;color:#5b21b6'; _bn.textContent='Vinculada al acta de la novedad: al guardar la revision se cierra el acta y se deja el seguimiento.'; _mc.insertBefore(_bn,_mc.firstChild); } } }catch(_e){}
   cargarRevisionesApto();
 }
@@ -14430,6 +14437,63 @@ async function cargarRevisionesApto(){
   var tr=rows.map(function(x){return '<tr><td>'+fmtF(x.fecha)+'</td><td><b>'+esc(x.apto)+'</b></td><td>'+esc(x.estado_apto||'')+'</td><td style="text-align:left">'+esc(x.cortesias||'')+'</td><td style="text-align:left">'+esc(x.observaciones||'')+'</td><td>'+esc(x.revisado_por||'')+'</td><td style="white-space:nowrap">'+_btnsEdit('revisiones_apto',x.id)+'</td></tr>';}).join('')||'<tr><td colspan="7" style="text-align:center;color:#999;padding:16px">Sin revisiones registradas</td></tr>';
   cont.innerHTML='<div class="card"><div class="card-title" style="margin-bottom:8px">Revisiones recientes</div><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th>Fecha</th><th>Apto</th><th>Estado</th><th>Cortesías</th><th>Observaciones</th><th>Revisó</th><th>Acciones</th></tr></thead><tbody>'+tr+'</tbody></table></div></div>';
 }
+
+// ══ PUERTAS COMUNICANTES (Kubik) — Sol. Santiago (8-sep-2026) ═══════════════════════════════
+// Entre el 01 y el 02, y entre el 02 y el 03 de cada piso (2 al 9) hay DOS puertas, una a cada
+// lado, y la espuma aislante va en el vacio entre las dos. Este modulo lleva el inventario de
+// esas 16 espumas: si esta instalada en el vacio, guardada en alguno de los aptos, o falta.
+// Se guarda en config (id puertas_kubik) como JSON, igual que Atelier.
+(function(){
+  var KEY='puertas_kubik';
+  var PISOS=[2,3,4,5,6,7,8,9];
+  var PARES=[['01','02'],['02','03']];
+  var ESTADOS=function(p,a,b){ return [
+    {v:'instalada', t:'Espuma en el vacío ✔'},
+    {v:'guardada_'+a, t:'Guardada en el '+p+a},
+    {v:'guardada_'+b, t:'Guardada en el '+p+b},
+    {v:'falta', t:'Falta ✖'},
+    {v:'', t:'— sin revisar —'} ]; };
+  var _esc=function(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');};
+  var _quien=function(){ return (typeof currentProfile!=='undefined'&&currentProfile&&currentProfile.nombre)||(typeof currentUser!=='undefined'&&currentUser&&currentUser.email)||''; };
+  var _fF=function(f){ if(!f) return ''; var p=String(f).slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; };
+  window._pkLoad=async function(){ try{ var r=await sb.from('config').select('valor').eq('id',KEY).maybeSingle(); if(r.data&&r.data.valor){ var o=JSON.parse(r.data.valor); return o&&o.puertas?o.puertas:{}; } }catch(e){} return {}; };
+  window._pkSave=async function(){ try{ var r=await sb.from('config').upsert({id:KEY, valor:JSON.stringify({puertas:window._pkSt}), updated_at:new Date().toISOString()}); if(r.error) throw r.error; }catch(e){ if(typeof showToast==='function') showToast('No se pudo guardar: '+(e.message||e),'error'); } };
+  window._pkSet=async function(k,campo,val){ var st=window._pkSt; st[k]=st[k]||{}; st[k][campo]=val; st[k].quien=_quien(); st[k].fecha=(typeof TODAY!=='undefined'?TODAY:new Date().toISOString().slice(0,10)); await window._pkSave(); window._pkRender(); };
+  // Estado de las puertas de UN apto (para Revision de Apartamento / otros modulos)
+  window._pkEstadoApto=function(apto){ var st=window._pkSt||{}; var m=String(apto||'').match(/^(\d)(0[123])$/); if(!m) return []; var piso=m[1], lado=m[2]; var out=[];
+    PARES.forEach(function(par){ if(par.indexOf(lado)<0) return; var k=piso+'|'+par[0]+par[1]; var e=st[k]||{}; var op=ESTADOS(piso,par[0],par[1]).find(function(o){return o.v===(e.estado||'');}); out.push({puerta:piso+par[0]+'–'+piso+par[1], estado:e.estado||'', texto:op?op.t:'— sin revisar —', ok:e.estado==='instalada'}); });
+    return out; };
+  window._pkRender=function(){
+    var st=window._pkSt||{}; var tot=PISOS.length*PARES.length, ok=0, falta=0, sinRev=0;
+    var filas=PISOS.map(function(piso){
+      return '<tr><td style="font-weight:800;text-align:center;color:#1D3461">Piso '+piso+'</td>'+PARES.map(function(par){
+        var k=piso+'|'+par[0]+par[1]; var e=st[k]||{}; var est=e.estado||'';
+        if(est==='instalada') ok++; else if(est==='falta') falta++; else if(!est) sinRev++;
+        var bg=est==='instalada'?'#D1FAE5':(est==='falta'?'#FEE2E2':(est?'#FEF3C7':'#F3F4F6'));
+        var opts=ESTADOS(String(piso),par[0],par[1]).map(function(o){ return '<option value="'+o.v+'"'+(o.v===est?' selected':'')+'>'+o.t+'</option>'; }).join('');
+        return '<td style="background:'+bg+';padding:8px;vertical-align:top;min-width:230px">'
+          +'<div style="font-size:11px;color:#555;margin-bottom:4px">Puertas <b>'+piso+par[0]+' – '+piso+par[1]+'</b></div>'
+          +'<select onchange="window._pkSet(\''+k+'\',\'estado\',this.value)" style="width:100%;padding:5px;border:1px solid #ccc;border-radius:6px;font-size:12px;font-weight:600">'+opts+'</select>'
+          +'<input value="'+_esc(e.obs||'')+'" placeholder="Observación" onchange="window._pkSet(\''+k+'\',\'obs\',this.value)" style="width:100%;margin-top:4px;padding:4px;border:1px solid #ddd;border-radius:6px;font-size:11px">'
+          +(e.quien?'<div style="font-size:10px;color:#888;margin-top:3px">'+_esc(e.quien)+' · '+_fF(e.fecha)+'</div>':'')
+          +'</td>';
+      }).join('')+'</tr>';
+    }).join('');
+    var cont=document.getElementById('pk-cont'); if(!cont) return;
+    cont.innerHTML='<div class="kpi-grid" style="margin-bottom:14px">'
+      +'<div class="kpi k-verde"><div class="kpi-lbl">Con espuma instalada</div><div class="kpi-val">'+ok+' <span style="font-size:14px;color:#666">de '+tot+'</span></div></div>'
+      +'<div class="kpi k-naran"><div class="kpi-lbl">Guardada / falta</div><div class="kpi-val" style="color:'+(falta?'#b91c1c':'inherit')+'">'+(tot-ok-sinRev)+'</div><div class="kpi-sub">'+falta+' faltan</div></div>'
+      +'<div class="kpi k-azul"><div class="kpi-lbl">Sin revisar</div><div class="kpi-val">'+sinRev+'</div></div></div>'
+      +'<div class="card"><div style="overflow-x:auto"><table class="tabla" style="font-size:12px"><thead><tr><th style="width:80px">Piso</th><th>Puertas 01 – 02</th><th>Puertas 02 – 03</th></tr></thead><tbody>'+filas+'</tbody></table></div>'
+      +'<p style="font-size:11px;color:var(--gris-t);margin-top:8px">Entre dos apartamentos hay dos puertas (una a cada lado) y la espuma aislante va en el vacío entre las dos. Marcar dónde está: instalada en el vacío, guardada en uno de los dos aptos, o falta. Cada cambio guarda quién y cuándo. Verde = instalada · amarillo = guardada · rojo = falta · gris = sin revisar.</p></div>';
+  };
+  window._pkRevBadge=function(apto){ var el=document.getElementById('rv-puertas'); if(!el) return; if(EDIFICIO_ACTIVO!=='kubik'){ el.innerHTML=''; return; } var L=window._pkEstadoApto(apto); if(!L.length){ el.innerHTML=''; return; }
+    el.innerHTML=L.map(function(x){ return '<span style="display:inline-block;margin:2px 4px 0 0;padding:2px 8px;border-radius:10px;background:'+(x.ok?'#D1FAE5':(x.estado==='falta'?'#FEE2E2':(x.estado?'#FEF3C7':'#F3F4F6')))+';color:#333">🚪 '+x.puerta+': '+x.texto+'</span>'; }).join('')+' <a href="#" onclick="event.preventDefault();loadView(\'puertas-kl\')" style="font-size:11px;color:#1D3461">ver puertas</a>'; };
+  window.renderPuertasKL=async function(){
+    document.getElementById('main-content').innerHTML='<div class="page-title">🚪 Puertas comunicantes — espumas</div><div id="pk-cont"><p style="color:var(--gris-t)">Cargando…</p></div>';
+    window._pkSt=await window._pkLoad(); window._pkRender();
+  };
+})();
 
 async function renderPrestamosElementos(){
   document.getElementById('main-content').innerHTML=
