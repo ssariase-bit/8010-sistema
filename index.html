@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-09-hk-tipo-v69';
+const APP_VERSION = '2026-09-09-traslape-combo-v70';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-09', version:'2026-09-09-traslape-combo-v70', titulo:'Kubik: candado de traslape ampliado a las unidades hermanas de combinadas en Nueva Reserva',
+    afecta:'Nueva Reserva (Kubik)',
+    detalle:'Sol. Santiago (9-sep-2026), a raiz de la respuesta de Fernando (NH) sobre las 16 combinadas: se probo virtualRoom:true en Newhotel pero saca las virtuales del orden consecutivo por piso (Rack quedaba desordenado), asi que quedaron como fisicas independientes (virtualRoom:false) - eso significa que Newhotel NO bloquea automaticamente el traslape entre una combinada y sus unidades fisicas componentes; la mitigacion alla es 100% manual (bloquear a mano la contraparte). El SO ya tenia un aviso preventivo de doble-booking en guardarReserva, pero solo cubria la direccion combo->fisicas (reservar FR7 ya revisaba 701 y 702): si alguien reservaba el fisico 701 directamente, no se revisaba si 702 (o la combinada completa) ya estaba ocupado. Se agrega window._combosSiblingsDe(apto), el inverso de _aptosFisicosDe, y el candado ahora revisa tambien las hermanas de combinada de cada unidad antes de guardar, en ambas direcciones. El mensaje de advertencia aclara cuando el conflicto es con la hermana de una combinada. No depende de Newhotel ni de que el equipo se acuerde de bloquear a mano - queda blindado en el sistema que ya se controla.' },
   { fecha:'2026-09-09', version:'2026-09-09-hk-tipo-v69', titulo:'Tiempos de Camareras (8010 y Kubik): clasificación automática Aptos Ocupados / Repaso Aptos Desocupados',
     afecta:'Menú Operación: Tiempos Camareras (ambos edificios)',
     detalle:'Sol. Santiago (9-sep-2026): "en el modulo de tiempo de las camareras tenemos que tener dos variables: 1. Aptos ocupados 2. Repaso aptos desocupados... esto con el fin de saber la realidad de los tiempos". El promedio de tiempo por camarera venia mezclando aseos completos (con huesped) y repasos de aptos vacios en una sola cifra, sin reflejar la realidad de cada tarea. En vez de agregar un campo manual mas al formulario (riesgo de error/olvido del administrador), la clasificacion se deriva automaticamente cruzando cada registro de limpieza contra el estado real del apto ese dia en el Rack, reutilizando el set window._OCU_VENTA que ya define "ocupado" en el resto del SO (Indicadores, _esVentaAloja) - mismo idioma, mismas cifras, un solo dueno del dato (el Rack). Ocupado = Rack en Ocupado/Check-in hoy/Check-out hoy/Completo/Sale de viaje/Check-out realizado (el aseo de salida es un aseo completo, no un repaso); Repaso = Libre/Sucio/Pendiente repaso/No Show/Limpieza/Mantenimiento/Bloqueado. Sin dato de Rack ese dia = "sin clasificar" (?), no se fuerza. Las tarjetas de promedio por camarera ahora muestran Ocupados y Repasos por separado ademas del promedio general, y la tabla diaria tiene columna "Tipo". No requiere ningun cambio en como el administrador registra la limpieza.' },
@@ -7249,6 +7252,29 @@ async function renderDashServicios() {
 const _KUBIK_UNID = { '01':{n:'Grand Residence',m2:100}, '02':{n:'Smart',m2:29}, '03':{n:'One Residence',m2:56}, '04':{n:'Suit Home',m2:42}, '04A':{n:'Deluxe',m2:37}, 'PH1':{n:'Pent House Mountain View'}, 'PH2':{n:'Pent House Park View'} };
 const _KUBIK_COMBOS = { 'FR':{n:'Famili Residence',m2:130,suf:['01','02']}, 'TR':{n:'Two Residence',m2:85,suf:['02','03']}, 'SD':{n:'Suite Deluxe',m2:79,suf:['04','04A']} };
 window._aptosFisicosDe = function(apto){ apto=String(apto==null?'':apto).trim(); if(apto==='AH') return ['PH1','PH2']; var _m=/^(FR|TR|SD)(\d+)$/.exec(apto); if(_m){ var _s={FR:['01','02'],TR:['02','03'],SD:['04','04A']}[_m[1]]; return _s.map(function(x){return _m[2]+x;}); } return [apto]; };
+// Reverso de _aptosFisicosDe: dado un apto FÍSICO (no un código de combo), devuelve sus posibles
+// hermanas de combinada. Sol. Santiago (9-sep-2026), a raíz de la respuesta de Fernando (NH): las
+// 16 combinadas de Kubik están cargadas en Newhotel como físicas independientes y ESE sistema no
+// bloquea el traslape automáticamente entre la combinada y sus componentes — la mitigación allá es
+// 100% manual. Este candado queda en el SO como respaldo: si alguien reserva 701 directamente (sin
+// pasar por el código FR7), igual se advierte si 702 ya está ocupado, y viceversa. El sufijo "02" es
+// ambiguo (puede ser la mitad de FR{n} o la mitad de TR{n} según qué combo exista en ese piso) — se
+// incluyen ambas posibles hermanas; es preferible una advertencia de más (se puede descartar con
+// confirm) que dejar pasar un traslape real.
+window._combosSiblingsDe = function(apto){
+  apto = String(apto==null?'':apto).trim();
+  if (apto==='PH1') return ['PH2'];
+  if (apto==='PH2') return ['PH1'];
+  var m = /^(\d+)(01|02|03|04A|04)$/.exec(apto);
+  if(!m) return [];
+  var n = m[1], suf = m[2], out = [];
+  if (suf==='01') out.push(n+'02');
+  if (suf==='02') { out.push(n+'01'); out.push(n+'03'); }
+  if (suf==='03') out.push(n+'02');
+  if (suf==='04') out.push(n+'04A');
+  if (suf==='04A') out.push(n+'04');
+  return out;
+};
 window._facNitLookup = async function(){ try{ var el=document.getElementById('fac-cli-nit'); if(!el) return; var nit=String(el.value||'').replace(/[.\s-]/g,'').trim(); if(nit.length<4) return; var q=await sb.from('facturas').select('cliente,cliente_nit,cliente_dir,email,telefono,created_at').eq('edificio',EDIFICIO_ACTIVO).order('created_at',{ascending:false}).limit(400); var rows=(q.data||[]).filter(function(r){ return String(r.cliente_nit||'').replace(/[.\s-]/g,'')===nit; }); if(!rows.length) return; var r=rows[0]; var setIf=function(id,v){ var e=document.getElementById(id); if(e && !String(e.value||'').trim() && v){ e.value=v; } }; setIf('fac-cli-nombre', r.cliente); setIf('fac-cli-dir', r.cliente_dir); setIf('fac-cli-email', r.email); setIf('fac-cli-tel', r.telefono); if(typeof showToast==='function') showToast('Datos traídos del NIT '+nit+(r.cliente?(' · '+r.cliente):''),'success'); }catch(_e){} };
 function _kubikUnidad(apto){ apto=String(apto||'').trim(); if(_KUBIK_UNID[apto]) return Object.assign({suf:apto},_KUBIK_UNID[apto]); var m=/^(\d)(\d{2}A?)$/.exec(apto); if(!m) return null; var b=_KUBIK_UNID[m[2]]; if(!b) return null; return {n:b.n,m2:b.m2,piso:m[1],suf:m[2]}; }
 // Nombre comercial para mostrar junto al código (ej: "201 · Grand Residence")
@@ -7781,6 +7807,9 @@ async function guardarReserva() {
   const _adjSel = Array.from((document.getElementById('res-adjuntos')||{}).selectedOptions||[]).map(o=>o.value).filter(a=>a&&_aptosW.indexOf(a)<0);
   const _aptosW2 = [..._aptosW, ..._adjSel];
   const _nCombo = _aptosW2.length;
+  // Amplía el chequeo de traslape a las hermanas de combinada de cada unidad (ver _combosSiblingsDe):
+  // reservar el físico 701 solo también debe advertir si 702 (su hermana en FR7) ya está ocupado.
+  const _aptosCheck = [...new Set(_aptosW2.flatMap(a => [a, ...((window._combosSiblingsDe && window._combosSiblingsDe(a)) || [])]))];
   // ── Unidad que cobra en un combinado ────────────────────────────────────────────────────
   // Auditoria 19-ago-2026: una reserva de combinado escribia la tarifa COMPLETA en las dos
   // unidades (FR7 -> 701 y 702, cada una con la tarifa entera), y el mes quedaba cobrado dos
@@ -7801,12 +7830,13 @@ async function guardarReserva() {
   // Aviso preventivo de doble-booking: si el/los apto(s) ya están ocupados por OTRO huésped en esas fechas
   try {
     const _coPrev = (function(){ const d=new Date(co); d.setDate(d.getDate()-1); return d.toISOString().split('T')[0]; })();
-    const _occ = await sb.from('rack').select('apto,fecha,huesped,estado').eq('edificio',EDIFICIO_ACTIVO).in('apto',_aptosW2).gte('fecha',ci).lte('fecha',_coPrev).in('estado',['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje']);
+    const _occ = await sb.from('rack').select('apto,fecha,huesped,estado').eq('edificio',EDIFICIO_ACTIVO).in('apto',_aptosCheck).gte('fecha',ci).lte('fecha',_coPrev).in('estado',['Ocupado','Check-in hoy','Check-out hoy','Completo','Sale de viaje']);
     const _norm = s => String(s||'').trim().toLowerCase();
     const _confl = (_occ.data||[]).filter(r => r.huesped && _norm(r.huesped)!==_norm(nombre));
     if (_confl.length) {
       const _u=_confl[0]; const _fechas=[...new Set(_confl.map(x=>x.fecha))].sort();
-      if(!confirm('⚠️ APTO OCUPADO\n\nEl apto '+_u.apto+' ya está ocupado por "'+_u.huesped+'" en esas fechas ('+_fechas[0]+(_fechas.length>1?(' a '+_fechas[_fechas.length-1]):'')+').\n\n¿Registrar de todos modos? (sobrescribirá el rack de ese apto)')){ _resetBtn(); return; }
+      const _esHnaCombo = _aptosW2.indexOf(_u.apto) < 0; // el conflicto es en una hermana de combinada, no en el apto pedido directamente
+      if(!confirm('⚠️ '+(_esHnaCombo?'TRASLAPE CON COMBINADA':'APTO OCUPADO')+'\n\nEl apto '+_u.apto+' ya está ocupado por "'+_u.huesped+'" en esas fechas ('+_fechas[0]+(_fechas.length>1?(' a '+_fechas[_fechas.length-1]):'')+').'+(_esHnaCombo?' Es la unidad hermana de la combinada que estás reservando — si sigues, quedarán las dos vendidas al mismo tiempo.':'')+'\n\n¿Registrar de todos modos? (sobrescribirá el rack de ese apto)')){ _resetBtn(); return; }
     }
   } catch(_e){}
 
