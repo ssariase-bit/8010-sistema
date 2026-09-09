@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-08-importar-nh-v68b';
+const APP_VERSION = '2026-09-09-hk-tipo-v69';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-09', version:'2026-09-09-hk-tipo-v69', titulo:'Tiempos de Camareras (8010 y Kubik): clasificación automática Aptos Ocupados / Repaso Aptos Desocupados',
+    afecta:'Menú Operación: Tiempos Camareras (ambos edificios)',
+    detalle:'Sol. Santiago (9-sep-2026): "en el modulo de tiempo de las camareras tenemos que tener dos variables: 1. Aptos ocupados 2. Repaso aptos desocupados... esto con el fin de saber la realidad de los tiempos". El promedio de tiempo por camarera venia mezclando aseos completos (con huesped) y repasos de aptos vacios en una sola cifra, sin reflejar la realidad de cada tarea. En vez de agregar un campo manual mas al formulario (riesgo de error/olvido del administrador), la clasificacion se deriva automaticamente cruzando cada registro de limpieza contra el estado real del apto ese dia en el Rack, reutilizando el set window._OCU_VENTA que ya define "ocupado" en el resto del SO (Indicadores, _esVentaAloja) - mismo idioma, mismas cifras, un solo dueno del dato (el Rack). Ocupado = Rack en Ocupado/Check-in hoy/Check-out hoy/Completo/Sale de viaje/Check-out realizado (el aseo de salida es un aseo completo, no un repaso); Repaso = Libre/Sucio/Pendiente repaso/No Show/Limpieza/Mantenimiento/Bloqueado. Sin dato de Rack ese dia = "sin clasificar" (?), no se fuerza. Las tarjetas de promedio por camarera ahora muestran Ocupados y Repasos por separado ademas del promedio general, y la tabla diaria tiene columna "Tipo". No requiere ningun cambio en como el administrador registra la limpieza.' },
   { fecha:'2026-09-08', version:'2026-09-08-importar-nh-v68b', titulo:'Kubik: nuevo módulo Importar Newhotel (puente NH → SO) con la migración de facturación del 8-sep-2026 + formato único de numeración F8I8 n / NCR26 n',
     afecta:'Menú (Kubik): Importar Newhotel; Facturación Kubik',
     detalle:'Sol. Santiago (8-sep-2026): "el Sistema Operativo se debe alimentar de NH" (Newhotel Cloud PMS, instancia kubikliving8i8). Auditoría del 8-sep: NH tiene 187 facturas + 41 notas crédito y el SO tenía 145 + 30; faltaban 42 facturas ($196,7M) y 12 NC, 3 NC estaban guardadas con el número de la factura, 2 valores no coincidían (N8, F118) y 40 documentos tenían fecha de captura en vez de fecha de emisión. El módulo trae embebidos esos documentos (con cliente, NIT, # reserva NH, apto, fechas de estadía, líneas con IVA por renglón, forma y medio de pago) y las correcciones; muestra el cruce contra Facturación y cada bloque se aplica con un botón (nada automático). Los registros cargados quedan con observación "Cargada desde Newhotel" y fecha de emisión real. Incluye lector del export de NH (Reportes → Exportar → Facturas / Notas Crédito) pendiente de mapeo con un archivo de ejemplo. Hallazgos de la auditoría documentados en Base_Conocimiento_Newhotel_vs_SO_Kubik.xlsx: NH no registra tarifa por noche (0 en 129 de 142 reservas → el SO sigue siendo la fuente de ventas/ADR), las 16 combinadas están creadas en NH como habitaciones físicas (Hab. Virtuales vacío → NH reporta 58 habitaciones), el número de reserva NH (n/2026) ya está en el SO en 105 de 110 reservas cruzadas y es la llave entre sistemas, cartera NH $639,6M por validar con Contabilidad.' },
@@ -6934,6 +6937,22 @@ async function renderHKList() {
   const { data } = await sb.from('housekeeping').select('*').order('fecha', {ascending:false}).order('camarera').limit(200);
   const rows = data || [];
 
+  // Clasificación automática Ocupado / Repaso desocupado: cruza cada registro de limpieza
+  // contra el estado real del apto ese día en el Rack (el Rack es el dueño de ese dato,
+  // no se duplica en un campo manual). Usa el mismo set _OCU_VENTA que ya define "ocupado"
+  // para ventas/ocupación en el resto del SO — mismo idioma, mismas cifras.
+  const _fechasHK = [...new Set(rows.map(h=>h.fecha))];
+  let _rackMapHK = {};
+  if (_fechasHK.length) {
+    const { data: _rackHK } = await sb.from('rack').select('apto,fecha,estado').in('fecha', _fechasHK);
+    (_rackHK||[]).forEach(r => { _rackMapHK[r.fecha+'|'+r.apto] = r.estado; });
+  }
+  function hkTipo(h) {
+    const est = _rackMapHK[h.fecha+'|'+h.apto];
+    if (!est) return null; // sin dato de rack ese día = sin clasificar
+    return window._OCU_VENTA.has(est) ? 'Ocupado' : 'Repaso';
+  }
+
   // Calcular duración en minutos entre dos horas HH:MM
   function calcMin(ingreso, salida) {
     if (!ingreso || !salida) return null;
@@ -6991,9 +7010,12 @@ async function renderHKList() {
     if (m && h.camarera) {
       const nomC = _canonNom(h.camarera);
       const k = _normNom(nomC);
-      if (!promedios[k]) promedios[k] = {nombre: nomC, total:0, count:0};
+      if (!promedios[k]) promedios[k] = {nombre: nomC, total:0, count:0, totalOcu:0, countOcu:0, totalRep:0, countRep:0};
       promedios[k].total += m;
       promedios[k].count++;
+      const tipo = hkTipo(h);
+      if (tipo === 'Ocupado') { promedios[k].totalOcu += m; promedios[k].countOcu++; }
+      else if (tipo === 'Repaso') { promedios[k].totalRep += m; promedios[k].countRep++; }
     }
   });
 
@@ -7038,10 +7060,18 @@ async function renderHKList() {
         ${Object.values(promedios).sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(d => {
           const avg = Math.round(d.total / d.count);
           const color = avg <= 30 ? 'var(--verde)' : avg <= 45 ? 'var(--naran)' : 'var(--rojo)';
-          return `<div style="background:var(--gris);border-radius:10px;padding:14px 18px;text-align:center;min-width:140px;border-left:4px solid ${color}">
+          const avgOcu = d.countOcu ? Math.round(d.totalOcu / d.countOcu) : null;
+          const avgRep = d.countRep ? Math.round(d.totalRep / d.countRep) : null;
+          const sinClasif = d.count - d.countOcu - d.countRep;
+          return `<div style="background:var(--gris);border-radius:10px;padding:14px 18px;text-align:center;min-width:170px;border-left:4px solid ${color}">
             <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px">${d.nombre}</div>
             <div style="font-size:22px;font-weight:800;color:${color}">${fmtMin(avg)}</div>
-            <div style="font-size:10px;color:var(--gris-t)">${d.count} apto${d.count>1?'s':''} limpiado${d.count>1?'s':''}</div>
+            <div style="font-size:10px;color:var(--gris-t);margin-bottom:6px">${d.count} apto${d.count>1?'s':''} limpiado${d.count>1?'s':''}</div>
+            <div style="display:flex;gap:10px;justify-content:center;border-top:1px solid #E5E7EB;padding-top:6px;font-size:10px">
+              <span title="Aptos ocupados (con huésped)">🛏️ ${avgOcu?fmtMin(avgOcu):'—'}<br><span style="color:var(--gris-t)">${d.countOcu} apto${d.countOcu===1?'':'s'}</span></span>
+              <span title="Repaso de aptos desocupados">🧺 ${avgRep?fmtMin(avgRep):'—'}<br><span style="color:var(--gris-t)">${d.countRep} apto${d.countRep===1?'':'s'}</span></span>
+              ${sinClasif>0?`<span title="Sin dato de Rack ese día">❔<br><span style="color:var(--gris-t)">${sinClasif}</span></span>`:''}
+            </div>
           </div>`;
         }).join('')}
       </div>
@@ -7075,7 +7105,7 @@ async function renderHKList() {
               <thead><tr>
                 <th onclick="window._hkOrden='apto';renderHKList()" style="cursor:pointer" title="Ordenar por apto">Apto ${_ord==='apto'?'▾':''}</th>
                 <th onclick="window._hkOrden='camarera';renderHKList()" style="cursor:pointer" title="Ordenar por camarera">Camarera ${_ord==='camarera'?'▾':''}</th>
-                <th>Ingreso</th><th>Salida</th><th>⏱ Duración</th>
+                <th>Ingreso</th><th>Salida</th><th>⏱ Duración</th><th>Tipo</th>
                 <th onclick="window._hkOrden='estado';renderHKList()" style="cursor:pointer" title="Ordenar por estado">Estado ${_ord==='estado'?'▾':''}</th>
                 <th>Frec.</th><th>Observaciones</th><th>Registró (admin)</th><th></th></tr></thead>
               <tbody>${_diaOrd.map(h => {
@@ -7090,6 +7120,7 @@ async function renderHKList() {
                     : `<button onclick="registrarSalidaHK('${h.id}')" class="btn btn-outline btn-sm" style="padding:3px 10px;font-size:11px;color:var(--naran);border-color:var(--naran)">⏱ Registrar salida</button>`
                   }</td>
                   <td style="font-weight:700;color:${durColor}">${fmtMin(mins)}${(Number(h.pausa_min)||0)>0?` <span style="color:#7A5C00;font-weight:400;font-size:10px" title="${h.pausa_detalle?String(h.pausa_detalle).replace(/"/g,'&quot;'):'Pausa'}">(−${h.pausa_min}m pausa)</span>`:''}</td>
+                  <td>${(function(){ var t=hkTipo(h); return t==='Ocupado' ? '<span class="badge" style="background:#E0ECFF;color:#1D4ED8">🛏️ Ocupado</span>' : t==='Repaso' ? '<span class="badge" style="background:#EDE7F9;color:#5B2A86">🧺 Repaso</span>' : '<span style="color:#999;font-size:11px">sin dato</span>'; })()}</td>
                   <td><span class="badge b-${(h.estado==='Limpio'||String(h.estado||'').indexOf('Al día')===0)?'resuelto':h.estado==='Declina limpieza'?'alta':'proceso'}">${h.estado||'-'}</span></td>
                   <td style="font-size:11px;white-space:nowrap">${h.frecuencia||'-'}</td>
                   <td style="max-width:140px;font-size:11px">${h.observaciones||'-'}</td>
