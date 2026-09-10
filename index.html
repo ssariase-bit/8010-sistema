@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-09-traslape-combo-v70';
+const APP_VERSION = '2026-09-10-fix-sala-juntas-v71';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-10', version:'2026-09-10-fix-sala-juntas-v71', titulo:'Fix urgente: "Sala de Juntas" había desaparecido del menú de los administradores (Kubik y 8010)',
+    afecta:'Menú lateral — permisos por rol (rol administrador)',
+    detalle:'Sol. Santiago (10-sep-2026): "a los administradores no les sale Salas de Juntas, solo Atelier". Causa: el 19-ago-2026, al completar la lista window._ITEMS_COMPRAS_FIN_8010 (módulos financieros/de compras que el rol administrador no gestiona, pedido original de Sebastián: Cartera/CxP/Proveedores/Flujo de Caja) con 4 ítems que habían quedado por fuera, se coló "sala-juntas-list" en ese lote por error — no es un módulo financiero, es la reserva del espacio físico. Efecto: cualquier usuario que no fuera gerente_general ni estuviera en la whitelist de compras/financiero dejó de ver "Sala de Juntas" en el menú (en ambos edificios, la lista de ítems restringidos es compartida), mientras "Atelier" seguía visible porque nunca estuvo en esa lista — coincide exactamente con el síntoma reportado. Santiago no lo notó porque su rol pasa siempre ese filtro. Se retira "sala-juntas-list" de window._ITEMS_COMPRAS_FIN_8010; vuelve a regirse por el permiso normal de módulo (igual que Atelier).' },
   { fecha:'2026-09-09', version:'2026-09-09-traslape-combo-v70', titulo:'Kubik: candado de traslape ampliado a las unidades hermanas de combinadas en Nueva Reserva',
     afecta:'Nueva Reserva (Kubik)',
     detalle:'Sol. Santiago (9-sep-2026), a raiz de la respuesta de Fernando (NH) sobre las 16 combinadas: se probo virtualRoom:true en Newhotel pero saca las virtuales del orden consecutivo por piso (Rack quedaba desordenado), asi que quedaron como fisicas independientes (virtualRoom:false) - eso significa que Newhotel NO bloquea automaticamente el traslape entre una combinada y sus unidades fisicas componentes; la mitigacion alla es 100% manual (bloquear a mano la contraparte). El SO ya tenia un aviso preventivo de doble-booking en guardarReserva, pero solo cubria la direccion combo->fisicas (reservar FR7 ya revisaba 701 y 702): si alguien reservaba el fisico 701 directamente, no se revisaba si 702 (o la combinada completa) ya estaba ocupado. Se agrega window._combosSiblingsDe(apto), el inverso de _aptosFisicosDe, y el candado ahora revisa tambien las hermanas de combinada de cada unidad antes de guardar, en ambas direcciones. El mensaje de advertencia aclara cuando el conflicto es con la hermana de una combinada. No depende de Newhotel ni de que el equipo se acuerde de bloquear a mano - queda blindado en el sistema que ya se controla.' },
@@ -1787,7 +1790,11 @@ window._ITEMS_CONFID = ['modelo-kl','informes-kl','ingresos','resumen-ventas','v
 // equipo de Administración (rol administrador) no gestiona Cartera/CxP/Proveedores/Flujo de Caja. La
 // lista ya existía (Sol. Sebastián 23-jul-2026) pero le faltaban 4 ítems agregados al menú después:
 // recaudo-list, flujo-mes-list, proveedores-aging-list y sala-juntas-list (los mismos que señaló en su captura).
-window._ITEMS_COMPRAS_FIN_8010 = ['inventario-list','compras-orden-form','cartera-list','por-pagar-list','proveedores-list','flujo-caja-list','flujo-semanal-list','recaudo-list','flujo-mes-list','proveedores-aging-list','sala-juntas-list'];
+// Fix (Sol. Santiago, 10-sep-2026): 'sala-juntas-list' se había colado por error en este lote — no es un
+// módulo financiero/de compras, es operativo (reserva del espacio físico). Efecto: a los administradores
+// de Kubik (y 8010) les desapareció "Sala de Juntas" del menú, mientras "Atelier" seguía visible porque
+// nunca estuvo en esta lista. Se retira de aquí para que vuelva a regirse por el permiso normal de módulo.
+window._ITEMS_COMPRAS_FIN_8010 = ['inventario-list','compras-orden-form','cartera-list','por-pagar-list','proveedores-list','flujo-caja-list','flujo-semanal-list','recaudo-list','flujo-mes-list','proveedores-aging-list'];
 // Sol. Santiago (19-ago-2026): "Ya TODOS lo deberian ver" — la Matriz de Uso sale de esta lista para
 // que todo el equipo pueda marcar su propia columna. El levantamiento lo hace cada persona, no el
 // gerente transcribiendo respuestas de WhatsApp. Sigue siendo un modulo temporal.
