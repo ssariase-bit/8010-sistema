@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-10-importar-nh-consumos-v72';
+const APP_VERSION = '2026-09-11-consumos-concepto-v73';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-11', version:'2026-09-11-consumos-concepto-v73', titulo:'Kubik: el detalle de "Consumos de huéspedes" del Dashboard ahora muestra el concepto (para distinguir los cargados desde Newhotel)',
+    afecta:'Dashboard — detalle de Ventas del mes por categoría (Consumos de huéspedes)',
+    detalle:'Sol. Santiago (11-sep-2026): tras cargar los 290 consumos del histórico de Newhotel (v72), no los veía diferenciados — el popup de detalle mostraba siempre el nombre del huésped como título, así que un registro de Newhotel (ej. "OSUNA, EDGAR ELIAS" por BAGATELLE) se veía igual que un registro manual del módulo Consumos, sin forma de distinguirlos. Ahora, cuando el registro trae concepto (columna agregada en la migración a NH), se muestra el concepto como título (ej. "BAGATELLE · NH") y el huésped pasa al subtítulo junto con el apto y la fecha; los registros sin concepto (los de siempre) se ven exactamente igual que antes.' },
   { fecha:'2026-09-10', version:'2026-09-10-importar-nh-consumos-v72', titulo:'Kubik: Importar Newhotel — nuevo Bloque 5, consumos no-alojamiento (Bagatelle, Agua, Vino, etc.) traídos de Newhotel al SO',
     afecta:'Menú (Kubik): Importar Newhotel; tabla consumos',
     detalle:'Sol. Santiago (10-sep-2026): "Y asi mismo ponerlos en el SO", sobre el consumo no-alojamiento de Kubik en Newhotel ($19.179.780,35 en Bagatelle, Alquiler de Salón, Vino Aptos, Teléfono, Transporte, Llave de Acceso, Agua y Masaje, del histórico completo de NH al 10-sep-2026 — excluye Alojamiento, Cash Advance y Canon de Arrendamiento). Se agregaron a la tabla consumos las columnas concepto y origen_nh (esta última con índice único, para que un mismo movimiento de NH nunca se cargue dos veces) y se extendió Importar Newhotel con un quinto bloque, mismo patrón que los otros cuatro: cruce contra lo que ya existe en el SO, muestra antes/después, un solo botón "Cargar" que aplica, nada se inserta solo. Nota pendiente de decisión: "ALQUILER DE SALON" ($2.410.084,03 en 4 movimientos) está mal etiquetado en el departamento de Newhotel como "Restaurant" pero es renta de salón — se incluye aquí como consumo por ahora; falta decidir si además debe reflejarse en el ingreso de Salas de Juntas/Atelier.' },
@@ -3954,8 +3957,18 @@ async function renderDashboard() {
     // Atelier (último piso, Kubik): sala + consumos juntos, categoría propia
     const atelier = [];
     _atd.forEach(x=>{ const vs=Number(x.valor_sala)||0, vc=Number(x.valor_consumos)||0; if(vs>0) atelier.push({ desc:(x.cliente||'Atelier')+' — Sala', sub:'Atelier · '+(x.fecha||'')+(x.fecha_fin?' a '+x.fecha_fin:''), valor:vs }); if(vc>0) atelier.push({ desc:(x.cliente||'Atelier')+' — '+(x.proveedor||'Consumo'), sub:'Atelier · '+(x.fecha||''), valor:vc }); });
-    // Consumos de huéspedes
-    const consumos = _cod.filter(x=>(Number(x.valor)||0)>0).map(x=>({ desc:(x.huesped||'Sin nombre'), sub:'Apto '+(x.apto||'—')+' · '+(x.fecha||''), valor:Number(x.valor)||0 }));
+    // Consumos de huéspedes (Sol. Santiago 11-sep-2026: se mezclaban visualmente los cargados
+    // desde Newhotel con los del módulo Consumos — ahora si el registro trae concepto (BAGATELLE,
+    // Alquiler de Salón, etc., típicamente de origen_nh) se muestra el concepto como título y el
+    // huésped pasa al subtítulo, para poder distinguirlos de un vistazo).
+    const consumos = _cod.filter(x=>(Number(x.valor)||0)>0).map(x=>{
+      const tieneConcepto = !!x.concepto;
+      return {
+        desc: tieneConcepto ? (x.concepto+(x.origen_nh?' · NH':'')) : (x.huesped||'Sin nombre'),
+        sub: (tieneConcepto ? (x.huesped||'—')+' · ' : '')+'Apto '+(x.apto||'—')+' · '+(x.fecha||''),
+        valor: Number(x.valor)||0
+      };
+    });
     // Otros cargos (desglosado por tipo)
     const otros = [];
     _lcd.forEach(x=>{
