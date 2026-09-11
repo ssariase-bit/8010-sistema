@@ -477,10 +477,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Auto-actualización: si hay versión nueva publicada, recarga sola ──
-const APP_VERSION = '2026-09-11-consumos-concepto-v73';
+const APP_VERSION = '2026-09-11-ppto-corte-agosto-v74';
 // ── Registro de Cambios estructurales del SO (lo más reciente arriba) ──
 // Cada cambio estructural se documenta aquí: fecha, versión, qué cambió y a quién afecta.
 const CHANGELOG = [
+  { fecha:'2026-09-11', version:'2026-09-11-ppto-corte-agosto-v74', titulo:'8010: Ventas vs Presupuesto — actualizado al corte "60% AGOSTO 2026" (agosto pasa de presupuesto a real)',
+    afecta:'🎯 Ventas vs Presupuesto (8010)',
+    detalle:'Sol. Santiago (11-sep-2026), archivo "PRESUPUESTO 2026 8010 60 AGOSTO 2026.xlsx": se actualizan PPTO_APTOS y PPTO_EVCO tomando la hoja TOTAL del nuevo corte. Metodologia identica a la del corte de julio (19-ago-2026): PPTO_APTOS = Total Apartamentos + Operador Turistico UL 80-10 + Parqueaderos; PPTO_EVCO = Salas de Juntas + Servicios Adicionales. Unico cambio vs. el corte anterior: agosto pasa de presupuestado a real en ambas lineas (los demas 11 meses quedan identicos). ALERTA — variacion de agosto: Aptos cerro en $386.256.185 vs. presupuesto $468.532.512 (82% de cumplimiento, -17,6%); Eventos+Consumos cerro en solo $36.027.996 vs. presupuesto $149.380.983 (24% de cumplimiento, -75,9% — la caida mas fuerte del año en esta linea). Revisar con el equipo comercial que paso en agosto en salones/eventos.' },
   { fecha:'2026-09-11', version:'2026-09-11-consumos-concepto-v73', titulo:'Kubik: el detalle de "Consumos de huéspedes" del Dashboard ahora muestra el concepto (para distinguir los cargados desde Newhotel)',
     afecta:'Dashboard — detalle de Ventas del mes por categoría (Consumos de huéspedes)',
     detalle:'Sol. Santiago (11-sep-2026): tras cargar los 290 consumos del histórico de Newhotel (v72), no los veía diferenciados — el popup de detalle mostraba siempre el nombre del huésped como título, así que un registro de Newhotel (ej. "OSUNA, EDGAR ELIAS" por BAGATELLE) se veía igual que un registro manual del módulo Consumos, sin forma de distinguirlos. Ahora, cuando el registro trae concepto (columna agregada en la migración a NH), se muestra el concepto como título (ej. "BAGATELLE · NH") y el huésped pasa al subtítulo junto con el apto y la fecha; los registros sin concepto (los de siempre) se ven exactamente igual que antes.' },
@@ -16220,16 +16223,14 @@ async function renderVentasPpto(){
   var Y=2026;
   var MN=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   var MC=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  // Presupuesto 2026 — actualizado al corte "60% JULIO 2026" (Sol. Santiago, 19-ago-2026).
-  // Antes se tomaba del corte de MAYO y ademas PPTO_APTOS traia la fila TOTAL INGRESOS del Excel
-  // (que ya incluye Salas de Juntas y Servicios Adicionales); al sumarle PPTO_EVCO encima, la meta
-  // quedaba inflada ~9% todos los meses y el cumplimiento se mostraba peor del real.
-  // Ahora las dos lineas son complementarias y suman exacto el TOTAL INGRESOS del Excel:
+  // Presupuesto 2026 — actualizado al corte "60% AGOSTO 2026" (Sol. Santiago, 11-sep-2026).
+  // Metodologia sin cambios desde el corte de julio (19-ago-2026):
   //   PPTO_APTOS = Total Apartamentos + Operador Turistico UL 80-10 + Parqueaderos
   //   PPTO_EVCO  = Salas de Juntas + Servicios Adicionales
-  // Ene-Jul son cifras REALES del cierre; Ago-Dic son presupuesto.
-  var PPTO_APTOS=[307852683,376238091,385814328,297505760,471147093,343876721,405039931,468532512,448020720,468532512,453418560,440643672];
-  var PPTO_EVCO=[63762724,75923052,33594414,31614590,73248405,70998227,52105794,149380983,150380983,151380983,169080983,111630983];
+  // Ene-Ago son cifras REALES del cierre; Sep-Dic son presupuesto. Unico mes que cambia vs.
+  // el corte anterior es agosto (pasa de presupuestado a real en ambas lineas).
+  var PPTO_APTOS=[307852683,376238091,385814328,297505760,471147093,343876721,405039931,386256185,448020720,468532512,453418560,440643672];
+  var PPTO_EVCO=[63762724,75923052,33594414,31614590,73248405,70998227,52105794,36027996,150380983,151380983,169080983,111630983];
   document.getElementById('main-content').innerHTML='<div class="page-title">🎯 Ventas vs Presupuesto '+Y+'</div><p style="color:var(--gris-t)">Cargando datos del rack, consumos y eventos…</p>';
   // Esta vista es fija de 8010: usamos el from "crudo" para no chocar con el filtro de edificio activo (rack y consumos lo aplican)
   var _RAW=(typeof window._sbFromRaw==='function')?window._sbFromRaw:function(t){return sb.from(t);};
